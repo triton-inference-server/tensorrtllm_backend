@@ -1,0 +1,41 @@
+name: "gpt"
+backend: "python"
+max_batch_size: 0
+input [
+  {
+    name: "input_ids"
+    data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  }
+]
+output [
+  {
+    name: "output_ids"
+    data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  }
+]
+instance_group [
+  {
+    count: 1
+    kind : KIND_CPU
+  }
+]
+parameters {
+  key: "engine_dir"
+  value: {
+    string_value: "/home/scratch.kevxie_gpu/share/tekit/examples/gpt/gpt_outputs"
+  }
+}
+parameters {
+  key: "max_out_len"
+  value: {
+    string_value: "200"
+  }
+}
+parameters: {
+  key: "FORCE_CPU_ONLY_INPUT_TENSORS"
+  value: {
+    string_value: "no"
+  }
+}
