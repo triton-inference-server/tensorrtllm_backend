@@ -1,12 +1,11 @@
 import json
 import os
 
+import tekit
 import torch
 import triton_python_backend_utils as pb_utils
-from torch.utils.dlpack import from_dlpack, to_dlpack
+from torch import from_numpy
 from transformers import GPT2Config
-
-import tekit
 
 
 class TritonPythonModel:
@@ -124,10 +123,11 @@ class TritonPythonModel:
         for request in requests:
             # Perform inference on the request and append it to responses list...
             if self.rank == 0:
-                # Triton tensor -> dlpack tensor -> PyTorch tensor
-                input_ids = from_dlpack(
+                # Triton tensor -> numpy tensor -> PyTorch tensor
+                input_ids = from_numpy(
                     pb_utils.get_input_tensor_by_name(request,
-                                                      input_name).to_dlpack())
+                                                      input_name).as_numpy())
+
             else:
                 input_ids = None
 
@@ -149,8 +149,8 @@ class TritonPythonModel:
                 # Create output tensors. You need pb_utils.Tensor
                 # objects to create pb_utils.InferenceResponse.
                 torch.cuda.synchronize()
-                output_ids = pb_utils.Tensor.from_dlpack(
-                    "output_ids", to_dlpack(output_ids))
+                output_ids = pb_utils.Tensor("output_ids",
+                                             output_ids.cpu().numpy())
 
                 # Create InferenceResponse. You can set an error here in case
                 # there was a problem with handling this inference request.
