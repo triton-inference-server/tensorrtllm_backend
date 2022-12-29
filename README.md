@@ -5,11 +5,13 @@ The Triton backend for Tekit.
 
 ### Launch the backend *within Docker*
 ```
-# Pull the docker image
+# 1. Pull the docker image
 nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <your/path>:<your/path> <image> bash
 # <image> could be gitlab-master.nvidia.com:5005/ftp/tekit/triton:tot-ln
 
-# Modify scripts/launch_triton_server.sh to suit your environment.
+# 2. Modify parameters[engine_dir] in all_models/gpt/config.pbtxt to the path of built engines.
+
+# 3. Modify scripts/launch_triton_server.sh to suit your environment.
 bash scripts/launch_triton_server.sh
 ```
 
