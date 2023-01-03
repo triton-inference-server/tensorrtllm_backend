@@ -19,14 +19,14 @@ def parse_arguments():
 
 def get_cmd(world_size, tritonserver, model_repo):
     cmd = 'mpirun --allow-run-as-root '
-    for _ in range(world_size):
-        cmd += ' -n 1 {} --model-repository={} --backend-config=python,shm-region-prefix-name=prefix0_ : '.format(
-            tritonserver, model_repo)
+    for i in range(world_size):
+        cmd += ' -n 1 {} --model-repository={} --backend-config=python,shm-region-prefix-name=prefix{}_ : '.format(
+            tritonserver, model_repo, i)
     cmd += '&'
     return cmd
 
 
 if __name__ == '__main__':
     args = parse_arguments()
-    cmd = get_cmd(args.world_size, args.tritonserver, args.model_repo)
+    cmd = get_cmd(int(args.world_size), args.tritonserver, args.model_repo)
     subprocess.call(cmd, shell=True)
