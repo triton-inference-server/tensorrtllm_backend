@@ -24,7 +24,7 @@ instance_group [
 parameters {
   key: "engine_dir"
   value: {
-    string_value: "/home/scratch.kevxie_gpu/share/tekit/examples/gpt/gpt_outputs"
+    string_value: "TO_BE_FILLED"
   }
 }
 parameters {
