@@ -123,8 +123,9 @@ if __name__ == '__main__':
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
-        print("unexpected protocol \"{}\", expects \"http\" or \"grpc\"".format(
-            FLAGS.protocol))
+        print(
+            "unexpected protocol \"{}\", expects \"http\" or \"grpc\"".format(
+                FLAGS.protocol))
         exit(1)
 
     client_util = httpclient if FLAGS.protocol == "http" else grpcclient
