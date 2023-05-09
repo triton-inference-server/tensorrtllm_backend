@@ -1,11 +1,11 @@
 import json
 import os
 
-import tekit
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
-from transformers import GPT2Config
+
+import tekit
 
 
 class TritonPythonModel:
@@ -66,15 +66,18 @@ class TritonPythonModel:
         self.max_out_len = int(
             model_config['parameters']['max_out_len']['string_value'])
         config_path = os.path.join(engine_dir, 'config.json')
-        config = GPT2Config.from_json_file(config_path)
-        self.use_plugin = config.gpt_attention_plugin
-        self.vocab_size = config.vocab_size
-        dtype = config.dtype
-        world_size = config.world_size
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        self.use_gpt_attention_plugin = config['plugin_config'][
+            'gpt_attention_plugin']
+        dtype = 'float16' if config['builder_config']['fp16'] else 'float32'
+        world_size = config['builder_config']['tensor_parallel']
         assert world_size == tekit.mpi_world_size(), \
             f'Engine world size ({world_size}) != Runtime world size ({tekit.mpi_world_size()})'
-        config.n_head = config.n_head // world_size
-        config.n_embd = config.n_embd // world_size
+        self.num_heads = config['builder_config']['num_heads'] // world_size
+        self.hidden_size = config['builder_config']['hidden_size'] // world_size
+        self.vocab_size = config['builder_config']['vocab_size']
+        self.num_layers = config['builder_config']['num_layers']
 
         self.comm = tekit.mpi_comm()
         self.rank = tekit.mpi_rank()
@@ -88,7 +91,7 @@ class TritonPythonModel:
         tekit.init()
         runtime = tekit.GPTRuntime(dtype)
         runtime.prepare(runtime_mapping, serialize_path)
-        self.decoder = tekit.GPTDecoder(config, runtime_mapping, runtime)
+        self.decoder = tekit.GPTDecoder(runtime_mapping, runtime)
 
         if self.rank != 0:
             while (True):
@@ -133,17 +136,15 @@ class TritonPythonModel:
 
             # Broadcast requests to other clients
             input_ids = self.comm.bcast(input_ids, root=0).cuda()
-            self.decoder.allocate_buffer(input_ids.size(0),
-                                         input_ids.size(1),
-                                         self.max_out_len,
-                                         num_beams=1,
-                                         vocab_size=self.vocab_size,
-                                         use_plugin=self.use_plugin)
-            output_ids = self.decoder.decode(input_ids,
-                                             max_new_tokens=self.max_out_len,
-                                             top_k=1,
-                                             top_p=0.9,
-                                             use_plugin=self.use_plugin)
+            self.decoder.setup(input_ids.size(0),
+                               input_ids.size(1),
+                               self.max_out_len,
+                               self.vocab_size,
+                               self.num_layers,
+                               self.num_heads,
+                               self.hidden_size,
+                               use_plugin=self.use_gpt_attention_plugin)
+            output_ids = self.decoder.decode(input_ids)
 
             if self.rank == 0:
                 # Create output tensors. You need pb_utils.Tensor

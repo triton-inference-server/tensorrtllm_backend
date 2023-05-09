@@ -1,4 +1,4 @@
-name: "gpt"
+name: "tekit"
 backend: "python"
 max_batch_size: 0
 input [
