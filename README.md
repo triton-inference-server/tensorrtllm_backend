@@ -7,21 +7,17 @@ The Triton backend for Tekit.
 
 ```bash
 # 1. Pull the docker image
-nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <your/path>:<your/path> <image> bash
-# <image> could be gitlab-master.nvidia.com:5005/ftp/tekit/triton:tot-ln
+nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <your/path>:<mount/path> <image> bash
+# Recommend <image>: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
 
-# 2. install tekit and tritonserver
+# 2. Modify parameters in all_models/xxx/tekit/config.pbtxt
 
-pip install tekit --extra-index-url https://__token__:_un3_XBz1zhfMHp2mMLq@gitlab-master.nvidia.com/api/v4/projects/68442/packages/pypi/simple
-pip install --extra-index-url https://pypi.ngc.nvidia.com regex fire tritonclient[all]
-
-# 3. Modify parameters[engine_dir] in all_models/gpt/config.pbtxt to the path of built engines.
-
-# 4. Launch triton server
-python scripts/launch_triton_server.py --world_size=2
+# 3. Launch triton server
+python3 scripts/launch_triton_server.py --world_size=1 \
+    --model_repo=all_models/gpt
 ```
 
-### Launch the backend *with Slurm*
+### Launch the backend *within Slurm based clusters*
 tekit_triton.sub
 
 ```bash
@@ -31,13 +27,17 @@ tekit_triton.sub
 #SBATCH -J gpu-comparch-ftp:mgmn
 #SBATCH -A gpu-comparch
 #SBATCH -p luna
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --time=00:30:00
 
 sudo nvidia-smi -lgc 1410,1410
 
-srun --mpi=pmix --container-image gitlab-master.nvidia.com/ftp/tekit/triton:tot-ln --container-mounts /home/kevxie/lustre/workspace/:/workspace/ --container-workdir /workspace/tekit --output logs/tekit_%t.out --error logs/tekit_%t.error bash /workspace/tekit_triton.sh
+srun --mpi=pmix --container-image <image> \
+    --container-mounts <your/path>:<mount/path> \
+    --container-workdir <workdir> \
+    --output logs/tekit_%t.out \
+    bash <workdir>/tekit_triton.sh
 ```
 
 tekit_triton.sh

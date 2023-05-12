@@ -12,7 +12,7 @@ def parse_arguments():
     parser.add_argument('--tritonserver',
                         type=str,
                         default='/opt/tritonserver/bin/tritonserver')
-    path = str(Path(__file__).parent.absolute()) + '/../all_models/'
+    path = str(Path(__file__).parent.absolute()) + '/../all_models/gpt'
     parser.add_argument('--model_repo', type=str, default=path)
     return parser.parse_args()
 

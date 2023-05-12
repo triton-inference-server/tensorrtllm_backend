@@ -147,10 +147,6 @@ def send_requests(url,
         for i in range(request_parallelism):
             # Get the result from the initiated asynchronous inference request.
             # Note the call will block till the server responds.
-            print("wait result return 0000\n")
-            print("wait result return 1111\n")
-            print("get results\n")
-
             output_data = results[i].as_numpy("output_ids")
             np.savetxt("triton_out",
                        output_data.reshape([-1, output_data.shape[-1]]),
