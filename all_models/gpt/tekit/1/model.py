@@ -181,7 +181,6 @@ class TritonPythonModel:
                     request, 'top_p_reset_ids')
 
             # Broadcast requests to other clients
-            # input_ids = self.comm.bcast(input_ids, root=0).cuda()
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
             self.decoder.setup(input_ids.size(0),
