@@ -82,8 +82,6 @@ class TritonPythonModel:
         """
         model_config = json.loads(args['model_config'])
         engine_dir = model_config['parameters']['engine_dir']['string_value']
-        self.max_out_len = int(
-            model_config['parameters']['max_out_len']['string_value'])
         config_path = os.path.join(engine_dir, 'config.json')
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -144,10 +142,10 @@ class TritonPythonModel:
         for request in requests:
             # Perform inference on the request and append it to responses list...
             input_names = [
-                'input_ids', 'runtime_top_k', 'runtime_top_p',
-                'beam_search_diversity_rate', 'temperature', 'len_penalty',
-                'repetition_penalty', 'beam_width', 'random_seed',
-                'top_p_decay', 'top_p_min', 'top_p_reset_ids'
+                'input_ids', 'request_output_len', 'runtime_top_k',
+                'runtime_top_p', 'beam_search_diversity_rate', 'temperature',
+                'len_penalty', 'repetition_penalty', 'beam_width',
+                'random_seed', 'top_p_decay', 'top_p_min', 'top_p_reset_ids'
             ]
             inputs = {}
             for name in input_names:
@@ -156,6 +154,8 @@ class TritonPythonModel:
             if self.rank == 0:
                 inputs['input_ids'] = get_input_tensor_by_name(
                     request, 'input_ids')
+                inputs['request_output_len'] = get_input_scalar_by_name(
+                    request, 'request_output_len')
                 inputs['beam_width'] = get_input_scalar_by_name(
                     request, 'beam_width')
                 inputs['temperature'] = get_input_scalar_by_name(
@@ -185,7 +185,7 @@ class TritonPythonModel:
             input_ids = inputs['input_ids'].cuda()
             self.decoder.setup(input_ids.size(0),
                                input_ids.size(1),
-                               self.max_out_len,
+                               inputs['request_output_len'],
                                self.vocab_size,
                                self.num_layers,
                                self.num_heads,

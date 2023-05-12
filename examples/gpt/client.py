@@ -79,6 +79,8 @@ def send_requests(
                                         url,
                                         concurrency=1,
                                         verbose=verbose) as client:
+        output_len = np.ones([input_start_ids.shape[0], 1]).astype(
+            np.uint32) * FLAGS.output_len
         runtime_top_k = (flags.topk *
                          np.ones([input_start_ids.shape[0], 1])).astype(
                              np.uint32)
@@ -116,7 +118,7 @@ def send_requests(
         inputs = [
             prepare_tensor("input_ids", input_data, flags.protocol),
             # prepare_tensor("input_lengths", input_len, flags.protocol),
-            # prepare_tensor("request_output_len", output_len, flags.protocol),
+            prepare_tensor("request_output_len", output_len, flags.protocol),
             prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
             prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),
             prepare_tensor("beam_search_diversity_rate",
@@ -190,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('-o',
                         '--output_len',
                         type=int,
-                        default=20,
+                        default=10,
                         required=False,
                         help='Specify output length')
 
