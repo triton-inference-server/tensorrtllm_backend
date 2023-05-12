@@ -8,6 +8,25 @@ from torch import from_numpy
 import tekit
 
 
+def get_input_tensor_by_name(request, name):
+    tensor = pb_utils.get_input_tensor_by_name(request, name)
+    if tensor is not None:
+        # Triton tensor -> numpy tensor -> PyTorch tensor
+        return from_numpy(tensor.as_numpy())
+    else:
+        return tensor
+
+
+def get_input_scalar_by_name(request, name):
+    tensor = pb_utils.get_input_tensor_by_name(request, name)
+    if tensor is not None:
+        # Triton tensor -> numpy tensor -> first scalar
+        tensor = tensor.as_numpy()
+        return tensor.reshape((tensor.size, ))[0]
+    else:
+        return tensor
+
+
 class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
     that is created must have "TritonPythonModel" as the class name.
@@ -122,20 +141,49 @@ class TritonPythonModel:
         # as they will be overridden in subsequent inference requests. You can
         # make a copy of the underlying NumPy array and store it if it is
         # required.
-        input_name = 'input_ids'
         for request in requests:
             # Perform inference on the request and append it to responses list...
-            if self.rank == 0:
-                # Triton tensor -> numpy tensor -> PyTorch tensor
-                input_ids = from_numpy(
-                    pb_utils.get_input_tensor_by_name(request,
-                                                      input_name).as_numpy())
+            input_names = [
+                'input_ids', 'runtime_top_k', 'runtime_top_p',
+                'beam_search_diversity_rate', 'temperature', 'len_penalty',
+                'repetition_penalty', 'beam_width', 'random_seed',
+                'top_p_decay', 'top_p_min', 'top_p_reset_ids'
+            ]
+            inputs = {}
+            for name in input_names:
+                inputs[name] = None
 
-            else:
-                input_ids = None
+            if self.rank == 0:
+                inputs['input_ids'] = get_input_tensor_by_name(
+                    request, 'input_ids')
+                inputs['beam_width'] = get_input_scalar_by_name(
+                    request, 'beam_width')
+                inputs['temperature'] = get_input_scalar_by_name(
+                    request, 'temperature')
+                inputs['runtime_top_k'] = get_input_scalar_by_name(
+                    request, 'runtime_top_k')
+                inputs['runtime_top_p'] = get_input_scalar_by_name(
+                    request, 'runtime_top_p')
+                inputs['len_penalty'] = get_input_scalar_by_name(
+                    request, 'len_penalty')
+                inputs['repetition_penalty'] = get_input_scalar_by_name(
+                    request, 'repetition_penalty')
+                inputs[
+                    'beam_search_diversity_rate'] = get_input_scalar_by_name(
+                        request, 'beam_search_diversity_rate')
+                inputs['random_seed'] = get_input_scalar_by_name(
+                    request, 'random_seed')
+                inputs['top_p_decay'] = get_input_scalar_by_name(
+                    request, 'top_p_decay')
+                inputs['top_p_min'] = get_input_scalar_by_name(
+                    request, 'top_p_min')
+                inputs['top_p_reset_ids'] = get_input_scalar_by_name(
+                    request, 'top_p_reset_ids')
 
             # Broadcast requests to other clients
-            input_ids = self.comm.bcast(input_ids, root=0).cuda()
+            # input_ids = self.comm.bcast(input_ids, root=0).cuda()
+            inputs = self.comm.bcast(inputs, root=0)
+            input_ids = inputs['input_ids'].cuda()
             self.decoder.setup(input_ids.size(0),
                                input_ids.size(1),
                                self.max_out_len,
@@ -143,7 +191,20 @@ class TritonPythonModel:
                                self.num_layers,
                                self.num_heads,
                                self.hidden_size,
-                               use_plugin=self.use_gpt_attention_plugin)
+                               num_beams=inputs['beam_width'],
+                               use_plugin=self.use_gpt_attention_plugin,
+                               temperature=inputs['temperature'],
+                               top_k=inputs['runtime_top_k'],
+                               top_p=inputs['runtime_top_p'],
+                               length_penalty=inputs['len_penalty'],
+                               repetition_penalty=inputs['repetition_penalty'],
+                               presence_penalty=None,
+                               min_length=0,
+                               beam_search_diversity_rate=None,
+                               random_seed=None,
+                               top_p_decay=None,
+                               top_p_min=None,
+                               top_p_reset_ids=None)
             output_ids = self.decoder.decode(input_ids)
 
             if self.rank == 0:
