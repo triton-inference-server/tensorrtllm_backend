@@ -13,6 +13,11 @@ input [
     dims: [ -1 ]
   },
   {
+    name: "request_output_len"
+    data_type: TYPE_UINT32
+    dims: [ -1 ]
+  },
+  {
     name: "runtime_top_k"
     data_type: TYPE_UINT32
     dims: [ 1 ]
@@ -107,12 +112,6 @@ parameters {
   key: "engine_dir"
   value: {
     string_value: "TO_BE_FILLED"
-  }
-}
-parameters {
-  key: "max_out_len"
-  value: {
-    string_value: "200"
   }
 }
 parameters: {
