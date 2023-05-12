@@ -59,7 +59,7 @@ def prepare_tensor(name, input):
 
 
 def send_http_requests(client, input_start_ids, request_parallelism):
-    model_name = "gpt"
+    model_name = "tekit"
     async_requests = []
     inputs = [prepare_tensor("input_ids", input_start_ids)]
     for _ in range(request_parallelism):
@@ -72,7 +72,7 @@ def send_http_requests(client, input_start_ids, request_parallelism):
 
 
 def send_grpc_requests(client, input_start_ids, request_parallelism):
-    model_name = "gpt"
+    model_name = "tekit"
     async_requests = []
     inputs = [prepare_tensor("input_ids", input_start_ids)]
     user_data = UserData()

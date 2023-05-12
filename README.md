@@ -61,8 +61,8 @@ bash scripts/kill_triton_server.sh
 ## Test
 
 ```bash
-python examples/gpt/client.py
+python3 examples/gpt/client.py
 
-perf_analyzer -m gpt --concurrency-range 1:4 -u 'localhost:8000' 2>&1 | tee triton_http_perf.log
-perf_analyzer -m gpt --concurrency-range 1:4 -u 'localhost:8001' -i grpc 2>&1 | tee triton_grpc_perf.log
+perf_analyzer -m tekit --concurrency-range 1:4 -u 'localhost:8000' 2>&1 | tee triton_http_perf.log
+perf_analyzer -m tekit --concurrency-range 1:4 -u 'localhost:8001' -i grpc 2>&1 | tee triton_grpc_perf.log
 ```
