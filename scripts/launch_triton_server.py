@@ -7,7 +7,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--world_size',
                         type=int,
-                        default=2,
+                        default=1,
                         help='world size, only support tensor parallelism now')
     parser.add_argument('--tritonserver',
                         type=str,
