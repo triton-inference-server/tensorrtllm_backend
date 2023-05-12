@@ -27,21 +27,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import statistics as s
+import sys
+from builtins import range
 from datetime import datetime
 
 import numpy as np
 import tritonclient.grpc as grpcclient
 import tritonclient.http as httpclient
 from tritonclient.utils import np_to_triton_dtype
-from utils import token_encoder
-
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
-
-START_ID = 50256
-END_ID = 50256
 
 
 # Callback function used for async_stream_infer()
@@ -68,17 +62,20 @@ def create_inference_server_client(protocol, url, concurrency, verbose):
         return client_util.InferenceServerClient(url, verbose=verbose)
 
 
-def send_requests(
-    url,
-    input_start_ids,
-    verbose,
-    flags,
-):
+def send_requests(url,
+                  input_start_ids,
+                  input_len,
+                  output_len,
+                  verbose,
+                  flags,
+                  request_parallelism=10):
     model_name = "tekit"
     with create_inference_server_client(flags.protocol,
                                         url,
-                                        concurrency=1,
+                                        concurrency=request_parallelism,
                                         verbose=verbose) as client:
+        results = []
+
         runtime_top_k = (flags.topk *
                          np.ones([input_start_ids.shape[0], 1])).astype(
                              np.uint32)
@@ -112,33 +109,41 @@ def send_requests(
             (-1 * np.ones([input_start_ids.shape[0], 1, 1])).astype(np.int32)
         ],
                                         axis=1)
-        input_data = input_start_ids
-        inputs = [
-            prepare_tensor("input_ids", input_data, flags.protocol),
-            # prepare_tensor("input_lengths", input_len, flags.protocol),
-            # prepare_tensor("request_output_len", output_len, flags.protocol),
-            prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
-            prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),
-            prepare_tensor("beam_search_diversity_rate",
-                           beam_search_diversity_rate, flags.protocol),
-            prepare_tensor("temperature", temperature, flags.protocol),
-            prepare_tensor("len_penalty", len_penalty, flags.protocol),
-            prepare_tensor("repetition_penalty", repetition_penalty,
-                           flags.protocol),
-            prepare_tensor("random_seed", random_seed, flags.protocol),
-            # prepare_tensor("is_return_log_probs", is_return_log_probs, flags.protocol),
-            prepare_tensor("beam_width", beam_width, flags.protocol),
-            # prepare_tensor("start_id", start_ids, flags.protocol),
-            # prepare_tensor("end_id", end_ids, flags.protocol),
-            # prepare_tensor("bad_words_list", bad_words_list, flags.protocol),
-            # prepare_tensor("stop_words_list", stop_word_list, flags.protocol),
-        ]
+        for i in range(request_parallelism):
+            input_data = input_start_ids
+            inputs = [
+                prepare_tensor("input_ids", input_data, flags.protocol),
+                # prepare_tensor("input_lengths", input_len, flags.protocol),
+                # prepare_tensor("request_output_len", output_len, flags.protocol),
+                prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
+                prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),
+                prepare_tensor("beam_search_diversity_rate",
+                               beam_search_diversity_rate, flags.protocol),
+                prepare_tensor("temperature", temperature, flags.protocol),
+                prepare_tensor("len_penalty", len_penalty, flags.protocol),
+                prepare_tensor("repetition_penalty", repetition_penalty,
+                               flags.protocol),
+                prepare_tensor("random_seed", random_seed, flags.protocol),
+                # prepare_tensor("is_return_log_probs", is_return_log_probs, flags.protocol),
+                prepare_tensor("beam_width", beam_width, flags.protocol),
+                # prepare_tensor("start_id", start_ids, flags.protocol),
+                # prepare_tensor("end_id", end_ids, flags.protocol),
+                # prepare_tensor("bad_words_list", bad_words_list, flags.protocol),
+                # prepare_tensor("stop_words_list", stop_word_list, flags.protocol),
+            ]
 
-        print("set request")
-        result = client.infer(model_name, inputs)
-        print("get request")
+            print("set request")
+            result = client.infer(model_name, inputs)
+            print("get request")
+            results.append(result)
 
-        return result.as_numpy("output_ids")
+        for i in range(request_parallelism):
+            # Get the result from the initiated asynchronous inference request.
+            # Note the call will block till the server responds.
+            output_data = results[i].as_numpy("output_ids")
+            if output_data is None:
+                print("error: expected 'output_ids'")
+                sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -162,13 +167,18 @@ if __name__ == '__main__':
         default='http',
         help='Protocol ("http"/"grpc") used to ' +
         'communicate with inference service. Default is "http".')
-    parser.add_argument(
-        '-t',
-        '--text',
-        type=str,
-        required=False,
-        default='Born in north-east France, Soyer trained as a',
-        help='Input text')
+    parser.add_argument('-w',
+                        '--warm_up',
+                        action="store_true",
+                        required=False,
+                        default=False,
+                        help='Enable warm_up before benchmark')
+    parser.add_argument('-b',
+                        '--batch_size',
+                        type=int,
+                        default=8,
+                        required=False,
+                        help='Specify batch size')
     parser.add_argument('-beam',
                         '--beam_width',
                         type=int,
@@ -187,12 +197,25 @@ if __name__ == '__main__':
                         default=0.0,
                         required=False,
                         help='topp for sampling')
+    parser.add_argument('-s',
+                        '--start_len',
+                        type=int,
+                        default=8,
+                        required=False,
+                        help='Specify input length')
     parser.add_argument('-o',
                         '--output_len',
                         type=int,
-                        default=20,
+                        default=24,
                         required=False,
                         help='Specify output length')
+    parser.add_argument(
+        '-n',
+        '--num_runs',
+        type=int,
+        default=1,
+        required=False,
+        help="Spedifty number of runs to get the average latency")
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
@@ -202,21 +225,30 @@ if __name__ == '__main__':
         exit(1)
 
     client_util = httpclient if FLAGS.protocol == "http" else grpcclient
+    concurrency = 20
+    request_parallelism = 10
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
+    input_start_ids = np.random.randint(0,
+                                        50255,
+                                        size=(FLAGS.batch_size,
+                                              FLAGS.start_len),
+                                        dtype=np.int32)
 
-    encoder = token_encoder.get_encoder(VOCAB_FILE, MERGES_FILE)
-    input_start_ids = np.array([encoder.encode(FLAGS.text)], np.int32)
-
-    start_time = datetime.now()
-    output_ids = send_requests(FLAGS.url, input_start_ids, FLAGS.verbose,
-                               FLAGS)
-    stop_time = datetime.now()
-    latencies = (stop_time - start_time).total_seconds() * 1000.0
-    print(f"[INFO] Latency: {latencies} ms")
-
-    output_ids = output_ids.reshape(
-        (output_ids.size, )).tolist()[input_start_ids.shape[1]:]
-    output_text = encoder.decode(output_ids)
-    print(f'Input: {FLAGS.text}')
-    print(f'Output: {output_text}')
+    latencies = []
+    for i in range(FLAGS.num_runs):
+        start_time = datetime.now()
+        input_len = np.array([[sentence.size] for sentence in input_start_ids],
+                             np.uint32)
+        output_len = np.ones_like(input_len).astype(
+            np.uint32) * FLAGS.output_len
+        send_requests(FLAGS.url, input_start_ids, input_len, output_len,
+                      FLAGS.verbose, FLAGS, request_parallelism)
+        stop_time = datetime.now()
+        latencies.append((stop_time - start_time).total_seconds() * 1000.0 /
+                         request_parallelism)
+    if FLAGS.num_runs > 1:
+        print(latencies)
+        print(f"[INFO] execution time: {s.mean(latencies)} ms")
+    else:
+        print(f"[INFO] execution time: {latencies[0]} ms")
