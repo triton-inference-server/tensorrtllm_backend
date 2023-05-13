@@ -64,8 +64,6 @@ def create_inference_server_client(protocol, url, concurrency, verbose):
 
 def send_requests(url,
                   input_start_ids,
-                  input_len,
-                  output_len,
                   verbose,
                   flags,
                   request_parallelism=10):
@@ -75,7 +73,8 @@ def send_requests(url,
                                         concurrency=request_parallelism,
                                         verbose=verbose) as client:
         results = []
-
+        output_len = np.ones([input_start_ids.shape[0], 1]).astype(
+            np.uint32) * FLAGS.output_len
         runtime_top_k = (flags.topk *
                          np.ones([input_start_ids.shape[0], 1])).astype(
                              np.uint32)
@@ -114,7 +113,8 @@ def send_requests(url,
             inputs = [
                 prepare_tensor("input_ids", input_data, flags.protocol),
                 # prepare_tensor("input_lengths", input_len, flags.protocol),
-                # prepare_tensor("request_output_len", output_len, flags.protocol),
+                prepare_tensor("request_output_len", output_len,
+                               flags.protocol),
                 prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
                 prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),
                 prepare_tensor("beam_search_diversity_rate",
@@ -238,12 +238,8 @@ if __name__ == '__main__':
     latencies = []
     for i in range(FLAGS.num_runs):
         start_time = datetime.now()
-        input_len = np.array([[sentence.size] for sentence in input_start_ids],
-                             np.uint32)
-        output_len = np.ones_like(input_len).astype(
-            np.uint32) * FLAGS.output_len
-        send_requests(FLAGS.url, input_start_ids, input_len, output_len,
-                      FLAGS.verbose, FLAGS, request_parallelism)
+        send_requests(FLAGS.url, input_start_ids, FLAGS.verbose, FLAGS,
+                      request_parallelism)
         stop_time = datetime.now()
         latencies.append((stop_time - start_time).total_seconds() * 1000.0 /
                          request_parallelism)
