@@ -74,7 +74,9 @@ cd examples/gpt/
 wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
 wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
 
-python3 client.py
+python3 client.py \
+    --text="Born in north-east France, Soyer trained as a" \
+    --output_len=10
 
 # Exmaple output:
 # [INFO] Latency: 92.278 ms

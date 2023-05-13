@@ -136,10 +136,7 @@ def send_requests(
             # prepare_tensor("stop_words_list", stop_word_list, flags.protocol),
         ]
 
-        print("set request")
         result = client.infer(model_name, inputs)
-        print("get request")
-
         return result.as_numpy("output_ids")
 
 

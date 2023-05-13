@@ -204,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('-o',
                         '--output_len',
                         type=int,
-                        default=24,
+                        default=10,
                         required=False,
                         help='Specify output length')
     parser.add_argument(
@@ -254,6 +254,10 @@ if __name__ == '__main__':
         latency = s.mean(latencies)
     else:
         latency = latencies[0]
+    latency = round(latency, 3)
     throughtput = round(1000 / latency * FLAGS.batch_size, 3)
+    print(
+        f"[INFO] Batch size: {FLAGS.batch_size}, Start len: {FLAGS.start_len}, Output len: {FLAGS.output_len}"
+    )
     print(f"[INFO] Latency: {latency} ms")
     print(f"[INFO] Throughtput: {throughtput} sentences / sec")
