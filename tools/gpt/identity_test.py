@@ -132,9 +132,7 @@ def send_requests(url,
                 # prepare_tensor("stop_words_list", stop_word_list, flags.protocol),
             ]
 
-            print("set request")
             result = client.infer(model_name, inputs)
-            print("get request")
             results.append(result)
 
         for i in range(request_parallelism):
@@ -224,9 +222,6 @@ if __name__ == '__main__':
                 FLAGS.protocol))
         exit(1)
 
-    client_util = httpclient if FLAGS.protocol == "http" else grpcclient
-    concurrency = 20
-    request_parallelism = 10
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
     input_start_ids = np.random.randint(0,
@@ -235,6 +230,17 @@ if __name__ == '__main__':
                                               FLAGS.start_len),
                                         dtype=np.int32)
 
+    # warm up
+    if FLAGS.warm_up:
+        print("[INFO] sending requests to warm up")
+        send_requests(FLAGS.url,
+                      FLAGS.batch_size,
+                      input_start_ids,
+                      FLAGS.verbose,
+                      FLAGS,
+                      request_parallelism=2)
+
+    request_parallelism = 10
     latencies = []
     for i in range(FLAGS.num_runs):
         start_time = datetime.now()
@@ -243,8 +249,11 @@ if __name__ == '__main__':
         stop_time = datetime.now()
         latencies.append((stop_time - start_time).total_seconds() * 1000.0 /
                          request_parallelism)
+
     if FLAGS.num_runs > 1:
-        print(latencies)
-        print(f"[INFO] execution time: {s.mean(latencies)} ms")
+        latency = s.mean(latencies)
     else:
-        print(f"[INFO] execution time: {latencies[0]} ms")
+        latency = latencies[0]
+    throughtput = round(1000 / latency * FLAGS.batch_size, 3)
+    print(f"[INFO] Latency: {latency} ms")
+    print(f"[INFO] Throughtput: {throughtput} sentences / sec")
