@@ -31,20 +31,20 @@ def main():
     len_penalty = 1.0 * np.ones([1]).astype(np.float32)
     repetition_penalty = 1.0 * np.ones([1]).astype(np.float32)
     random_seed = 0 * np.ones([1]).astype(np.uint64)
-    True * np.ones([1]).astype(bool)
+    # is_return_log_probs = True * np.ones([1]).astype(bool)
     beam_width = (beam_width * np.ones([1])).astype(np.uint32)
-    50256 * np.ones([1]).astype(np.uint32)
-    50256 * np.ones([1]).astype(np.uint32)
-    bad_words_list = np.concatenate([
-        np.zeros([1, 1]).astype(np.int32),
-        (-1 * np.ones([1, 1])).astype(np.int32)
-    ],
-                                    axis=1)
-    stop_word_list = np.concatenate([
-        np.zeros([1, 1]).astype(np.int32),
-        (-1 * np.ones([1, 1])).astype(np.int32)
-    ],
-                                    axis=1)
+    # start_ids = 50256 * np.ones([1]).astype(np.uint32)
+    # end_ids = 50256 * np.ones([1]).astype(np.uint32)
+    # bad_words_list = np.concatenate([
+    #     np.zeros([1, 1]).astype(np.int32),
+    #     (-1 * np.ones([1, 1])).astype(np.int32)
+    # ],
+    #                                 axis=1)
+    # stop_word_list = np.concatenate([
+    #     np.zeros([1, 1]).astype(np.int32),
+    #     (-1 * np.ones([1, 1])).astype(np.int32)
+    # ],
+    #                                 axis=1)
 
     add_data(data, 'input_ids', input_start_ids)
     add_data(data, 'request_output_len', output_len)
