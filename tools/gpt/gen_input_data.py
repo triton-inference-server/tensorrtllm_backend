@@ -3,15 +3,12 @@ import json
 import numpy as np
 
 
-def add_data(data, name, array):
-    data['data'][0][name] = {
-        'content': array.flatten().tolist(),
-        'shape': array.shape
-    }
+def add_sample(sample, name, array):
+    sample[name] = {'content': array.flatten().tolist(), 'shape': array.shape}
 
 
 def main():
-    data = {'data': [{}]}
+    data = {'data': []}
 
     start_len = 20
     output_len = 10
@@ -46,19 +43,24 @@ def main():
     # ],
     #                                 axis=1)
 
-    add_data(data, 'input_ids', input_start_ids)
-    add_data(data, 'request_output_len', output_len)
-    add_data(data, 'runtime_top_k', runtime_top_k)
-    add_data(data, 'runtime_top_p', runtime_top_p)
-    add_data(data, 'beam_search_diversity_rate', beam_search_diversity_rate)
-    add_data(data, 'temperature', temperature)
-    add_data(data, 'len_penalty', len_penalty)
-    add_data(data, 'repetition_penalty', repetition_penalty)
-    add_data(data, 'random_seed', random_seed)
-    add_data(data, 'beam_width', beam_width)
-    # add_data(data, 'top_p_decay', top_p_decay)
-    # add_data(data, 'top_p_min', top_p_min)
-    # add_data(data, 'top_p_reset_ids', top_p_reset_ids)
+    num_sample = 10000
+    for _ in range(num_sample):
+        sample = {}
+        add_sample(sample, 'input_ids', input_start_ids)
+        add_sample(sample, 'request_output_len', output_len)
+        add_sample(sample, 'runtime_top_k', runtime_top_k)
+        add_sample(sample, 'runtime_top_p', runtime_top_p)
+        add_sample(sample, 'beam_search_diversity_rate',
+                   beam_search_diversity_rate)
+        add_sample(sample, 'temperature', temperature)
+        add_sample(sample, 'len_penalty', len_penalty)
+        add_sample(sample, 'repetition_penalty', repetition_penalty)
+        add_sample(sample, 'random_seed', random_seed)
+        add_sample(sample, 'beam_width', beam_width)
+        # add_sample(sample, 'top_p_decay', top_p_decay)
+        # add_sample(sample, 'top_p_min', top_p_min)
+        # add_sample(sample, 'top_p_reset_ids', top_p_reset_ids)
+        data['data'].append(sample)
 
     with open('input_data.json', 'w') as f:
         json.dump(data, f, indent=4)

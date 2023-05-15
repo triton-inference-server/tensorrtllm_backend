@@ -87,8 +87,10 @@ python3 client.py \
 ## Test
 
 ```bash
+cd tools/gpt/
+
 # Identity test
-python3 tools/gpt/identity_test.py \
+python3 identity_test.py \
     --batch_size=8 --start_len=128 --output_len=20
 # Results:
 # [INFO] Batch size: 8, Start len: 8, Output len: 10
