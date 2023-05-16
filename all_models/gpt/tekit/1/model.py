@@ -105,7 +105,6 @@ class TritonPythonModel:
                                              self.rank)
         serialize_path = os.path.join(engine_dir, engine_name)
 
-        tekit.init()
         runtime = tekit.GPTRuntime(dtype)
         runtime.prepare(runtime_mapping, serialize_path)
         self.decoder = tekit.GPTDecoder(runtime_mapping, runtime)
@@ -203,7 +202,8 @@ class TritonPythonModel:
                                random_seed=None,
                                top_p_decay=None,
                                top_p_min=None,
-                               top_p_reset_ids=None)
+                               top_p_reset_ids=None,
+                               end_id=50256)
             output_ids = self.decoder.decode(input_ids)
 
             if self.rank == 0:
