@@ -87,6 +87,27 @@ python3 client.py \
 ## Test
 
 ```bash
-python3 tools/gpt/identity_test.py \
+cd tools/gpt/
+
+# Identity test
+python3 identity_test.py \
     --batch_size=8 --start_len=128 --output_len=20
+# Results:
+# [INFO] Batch size: 8, Start len: 8, Output len: 10
+# [INFO] Latency: 70.782 ms
+# [INFO] Throughtput: 113.023 sentences / sec
+
+# Benchmark using Perf Analyzer
+python3 gen_input_data.py
+perf_analyzer -m tekit \
+    -b 8 --input-data input_data.json \
+    --concurrency-range 1:10:2 \
+    -u 'localhost:8000'
+
+# Results:
+# Concurrency: 1, throughput: 99.9875 infer/sec, latency 79797 usec
+# Concurrency: 3, throughput: 197.308 infer/sec, latency 121342 usec
+# Concurrency: 5, throughput: 259.077 infer/sec, latency 153693 usec
+# Concurrency: 7, throughput: 286.18 infer/sec, latency 195011 usec
+# Concurrency: 9, throughput: 307.067 infer/sec, latency 233354 usec
 ```
