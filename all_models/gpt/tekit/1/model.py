@@ -87,7 +87,7 @@ class TritonPythonModel:
             config = json.load(f)
         self.use_gpt_attention_plugin = config['plugin_config'][
             'gpt_attention_plugin']
-        dtype = 'float16' if config['builder_config']['fp16'] else 'float32'
+        dtype = config['builder_config']['precision']
         world_size = config['builder_config']['tensor_parallel']
         assert world_size == tekit.mpi_world_size(), \
             f'Engine world size ({world_size}) != Runtime world size ({tekit.mpi_world_size()})'
