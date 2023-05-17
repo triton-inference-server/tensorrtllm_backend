@@ -1,0 +1,53 @@
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  GIT_SUBMODULE_STRATEGY: recursive
+
+cache:
+  paths:
+    - .cache/pip
+
+stages:
+  - style-check
+  - build-model
+  - test
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "schedule"
+
+style-check-job:
+  stage: style-check
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install pre-commit
+    - pre-commit run -a
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
+    expire_in: 10 mins
+
+build-gpt-model-job:
+  stage: build-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - bash scripts/tests/build_model.sh GPT
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
+    expire_in: 10 mins
+    paths:
+      - tekit/
+
+test-gpt-job:
+  stage: test
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - bash scripts/tests/test.sh GPT tekit/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
+    expire_in: 10 mins
+  dependencies:
+    - build-gpt-model-job
