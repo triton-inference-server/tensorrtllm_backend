@@ -85,16 +85,16 @@ class TritonPythonModel:
         config_path = os.path.join(engine_dir, 'config.json')
         with open(config_path, 'r') as f:
             config = json.load(f)
-        self.use_gpt_attention_plugin = config['plugin_config'][
+        use_gpt_attention_plugin = config['plugin_config'][
             'gpt_attention_plugin']
         dtype = config['builder_config']['precision']
         world_size = config['builder_config']['tensor_parallel']
         assert world_size == tekit.mpi_world_size(), \
             f'Engine world size ({world_size}) != Runtime world size ({tekit.mpi_world_size()})'
-        self.num_heads = config['builder_config']['num_heads'] // world_size
-        self.hidden_size = config['builder_config']['hidden_size'] // world_size
-        self.vocab_size = config['builder_config']['vocab_size']
-        self.num_layers = config['builder_config']['num_layers']
+        num_heads = config['builder_config']['num_heads'] // world_size
+        hidden_size = config['builder_config']['hidden_size'] // world_size
+        vocab_size = config['builder_config']['vocab_size']
+        num_layers = config['builder_config']['num_layers']
 
         self.comm = tekit.mpi_comm()
         self.rank = tekit.mpi_rank()
@@ -105,9 +105,14 @@ class TritonPythonModel:
                                              self.rank)
         serialize_path = os.path.join(engine_dir, engine_name)
 
-        runtime = tekit.GPTRuntime(dtype)
-        runtime.prepare(runtime_mapping, serialize_path)
-        self.decoder = tekit.GPTDecoder(runtime_mapping, runtime)
+        model_config = tekit.models.gpt.runtime.GPTConfig(
+            num_heads=num_heads,
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+            num_layers=num_layers,
+            gpt_attention_plugin=use_gpt_attention_plugin)
+        self.decoder = tekit.GPTDecoder(model_config, serialize_path,
+                                        runtime_mapping, dtype)
 
         if self.rank != 0:
             while (True):
@@ -182,29 +187,19 @@ class TritonPythonModel:
             # Broadcast requests to other clients
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
+            sampling_config = tekit.models.gpt.runtime.GPTSamplingConfig(
+                end_id=50256,
+                num_beams=inputs['beam_width'],
+                temperature=inputs['temperature'],
+                top_k=inputs['runtime_top_k'],
+                top_p=inputs['runtime_top_p'],
+                length_penalty=inputs['len_penalty'],
+                repetition_penalty=inputs['repetition_penalty'],
+            )
             self.decoder.setup(input_ids.size(0),
-                               input_ids.size(1),
-                               inputs['request_output_len'],
-                               self.vocab_size,
-                               self.num_layers,
-                               self.num_heads,
-                               self.hidden_size,
-                               num_beams=inputs['beam_width'],
-                               use_plugin=self.use_gpt_attention_plugin,
-                               temperature=inputs['temperature'],
-                               top_k=inputs['runtime_top_k'],
-                               top_p=inputs['runtime_top_p'],
-                               length_penalty=inputs['len_penalty'],
-                               repetition_penalty=inputs['repetition_penalty'],
-                               presence_penalty=None,
-                               min_length=0,
-                               beam_search_diversity_rate=None,
-                               random_seed=None,
-                               top_p_decay=None,
-                               top_p_min=None,
-                               top_p_reset_ids=None,
-                               end_id=50256)
-            output_ids = self.decoder.decode(input_ids)
+                               max_input_length=input_ids.size(1),
+                               max_new_tokens=inputs['request_output_len'])
+            output_ids = self.decoder.decode(input_ids, sampling_config)
 
             if self.rank == 0:
                 # Create output tensors. You need pb_utils.Tensor
