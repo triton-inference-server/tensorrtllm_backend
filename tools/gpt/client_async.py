@@ -25,14 +25,18 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 import argparse
-import statistics as s
-from builtins import range
 from datetime import datetime
 
 import numpy as np
-from utils import utils
+import tritonclient.grpc as grpcclient
+import tritonclient.http as httpclient
+from utils import token_encoder, utils
+
+# GPT3 Related variables
+# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
+MERGES_FILE = "gpt2-merges.txt"
+VOCAB_FILE = "gpt2-vocab.json"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -55,36 +59,19 @@ if __name__ == '__main__':
         default='http',
         help='Protocol ("http"/"grpc") used to ' +
         'communicate with inference service. Default is "http".')
-    parser.add_argument('-w',
-                        '--warm_up',
-                        action="store_true",
-                        required=False,
-                        default=False,
-                        help='Enable warm_up before benchmark')
+    parser.add_argument(
+        '-t',
+        '--text',
+        type=str,
+        required=False,
+        default='Born in north-east France, Soyer trained as a',
+        help='Input text')
     parser.add_argument('-c',
                         '--concurrency',
                         type=int,
                         default=1,
                         required=False,
                         help='Specify concurrency')
-    parser.add_argument('-p',
-                        '--request_parallelism',
-                        type=int,
-                        default=10,
-                        required=False,
-                        help='Specify request parallelism')
-    parser.add_argument('-m',
-                        '--mode',
-                        type=str,
-                        required=False,
-                        default='sync',
-                        help='Mode ("sync"/"async").')
-    parser.add_argument('-b',
-                        '--batch_size',
-                        type=int,
-                        default=8,
-                        required=False,
-                        help='Specify batch size')
     parser.add_argument('-beam',
                         '--beam_width',
                         type=int,
@@ -103,25 +90,12 @@ if __name__ == '__main__':
                         default=0.0,
                         required=False,
                         help='topp for sampling')
-    parser.add_argument('-s',
-                        '--start_len',
-                        type=int,
-                        default=8,
-                        required=False,
-                        help='Specify input length')
     parser.add_argument('-o',
                         '--output_len',
                         type=int,
                         default=10,
                         required=False,
                         help='Specify output length')
-    parser.add_argument(
-        '-n',
-        '--num_runs',
-        type=int,
-        default=1,
-        required=False,
-        help="Spedifty number of runs to get the average latency")
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
@@ -130,54 +104,40 @@ if __name__ == '__main__':
                 FLAGS.protocol))
         exit(1)
 
+    client_util = httpclient if FLAGS.protocol == "http" else grpcclient
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
-    input_start_ids = np.random.randint(0,
-                                        50255,
-                                        size=(FLAGS.batch_size,
-                                              FLAGS.start_len),
-                                        dtype=np.int32)
+
+    encoder = token_encoder.get_encoder(VOCAB_FILE, MERGES_FILE)
+    input_start_ids = np.array([encoder.encode(FLAGS.text)], np.int32)
     inputs = utils.prepare_inputs(input_start_ids, FLAGS)
 
-    # warm up
-    if FLAGS.warm_up:
-        print("[INFO] sending requests to warm up")
-        utils.send_requests(inputs, FLAGS, request_parallelism=2)
+    start_time = datetime.now()
 
-    latencies = []
-    for i in range(FLAGS.num_runs):
-        start_time = datetime.now()
+    with utils.create_inference_server_client(FLAGS.protocol,
+                                              FLAGS.url,
+                                              concurrency=FLAGS.concurrency,
+                                              verbose=FLAGS.verbose) as client:
+        if FLAGS.protocol == "http":
+            async_requests = utils.send_requests_async(inputs,
+                                                       client,
+                                                       FLAGS,
+                                                       request_parallelism=1)
+            results = utils.get_http_results(async_requests)
+        else:
+            user_data = utils.send_requests_async(inputs,
+                                                  client,
+                                                  FLAGS,
+                                                  request_parallelism=1)
+            results = utils.get_grpc_results(user_data, request_parallelism=1)
+    output_ids = results[0].as_numpy("output_ids")
 
-        with utils.create_inference_server_client(
-                FLAGS.protocol,
-                FLAGS.url,
-                concurrency=FLAGS.concurrency,
-                verbose=FLAGS.verbose) as client:
-            if FLAGS.mode == 'sync':
-                utils.send_requests(inputs, client, FLAGS.request_parallelism)
-            else:
-                if FLAGS.protocol == "http":
-                    async_requests = utils.send_requests_async(
-                        inputs, client, FLAGS, FLAGS.request_parallelism)
-                    results = utils.get_http_results(async_requests)
-                else:
-                    user_data = utils.send_requests_async(
-                        inputs, client, FLAGS, FLAGS.request_parallelism)
-                    results = utils.get_grpc_results(user_data,
-                                                     FLAGS.request_parallelism)
+    stop_time = datetime.now()
+    latencies = (stop_time - start_time).total_seconds() * 1000.0
+    print(f"[INFO] Latency: {latencies} ms")
 
-        stop_time = datetime.now()
-        latencies.append((stop_time - start_time).total_seconds() * 1000.0 /
-                         FLAGS.request_parallelism)
-
-    if FLAGS.num_runs > 1:
-        latency = s.mean(latencies)
-    else:
-        latency = latencies[0]
-    latency = round(latency, 3)
-    throughtput = round(1000 / latency * FLAGS.batch_size, 3)
-    print(
-        f"[INFO] Batch size: {FLAGS.batch_size}, Start len: {FLAGS.start_len}, Output len: {FLAGS.output_len}"
-    )
-    print(f"[INFO] Latency: {latency} ms")
-    print(f"[INFO] Throughtput: {throughtput} sentences / sec")
+    output_ids = output_ids.reshape(
+        (output_ids.size, )).tolist()[input_start_ids.shape[1]:]
+    output_text = encoder.decode(output_ids)
+    print(f'Input: {FLAGS.text}')
+    print(f'Output: {output_text}')

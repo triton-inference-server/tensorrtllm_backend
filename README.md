@@ -68,7 +68,7 @@ bash scripts/kill_triton_server.sh
 
 ### GPT
 ```bash
-cd examples/gpt/
+cd tools/gpt/
 
 # Download vocab and merge table for HF models
 wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
