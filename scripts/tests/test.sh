@@ -20,27 +20,48 @@ if [ "$MODEL" = "GPT" ]; then
     export SERVER_PID=$!
     wait_for_server_ready $SERVER_PID 1200
 
-    pushd examples/gpt
+    pushd tools/gpt/
     wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
     wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
 
     # Client
     python3 client.py \
         --text="Born in north-east France, Soyer trained as a" \
-        --output_len=10
+        --output_len=10 \
+        --protocol=http
+
+    python3 client.py \
+        --text="Born in north-east France, Soyer trained as a" \
+        --output_len=10 \
+        --protocol=grpc
 
     # Async Client
     python3 client_async.py \
         --text="Born in north-east France, Soyer trained as a" \
-        --output_len=10
+        --output_len=10 \
+        --protocol=http
 
-    popd # examples/gpt
-
-    pushd tools/gpt
+    python3 client_async.py \
+        --text="Born in north-east France, Soyer trained as a" \
+        --output_len=10 \
+        --protocol=grpc
 
     # Identity test
     python3 identity_test.py \
-        --batch_size=8 --start_len=128 --output_len=20
+        --batch_size=8 --start_len=128 --output_len=20 \
+        --protocol=http --mode=sync
+
+    python3 identity_test.py \
+        --batch_size=8 --start_len=128 --output_len=20 \
+        --protocol=grpc --mode=sync
+
+    python3 identity_test.py \
+        --batch_size=8 --start_len=128 --output_len=20 \
+        --protocol=http --mode=async
+
+    python3 identity_test.py \
+        --batch_size=8 --start_len=128 --output_len=20 \
+        --protocol=grpc --mode=async
 
     # Benchmark using Perf Analyzer
     python3 gen_input_data.py
