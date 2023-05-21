@@ -116,7 +116,10 @@ if __name__ == '__main__':
                                               FLAGS.url,
                                               concurrency=FLAGS.concurrency,
                                               verbose=FLAGS.verbose) as client:
-        results = utils.send_requests(inputs, client, request_parallelism=1)
+        results = utils.send_requests('tekit',
+                                      inputs,
+                                      client,
+                                      request_parallelism=1)
     output_ids = results[0].as_numpy("output_ids")
 
     stop_time = datetime.now()

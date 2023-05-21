@@ -95,8 +95,7 @@ def create_inference_server_client(protocol, url, concurrency, verbose):
         return client_util.InferenceServerClient(url, verbose=verbose)
 
 
-def send_requests(inputs, client, request_parallelism):
-    model_name = "tekit"
+def send_requests(model_name, inputs, client, request_parallelism):
     results = []
     for _ in range(request_parallelism):
         result = client.infer(model_name, inputs)
@@ -104,8 +103,8 @@ def send_requests(inputs, client, request_parallelism):
     return results
 
 
-def send_requests_async(inputs, client, flags, request_parallelism):
-    model_name = "tekit"
+def send_requests_async(model_name, inputs, client, flags,
+                        request_parallelism):
     if flags.protocol == "http":
         async_requests = []
         for _ in range(request_parallelism):
@@ -136,3 +135,16 @@ def get_grpc_results(user_data, request_parallelism):
             raise RuntimeError(error)
         results.append(result)
     return results
+
+
+def append_start_and_end_ids(inputs,
+                             batch_size,
+                             flags,
+                             start_id=None,
+                             end_id=None):
+    if start_id is not None:
+        start_ids = start_id * np.ones([batch_size, 1]).astype(np.uint32)
+        inputs.append(prepare_tensor("start_id", start_ids, flags.protocol))
+    if end_id is not None:
+        end_ids = end_id * np.ones([batch_size, 1]).astype(np.uint32)
+        inputs.append(prepare_tensor("end_id", end_ids, flags.protocol))
