@@ -46,6 +46,9 @@ if [ "$MODEL" = "GPT" ]; then
         --output_len=10 \
         --protocol=grpc
 
+    # End to end test
+    python3 end_to_end_test.py
+
     # Identity test
     python3 identity_test.py \
         --batch_size=8 --start_len=128 --output_len=20 \
