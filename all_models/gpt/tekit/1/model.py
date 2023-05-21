@@ -6,6 +6,20 @@ import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 
 import tekit
+from tekit.runtime import GPTConfig, GPTDecoder, GPTSamplingConfig
+
+
+def mpi_comm():
+    from mpi4py import MPI
+    return MPI.COMM_WORLD
+
+
+def mpi_rank():
+    return mpi_comm().Get_rank()
+
+
+def get_engine_name(model, dtype, tp_size, rank):
+    return '{}_{}_tp{}_rank{}.engine'.format(model, dtype, tp_size, rank)
 
 
 def get_input_tensor_by_name(request, name):
@@ -96,23 +110,21 @@ class TritonPythonModel:
         vocab_size = config['builder_config']['vocab_size']
         num_layers = config['builder_config']['num_layers']
 
-        self.comm = tekit.mpi_comm()
-        self.rank = tekit.mpi_rank()
+        self.comm = mpi_comm()
+        self.rank = mpi_rank()
+
+        model_config = GPTConfig(num_heads=num_heads,
+                                 hidden_size=hidden_size,
+                                 vocab_size=vocab_size,
+                                 num_layers=num_layers,
+                                 gpt_attention_plugin=use_gpt_attention_plugin)
+        engine_name = get_engine_name('gpt', dtype, world_size, self.rank)
+        serialize_path = os.path.join(engine_dir, engine_name)
+        with open(serialize_path, 'rb') as f:
+            engine_buffer = f.read()
         runtime_mapping = tekit.Mapping(world_size, self.rank)
         torch.cuda.set_device(self.rank % runtime_mapping.gpus_per_node)
-
-        engine_name = tekit.rank_engine_file('gpt', dtype, world_size,
-                                             self.rank)
-        serialize_path = os.path.join(engine_dir, engine_name)
-
-        model_config = tekit.models.gpt.runtime.GPTConfig(
-            num_heads=num_heads,
-            hidden_size=hidden_size,
-            vocab_size=vocab_size,
-            num_layers=num_layers,
-            gpt_attention_plugin=use_gpt_attention_plugin)
-        self.decoder = tekit.GPTDecoder(model_config, serialize_path,
-                                        runtime_mapping, dtype)
+        self.decoder = GPTDecoder(model_config, engine_buffer, runtime_mapping)
 
         if self.rank != 0:
             while (True):
@@ -187,7 +199,7 @@ class TritonPythonModel:
             # Broadcast requests to other clients
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
-            sampling_config = tekit.models.gpt.runtime.GPTSamplingConfig(
+            sampling_config = GPTSamplingConfig(
                 end_id=50256,
                 num_beams=inputs['beam_width'],
                 temperature=inputs['temperature'],
