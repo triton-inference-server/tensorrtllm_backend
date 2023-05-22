@@ -178,9 +178,9 @@ if __name__ == '__main__':
     else:
         latency = latencies[0]
     latency = round(latency, 3)
-    throughtput = round(1000 / latency * FLAGS.batch_size, 3)
+    throughput = round(1000 / latency * FLAGS.batch_size, 3)
     print(
         f"[INFO] Batch size: {FLAGS.batch_size}, Start len: {FLAGS.start_len}, Output len: {FLAGS.output_len}"
     )
     print(f"[INFO] Latency: {latency} ms")
-    print(f"[INFO] Throughtput: {throughtput} sentences / sec")
+    print(f"[INFO] Throughput: {throughput} sentences / sec")
