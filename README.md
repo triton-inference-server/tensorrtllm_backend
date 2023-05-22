@@ -95,7 +95,7 @@ python3 identity_test.py \
 # Results:
 # [INFO] Batch size: 8, Start len: 8, Output len: 10
 # [INFO] Latency: 70.782 ms
-# [INFO] Throughtput: 113.023 sentences / sec
+# [INFO] Throughput: 113.023 sentences / sec
 
 # Benchmark using Perf Analyzer
 python3 gen_input_data.py
