@@ -27,7 +27,7 @@ def prepare_tensor(name, input, protocol):
     return t
 
 
-def prepare_inputs(input_start_ids, flags):
+def prepare_inputs(input_start_ids, input_len, flags):
     output_len = np.ones([input_start_ids.shape[0], 1]).astype(
         np.uint32) * flags.output_len
     runtime_top_k = (flags.topk *
@@ -64,7 +64,7 @@ def prepare_inputs(input_start_ids, flags):
                                     axis=1)
     inputs = [
         prepare_tensor("input_ids", input_start_ids, flags.protocol),
-        # prepare_tensor("input_lengths", input_len, flags.protocol),
+        prepare_tensor("input_lengths", input_len, flags.protocol),
         prepare_tensor("request_output_len", output_len, flags.protocol),
         prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
         prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),

@@ -6,7 +6,7 @@ import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 
 import tekit
-from tekit.runtime import GPTConfig, GPTDecoder, GPTSamplingConfig
+from tekit.runtime import GenerationSession, ModelConfig, SamplingConfig
 
 
 def mpi_comm():
@@ -113,18 +113,20 @@ class TritonPythonModel:
         self.comm = mpi_comm()
         self.rank = mpi_rank()
 
-        model_config = GPTConfig(num_heads=num_heads,
-                                 hidden_size=hidden_size,
-                                 vocab_size=vocab_size,
-                                 num_layers=num_layers,
-                                 gpt_attention_plugin=use_gpt_attention_plugin)
+        model_config = ModelConfig(
+            num_heads=num_heads,
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+            num_layers=num_layers,
+            gpt_attention_plugin=use_gpt_attention_plugin)
         engine_name = get_engine_name('gpt', dtype, world_size, self.rank)
         serialize_path = os.path.join(engine_dir, engine_name)
         with open(serialize_path, 'rb') as f:
             engine_buffer = f.read()
         runtime_mapping = tekit.Mapping(world_size, self.rank)
         torch.cuda.set_device(self.rank % runtime_mapping.gpus_per_node)
-        self.decoder = GPTDecoder(model_config, engine_buffer, runtime_mapping)
+        self.decoder = GenerationSession(model_config, engine_buffer,
+                                         runtime_mapping)
 
         if self.rank != 0:
             while (True):
@@ -157,19 +159,12 @@ class TritonPythonModel:
         # required.
         for request in requests:
             # Perform inference on the request and append it to responses list...
-            input_names = [
-                'input_ids', 'request_output_len', 'runtime_top_k',
-                'runtime_top_p', 'beam_search_diversity_rate', 'temperature',
-                'len_penalty', 'repetition_penalty', 'beam_width',
-                'random_seed', 'top_p_decay', 'top_p_min', 'top_p_reset_ids'
-            ]
             inputs = {}
-            for name in input_names:
-                inputs[name] = None
-
             if self.rank == 0:
                 inputs['input_ids'] = get_input_tensor_by_name(
                     request, 'input_ids')
+                inputs['input_lengths'] = get_input_tensor_by_name(
+                    request, 'input_lengths')
                 inputs['request_output_len'] = get_input_scalar_by_name(
                     request, 'request_output_len')
                 inputs['beam_width'] = get_input_scalar_by_name(
@@ -199,7 +194,8 @@ class TritonPythonModel:
             # Broadcast requests to other clients
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
-            sampling_config = GPTSamplingConfig(
+            input_lengths = inputs['input_lengths'].cuda()
+            sampling_config = SamplingConfig(
                 end_id=50256,
                 num_beams=inputs['beam_width'],
                 temperature=inputs['temperature'],
@@ -211,7 +207,8 @@ class TritonPythonModel:
             self.decoder.setup(input_ids.size(0),
                                max_input_length=input_ids.size(1),
                                max_new_tokens=inputs['request_output_len'])
-            output_ids = self.decoder.decode(input_ids, sampling_config)
+            output_ids = self.decoder.decode(input_ids, input_lengths,
+                                             sampling_config)
 
             if self.rank == 0:
                 # Create output tensors. You need pb_utils.Tensor

@@ -19,7 +19,7 @@ if [ "$MODEL" = "GPT" ]; then
         wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && popd
 
     echo "Convert GPT from HF"
-    python3 hf_gpt_convert.py -i gpt2 -o ./c-model/gpt2/fp16 -i_g 1 -weight_data_type fp16
+    python3 hf_gpt_convert.py -i gpt2 -o ./c-model/gpt2/fp16 --storage-type fp16
 
     echo "Build GPT: float16 | src FT"
     python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \

@@ -147,7 +147,7 @@ if __name__ == '__main__':
                                               FLAGS.url,
                                               concurrency=1,
                                               verbose=FLAGS.verbose) as client:
-        inputs = utils.prepare_inputs(output0, FLAGS)
+        inputs = utils.prepare_inputs(output0, output1, FLAGS)
 
         try:
             result = client.infer(model_name, inputs)

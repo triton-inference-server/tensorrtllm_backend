@@ -13,6 +13,12 @@ input [
     dims: [ -1 ]
   },
   {
+    name: "input_lengths"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+  },
+  {
     name: "request_output_len"
     data_type: TYPE_UINT32
     dims: [ -1 ]

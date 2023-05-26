@@ -109,8 +109,10 @@ if __name__ == '__main__':
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
     encoder = token_encoder.get_encoder(VOCAB_FILE, MERGES_FILE)
-    input_start_ids = np.array([encoder.encode(FLAGS.text)], np.int32)
-    inputs = utils.prepare_inputs(input_start_ids, FLAGS)
+    line = encoder.encode(FLAGS.text)
+    input_start_ids = np.array([line], np.int32)
+    input_len = np.array([[len(line)]], np.int32)
+    inputs = utils.prepare_inputs(input_start_ids, input_len, FLAGS)
 
     start_time = datetime.now()
 

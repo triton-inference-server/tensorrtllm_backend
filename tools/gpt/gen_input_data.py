@@ -14,6 +14,7 @@ def main(args):
                                         50255,
                                         size=(args.start_len),
                                         dtype=np.int32)
+    input_len = np.array([input_start_ids.shape[0]], np.int32)
     output_len = np.ones([1]).astype(np.uint32) * args.output_len
     runtime_top_k = (args.topk * np.ones([1])).astype(np.uint32)
     runtime_top_p = args.topp * np.ones([1]).astype(np.float32)
@@ -40,6 +41,7 @@ def main(args):
     for _ in range(args.num_samples):
         sample = {}
         add_sample(sample, 'input_ids', input_start_ids)
+        add_sample(sample, 'input_lengths', input_len)
         add_sample(sample, 'request_output_len', output_len)
         add_sample(sample, 'runtime_top_k', runtime_top_k)
         add_sample(sample, 'runtime_top_p', runtime_top_p)
