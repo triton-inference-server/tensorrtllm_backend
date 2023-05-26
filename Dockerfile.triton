@@ -2,7 +2,22 @@ FROM nvcr.io/nvidia/tritonserver:23.04-py3 as build
 
 WORKDIR /app/tekit
 COPY tekit .
-RUN bash scripts/build_wheel.sh
+
+# install deps
+RUN pip install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+# build decoding lib
+RUN rm -rf cpp/build && mkdir -p cpp/build && \
+    pushd cpp/build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_PYT=ON .. &&\
+    make -j"$(grep -c ^processor /proc/cpuinfo)" && popd
+
+# copy decoding lib
+RUN rm -rf tekit/libs && mkdir -p tekit/libs && \
+    cp cpp/build/tekit/thop/libth_common.so tekit/libs/libth_common.so && \
+    cp cpp/build/tekit/plugins/libnvinfer_plugin.so tekit/libs/libnvinfer_plugin_tekit.so
+
+# build wheel
+RUN mkdir -p build && python3 setup.py --quiet bdist_wheel --dist-dir build
 
 FROM nvcr.io/nvidia/tritonserver:23.04-py3
 
