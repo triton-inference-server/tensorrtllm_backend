@@ -118,7 +118,7 @@ if __name__ == '__main__':
                                               FLAGS.url,
                                               concurrency=FLAGS.concurrency,
                                               verbose=FLAGS.verbose) as client:
-        results = utils.send_requests('tekit',
+        results = utils.send_requests('tensorrt_llm',
                                       inputs,
                                       client,
                                       request_parallelism=1)

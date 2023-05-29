@@ -10,7 +10,7 @@ source tools/utils.sh
 if [ "$MODEL" = "GPT" ]; then
     # Modify config.pbtxt
     bash tools/gpt/create_gpt_config.sh ${ENGINE_PATH}
-    mv config.pbtxt all_models/gpt/tekit
+    mv config.pbtxt all_models/gpt/tensorrt_llm
 
     # Launch Triton Server
     mpirun --allow-run-as-root \
@@ -68,13 +68,13 @@ if [ "$MODEL" = "GPT" ]; then
 
     # Benchmark using Perf Analyzer
     python3 gen_input_data.py
-    perf_analyzer -m tekit -v \
+    perf_analyzer -m tensorrt_llm -v \
         -b 8 --input-data input_data.json \
         --concurrency-range 2 \
         -i http \
         -u 'localhost:8000'
 
-    perf_analyzer -m tekit -v \
+    perf_analyzer -m tensorrt_llm -v \
         -b 8 --input-data input_data.json \
         --concurrency-range 2 \
         -i grpc \
