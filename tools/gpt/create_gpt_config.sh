@@ -8,7 +8,7 @@ else
 fi
 
 echo "
-name: \"tekit\"
+name: \"tensorrt_llm\"
 backend: \"python\"
 max_batch_size: 1024
 

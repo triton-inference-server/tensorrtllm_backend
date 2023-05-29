@@ -142,7 +142,7 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
 
-    model_name = "tekit"
+    model_name = "tensorrt_llm"
     with utils.create_inference_server_client(FLAGS.protocol,
                                               FLAGS.url,
                                               concurrency=1,

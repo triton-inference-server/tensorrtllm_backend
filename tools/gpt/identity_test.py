@@ -144,7 +144,10 @@ if __name__ == '__main__':
     # warm up
     if FLAGS.warm_up:
         print("[INFO] sending requests to warm up")
-        utils.send_requests('tekit', inputs, FLAGS, request_parallelism=2)
+        utils.send_requests('tensorrt_llm',
+                            inputs,
+                            FLAGS,
+                            request_parallelism=2)
 
     latencies = []
     for i in range(FLAGS.num_runs):
@@ -156,17 +159,17 @@ if __name__ == '__main__':
                 concurrency=FLAGS.concurrency,
                 verbose=FLAGS.verbose) as client:
             if FLAGS.mode == 'sync':
-                utils.send_requests('tekit', inputs, client,
+                utils.send_requests('tensorrt_llm', inputs, client,
                                     FLAGS.request_parallelism)
             else:
                 if FLAGS.protocol == "http":
                     async_requests = utils.send_requests_async(
-                        'tekit', inputs, client, FLAGS,
+                        'tensorrt_llm', inputs, client, FLAGS,
                         FLAGS.request_parallelism)
                     results = utils.get_http_results(async_requests)
                 else:
                     user_data = utils.send_requests_async(
-                        'tekit', inputs, client, FLAGS,
+                        'tensorrt_llm', inputs, client, FLAGS,
                         FLAGS.request_parallelism)
                     results = utils.get_grpc_results(user_data,
                                                      FLAGS.request_parallelism)

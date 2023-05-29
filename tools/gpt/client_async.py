@@ -121,14 +121,14 @@ if __name__ == '__main__':
                                               concurrency=FLAGS.concurrency,
                                               verbose=FLAGS.verbose) as client:
         if FLAGS.protocol == "http":
-            async_requests = utils.send_requests_async('tekit',
+            async_requests = utils.send_requests_async('tensorrt_llm',
                                                        inputs,
                                                        client,
                                                        FLAGS,
                                                        request_parallelism=1)
             results = utils.get_http_results(async_requests)
         else:
-            user_data = utils.send_requests_async('tekit',
+            user_data = utils.send_requests_async('tensorrt_llm',
                                                   inputs,
                                                   client,
                                                   FLAGS,

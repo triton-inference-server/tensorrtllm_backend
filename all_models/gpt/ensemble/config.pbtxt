@@ -113,7 +113,7 @@ ensemble_scheduling {
       }
     },
     {
-      model_name: "tekit"
+      model_name: "tensorrt_llm"
       model_version: -1
       input_map {
         key: "input_ids"

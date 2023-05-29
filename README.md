@@ -1,5 +1,5 @@
-# Tekit Backend
-The Triton backend for Tekit.
+# TensorRT-LLM Backend
+The Triton backend for [TensorRT-LLM](https://docs.google.com/document/d/1g3_mL63pn5a72-eyMsL127jKedSaSdrv8fOh1Gcdgi8/edit).
 
 ## Usage
 
@@ -20,11 +20,11 @@ python3 scripts/launch_triton_server.py --world_size=1 \
 ### Launch the backend *within Slurm based clusters*
 1. Prepare some scripts
 
-`tekit_triton.sub`
+`tensorrt_llm_triton.sub`
 ```bash
 #!/bin/bash
-#SBATCH -o logs/tekit.out
-#SBATCH -e logs/tekit.error
+#SBATCH -o logs/tensorrt_llm.out
+#SBATCH -e logs/tensorrt_llm.error
 #SBATCH -J gpu-comparch-ftp:mgmn
 #SBATCH -A gpu-comparch
 #SBATCH -p luna
@@ -37,25 +37,21 @@ sudo nvidia-smi -lgc 1410,1410
 srun --mpi=pmix --container-image <image> \
     --container-mounts <your/path>:<mount/path> \
     --container-workdir <workdir> \
-    --output logs/tekit_%t.out \
-    bash <workdir>/tekit_triton.sh
+    --output logs/tensorrt_llm_%t.out \
+    bash <workdir>/tensorrt_llm_triton.sh
 ```
 
-`tekit_triton.sh`
+`tensorrt_llm_triton.sh`
 ```
-export PYTHONPATH=/workspace/tekit
-export CUDA_DEVICE_MAX_CONNECTIONS=1
-
-WORK_DIR=${PYTHONPATH}
 TRITONSERVER="/opt/tritonserver/bin/tritonserver"
-MODEL_REPO="${WORK_DIR}/triton_backend/"
+MODEL_REPO="<workdir>/triton_backend/"
 
 ${TRITONSERVER} --model-repository=${MODEL_REPO} --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
 ```
 
 2. Submit a Slurm job
 ```
-sbatch tekit_triton.sub
+sbatch tensorrt_llm_triton.sub
 ```
 
 ### Kill the backend
@@ -99,7 +95,7 @@ python3 identity_test.py \
 
 # Benchmark using Perf Analyzer
 python3 gen_input_data.py
-perf_analyzer -m tekit \
+perf_analyzer -m tensorrt_llm \
     -b 8 --input-data input_data.json \
     --concurrency-range 1:10:2 \
     -u 'localhost:8000'
