@@ -20,7 +20,7 @@ def parse_arguments():
 def get_cmd(world_size, tritonserver, model_repo):
     cmd = 'mpirun --allow-run-as-root '
     for i in range(world_size):
-        cmd += ' -n 1 {} --model-repository={} --backend-config=python,shm-region-prefix-name=prefix{}_ : '.format(
+        cmd += ' -n 1 {} --model-repository={} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix{}_ : '.format(
             tritonserver, model_repo, i)
     cmd += '&'
     return cmd

@@ -46,7 +46,7 @@ srun --mpi=pmix --container-image <image> \
 TRITONSERVER="/opt/tritonserver/bin/tritonserver"
 MODEL_REPO="<workdir>/triton_backend/"
 
-${TRITONSERVER} --model-repository=${MODEL_REPO} --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
+${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
 ```
 
 2. Submit a Slurm job

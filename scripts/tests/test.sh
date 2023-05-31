@@ -16,6 +16,7 @@ if [ "$MODEL" = "GPT" ]; then
     mpirun --allow-run-as-root \
         -n 1 /opt/tritonserver/bin/tritonserver \
         --model-repository=all_models/gpt \
+        --disable-auto-complete-config \
         --backend-config=python,shm-region-prefix-name=prefix0_ : &
     export SERVER_PID=$!
     wait_for_server_ready $SERVER_PID 1200
