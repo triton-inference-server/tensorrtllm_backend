@@ -69,17 +69,18 @@ if [ "$MODEL" = "GPT" ]; then
 
     # Benchmark using Perf Analyzer
     python3 gen_input_data.py
-    perf_analyzer -m tensorrt_llm -v \
-        -b 8 --input-data input_data.json \
-        --concurrency-range 2 \
-        -i http \
-        -u 'localhost:8000'
+    # FIXME(kaiyu): Uncomment this when perf_analyzer is available.
+    # perf_analyzer -m tensorrt_llm -v \
+    #     -b 8 --input-data input_data.json \
+    #     --concurrency-range 2 \
+    #     -i http \
+    #     -u 'localhost:8000'
 
-    perf_analyzer -m tensorrt_llm -v \
-        -b 8 --input-data input_data.json \
-        --concurrency-range 2 \
-        -i grpc \
-        -u 'localhost:8001'
+    # perf_analyzer -m tensorrt_llm -v \
+    #     -b 8 --input-data input_data.json \
+    #     --concurrency-range 2 \
+    #     -i grpc \
+    #     -u 'localhost:8001'
 
     popd # tools/gpt
 

@@ -1,12 +1,11 @@
 import json
 import os
 
+import tensorrt_llm
 import torch
 import triton_python_backend_utils as pb_utils
+from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 from torch import from_numpy
-
-import tekit
-from tekit.runtime import GenerationSession, ModelConfig, SamplingConfig
 
 
 def mpi_comm():
@@ -71,8 +70,8 @@ class TritonPythonModel:
             'gpt_attention_plugin']
         dtype = config['builder_config']['precision']
         world_size = config['builder_config']['tensor_parallel']
-        assert world_size == tekit.mpi_world_size(), \
-            f'Engine world size ({world_size}) != Runtime world size ({tekit.mpi_world_size()})'
+        assert world_size == tensorrt_llm.mpi_world_size(), \
+            f'Engine world size ({world_size}) != Runtime world size ({tensorrt_llm.mpi_world_size()})'
         num_heads = config['builder_config']['num_heads'] // world_size
         hidden_size = config['builder_config']['hidden_size'] // world_size
         vocab_size = config['builder_config']['vocab_size']
@@ -91,7 +90,7 @@ class TritonPythonModel:
         serialize_path = os.path.join(engine_dir, engine_name)
         with open(serialize_path, 'rb') as f:
             engine_buffer = f.read()
-        runtime_mapping = tekit.Mapping(world_size, self.rank)
+        runtime_mapping = tensorrt_llm.Mapping(world_size, self.rank)
         torch.cuda.set_device(self.rank % runtime_mapping.gpus_per_node)
         self.decoder = GenerationSession(model_config, engine_buffer,
                                          runtime_mapping)
