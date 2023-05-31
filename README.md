@@ -8,9 +8,9 @@ The Triton backend for [TensorRT-LLM](https://docs.google.com/document/d/1g3_mL6
 ```bash
 # 1. Pull the docker image
 nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <your/path>:<mount/path> <image> bash
-# Recommend <image>: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+# Recommend <image>: gitlab-master.nvidia.com:5005/ftp/tensorrt_llm_backend/triton:23.04
 
-# 2. Modify parameters in all_models/<model>/tekit/config.pbtxt
+# 2. Modify parameters in all_models/<model>/tensorrt_llm/config.pbtxt
 
 # 3. Launch triton server
 python3 scripts/launch_triton_server.py --world_size=1 \
