@@ -23,11 +23,13 @@ if [ "$MODEL" = "GPT" ]; then
 
     echo "Build GPT: float16 | src FT"
     python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
+        --dtype float16 \
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
+        --use_layernorm_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/ --hidden_act gelu
 
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
     python3 run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/
 
     popd # tekit/examples/gpt
