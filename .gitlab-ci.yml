@@ -8,6 +8,7 @@ cache:
 
 stages:
   - style-check
+  - build
   - build-model
   - test
 
@@ -24,30 +25,39 @@ style-check-job:
     - cd $CI_PROJECT_DIR
     - pip3 install pre-commit
     - pre-commit run -a
+
+build-tensorrt-llm:
+  stage: build
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - python3 tekit/scripts/build_wheel.py -a "80;86"
   artifacts:
-    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
-    expire_in: 10 mins
+    expire_in: 30 mins
+    paths:
+      - tekit/build
 
 build-gpt-model-job:
   stage: build-model
   image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
   script:
     - cd $CI_PROJECT_DIR
+    - pip install tekit/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh GPT
   artifacts:
-    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
-    expire_in: 10 mins
+    expire_in: 30 mins
     paths:
-      - tekit/
+      - tekit/examples
+  dependencies:
+    - build-tensorrt-llm
 
 test-gpt-job:
   stage: test
   image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
   script:
     - cd $CI_PROJECT_DIR
+    - pip install tekit/build/tensorrt_llm*.whl
     - bash scripts/tests/test.sh GPT tekit/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
-  artifacts:
-    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHA"
-    expire_in: 10 mins
   dependencies:
+    - build-tensorrt-llm
     - build-gpt-model-job

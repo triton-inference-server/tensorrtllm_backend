@@ -3,7 +3,7 @@ FROM nvcr.io/nvidia/tritonserver:23.04-py3 as build
 WORKDIR /app/tensorrt_llm
 COPY tekit .
 
-RUN bash scripts/build_wheel.sh
+RUN python3 scripts/build_wheel.py
 
 FROM nvcr.io/nvidia/tritonserver:23.04-py3
 

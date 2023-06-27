@@ -164,6 +164,7 @@ class TritonPythonModel:
             input_lengths = inputs['input_lengths'].cuda()
             sampling_config = SamplingConfig(
                 end_id=50256,
+                pad_id=50256,
                 num_beams=inputs['beam_width'],
                 temperature=inputs['temperature'],
                 top_k=inputs['runtime_top_k'],
