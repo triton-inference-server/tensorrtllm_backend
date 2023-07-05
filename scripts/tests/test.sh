@@ -9,8 +9,7 @@ source tools/utils.sh
 
 if [ "$MODEL" = "GPT" ]; then
     # Modify config.pbtxt
-    bash tools/gpt/create_gpt_config.sh ${ENGINE_PATH}
-    mv config.pbtxt all_models/gpt/tensorrt_llm
+    python3 tools/fill_template.py all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
 
     # Launch Triton Server
     mpirun --allow-run-as-root \
@@ -19,11 +18,11 @@ if [ "$MODEL" = "GPT" ]; then
         --disable-auto-complete-config \
         --backend-config=python,shm-region-prefix-name=prefix0_ : &
     export SERVER_PID=$!
-    wait_for_server_ready $SERVER_PID 1200
+    wait_for_server_ready ${SERVER_PID} 1200
 
     pushd tools/gpt/
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
+    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json -O gpt2-vocab.json
+    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt -O gpt2-merges.txt
 
     # Client
     python3 client.py \
@@ -81,6 +80,8 @@ if [ "$MODEL" = "GPT" ]; then
     #     --concurrency-range 2 \
     #     -i grpc \
     #     -u 'localhost:8001'
+
+    kill ${SERVER_PID}
 
     popd # tools/gpt
 

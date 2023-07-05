@@ -96,7 +96,7 @@ instance_group [
 parameters {
   key: "engine_dir"
   value: {
-    string_value: "TO_BE_FILLED"
+    string_value: "${engine_dir}"
   }
 }
 parameters: {

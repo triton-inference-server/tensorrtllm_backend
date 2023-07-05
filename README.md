@@ -56,7 +56,7 @@ sbatch tensorrt_llm_triton.sub
 ### Kill the backend
 
 ```bash
-bash scripts/kill_triton_server.sh
+pgrep tritonserver | xargs kill -9
 ```
 
 ## Examples
