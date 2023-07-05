@@ -1,7 +1,8 @@
 FROM nvcr.io/nvidia/tritonserver:23.04-py3 as build
 
 RUN pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
-RUN pip3 install regex fire tritonclient[all] --extra-index-url https://pypi.ngc.nvidia.com
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
 RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
@@ -16,7 +17,8 @@ FROM nvcr.io/nvidia/tritonserver:23.04-py3
 
 WORKDIR /app
 RUN pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
-RUN pip3 install regex fire tritonclient[all] --extra-index-url https://pypi.ngc.nvidia.com
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 COPY --from=build /app/tensorrt_llm/build/tensorrt_llm*.whl .
 RUN pip3 install tensorrt_llm*.whl --extra-index-url https://pypi.ngc.nvidia.com \
     && rm tensorrt_llm*.whl
