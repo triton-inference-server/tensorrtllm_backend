@@ -68,6 +68,9 @@ class TritonPythonModel:
             config = json.load(f)
         use_gpt_attention_plugin = config['plugin_config'][
             'gpt_attention_plugin']
+        self.remove_input_padding = config['plugin_config'][
+            'remove_input_padding']
+        model = config['builder_config']['name']
         dtype = config['builder_config']['precision']
         world_size = config['builder_config']['tensor_parallel']
         assert world_size == tensorrt_llm.mpi_world_size(), \
@@ -76,6 +79,9 @@ class TritonPythonModel:
         hidden_size = config['builder_config']['hidden_size'] // world_size
         vocab_size = config['builder_config']['vocab_size']
         num_layers = config['builder_config']['num_layers']
+        multi_query_mode = False
+        if 'multi_query_mode' in config['builder_config'].keys():
+            multi_query_mode = config['builder_config']['multi_query_mode']
 
         self.comm = mpi_comm()
         self.rank = mpi_rank()
@@ -85,8 +91,10 @@ class TritonPythonModel:
             hidden_size=hidden_size,
             vocab_size=vocab_size,
             num_layers=num_layers,
-            gpt_attention_plugin=use_gpt_attention_plugin)
-        engine_name = get_engine_name('gpt', dtype, world_size, self.rank)
+            gpt_attention_plugin=use_gpt_attention_plugin,
+            multi_query_mode=multi_query_mode,
+            remove_input_padding=self.remove_input_padding)
+        engine_name = get_engine_name(model, dtype, world_size, self.rank)
         serialize_path = os.path.join(engine_dir, engine_name)
         with open(serialize_path, 'rb') as f:
             engine_buffer = f.read()
@@ -172,9 +180,15 @@ class TritonPythonModel:
                 length_penalty=inputs['len_penalty'],
                 repetition_penalty=inputs['repetition_penalty'],
             )
-            self.decoder.setup(input_ids.size(0),
-                               max_input_length=input_ids.size(1),
-                               max_new_tokens=inputs['request_output_len'])
+            if self.remove_input_padding:
+                self.decoder.setup(
+                    batch_size=1,
+                    max_input_length=torch.max(input_lengths).item(),
+                    max_new_tokens=inputs['request_output_len'])
+            else:
+                self.decoder.setup(batch_size=input_ids.size(0),
+                                   max_input_length=input_ids.size(1),
+                                   max_new_tokens=inputs['request_output_len'])
             output_ids = self.decoder.decode(input_ids, input_lengths,
                                              sampling_config)
 

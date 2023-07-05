@@ -7,7 +7,7 @@ set -e
 # install deps
 pip3 install -r tekit/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
-if [ "$MODEL" = "GPT" ]; then
+if [ "$MODEL" = "gpt" ]; then
 
     # GPT2
     pushd tekit/examples/gpt
@@ -33,5 +33,69 @@ if [ "$MODEL" = "GPT" ]; then
     python3 run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/
 
     popd # tekit/examples/gpt
+
+fi
+
+if [ "$MODEL" = "opt" ]; then
+
+    pushd tekit/examples/opt
+
+    pip install -r requirements.txt
+
+    mkdir opt-125m && pushd opt-125m && \
+    wget -q https://huggingface.co/facebook/opt-125m/resolve/main/config.json && \
+    wget https://huggingface.co/facebook/opt-125m/resolve/main/pytorch_model.bin && \
+    wget https://huggingface.co/facebook/opt-125m/resolve/main/vocab.json && \
+    wget https://huggingface.co/facebook/opt-125m/resolve/main/tokenizer_config.json && \
+    wget https://huggingface.co/facebook/opt-125m/resolve/main/generation_config.json && \
+    wget https://huggingface.co/facebook/opt-125m/resolve/main/merges.txt && popd
+
+    echo "Convert OPT from HF"
+    python3 hf_opt_convert.py -i opt-125m/ -o ./c-model/opt-125m/fp16 -i_g 1 -weight_data_type fp16
+
+    echo "OPT builder"
+    python3 build.py --model_dir=./c-model/opt-125m/fp16/1-gpu/ \
+                     --max_batch_size 8 \
+                     --use_gpt_attention_plugin float16 \
+                     --use_gemm_plugin float16 \
+                     --use_layernorm_plugin float16 \
+                     --max_input_len 924 \
+                     --max_output_len 100 \
+                     --world_size 1 \
+                     --output_dir trt_engine/opt-125m/fp16/1-gpu/ \
+                     --do_layer_norm_before \
+                     --pre_norm \
+                     --hidden_act relu
+
+    popd # tekit/examples/opt
+
+fi
+
+if [ "$MODEL" = "llama" ]; then
+
+    pushd tekit/examples/llama
+
+    pip install -r requirements.txt
+    python3 build.py --dtype=float16 --n_layer=2 \
+        --use_gpt_attention_plugin --use_gemm_plugin
+    wget -q https://huggingface.co/decapoda-research/llama-7b-hf/resolve/main/tokenizer.model
+    python3 run.py --max_output_len=1
+
+    popd # tekit/examples/llama
+
+fi
+
+if [ "$MODEL" = "gptj" ]; then
+
+    pushd tekit/examples/gptj
+
+    pip install -r requirements.txt
+    python3 build.py --dtype=float16 --n_layer=2 \
+        --use_gpt_attention_plugin --use_gemm_plugin --use_layernorm_plugin
+    wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/vocab.json
+    wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/merges.txt
+    python3 run.py --max_output_len=1
+
+    popd # tekit/examples/gptj
 
 fi

@@ -7,7 +7,7 @@ set -e
 nvidia-smi
 source tools/utils.sh
 
-if [ "$MODEL" = "GPT" ]; then
+if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
 

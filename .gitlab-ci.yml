@@ -9,8 +9,7 @@ cache:
 stages:
   - style-check
   - build
-  - build-model
-  - test
+  - test-model
 
 workflow:
   rules:
@@ -20,7 +19,7 @@ workflow:
 
 style-check-job:
   stage: style-check
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install pre-commit
@@ -28,7 +27,7 @@ style-check-job:
 
 build-tensorrt-llm:
   stage: build
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
   script:
     - cd $CI_PROJECT_DIR
     - python3 tekit/scripts/build_wheel.py -a "80;86"
@@ -37,27 +36,54 @@ build-tensorrt-llm:
     paths:
       - tekit/build
 
-build-gpt-model-job:
-  stage: build-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+test-gpt-model-job:
+  stage: test-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
   script:
     - cd $CI_PROJECT_DIR
-    - pip install tekit/build/tensorrt_llm*.whl
-    - bash scripts/tests/build_model.sh GPT
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - bash scripts/tests/build_model.sh gpt
+    - bash scripts/tests/test.sh gpt tekit/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
-    paths:
-      - tekit/examples
   dependencies:
     - build-tensorrt-llm
 
-test-gpt-job:
-  stage: test
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:23.04
+test-opt-model-job:
+  stage: test-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
   script:
     - cd $CI_PROJECT_DIR
-    - pip install tekit/build/tensorrt_llm*.whl
-    - bash scripts/tests/test.sh GPT tekit/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - bash scripts/tests/build_model.sh opt
+    - bash scripts/tests/test.sh opt tekit/examples/opt/trt_engine/opt-125m/fp16/1-gpu/
+  artifacts:
+    expire_in: 30 mins
   dependencies:
     - build-tensorrt-llm
-    - build-gpt-model-job
+
+test-llama-model-job:
+  stage: test-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - bash scripts/tests/build_model.sh llama
+    - bash scripts/tests/test.sh llama tekit/examples/llama/llama_outputs
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-tensorrt-llm
+
+test-gptj-model-job:
+  stage: test-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt8.6.1-ngc23.04
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - bash scripts/tests/build_model.sh gptj
+    - bash scripts/tests/test.sh gptj tekit/examples/gptj/gpt_outputs
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-tensorrt-llm
