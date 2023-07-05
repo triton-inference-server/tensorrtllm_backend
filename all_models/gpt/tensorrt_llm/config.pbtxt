@@ -2,9 +2,10 @@ name: "tensorrt_llm"
 backend: "python"
 max_batch_size: 1024
 
-dynamic_batching {
-   max_queue_delay_microseconds: 50000
-}
+# # Uncomment this for dynamic_batching
+# dynamic_batching {
+#    max_queue_delay_microseconds: 50000
+# }
 
 input [
   {
