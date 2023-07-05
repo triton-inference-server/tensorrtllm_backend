@@ -61,11 +61,12 @@ pgrep tritonserver | xargs kill -9
 
 ## Examples
 
-### GPT
+### GPT/OPT/LLaMA/GPT-J...
 ```bash
 cd tools/gpt/
 
 # Download vocab and merge table for HF models
+# Take GPT as an example:
 wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
 wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
 
@@ -78,6 +79,7 @@ python3 client.py \
 # Input: Born in north-east France, Soyer trained as a
 # Output:  chef and a cook at the local restaurant, La
 ```
+*Please note that the example outputs are only for reference, specific performance numbers depend on the GPU you're using.*
 
 ## Test
 
@@ -106,3 +108,4 @@ perf_analyzer -m tensorrt_llm \
 # Concurrency: 7, throughput: 286.18 infer/sec, latency 195011 usec
 # Concurrency: 9, throughput: 307.067 infer/sec, latency 233354 usec
 ```
+*Please note that the example outputs are only for reference, specific performance numbers depend on the GPU you're using.*
