@@ -1,0 +1,11 @@
+FROM nvcr.io/nvidia/tritonserver:23.04-py3
+
+COPY requirements.txt /tmp/
+RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+COPY tekit/requirements-dev.txt /tmp/
+RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
+RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
+ENV PATH="/usr/local/bin:${PATH}"
