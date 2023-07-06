@@ -9,7 +9,7 @@ source tools/utils.sh
 
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
+    python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
 
     # Launch Triton Server
     mpirun --allow-run-as-root \
