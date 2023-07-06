@@ -25,6 +25,34 @@ input [
     dims: [ -1 ]
   },
   {
+    name: "end_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "pad_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "beam_width"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "temperature"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "runtime_top_k"
     data_type: TYPE_UINT32
     dims: [ 1 ]
@@ -33,20 +61,6 @@ input [
   },
   {
     name: "runtime_top_p"
-    data_type: TYPE_FP32
-    dims: [ 1 ]
-    reshape: { shape: [ ] }
-    optional: true
-  },
-  {
-    name: "beam_search_diversity_rate"
-    data_type: TYPE_FP32
-    dims: [ 1 ]
-    reshape: { shape: [ ] }
-    optional: true
-  },
-  {
-    name: "temperature"
     data_type: TYPE_FP32
     dims: [ 1 ]
     reshape: { shape: [ ] }
@@ -67,6 +81,20 @@ input [
     optional: true
   },
   {
+    name: "min_length"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "presence_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "random_seed"
     data_type: TYPE_UINT64
     dims: [ 1 ]
@@ -74,8 +102,8 @@ input [
     optional: true
   },
   {
-    name: "beam_width"
-    data_type: TYPE_UINT32
+    name: "output_log_probs"
+    data_type: TYPE_BOOL
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -85,6 +113,11 @@ output [
   {
     name: "output_ids"
     data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "log_probs"
+    data_type: TYPE_FP32
     dims: [ -1, -1 ]
   }
 ]

@@ -44,14 +44,18 @@ def prepare_inputs(input_start_ids, input_len, flags):
         np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
     random_seed = 0 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint64)
-    is_return_log_probs = True * \
+    output_log_probs = True * \
         np.ones([input_start_ids.shape[0], 1]).astype(bool)
     beam_width = (flags.beam_width *
                   np.ones([input_start_ids.shape[0], 1])).astype(np.uint32)
-    start_ids = 50256 * \
+    pad_ids = 50256 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
     end_ids = 50256 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
+    min_length = 1 * \
+        np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
+    presence_penalty = 0.0 * \
+        np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
     bad_words_list = np.concatenate([
         np.zeros([input_start_ids.shape[0], 1, 1]).astype(np.int32),
         (-1 * np.ones([input_start_ids.shape[0], 1, 1])).astype(np.int32)
@@ -66,19 +70,19 @@ def prepare_inputs(input_start_ids, input_len, flags):
         prepare_tensor("input_ids", input_start_ids, flags.protocol),
         prepare_tensor("input_lengths", input_len, flags.protocol),
         prepare_tensor("request_output_len", output_len, flags.protocol),
+        prepare_tensor("pad_id", pad_ids, flags.protocol),
+        prepare_tensor("end_id", end_ids, flags.protocol),
+        prepare_tensor("beam_width", beam_width, flags.protocol),
+        prepare_tensor("temperature", temperature, flags.protocol),
         prepare_tensor("runtime_top_k", runtime_top_k, flags.protocol),
         prepare_tensor("runtime_top_p", runtime_top_p, flags.protocol),
-        prepare_tensor("beam_search_diversity_rate",
-                       beam_search_diversity_rate, flags.protocol),
-        prepare_tensor("temperature", temperature, flags.protocol),
         prepare_tensor("len_penalty", len_penalty, flags.protocol),
         prepare_tensor("repetition_penalty", repetition_penalty,
                        flags.protocol),
+        prepare_tensor("min_length", min_length, flags.protocol),
+        prepare_tensor("presence_penalty", presence_penalty, flags.protocol),
         prepare_tensor("random_seed", random_seed, flags.protocol),
-        # prepare_tensor("is_return_log_probs", is_return_log_probs, flags.protocol),
-        prepare_tensor("beam_width", beam_width, flags.protocol),
-        # prepare_tensor("start_id", start_ids, flags.protocol),
-        # prepare_tensor("end_id", end_ids, flags.protocol),
+        prepare_tensor("output_log_probs", output_log_probs, flags.protocol),
         # prepare_tensor("bad_words_list", bad_words_list, flags.protocol),
         # prepare_tensor("stop_words_list", stop_word_list, flags.protocol),
     ]
