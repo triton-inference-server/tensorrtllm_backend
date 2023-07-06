@@ -23,6 +23,18 @@ input [
    dims: [ -1 ]
   },
   {
+    name: "end_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "pad_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "runtime_top_k"
     data_type: TYPE_UINT32
     dims: [ 1 ]
@@ -30,12 +42,6 @@ input [
   },
   {
     name: "runtime_top_p"
-    data_type: TYPE_FP32
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "beam_search_diversity_rate"
     data_type: TYPE_FP32
     dims: [ 1 ]
     optional: true
@@ -59,6 +65,18 @@ input [
     optional: true
   },
   {
+    name: "min_length"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "presence_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "random_seed"
     data_type: TYPE_UINT64
     dims: [ 1 ]
@@ -67,6 +85,12 @@ input [
   {
     name: "beam_width"
     data_type: TYPE_UINT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "output_log_probs"
+    data_type: TYPE_BOOL
     dims: [ 1 ]
     optional: true
   }
@@ -128,16 +152,20 @@ ensemble_scheduling {
         value: "_REQUEST_OUTPUT_LEN"
       }
       input_map {
+          key: "end_id"
+          value: "end_id"
+      }
+      input_map {
+          key: "pad_id"
+          value: "pad_id"
+      }
+      input_map {
           key: "runtime_top_k"
           value: "runtime_top_k"
       }
       input_map {
           key: "runtime_top_p"
           value: "runtime_top_p"
-      }
-      input_map {
-          key: "beam_search_diversity_rate"
-          value: "beam_search_diversity_rate"
       }
       input_map {
           key: "temperature"
@@ -152,12 +180,24 @@ ensemble_scheduling {
           value: "repetition_penalty"
       }
       input_map {
+          key: "min_length"
+          value: "min_length"
+      }
+      input_map {
+          key: "presence_penalty"
+          value: "presence_penalty"
+      }
+      input_map {
           key: "random_seed"
           value: "random_seed"
       }
       input_map {
           key: "beam_width"
           value: "beam_width"
+      }
+      input_map {
+          key: "output_log_probs"
+          value: "output_log_probs"
       }
       output_map {
         key: "output_ids"

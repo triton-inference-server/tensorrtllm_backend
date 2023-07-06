@@ -142,6 +142,8 @@ class TritonPythonModel:
                     request, 'input_lengths')
                 inputs['request_output_len'] = get_input_scalar_by_name(
                     request, 'request_output_len')
+                inputs['end_id'] = get_input_scalar_by_name(request, 'end_id')
+                inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id')
                 inputs['beam_width'] = get_input_scalar_by_name(
                     request, 'beam_width')
                 inputs['temperature'] = get_input_scalar_by_name(
@@ -154,32 +156,42 @@ class TritonPythonModel:
                     request, 'len_penalty')
                 inputs['repetition_penalty'] = get_input_scalar_by_name(
                     request, 'repetition_penalty')
-                inputs[
-                    'beam_search_diversity_rate'] = get_input_scalar_by_name(
-                        request, 'beam_search_diversity_rate')
+                inputs['min_length'] = get_input_scalar_by_name(
+                    request, 'min_length')
+                inputs['presence_penalty'] = get_input_scalar_by_name(
+                    request, 'presence_penalty')
                 inputs['random_seed'] = get_input_scalar_by_name(
                     request, 'random_seed')
-                inputs['top_p_decay'] = get_input_scalar_by_name(
-                    request, 'top_p_decay')
-                inputs['top_p_min'] = get_input_scalar_by_name(
-                    request, 'top_p_min')
-                inputs['top_p_reset_ids'] = get_input_scalar_by_name(
-                    request, 'top_p_reset_ids')
+                inputs['output_log_probs'] = get_input_scalar_by_name(
+                    request, 'output_log_probs')
 
             # Broadcast requests to other clients
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
             input_lengths = inputs['input_lengths'].cuda()
-            sampling_config = SamplingConfig(
-                end_id=50256,
-                pad_id=50256,
-                num_beams=inputs['beam_width'],
-                temperature=inputs['temperature'],
-                top_k=inputs['runtime_top_k'],
-                top_p=inputs['runtime_top_p'],
-                length_penalty=inputs['len_penalty'],
-                repetition_penalty=inputs['repetition_penalty'],
-            )
+            end_id = 50256 if inputs['end_id'] is None else inputs['end_id']
+            pad_id = 50256 if inputs['pad_id'] is None else inputs['pad_id']
+
+            sampling_config = SamplingConfig(end_id=end_id, pad_id=pad_id)
+            if inputs['beam_width'] is not None:
+                sampling_config.num_beams = inputs['beam_width']
+            if inputs['temperature'] is not None:
+                sampling_config.temperature = inputs['temperature']
+            if inputs['runtime_top_k'] is not None:
+                sampling_config.top_k = inputs['runtime_top_k']
+            if inputs['runtime_top_p'] is not None:
+                sampling_config.top_p = inputs['runtime_top_p']
+            if inputs['len_penalty'] is not None:
+                sampling_config.length_penalty = inputs['len_penalty']
+            if inputs['repetition_penalty'] is not None:
+                sampling_config.repetition_penalty = inputs[
+                    'repetition_penalty']
+            if inputs['min_length'] is not None:
+                sampling_config.min_length = inputs['min_length']
+            if inputs['presence_penalty'] is not None:
+                sampling_config.presence_penalty = inputs['presence_penalty']
+            sampling_config.random_seed = inputs['random_seed']
+            sampling_config.output_log_probs = inputs['output_log_probs']
             if self.remove_input_padding:
                 self.decoder.setup(
                     batch_size=1,
@@ -189,6 +201,7 @@ class TritonPythonModel:
                 self.decoder.setup(batch_size=input_ids.size(0),
                                    max_input_length=input_ids.size(1),
                                    max_new_tokens=inputs['request_output_len'])
+
             output_ids = self.decoder.decode(input_ids, input_lengths,
                                              sampling_config)
 
@@ -196,8 +209,17 @@ class TritonPythonModel:
                 # Create output tensors. You need pb_utils.Tensor
                 # objects to create pb_utils.InferenceResponse.
                 torch.cuda.synchronize()
-                output_ids = pb_utils.Tensor("output_ids",
-                                             output_ids.cpu().numpy())
+                output_tensors = [
+                    pb_utils.Tensor("output_ids",
+                                    output_ids.cpu().numpy())
+                ]
+
+                if sampling_config.output_log_probs:
+                    # [max_new_tokens, batch_size, num_beams] -> [batch_size, max_new_tokens, num_beams]
+                    log_probs = self.decoder.log_probs.transpose(
+                        0, 1).cpu().numpy()
+                    output_tensors.append(
+                        pb_utils.Tensor("log_probs", log_probs))
 
                 # Create InferenceResponse. You can set an error here in case
                 # there was a problem with handling this inference request.
@@ -207,8 +229,7 @@ class TritonPythonModel:
                 # pb_utils.InferenceResponse(
                 #    output_tensors=..., TritonError("An error occured"))
 
-                inference_response = pb_utils.InferenceResponse(
-                    output_tensors=[output_ids])
+                inference_response = pb_utils.InferenceResponse(output_tensors)
             else:
                 inference_response = pb_utils.InferenceResponse([])
             responses.append(inference_response)

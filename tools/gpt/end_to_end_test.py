@@ -5,14 +5,6 @@ import argparse
 import numpy as np
 from utils import utils
 
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
-
-GPT_START_ID = 220
-GPT_END_ID = 50256
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-v',
@@ -179,8 +171,6 @@ if __name__ == '__main__':
                          np.ones([input0_data.shape[0], 1])).astype(np.uint32)
         runtime_top_p = FLAGS.topp * np.ones([input0_data.shape[0], 1]).astype(
             np.float32)
-        beam_search_diversity_rate = 0.0 * np.ones([input0_data.shape[0], 1
-                                                    ]).astype(np.float32)
         temperature = 1.0 * np.ones([input0_data.shape[0], 1]).astype(
             np.float32)
         len_penalty = 1.0 * np.ones([input0_data.shape[0], 1]).astype(
@@ -188,27 +178,40 @@ if __name__ == '__main__':
         repetition_penalty = 1.0 * np.ones([input0_data.shape[0], 1]).astype(
             np.float32)
         random_seed = 0 * np.ones([input0_data.shape[0], 1]).astype(np.uint64)
-        is_return_log_probs = True * np.ones([input0_data.shape[0], 1
-                                              ]).astype(bool)
+        output_log_probs = True * np.ones([input0_data.shape[0], 1
+                                           ]).astype(bool)
         beam_width = (FLAGS.beam_width *
                       np.ones([input0_data.shape[0], 1])).astype(np.uint32)
+        pad_ids = 50256 * \
+            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+        end_ids = 50256 * \
+            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+        min_length = 1 * \
+            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+        presence_penalty = 0.0 * \
+            np.ones([input0_data.shape[0], 1]).astype(np.float32)
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
             utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
             utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
             utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
+            utils.prepare_tensor("pad_id", pad_ids, FLAGS.protocol),
+            utils.prepare_tensor("end_id", end_ids, FLAGS.protocol),
+            utils.prepare_tensor("beam_width", beam_width, FLAGS.protocol),
             utils.prepare_tensor("runtime_top_k", runtime_top_k,
                                  FLAGS.protocol),
             utils.prepare_tensor("runtime_top_p", runtime_top_p,
                                  FLAGS.protocol),
-            utils.prepare_tensor("beam_search_diversity_rate",
-                                 beam_search_diversity_rate, FLAGS.protocol),
             utils.prepare_tensor("temperature", temperature, FLAGS.protocol),
             utils.prepare_tensor("len_penalty", len_penalty, FLAGS.protocol),
             utils.prepare_tensor("repetition_penalty", repetition_penalty,
                                  FLAGS.protocol),
+            utils.prepare_tensor("min_length", min_length, FLAGS.protocol),
+            utils.prepare_tensor("presence_penalty", presence_penalty,
+                                 FLAGS.protocol),
             utils.prepare_tensor("random_seed", random_seed, FLAGS.protocol),
-            utils.prepare_tensor("beam_width", beam_width, FLAGS.protocol),
+            utils.prepare_tensor("output_log_probs", output_log_probs,
+                                 FLAGS.protocol),
         ]
 
         try:
