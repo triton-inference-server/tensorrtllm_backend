@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 from string import Template
 
 
-def main(file_path, substitutions):
+def main(file_path, substitutions, in_place):
     with open(file_path) as f:
         pbtxt = Template(f.read())
 
@@ -14,8 +14,11 @@ def main(file_path, substitutions):
 
     pbtxt = pbtxt.safe_substitute(sub_dict)
 
-    with open(file_path, "w") as f:
-        f.write(pbtxt)
+    if in_place:
+        with open(file_path, "w") as f:
+            f.write(pbtxt)
+    else:
+        print(pbtxt)
 
 
 if __name__ == "__main__":
@@ -26,6 +29,10 @@ if __name__ == "__main__":
         help=
         "substitions to perform, in the format variable_name_1:value_1,variable_name_2:value_2..."
     )
+    parser.add_argument("--in_place",
+                        "-i",
+                        action="store_true",
+                        help="do the operation in-place")
     args = parser.parse_args()
 
     main(**vars(args))
