@@ -1,0 +1,36 @@
+# TensorRT LLM Backend test definitions
+
+The following subfolder contains test definitions for `TURTLE` (https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle),
+which are used to validate TensorRT LLM Backend.
+
+
+## Directory structure
+
+~~~
+.
+└── turtle              # TURTLE-related definitions
+    ├── defs            #     Test definitions (pytest functions)
+    └── test_lists      #     TURTLE-related test lists
+        └── qa          #         Test lists used by QA
+~~~
+
+## How to run turtle test locally for TRT-LLM-Backend?
+
+1. Clone turtle lib，recommend to put it outside the TRT-LLM-Backend repo, to avoid nested git repo.
+
+```bash
+# inside TRT_LLM_Backend repo root dir, clone turtle into ../turtle dir
+git clone ssh://git@gitlab-master.nvidia.com:12051/TensorRT/Infrastructure/turtle.git ../turtle
+```
+
+2. Example commands to run turtle test
+```bash
+export LLM_BACKEND_ROOT=/code/tekit_backend/ # turtle test definition needs to read LLM_BACKEND_ROOT env to find where the example and unit tests code are
+
+# Run through test list file
+./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
+                    -f tekit_backend/tests/llm-backend-test-defs/turtle/test_lists/qa/llm_backend_functional_tests.txt \
+                    --test-python3-exe /usr/bin/python3 --output-dir output --save-workspace
+
+# List all available tests, by using "-l" option
+./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ -l
