@@ -6,6 +6,23 @@ RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvi
 COPY tekit/requirements-dev.txt /tmp/
 RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
+# Remove prevous TRT installation
+RUN apt-get remove --purge -y libnvinfer* tensorrt*
+RUN pip uninstall -y tensorrt
+
+# Download & install internal TRT release
+ARG RELEASE_URL=http://cuda-repo/release-candidates/Libraries/TensorRT/v9.0/9.0.0.2-0a89f19e/12.2-r535/Ubuntu20_04-x64-agnostic/deb/
+RUN curl $RELEASE_URL -o index.html
+RUN for package in $(grep -o '[^ >"]*\.deb' index.html | uniq); do wget -nv ${RELEASE_URL}${package} & done && wait
+RUN dpkg -i *.deb
+# Clean workspace to keep the image size not too large
+RUN rm -rf index.html *.deb
+
+# Install latest Polygraphy v0.48.1
+RUN pip uninstall -y polygraphy
+RUN pip install git+https://gitlab-master.nvidia.com/TensorRT/Infrastructure/Polygraphy.git@v0.48.1
+
+# CMake
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
 RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
 ENV PATH="/usr/local/bin:${PATH}"
