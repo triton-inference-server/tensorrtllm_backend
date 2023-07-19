@@ -118,10 +118,15 @@ if __name__ == '__main__':
     # warm up
     if FLAGS.warm_up:
         print("[INFO] sending requests to warm up")
-        utils.send_requests('tensorrt_llm',
-                            inputs,
-                            FLAGS,
-                            request_parallelism=2)
+        with utils.create_inference_server_client(
+                FLAGS.protocol,
+                FLAGS.url,
+                concurrency=FLAGS.concurrency,
+                verbose=FLAGS.verbose) as client:
+            utils.send_requests('tensorrt_llm',
+                                inputs,
+                                client,
+                                request_parallelism=2)
 
     latencies = []
     for i in range(FLAGS.num_runs):
