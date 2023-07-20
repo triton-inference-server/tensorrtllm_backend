@@ -1,15 +1,48 @@
 FROM nvcr.io/nvidia/tritonserver:23.04-py3 as build
 
+WORKDIR /app
+
+# Remove prevous TRT installation
+RUN pip uninstall -y tensorrt
+
+# Download & install internal TRT release
+ARG RELEASE_URL=http://cuda-repo/release-candidates/Libraries/TensorRT/v9.0/9.0.0.2-0a89f19e/12.2-r535/Ubuntu20_04-x64-agnostic/deb/
+RUN curl $RELEASE_URL -o index.html
+RUN for package in $(grep -o '[^ >"]*\.deb' index.html | uniq); do wget -nv ${RELEASE_URL}${package} & done && wait
+RUN dpkg -i *.deb
+# Clean workspace to keep the image size not too large
+RUN rm -rf index.html *.deb
+
 WORKDIR /app/tensorrt_llm
 COPY tekit .
 
-RUN python3 scripts/build_wheel.py
+RUN python3 scripts/build_wheel.py -c
 
 FROM nvcr.io/nvidia/tritonserver:23.04-py3
 
 WORKDIR /app
+
+# Install dependencies
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+# Remove prevous TRT installation
+RUN apt-get remove --purge -y libnvinfer* tensorrt*
+RUN pip uninstall -y tensorrt
+
+# Download & install internal TRT release
+ARG RELEASE_URL=http://cuda-repo/release-candidates/Libraries/TensorRT/v9.0/9.0.0.2-0a89f19e/12.2-r535/Ubuntu20_04-x64-agnostic/deb/
+RUN curl $RELEASE_URL -o index.html
+RUN for package in $(grep -o '[^ >"]*\.deb' index.html | uniq); do wget -nv ${RELEASE_URL}${package} & done && wait
+RUN dpkg -i *.deb
+# Clean workspace to keep the image size not too large
+RUN rm -rf index.html *.deb
+
+# Install latest Polygraphy v0.48.1
+RUN pip uninstall -y polygraphy
+RUN pip install git+https://gitlab-master.nvidia.com/TensorRT/Infrastructure/Polygraphy.git@v0.48.1
+
+# Install TensorRT-LLM
 COPY --from=build /app/tensorrt_llm/build/tensorrt_llm*.whl .
 RUN pip3 install tensorrt_llm*.whl --extra-index-url https://pypi.ngc.nvidia.com \
     && rm tensorrt_llm*.whl
