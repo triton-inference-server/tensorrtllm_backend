@@ -34,3 +34,9 @@ export LLM_BACKEND_ROOT=/code/tekit_backend/ # turtle test definition needs to r
 
 # List all available tests, by using "-l" option
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ -l
+
+# Run perf test
+./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
+                    --test-python3-exe /usr/bin/python3 --perf-log-formats csv \
+                    --perf-clock-gpu-configs-file /code/tekit_backend/tests/llm-backend-test-defs/turtle/perf_configs/gpu_configs.yml \
+                    --perf
