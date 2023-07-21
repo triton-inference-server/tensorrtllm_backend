@@ -5,6 +5,7 @@ import os
 import pytest
 # Conftest imports require defs root. This is not the case inside test defines however.
 from trt_test.misc import call, check_call, check_output, print_info
+from trt_test.session_data_writer import SessionDataWriter
 
 pytest_plugins = ["pytester", "trt_test.pytest_plugin"]
 
@@ -63,6 +64,17 @@ def llm_backend_root(trt_py3_venv_factory):
     return llm_backend_repo_root
 
 
+@pytest.fixture(scope="session")
+def trt_performance_cache_name():
+    return "performance.cache"
+
+
+@pytest.fixture(scope="session")
+def trt_performance_cache_fpath(trt_config, trt_performance_cache_name):
+    fpath = os.path.join(trt_config["workspace"], trt_performance_cache_name)
+    return fpath
+
+
 # Get the executing turtle case name
 @pytest.fixture(autouse=True)
 def turtle_case_name(request):
@@ -72,6 +84,33 @@ def turtle_case_name(request):
 @pytest.fixture(scope="session")
 def output_dir(request):
     return request.config._trt_config["output_dir"]
+
+
+@pytest.fixture(scope="session")
+def llm_session_data_writer(trt_config, trt_gpu_clock_lock,
+                            versions_from_infer_device, output_dir):
+    """
+    Fixture for the SessionDataWriter, used to write session data to output directory.
+    """
+
+    # Attempt to see if we can run infer_device to get the necessary tags for perf_runner
+    perf_tag_data = trt_config["perf_trt_tag"]
+
+    if versions_from_infer_device:
+        for k, v in versions_from_infer_device.items():
+            if k not in perf_tag_data or perf_tag_data[k] is None:
+                perf_tag_data[k] = v
+
+    session_data_writer = SessionDataWriter(
+        perf_trt_tag=perf_tag_data,
+        log_output_directory=output_dir,
+        output_formats=trt_config["perf_log_formats"],
+        gpu_clock_lock=trt_gpu_clock_lock,
+    )
+
+    yield session_data_writer
+
+    session_data_writer.teardown()
 
 
 @pytest.fixture(scope="session")
