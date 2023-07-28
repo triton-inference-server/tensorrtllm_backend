@@ -13,6 +13,7 @@ if [ "$MODEL" = "gpt" ]; then
     pushd tekit/examples/gpt
 
     pip3 install -r requirements.txt
+    pip3 uninstall -y safetensors # To fix `safetensors_rust.SafetensorError: Error while deserializing header: HeaderTooLarge`
 
     rm -rf gpt2 && git clone https://huggingface.co/gpt2
     pushd gpt2 && rm pytorch_model.bin && \
