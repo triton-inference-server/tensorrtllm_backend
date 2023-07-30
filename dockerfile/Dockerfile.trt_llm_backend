@@ -1,0 +1,59 @@
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:23.04-py3
+
+FROM ${BASE_IMAGE} as base
+
+COPY requirements.txt /tmp/
+RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+# Remove prevous TRT installation
+RUN apt-get remove --purge -y libnvinfer* tensorrt*
+RUN pip uninstall -y tensorrt
+
+# Download & install internal TRT release
+ARG RELEASE_URL=http://cuda-repo/release-candidates/Libraries/TensorRT/v9.0/9.0.0.2-0a89f19e/12.2-r535/Ubuntu20_04-x64-agnostic/deb/
+RUN curl $RELEASE_URL -o index.html
+RUN for package in $(grep -o '[^ >"]*\.deb' index.html | uniq); do wget -nv ${RELEASE_URL}${package} & done && wait
+RUN dpkg -i *.deb
+# Clean workspace to keep the image size not too large
+RUN rm -rf index.html *.deb
+
+FROM base as dev
+
+# Install latest Polygraphy v0.48.1
+RUN pip uninstall -y polygraphy
+RUN pip install git+https://gitlab-master.nvidia.com/TensorRT/Infrastructure/Polygraphy.git@v0.48.1
+
+# CMake
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
+RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
+ENV PATH="/usr/local/bin:${PATH}"
+
+COPY tekit/requirements-dev.txt /tmp/
+RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+
+FROM dev as trt_llm_builder
+
+WORKDIR /app
+COPY scripts scripts
+COPY tekit tekit
+RUN cd tekit; python3 scripts/build_wheel.py -a "80;86"; cd ..
+
+FROM trt_llm_builder as trt_llm_backend_builder
+
+WORKDIR /app/
+COPY inflight_batcher_llm inflight_batcher_llm
+RUN cd inflight_batcher_llm; bash scripts/build.sh; cd ..
+
+FROM trt_llm_backend_builder as final
+#FROM base as final
+#
+#WORKDIR /app
+#COPY --from=trt_llm_builder /app/tekit/build/tensorrt_llm*.whl .
+#RUN pip3 install tensorrt_llm*.whl --extra-index-url https://pypi.ngc.nvidia.com \
+#    && rm tensorrt_llm*.whl
+
+#Install inflight batcher backend
+RUN mkdir /opt/tritonserver/backends/inflight_batcher_llm
+RUN mkdir -p /opt/tensorrt_llm/lib
+COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+#COPY --from=trt_llm_backend_builder /app/tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin.so /opt/tensorrt_llm/lib/
