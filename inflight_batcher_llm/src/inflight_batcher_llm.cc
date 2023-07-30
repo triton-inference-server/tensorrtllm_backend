@@ -501,21 +501,6 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  // Move work item from work_items_in_progress_ to work_items_.
-  // This is done by GPT manager if it isn't able to process it (most likely due to some error),
-  // but want to try again later.
-  void restore_inference_request(std::vector<uint64_t> correlation_ids)
-  {
-    // No-op, will probably be removed from API
-  }
-
-  // Remove work from work_items_in_progress_ map. This will free WorkItem.
-  // This method should be called only after final response has been sent.
-  void commit_inference_request(std::vector<uint64_t> correlation_ids)
-  {
-    // No-op, will probably be removed from API
-  }
-
   TRITONSERVER_Error* send_response_(uint64_t correlation_id, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response)
   {
     auto work_item = work_items_in_progress_[correlation_id];
@@ -590,8 +575,6 @@ class ModelInstanceState : public BackendModelInstance {
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, mMaxSeqLen, mMaxNumRequests,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](std::vector<uint64_t> correlation_ids){commit_inference_request(correlation_ids);},
-          [this](std::vector<uint64_t> correlation_ids){restore_inference_request(correlation_ids);},
           [this](uint64_t correlation_id, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response){return send_response(correlation_id, response_tensors, final_response);});
   }
 
