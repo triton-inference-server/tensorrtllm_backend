@@ -1,3 +1,4 @@
 [submodule "tekit"]
 	path = tekit
 	url = ../tekit.git
+	branch = main
