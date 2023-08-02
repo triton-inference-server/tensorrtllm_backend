@@ -196,12 +196,16 @@ target_compile_options(
 add_library(tensorrt_llm STATIC IMPORTED)
 set_property(TARGET tensorrt_llm PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
+add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
+
 add_library(nvinfer_plugin SHARED IMPORTED)
 set_property(TARGET nvinfer_plugin PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin.so")
 
 target_link_libraries(
   triton-inflight_batcher_llm-backend
   PRIVATE
+    tensorrt_llm_batch_manager
     tensorrt_llm
     triton-core-serverapi   # from repo-core
     triton-core-backendapi  # from repo-core
