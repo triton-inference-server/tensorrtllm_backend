@@ -2,47 +2,9 @@ name: "tensorrt_llm"
 backend: "inflight_batcher_llm"
 max_batch_size: 128
 
-sequence_batching {
-  max_sequence_idle_microseconds: 5000000
-  oldest
-  {
-    max_candidate_sequences: 1024
-  }
-  control_input [
-    {
-      name: "START"
-      control [
-        {
-          kind: CONTROL_SEQUENCE_START
-          fp32_false_true: [ 0, 1 ]
-        }
-      ]
-    },
-    {
-      name: "END"
-      control [
-        {
-          kind: CONTROL_SEQUENCE_END
-          fp32_false_true: [ 0, 1 ]
-        }
-      ]
-    },
-    {
-      name: "CORRID"
-      control [
-        {
-          kind: CONTROL_SEQUENCE_CORRID
-          data_type: TYPE_UINT64
-        }
-      ]
-    }
-  ]
+dynamic_batching {
+   max_queue_delay_microseconds: 50000
 }
-
-# # Uncomment this for dynamic_batching
-# dynamic_batching {
-#    max_queue_delay_microseconds: 50000
-# }
 
 input [
   {
