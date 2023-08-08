@@ -71,14 +71,7 @@ if __name__ == '__main__':
     inputs[2].set_data_from_numpy(request_output_len_data)
 
     # you can pass parameters with each inference request
-    params = {"parameter1": "parameter1", "parameter2": 2}
-    # sequence_id in client API equals correlation_id on server side
-    result = triton_client.infer('tensorrt_llm',
-                                 inputs,
-                                 sequence_id=12345,
-                                 sequence_start=True,
-                                 sequence_end=True,
-                                 parameters=params)
+    result = triton_client.infer('tensorrt_llm', inputs, request_id="12345")
 
     print('Response: {}'.format(result.get_response()))
     print('output_ids= {}'.format(result.as_numpy('output_ids')))

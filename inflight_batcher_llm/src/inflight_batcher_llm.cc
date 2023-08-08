@@ -132,16 +132,6 @@ TRITONSERVER_DataType to_triton_datatype(Tensor_t data_type)
     }
 }
 
-//
-// Minimal backend that demonstrates the TRITONBACKEND API. This
-// backend works for any model that has 1 input called "IN0" with
-// INT32 datatype and shape [ 4 ] and 1 output called "OUT0" with
-// INT32 datatype and shape [ 4 ]. The backend supports both batching
-// and non-batching models.
-//
-// For each batch of requests, the backend returns the input tensor
-// value in the output tensor.
-//
 
 /////////////
 
@@ -312,30 +302,19 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
 class WorkItem
 {
   public:
-    WorkItem(TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request* request)
+    WorkItem(TRITONBACKEND_Request* request)
     {
-      instance_ptr_ = instance;
-      // TODO: Is there need to explicitly take over responsibility for request?
-      request_ptr_ = request;
-      TRITONBACKEND_RequestCorrelationId(request, &correlation_id_);
+      mRequestId = (rand() % INT64_MAX) + 1;
+      mInferenceRequest = createInferenceRequest(request, mRequestId);
+
       // Create response factory for this request
       TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
     }
+
     ~WorkItem()
     {
       // TODO: Verify if this is right way to release request.
-      TRITONBACKEND_RequestRelease(request_ptr_, TRITONSERVER_REQUEST_RELEASE_ALL);
       TRITONBACKEND_ResponseFactoryDelete(factory_ptr_);
-    }
-
-    TRITONBACKEND_ModelInstance* instance()
-    {
-      return instance_ptr_;
-    }
-
-    TRITONBACKEND_Request* request()
-    {
-      return request_ptr_;
     }
 
     TRITONBACKEND_ResponseFactory* response_factory()
@@ -343,17 +322,74 @@ class WorkItem
       return factory_ptr_;
     }
 
-    uint64_t correlation_id()
+    uint64_t requestId() const
     {
-      return correlation_id_;
+      return mRequestId;
     }
 
-  private:
-    TRITONBACKEND_ModelInstance* instance_ptr_;
-    TRITONBACKEND_Request* request_ptr_;
+    std::shared_ptr<InferenceRequest> getInferenceRequest() const
+    {
+      return mInferenceRequest;
+    }
+
+ private:
+
+    // Convert info from original backend request to data structures defined in common/common.h
+    std::shared_ptr<InferenceRequest> createInferenceRequest(TRITONBACKEND_Request* request, uint64_t requestId)
+    {
+      auto inferenceRequest = std::make_shared<InferenceRequest>(requestId);
+
+      // Extract input tensors
+      std::map<std::string, Tensor> input_tensors;
+      uint32_t num_inputs;
+      LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
+      for (uint32_t idx = 0;  idx < num_inputs;  ++idx)
+      {
+        TRITONBACKEND_Input* input = 0L;
+        TRITONBACKEND_RequestInputByIndex(request, idx, &input);
+
+        const char* input_name = 0L;
+        TRITONSERVER_DataType data_type = TRITONSERVER_TYPE_INVALID;
+        const int64_t* shape = 0L;
+        uint32_t dims_count = 0;
+        uint64_t byte_size = 0;
+        uint32_t buffer_count = 0;
+        TRITONBACKEND_InputProperties(input, &input_name, &data_type, &shape, &dims_count, &byte_size, &buffer_count);
+
+        //TODO: Should those be ignored?
+        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END") {
+            continue;
+        }
+
+        std::vector<int64_t> shapev;
+        for (uint32_t i = 0;  i < dims_count;  ++i) {
+          shapev.push_back(shape[i]);
+        }
+
+        auto t = Tensor(input_name, MT_HOST, to_common_datatype(data_type), shapev);
+        int64_t buffer_offset = 0;
+        for (int64_t buffer_id=0; buffer_id < buffer_count; ++buffer_id)
+        {
+          const void* buffer = 0L;
+          uint64_t buffer_byte_size = 0;
+          TRITONSERVER_MemoryType memory_type;
+          int64_t memory_type_id = 0;
+          TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
+          assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
+          // TODO: Do we need to handle GPU mem input buffers??
+          t.raw_copy_from(buffer, buffer_byte_size, buffer_offset);
+          buffer_offset += buffer_byte_size;
+        }
+
+        inferenceRequest->emplaceInputTensor(std::string(input_name), std::move(t));
+      }
+
+      return inferenceRequest;
+    }
+
+    std::shared_ptr<InferenceRequest> mInferenceRequest;
     TRITONBACKEND_ResponseFactory* factory_ptr_;
-    uint64_t correlation_id_;
-    // TODO: Add private state object. Not needed for this experiment.
+    uint64_t mRequestId;
 };
 
 //
@@ -383,97 +419,12 @@ class ModelInstanceState : public BackendModelInstance {
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
 
-  // Convert info from original backend request to data structures defined in common/common.h
-  std::shared_ptr<InferenceRequest> convert(std::shared_ptr<WorkItem> work_item)
-  {
-    // Extract input tensors
-    std::map<std::string, Tensor> input_tensors;
-    TRITONBACKEND_Request* request = work_item->request();
-    uint32_t num_inputs;
-    TRITONBACKEND_RequestInputCount(request, &num_inputs);
-    for (uint32_t idx = 0;  idx < num_inputs;  ++idx)
-    {
-      TRITONBACKEND_Input* input = 0L;
-      TRITONBACKEND_RequestInputByIndex(request, idx, &input);
-
-      const char* input_name = 0L;
-      TRITONSERVER_DataType data_type = TRITONSERVER_TYPE_INVALID;
-      const int64_t* shape = 0L;
-      uint32_t dims_count = 0;
-      uint64_t byte_size = 0;
-      uint32_t buffer_count = 0;
-      TRITONBACKEND_InputProperties(input, &input_name, &data_type, &shape, &dims_count, &byte_size, &buffer_count);
-
-      //TODO: Should those be ignored?
-      if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END") {
-          continue;
-      }
-
-      std::vector<int64_t> shapev;
-      for (uint32_t i = 0;  i < dims_count;  ++i) {
-        shapev.push_back(shape[i]);
-      }
-
-      auto t = Tensor(input_name, MT_HOST, to_common_datatype(data_type), shapev);
-      int64_t buffer_offset = 0;
-      for (int64_t buffer_id=0; buffer_id < buffer_count; ++buffer_id)
-      {
-        const void* buffer = 0L;
-        uint64_t buffer_byte_size = 0;
-        TRITONSERVER_MemoryType memory_type;
-        int64_t memory_type_id = 0;
-        TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
-        assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
-        // TODO: Do we need to handle GPU mem input buffers??
-        t.raw_copy_from(buffer, buffer_byte_size, buffer_offset);
-	buffer_offset += buffer_byte_size;
-      }
-
-      input_tensors.emplace(std::make_pair(std::string(input_name), t));
-    }
-
-    // Get correlation id
-    uint64_t correlation_id;
-    TRITONBACKEND_RequestCorrelationId(request, &correlation_id);
-    return std::make_shared<InferenceRequest>(input_tensors, correlation_id);
-  }
-
-  bool enqueue(TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests, const uint32_t request_count)
+  bool enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
   {
     std::lock_guard<std::mutex> lk(work_items_m_);
     for (uint32_t r = 0; r < request_count; ++r) {
       TRITONBACKEND_Request* request = requests[r];
-      work_items_.emplace_back(std::make_shared<WorkItem>(instance, request));
-      uint32_t num_params = 0;
-      TRITONBACKEND_RequestParameterCount(request, &num_params);
-      if (num_params > 0)
-      {
-        for (uint32_t idx = 0;  idx < num_params;  ++idx)
-        {
-          const char* key = 0L;
-          TRITONSERVER_ParameterType type;
-          const void* vvalue = 0L;
-          TRITONBACKEND_RequestParameter(request, idx, &key, &type, &vvalue);
-          switch (type)
-          {
-            case TRITONSERVER_PARAMETER_STRING:
-              //printf("%d :: --> \"%s\": %s\n",__LINE__,key,(const char*)vvalue);
-              break;
-            case TRITONSERVER_PARAMETER_INT:
-              //printf("%d :: --> \"%s\": %d\n",__LINE__,key,*((int*)vvalue));
-              break;
-            case TRITONSERVER_PARAMETER_BOOL:
-              //printf("%d :: --> \"%s\": %d\n",__LINE__,key,(int)(*((char*)vvalue)));
-              break;
-            case TRITONSERVER_PARAMETER_BYTES:
-              //printf("%d :: --> \"%s\": %d\n",__LINE__,key,(int)(*((char*)vvalue)));
-              break;
-            default:
-              assert(false);
-              break;
-          }
-        }
-      }
+      work_items_.emplace_back(std::make_shared<WorkItem>(request));
     }
     return false; // return true if any error occured
   }
@@ -490,8 +441,8 @@ class ModelInstanceState : public BackendModelInstance {
     {
       auto work_item = work_items_.front();
       work_items_.pop_front();
-      rval.emplace_back(convert(work_item));
-      work_items_in_progress_.emplace(std::make_pair(work_item->correlation_id(), work_item));
+      rval.emplace_back(work_item->getInferenceRequest());
+      work_items_in_progress_.emplace(std::make_pair(work_item->requestId(), work_item));
 
       ++count;
     }
@@ -501,9 +452,9 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  TRITONSERVER_Error* send_response_(uint64_t correlation_id, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response)
+  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<Tensor>> const& response_tensors, bool final_response)
   {
-    auto work_item = work_items_in_progress_[correlation_id];
+    auto work_item = work_items_in_progress_.at(requestId);
     auto response_factory = work_item->response_factory();
     TRITONBACKEND_Response* response;
     RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
@@ -513,37 +464,34 @@ class ModelInstanceState : public BackendModelInstance {
       auto tensor = *it;
       auto shape = tensor->shape(); // returns std::vectorint64_t>
       TRITONBACKEND_Output* output;
-      TRITONBACKEND_ResponseOutput(
+      RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
               response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
-              shape.data(), shape.size());
+              shape.data(), shape.size()));
 
       uint64_t buffersize = tensor->sizeBytes();
       void* buffer = 0L;
       TRITONSERVER_MemoryType memory_type;
       int64_t memory_type_id;
-      TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id);
+      RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
       tensor->raw_copy_to(buffer, buffersize, 0L);
     }
 
-    LOG_IF_ERROR(
+    RETURN_IF_ERROR(
         TRITONBACKEND_ResponseSend(
-          response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, nullptr),
-        "failed to send response");
+          response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, nullptr));
+
     if (final_response)
     {
-      work_items_in_progress_.erase(correlation_id);
+      work_items_in_progress_.erase(requestId);
     }
-    return 0L;
+    return nullptr;
   }
 
-  bool send_response(uint64_t correlation_id, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response)
+  bool sendResponse(uint64_t requestId, std::list<std::shared_ptr<Tensor>> const& response_tensors, bool final_response)
   {
-    if (send_response_(correlation_id, response_tensors, final_response))
-    {
-      return false;
-    } else {
-      return true;
-    }
+    auto tritonErr = sendTritonResponse(requestId, response_tensors, final_response);
+    LOG_IF_ERROR(tritonErr, "Failed to send Triton response for requestId: " + std::to_string(requestId));
+    return !tritonErr;
   }
 
  private:
@@ -575,7 +523,7 @@ class ModelInstanceState : public BackendModelInstance {
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, mMaxSeqLen, mMaxNumRequests,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t correlation_id, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response){return send_response(correlation_id, response_tensors, final_response);});
+          [this](uint64_t requestId, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response){return sendResponse(requestId, response_tensors, final_response);});
   }
 
   ModelState* model_state_;
@@ -685,9 +633,15 @@ TRITONBACKEND_ModelInstanceExecute(
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
       instance, reinterpret_cast<void**>(&instance_state)));
   RETURN_ERROR_IF_TRUE(
-      instance_state->enqueue(instance, requests, request_count),
+      instance_state->enqueue(requests, request_count),
       TRITONSERVER_ERROR_INTERNAL,
       std::string("unexpected error in enqueue method"));
+
+  for (uint32_t r = 0; r < request_count; ++r) {
+    TRITONBACKEND_Request* request = requests[r];
+    TRITONBACKEND_RequestRelease(request, TRITONSERVER_REQUEST_RELEASE_ALL);
+  }
+
   return nullptr;  // success
 }
 
