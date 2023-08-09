@@ -434,8 +434,8 @@ class ModelInstanceState : public BackendModelInstance {
   {
     // terminate decoupled execution loop
     {
-      std::lock_guard<std::mutex> lk(work_items_m_);
-      work_items_.clear();
+      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+      mWorkItems.clear();
     }
   }
 
@@ -444,10 +444,10 @@ class ModelInstanceState : public BackendModelInstance {
 
   bool enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
   {
-    std::lock_guard<std::mutex> lk(work_items_m_);
+    std::lock_guard<std::mutex> lk(mWorkItemsMutex);
     for (uint32_t r = 0; r < request_count; ++r) {
       TRITONBACKEND_Request* request = requests[r];
-      work_items_.emplace_back(std::make_shared<WorkItem>(request));
+      mWorkItems.emplace_back(std::make_shared<WorkItem>(request));
     }
     return false; // return true if any error occured
   }
@@ -455,17 +455,17 @@ class ModelInstanceState : public BackendModelInstance {
   // Return up to max_num_requests inference requests.
   std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(int max_num_requests)
   {
-    std::lock_guard<std::mutex> lk(work_items_m_);
+    std::lock_guard<std::mutex> lk(mWorkItemsMutex);
     std::list<std::shared_ptr<InferenceRequest>> rval;
-    if (max_num_requests <= 0) max_num_requests = (int)work_items_.size();
+    if (max_num_requests <= 0) max_num_requests = (int)mWorkItems.size();
 
     int count = 0;
-    while (count < max_num_requests && work_items_.size() > 0)
+    while (count < max_num_requests && mWorkItems.size() > 0)
     {
-      auto work_item = work_items_.front();
-      work_items_.pop_front();
+      auto work_item = mWorkItems.front();
+      mWorkItems.pop_front();
       rval.emplace_back(work_item->getInferenceRequest());
-      work_items_in_progress_.emplace(std::make_pair(work_item->requestId(), work_item));
+      mWorkItemsInProgress.emplace(std::make_pair(work_item->requestId(), work_item));
 
       ++count;
     }
@@ -475,8 +475,12 @@ class ModelInstanceState : public BackendModelInstance {
 
   TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<Tensor>> const& response_tensors, bool final_response)
   {
-    auto work_item = work_items_in_progress_.at(requestId);
-    auto response_factory = work_item->response_factory();
+    TRITONBACKEND_ResponseFactory* response_factory;
+    {
+      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+      auto work_item = mWorkItemsInProgress.at(requestId);
+      response_factory = work_item->response_factory();
+    }
     TRITONBACKEND_Response* response;
     RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
 
@@ -503,7 +507,8 @@ class ModelInstanceState : public BackendModelInstance {
 
     if (final_response)
     {
-      work_items_in_progress_.erase(requestId);
+      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+      mWorkItemsInProgress.erase(requestId);
     }
     return nullptr;
   }
@@ -569,7 +574,7 @@ class ModelInstanceState : public BackendModelInstance {
   // inflight batcher is a decoupled design.
   // It uses response factory objects to decouple responses from requests.
   //
-  // New requests are added to work_items_ list. This list is processed
+  // New requests are added to mWorkItems list. This list is processed
   // in an infinite loop run by a worker thread. Requests take multiple
   // iterations to complete, and number of iterations is not known in
   // advance. To facilitate this, we use response factory objects to
@@ -583,9 +588,9 @@ class ModelInstanceState : public BackendModelInstance {
   int mMaxNumRequests = -1;
   std::shared_ptr<GptManager> mBatchManager;
 
-  std::list<std::shared_ptr<WorkItem>> work_items_;
-  std::unordered_map<uint64_t, std::shared_ptr<WorkItem>> work_items_in_progress_;
-  std::mutex work_items_m_;
+  std::list<std::shared_ptr<WorkItem>> mWorkItems;
+  std::unordered_map<uint64_t, std::shared_ptr<WorkItem>> mWorkItemsInProgress;
+  std::mutex mWorkItemsMutex;
 };
 
 TRITONSERVER_Error*
