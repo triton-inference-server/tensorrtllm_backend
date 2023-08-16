@@ -92,9 +92,10 @@ if [ "$MODEL" = "gptj" ]; then
     pip install -r requirements.txt
     python3 build.py --dtype=float16 --n_layer=2 \
         --use_gpt_attention_plugin --use_gemm_plugin --use_layernorm_plugin
-    wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/vocab.json
-    wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/merges.txt
-    python3 run.py --max_output_len=1
+    # FIXME(kaiyu): Uncomment this after gptj is fixed
+    # wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/vocab.json -P gptj
+    # wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/merges.txt -P gptj
+    # python3 run.py --max_output_len=1
 
     popd # tekit/examples/gptj
 

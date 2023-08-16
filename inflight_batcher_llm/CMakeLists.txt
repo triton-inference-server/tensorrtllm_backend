@@ -199,8 +199,8 @@ set_property(TARGET tensorrt_llm PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOU
 add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
 set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
 
-add_library(nvinfer_plugin SHARED IMPORTED)
-set_property(TARGET nvinfer_plugin PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin.so")
+add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
+set_property(TARGET nvinfer_plugin_tensorrt_llm PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so")
 
 target_link_libraries(
   triton-inflight_batcher_llm-backend
@@ -213,7 +213,7 @@ target_link_libraries(
     triton-backend-utils    # from repo-backend
     ${MPI_LIBRARIES}
     nvinfer
-    nvinfer_plugin
+    nvinfer_plugin_tensorrt_llm
 )
 
 if(WIN32)
