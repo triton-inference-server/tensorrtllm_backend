@@ -56,4 +56,4 @@ FROM trt_llm_backend_builder as final
 RUN mkdir /opt/tritonserver/backends/inflight_batcher_llm
 RUN mkdir -p /opt/tensorrt_llm/lib
 COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
-#COPY --from=trt_llm_backend_builder /app/tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin.so /opt/tensorrt_llm/lib/
+#COPY --from=trt_llm_backend_builder /app/tekit/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so /opt/tensorrt_llm/lib/
