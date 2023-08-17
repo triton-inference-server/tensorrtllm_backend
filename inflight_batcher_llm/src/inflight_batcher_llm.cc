@@ -45,6 +45,8 @@
 #include "tensorrt_llm/batch_manager/GptManager.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
+#include <nlohmann/json.hpp>
+
 using namespace ::triton::common;   // TritonJson
 
 //
@@ -520,6 +522,18 @@ class ModelInstanceState : public BackendModelInstance {
       // Note: std::string::compare fails this test (always return non-zero value).
       // Using old school strcmp instead.
       mModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
+      auto configPath = mModelPath + "/config.json";
+      std::ifstream jsonStream(configPath);
+
+      auto constexpr allowExceptions = true;
+      auto constexpr ingoreComments = true;
+      auto json = nlohmann::json::parse(jsonStream, nullptr, allowExceptions, ingoreComments);
+
+      auto const& builderConfig = json.at("builder_config");
+      int maxInputLen = builderConfig.at("max_input_len");
+      int maxOutputLen = builderConfig.at("max_output_len");
+      mMaxSeqLen = maxInputLen + maxOutputLen;
+      mMaxNumRequests = builderConfig.at("max_batch_size");
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, mMaxSeqLen, mMaxNumRequests,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
@@ -541,9 +555,9 @@ class ModelInstanceState : public BackendModelInstance {
   TrtGptModelType mTrtGptModelType;
   std::string mModelPath;
 
-  // TODO: Those should come from config
-  int mMaxSeqLen = 60;
-  int mMaxNumRequests = 32;
+  // Initialize to clearly invalid values, will be overwritten later.
+  int mMaxSeqLen = -1;
+  int mMaxNumRequests = -1;
   std::shared_ptr<GptManager> mBatchManager;
 
   std::list<std::shared_ptr<WorkItem>> work_items_;

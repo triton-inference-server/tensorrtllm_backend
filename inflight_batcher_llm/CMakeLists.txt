@@ -181,7 +181,6 @@ target_include_directories(
     ${COMMON_HEADER_DIR}
 )
 
-
 #include_directories(${CUDA_INCLUDE_DIRS} ${CUDNN_ROOT_DIR}/include
 #                    ${NCCL_INCLUDE_DIR} ${3RDPARTY_DIR}/cutlass/include)
 
@@ -215,6 +214,15 @@ target_link_libraries(
     nvinfer
     nvinfer_plugin_tensorrt_llm
 )
+
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.2)
+
+FetchContent_MakeAvailable(json)
+
+target_link_libraries(triton-inflight_batcher_llm-backend PRIVATE nlohmann_json::nlohmann_json)
 
 if(WIN32)
   set_target_properties(
