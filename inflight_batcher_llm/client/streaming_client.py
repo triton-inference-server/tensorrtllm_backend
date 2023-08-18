@@ -26,10 +26,54 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import queue
 import sys
+from functools import partial
 
 import numpy as np
 import tritonclient.grpc as grpcclient
+from tritonclient.utils import InferenceServerException
+
+#
+# Simple streaming client for TRT-LLM inflight bacthing backend
+#
+# In order for this code to work properly, config.pbtxt must contain these values:
+#
+# model_transaction_policy {
+#   decoupled: True
+# }
+#
+# parameters: {
+#   key: "gpt_model_type"
+#   value: {
+#     string_value: "inflight_batching"
+#   }
+# }
+#
+# In order for gpt_model_type 'inflight_batching' to work, you must copy engine from
+#
+# tekit/cpp/tests/resources/models/rt_engine/gpt2/fp16-inflight-batching-plugin/1-gpu/
+#
+
+
+class UserData:
+
+    def __init__(self):
+        self._completed_requests = queue.Queue()
+
+
+# Define the callback function. Note the last two parameters should be
+# result and error. InferenceServerClient would povide the results of an
+# inference as grpcclient.InferResult in result. For successful
+# inference, error will be None, otherwise it will be an object of
+# tritonclientutils.InferenceServerException holding the error details
+def callback(user_data, result, error):
+    if error:
+        user_data._completed_requests.put(error)
+    else:
+        print(result)
+        user_data._completed_requests.put(result)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -59,11 +103,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-t",
-        "--client-timeout",
+        "--stream-timeout",
         type=float,
         required=False,
         default=None,
-        help="Client timeout in seconds. Default is None.",
+        help="Stream timeout in seconds. Default is None.",
     )
     parser.add_argument(
         "-r",
@@ -100,20 +144,7 @@ if __name__ == "__main__":
     )
 
     FLAGS = parser.parse_args()
-    try:
-        triton_client = grpcclient.InferenceServerClient(
-            url=FLAGS.url,
-            verbose=FLAGS.verbose,
-            ssl=FLAGS.ssl,
-            root_certificates=FLAGS.root_certificates,
-            private_key=FLAGS.private_key,
-            certificate_chain=FLAGS.certificate_chain,
-        )
-    except Exception as e:
-        print("channel creation failed: " + str(e))
-        sys.exit()
 
-    # First send a single request to the nonbatching model.
     print('=========')
     input_ids_data = np.array(
         [[28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257]],
@@ -130,8 +161,39 @@ if __name__ == "__main__":
     inputs[1].set_data_from_numpy(input_lengths_data)
     inputs[2].set_data_from_numpy(request_output_len_data)
 
-    # you can pass parameters with each inference request
-    result = triton_client.infer('tensorrt_llm', inputs, request_id="12345")
-
-    print('Response: {}'.format(result.get_response()))
-    print('output_ids= {}'.format(result.as_numpy('output_ids')))
+    user_data = UserData()
+    with grpcclient.InferenceServerClient(
+            url=FLAGS.url,
+            verbose=FLAGS.verbose,
+            ssl=FLAGS.ssl,
+            root_certificates=FLAGS.root_certificates,
+            private_key=FLAGS.private_key,
+            certificate_chain=FLAGS.certificate_chain,
+    ) as triton_client:
+        try:
+            # Establish stream
+            triton_client.start_stream(
+                callback=partial(callback, user_data),
+                stream_timeout=FLAGS.stream_timeout,
+            )
+            # Send request
+            triton_client.async_stream_infer('tensorrt_llm_streaming',
+                                             inputs,
+                                             request_id="12345",
+                                             parameters={'Streaming': 1})
+            eos = False
+            while not eos:
+                result = user_data._completed_requests.get()
+                if type(result) == InferenceServerException:
+                    print(result)
+                    sys.exit(1)
+                else:
+                    print("*******")
+                    print('Response: {}'.format(result.get_response()))
+                    output_ids = result.as_numpy('output_ids')
+                    print('output_ids= {}'.format(output_ids))
+                    if output_ids[0][-1] == 50256:
+                        eos = True
+        except Exception as e:
+            print("channel creation failed: " + str(e))
+            sys.exit()
