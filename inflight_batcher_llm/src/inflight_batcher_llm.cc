@@ -386,6 +386,27 @@ class WorkItem
         inferenceRequest->emplaceInputTensor(std::string(input_name), std::move(t));
       }
 
+      // Streaming is disabled by default. It can be enabled if request includes parameter "Streaming"
+      // and this parameter is either non-zero int or true bool.
+      bool streaming_flag = false;
+      uint32_t num_params = 0;
+      TRITONBACKEND_RequestParameterCount(request, &num_params);
+      for (uint32_t param_index = 0;  param_index < num_params;  ++param_index)
+      {
+        const char* key = 0L;
+        TRITONSERVER_ParameterType param_type;
+        const void* vvalue = 0L;
+        TRITONBACKEND_RequestParameter(request, param_index, &key, &param_type, &vvalue);
+        if (std::string(key) == "Streaming") {
+          if ((param_type == TRITONSERVER_PARAMETER_BOOL && (int)(*((char*)vvalue)) != 0) ||
+              (param_type == TRITONSERVER_PARAMETER_INT && *((int*)vvalue) != 0))
+          {
+            streaming_flag = true;
+          }
+        }
+      }
+      inferenceRequest->setIsStreaming(streaming_flag);
+
       return inferenceRequest;
     }
 
