@@ -79,20 +79,20 @@ class TritonPythonModel:
         hidden_size = config['builder_config']['hidden_size'] // world_size
         vocab_size = config['builder_config']['vocab_size']
         num_layers = config['builder_config']['num_layers']
-        multi_query_mode = False
-        if 'multi_query_mode' in config['builder_config'].keys():
-            multi_query_mode = config['builder_config']['multi_query_mode']
+        num_kv_heads = num_heads
+        if "num_kv_heads" in config['builder_config'].keys():
+            num_kv_heads = config['builder_config']['num_kv_heads']
 
         self.comm = mpi_comm()
         self.rank = mpi_rank()
 
         model_config = ModelConfig(
             num_heads=num_heads,
+            num_kv_heads=num_kv_heads,
             hidden_size=hidden_size,
             vocab_size=vocab_size,
             num_layers=num_layers,
             gpt_attention_plugin=use_gpt_attention_plugin,
-            multi_query_mode=multi_query_mode,
             remove_input_padding=self.remove_input_padding)
         engine_name = get_engine_name(model, dtype, world_size, self.rank)
         serialize_path = os.path.join(engine_dir, engine_name)
