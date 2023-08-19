@@ -32,23 +32,13 @@ build-tensorrt-llm:
   script:
     - cd $CI_PROJECT_DIR
     - python3 tekit/scripts/build_wheel.py -a "80;86"
+    - cd $CI_PROJECT_DIR/inflight_batcher_llm
+    - bash scripts/build.sh
   artifacts:
     expire_in: 30 mins
     paths:
       - tekit/build
-
-# build-tensorrt-llm-backend:
-#   stage: build-trt-llm-backend
-#   image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
-#   script:
-#     - cd $CI_PROJECT_DIR/inflight_batcher_llm
-#     - bash scripts/build.sh
-#   artifacts:
-#     expire_in: 30 mins
-#     paths:
-#       - inflight_batcher_llm/build
-#   dependencies:
-#     - build-tensorrt-llm
+      - inflight_batcher_llm/build
 
 test-gpt-model-job:
   stage: test-model
