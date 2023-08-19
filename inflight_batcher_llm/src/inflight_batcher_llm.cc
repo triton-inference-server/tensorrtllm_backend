@@ -469,8 +469,6 @@ class ModelInstanceState : public BackendModelInstance {
 
       ++count;
     }
-    if (rval.size() > 0)
-      std::cout << "Returning " << rval.size() << " inference requests" << std::endl;
 
     return rval;
   }
@@ -535,9 +533,13 @@ class ModelInstanceState : public BackendModelInstance {
       {
         mTrtGptModelType = TrtGptModelType::InflightBatching;
       }
+      else if (model_state_->GetParameter<std::string>("gpt_model_type") == "inflight_fused_batching")
+      {
+        mTrtGptModelType = TrtGptModelType::InflightFusedBatching;
+      }
       else
       {
-        throw std::runtime_error("Invalid gpt_model_type. Must be v1 or inflight_batching.");
+        throw std::runtime_error("Invalid gpt_model_type. Must be v1/inflight_batching/inflight_fused_batching.");
       }
 
       // Note: std::string::compare fails this test (always return non-zero value).
