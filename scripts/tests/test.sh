@@ -86,3 +86,22 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
     popd # tools/gpt
 
 fi
+
+if [ "$MODEL" = "gpt-ib" ]; then
+    # Modify config.pbtxt
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
+
+    # Launch Triton Server
+    /opt/tritonserver/bin/tritonserver \
+        --model-repository=all_models/inflight_batcher_llm &
+    export SERVER_PID=$!
+    wait_for_server_ready ${SERVER_PID} 1200
+
+    # Test client
+    pushd inflight_batcher_llm/client
+    python3 inflight_batcher_llm_client.py
+    popd # inflight_batcher_llm/client
+
+    kill ${SERVER_PID}
+
+fi
