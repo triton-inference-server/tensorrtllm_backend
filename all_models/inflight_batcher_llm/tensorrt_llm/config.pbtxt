@@ -126,12 +126,6 @@ instance_group [
     kind : KIND_CPU
   }
 ]
-parameters {
-  key: "engine_dir"
-  value: {
-    string_value: "${engine_dir}"
-  }
-}
 parameters: {
   key: "FORCE_CPU_ONLY_INPUT_TENSORS"
   value: {
@@ -147,6 +141,6 @@ parameters: {
 parameters: {
   key: "gpt_model_path"
   value: {
-    string_value: "/triton_model_repo/tensorrt_llm/1/1-gpu"
+    string_value: "${engine_dir}"
   }
 }

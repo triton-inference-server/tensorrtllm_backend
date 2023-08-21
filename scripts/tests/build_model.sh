@@ -100,3 +100,32 @@ if [ "$MODEL" = "gptj" ]; then
     popd # tekit/examples/gptj
 
 fi
+
+if [ "$MODEL" = "gpt-ib" ]; then
+
+    # GPT2
+    pushd tekit/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    rm -rf gpt2 && git clone https://huggingface.co/gpt2
+    pushd gpt2 && rm pytorch_model.bin model.safetensors && \
+        wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && popd
+
+    echo "Convert GPT from HF"
+    python3 hf_gpt_convert.py -i gpt2 -o ./c-model/gpt2/fp16 --storage-type float16
+
+    echo "Build GPT: float16 | src FT"
+    python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
+        --dtype float16 \
+        --use_inflight_batching float16 \
+        --use_gemm_plugin float16 \
+        --use_layernorm_plugin float16 \
+        --remove_input_padding \
+        --n_layer=2 \
+        --max_batch_size 128 --max_input_len 924 --max_output_len 100 \
+        --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
+
+    popd # tekit/examples/gpt
+
+fi

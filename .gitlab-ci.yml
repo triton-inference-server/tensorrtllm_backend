@@ -38,6 +38,7 @@ build-tensorrt-llm:
     expire_in: 30 mins
     paths:
       - tekit/build
+      - tekit/cpp/build
       - inflight_batcher_llm/build
 
 test-gpt-model-job:
@@ -87,6 +88,21 @@ test-gptj-model-job:
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh gptj
     - bash scripts/tests/test.sh gptj tekit/examples/gptj/gpt_outputs
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-tensorrt-llm
+
+test-gpt-ib-model-job:
+  stage: test-model
+  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - mkdir /opt/tritonserver/backends/inflight_batcher_llm
+    - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+    - bash scripts/tests/build_model.sh gpt-ib
+    - bash scripts/tests/test.sh gpt-ib tekit/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
   dependencies:
