@@ -14,7 +14,7 @@ First run:
 ```
 rm -rf triton_model_repo
 mkdir triton_model_repo
-cp -R all_models/inflight_batcher_llm/tensorrt_llm/ triton_model_repo
+cp -R all_models/inflight_batcher_llm/ triton_model_repo
 ```
 
 Then copy the TRT model directory to `triton_model_repo/tensorrt_llm/1/`. For example if `<TRT_model_directory>`  is `tekit/cpp/tests/resources/models/rt_engine/gpt2/fp16-plugin-packed/1-gpu/` then run
