@@ -2,6 +2,10 @@ name: "tensorrt_llm"
 backend: "inflight_batcher_llm"
 max_batch_size: 128
 
+model_transaction_policy {
+  decoupled: True
+}
+
 input [
   {
     name: "input_ids"

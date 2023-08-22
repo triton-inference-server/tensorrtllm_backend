@@ -99,7 +99,8 @@ if [ "$MODEL" = "gpt-ib" ]; then
 
     # Test client
     pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py
+    python3 inflight_batcher_llm_client.py --check-output
+    python3 inflight_batcher_llm_client.py --streaming --check-output
     popd # inflight_batcher_llm/client
 
     # TODO(kaiyu): enable this after we know how to test this file
