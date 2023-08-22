@@ -11,6 +11,7 @@ class UserData:
 
     def __init__(self):
         self._completed_requests = queue.Queue()
+        self._latencies = []
 
 
 # Callback function used for async_stream_infer()
