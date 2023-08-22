@@ -1,0 +1,82 @@
+name: "ensemble"
+platform: "ensemble"
+max_batch_size: 128
+input [
+  {
+    name: "INPUT_0"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "INPUT_1"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  }
+]
+output [
+  {
+    name: "OUTPUT_0"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  }
+]
+ensemble_scheduling {
+  step [
+    {
+      model_name: "preprocessing"
+      model_version: -1
+      input_map {
+        key: "QUERY"
+        value: "INPUT_0"
+      }
+      input_map {
+        key: "REQUEST_OUTPUT_LEN"
+        value: "INPUT_1"
+      }
+      output_map {
+        key: "REQUEST_INPUT_LEN"
+        value: "_REQUEST_INPUT_LEN"
+      }
+      output_map {
+        key: "INPUT_ID"
+        value: "_INPUT_ID"
+      }
+      output_map {
+        key: "REQUEST_OUTPUT_LEN"
+        value: "_REQUEST_OUTPUT_LEN"
+      }
+    },
+    {
+      model_name: "tensorrt_llm"
+      model_version: -1
+      input_map {
+        key: "input_ids"
+        value: "_INPUT_ID"
+      }
+      input_map {
+        key: "input_lengths"
+        value: "_REQUEST_INPUT_LEN"
+      }
+      input_map {
+        key: "request_output_len"
+        value: "_REQUEST_OUTPUT_LEN"
+      }
+      output_map {
+        key: "output_ids"
+        value: "_TOKENS_BATCH"
+      }
+    },
+    {
+      model_name: "postprocessing"
+      model_version: -1
+      input_map {
+        key: "TOKENS_BATCH"
+        value: "_TOKENS_BATCH"
+      }
+      output_map {
+        key: "OUTPUT"
+        value: "OUTPUT_0"
+      }
+    }
+  ]
+}
