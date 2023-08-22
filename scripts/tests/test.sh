@@ -102,6 +102,11 @@ if [ "$MODEL" = "gpt-ib" ]; then
     python3 inflight_batcher_llm_client.py
     popd # inflight_batcher_llm/client
 
+    # TODO(kaiyu): enable this after we know how to test this file
+    # pushd tools/inflight_batcher_llm
+    # python3 end_to_end_test.py --concurrency 2 --output_len 10
+    # popd # tools/inflight_batcher_llm
+
     kill ${SERVER_PID}
 
 fi

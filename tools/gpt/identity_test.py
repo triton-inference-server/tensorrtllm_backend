@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+import sys
+
+sys.path.append('../')
 import argparse
 import statistics as s
 from builtins import range

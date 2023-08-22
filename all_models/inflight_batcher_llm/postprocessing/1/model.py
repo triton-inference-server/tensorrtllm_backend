@@ -113,8 +113,12 @@ class TritonPythonModel:
                                   str(cur_folder / MERGES_FILE))
 
         outputs = []
-        for beam_tokens in tokens_batch:
-            for tokens in beam_tokens:
-                output = enc.decode(tokens)
-                outputs.append(output.encode('utf8'))
+        # FIXME(kaiyu): Iterate over beams after beam search is supported
+        # for beam_tokens in tokens_batch:
+        #     for tokens in beam_tokens:
+        #         output = enc.decode(tokens)
+        #         outputs.append(output.encode('utf8'))
+        for tokens in tokens_batch:
+            output = enc.decode(tokens)
+            outputs.append(output.encode('utf8'))
         return outputs

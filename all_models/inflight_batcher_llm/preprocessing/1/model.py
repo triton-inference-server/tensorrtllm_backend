@@ -8,14 +8,11 @@ import torch
 import triton_python_backend_utils as pb_utils
 import utils.gpt_token_encoder as encoder
 from torch.nn.utils.rnn import pad_sequence
-from word_list import to_word_list_format
 
 # GPT3 Related variables
 # Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
 MERGES_FILE = "gpt2-merges.txt"
 VOCAB_FILE = "gpt2-vocab.json"
-
-START_ID = 50256
 END_ID = 50256
 
 
@@ -43,9 +40,7 @@ class TritonPythonModel:
         self.model_config = model_config = json.loads(args['model_config'])
 
         # Parse model output configs and convert Triton types to numpy types
-        input_names = [
-            "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS"
-        ]
+        input_names = ["INPUT_ID", "REQUEST_INPUT_LEN"]
         for input_name in input_names:
             setattr(
                 self,
@@ -89,15 +84,8 @@ class TritonPythonModel:
             request_output_len = pb_utils.get_input_tensor_by_name(
                 request, 'REQUEST_OUTPUT_LEN').as_numpy()
 
-            bad_words_dict = pb_utils.get_input_tensor_by_name(
-                request, 'BAD_WORDS_DICT').as_numpy()
-            stop_words_dict = pb_utils.get_input_tensor_by_name(
-                request, 'STOP_WORDS_DICT').as_numpy()
-
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
-            bad_words = to_word_list_format(bad_words_dict)
-            stop_words = to_word_list_format(stop_words_dict)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -110,9 +98,6 @@ class TritonPythonModel:
                     self.request_input_len_dtype))
             request_output_len_tensor = pb_utils.Tensor(
                 'REQUEST_OUTPUT_LEN', request_output_len)
-            bad_words_ids_tensor = pb_utils.Tensor('BAD_WORDS_IDS', bad_words)
-            stop_words_ids_tensor = pb_utils.Tensor('STOP_WORDS_IDS',
-                                                    stop_words)
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.
@@ -122,8 +107,8 @@ class TritonPythonModel:
             # pb_utils.InferenceResponse(
             #    output_tensors=..., TritonError("An error occurred"))
             inference_response = pb_utils.InferenceResponse(output_tensors=[
-                input_id_tensor, bad_words_ids_tensor, stop_words_ids_tensor,
-                request_input_len_tensor, request_output_len_tensor
+                input_id_tensor, request_input_len_tensor,
+                request_output_len_tensor
             ])
             responses.append(inference_response)
 
