@@ -35,7 +35,7 @@ FROM dev as trt_llm_builder
 WORKDIR /app
 COPY scripts scripts
 COPY tekit tekit
-RUN cd tekit; python3 scripts/build_wheel.py -a "80;86"; cd ..
+RUN cd tekit; python3 scripts/build_wheel.py -a "80;86" --trt_root=/usr/local/tensorrt; cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
 
