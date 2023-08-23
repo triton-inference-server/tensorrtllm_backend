@@ -1,6 +1,13 @@
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   GIT_SUBMODULE_STRATEGY: recursive
+  IMAGE: gitlab-master.nvidia.com:5005/ftp/tekit_backend/tensorrt-llm-backend:dev-triton-23.07-trt9.0.1.1
+  TRT_ROOT: /usr/local/tensorrt
+
+default:
+  before_script:
+    - export LD_LIBRARY_PATH="$TRT_ROOT/lib/:$LD_LIBRARY_PATH"
+    - echo $LD_LIBRARY_PATH
 
 cache:
   paths:
@@ -20,7 +27,7 @@ workflow:
 
 style-check-job:
   stage: style-check
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install pre-commit
@@ -28,10 +35,10 @@ style-check-job:
 
 build-tensorrt-llm:
   stage: build-trt-llm
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - python3 tekit/scripts/build_wheel.py -a "80;86"
+    - python3 tekit/scripts/build_wheel.py -a "80;86" --trt_root $TRT_ROOT
     - cd $CI_PROJECT_DIR/inflight_batcher_llm
     - bash scripts/build.sh
   artifacts:
@@ -43,7 +50,7 @@ build-tensorrt-llm:
 
 test-gpt-model-job:
   stage: test-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
@@ -56,7 +63,7 @@ test-gpt-model-job:
 
 test-opt-model-job:
   stage: test-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
@@ -69,7 +76,7 @@ test-opt-model-job:
 
 test-llama-model-job:
   stage: test-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
@@ -82,7 +89,7 @@ test-llama-model-job:
 
 test-gptj-model-job:
   stage: test-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
@@ -95,7 +102,7 @@ test-gptj-model-job:
 
 test-gpt-ib-model-job:
   stage: test-model
-  image: gitlab-master.nvidia.com:5005/ftp/tekit_backend/triton:dev-trt9.0.0.2
+  image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
