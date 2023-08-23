@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tritonserver:23.04-py3
+FROM nvcr.io/nvidia/tritonserver:23.07-py3
 
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
@@ -7,20 +7,19 @@ COPY tekit/requirements-dev.txt /tmp/
 RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
 # Remove prevous TRT installation
-RUN apt-get remove --purge -y libnvinfer* tensorrt*
+# We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
+RUN apt-get remove --purge -y tensorrt*
 RUN pip uninstall -y tensorrt
 
-# Download & install internal TRT release
-ARG RELEASE_URL=http://cuda-repo/release-candidates/Libraries/TensorRT/v9.0/9.0.0.2-0a89f19e/12.2-r535/Ubuntu20_04-x64-agnostic/deb/
-RUN curl $RELEASE_URL -o index.html
-RUN for package in $(grep -o '[^ >"]*\.deb' index.html | uniq); do wget -nv ${RELEASE_URL}${package} & done && wait
-RUN dpkg -i *.deb
-# Clean workspace to keep the image size not too large
-RUN rm -rf index.html *.deb
+# Download TensorRT-<version>.Linux.x86_64-gnu.cuda-<m.n>.tar.gz to pwd before building docker image
+COPY TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz /workspace/
+RUN tar -xvf /workspace/TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz -C /usr/local/ && mv /usr/local/TensorRT-9.0.1.1 /usr/local/tensorrt
+RUN pip install /usr/local/tensorrt/python/tensorrt-9.0.1*cp310-none-linux_x86_64.whl && rm -fr /workspace/TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz
+ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
 
-# Install latest Polygraphy v0.48.1
-RUN pip uninstall -y polygraphy
-RUN pip install git+https://gitlab-master.nvidia.com/TensorRT/Infrastructure/Polygraphy.git@v0.48.1
+# Download polygraphy-0.48.1-py2.py3-none-any.whl to pwd before building the docker image
+COPY polygraphy-0.48.1-py2.py3-none-any.whl /workspace/
+RUN pip install /workspace/polygraphy-0.48.1-py2.py3-none-any.whl
 
 # CMake
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
