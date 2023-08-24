@@ -158,6 +158,22 @@ if __name__ == "__main__":
         help="Enable check of output ids for CI",
     )
 
+    parser.add_argument(
+        "-b",
+        "--beam-width",
+        required=False,
+        type=int,
+        default=1,
+        help="Beam width value",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        required=False,
+        default=1.0,
+        help="temperature value",
+    )
+
     FLAGS = parser.parse_args()
 
     print('=========')
@@ -168,23 +184,33 @@ if __name__ == "__main__":
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
     request_output_len = [[16]]
-    request_output_len_data = np.array(request_output_len, dtype=np.int32)
+    request_output_len_data = np.array(request_output_len, dtype=np.uint32)
+    beam_width = [[FLAGS.beam_width]]
+    beam_width_data = np.array(beam_width, dtype=np.uint32)
+    temperature = [[FLAGS.temperature]]
+    temperature_data = np.array(temperature, dtype=np.float32)
 
     inputs = [
         grpcclient.InferInput('input_ids', [1, 12], "INT32"),
         grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
-        grpcclient.InferInput('request_output_len', [1, 1], "INT32"),
+        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
+        grpcclient.InferInput('beam_width', [1, 1], "UINT32"),
+        grpcclient.InferInput('temperature', [1, 1], "FP32"),
     ]
     inputs[0].set_data_from_numpy(input_ids_data)
     inputs[1].set_data_from_numpy(input_lengths_data)
     inputs[2].set_data_from_numpy(request_output_len_data)
+    inputs[3].set_data_from_numpy(beam_width_data)
+    inputs[4].set_data_from_numpy(temperature_data)
 
-    expected_output_ids = input_ids[0] + [
-        21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852, 2564,
-        494, 13, 679
+    expected_output_ids = [
+        input_ids[0] + [
+            21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852,
+            2564, 494, 13, 679
+        ]
     ]
     if FLAGS.streaming:
-        actual_output_ids = input_ids[0]
+        actual_output_ids = [input_ids[0]]
     else:
         actual_output_ids = []
 
@@ -227,8 +253,15 @@ if __name__ == "__main__":
                     sys.exit(1)
                 else:
                     output_ids = result.as_numpy('output_ids')
-                    tokens = list(output_ids[0])
-                    actual_output_ids = actual_output_ids + tokens
+
+                    if (FLAGS.streaming):
+                        # Only one beam is supported
+                        tokens = list(output_ids[0][0])
+                        actual_output_ids[0] = actual_output_ids[0] + tokens
+                    else:
+                        for beam_output_ids in output_ids[0]:
+                            tokens = list(beam_output_ids)
+                            actual_output_ids.append(tokens)
 
         except Exception as e:
             print("channel creation failed: " + str(e))

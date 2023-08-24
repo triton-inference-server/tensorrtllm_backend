@@ -22,7 +22,7 @@ def test_functionality(client, prompts):
         model_name = 'preprocessing'
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
 
         inputs = [
             utils.prepare_tensor("QUERY", input0_data, FLAGS.protocol),
@@ -57,7 +57,7 @@ def test_functionality(client, prompts):
         model_name = "ensemble"
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
@@ -81,7 +81,7 @@ def test_performance(client, prompts):
     for i in range(10):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
@@ -90,6 +90,7 @@ def test_performance(client, prompts):
 
         client.infer(model_name, inputs, request_id=str(i))
 
+    #sys.exit(1)
     print(f"[INFO] Start benchmarking on {len(prompts)} prompts.")
     latency = 0
     async_requests = []
@@ -98,7 +99,8 @@ def test_performance(client, prompts):
     for i, prompt in enumerate(prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * output_len[i % 3]
+        output0_len = np.ones_like(input0).astype(
+            np.uint32) * output_len[i % 3]
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),

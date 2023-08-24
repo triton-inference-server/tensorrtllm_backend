@@ -89,7 +89,7 @@ fi
 
 if [ "$MODEL" = "gpt-ib" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False
 
     # Launch Triton Server
     /opt/tritonserver/bin/tritonserver \
@@ -100,13 +100,38 @@ if [ "$MODEL" = "gpt-ib" ]; then
     # Test client
     pushd inflight_batcher_llm/client
     python3 inflight_batcher_llm_client.py --check-output
-    python3 inflight_batcher_llm_client.py --streaming --check-output
     popd # inflight_batcher_llm/client
 
-    # TODO(kaiyu): enable this after we know how to test this file
-    # pushd tools/inflight_batcher_llm
-    # python3 end_to_end_test.py --concurrency 2 --output_len 10
-    # popd # tools/inflight_batcher_llm
+    # End to end test
+    pushd tools/inflight_batcher_llm
+
+    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json -O gpt2-vocab.json
+    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt -O gpt2-merges.txt
+
+    python3 end_to_end_test.py \
+        --concurrency 2 -i http --output_len 10 --dataset ../dataset/125_data.json
+    python3 identity_test.py \
+        --concurrency 2 -i http --dataset ../dataset/125_data.json
+    popd # tools/inflight_batcher_llm
+
+    kill ${SERVER_PID}
+
+fi
+
+if [ "$MODEL" = "gpt-ib-streaming" ]; then
+    # Modify config.pbtxt
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True
+
+    # Launch Triton Server
+    /opt/tritonserver/bin/tritonserver \
+        --model-repository=all_models/inflight_batcher_llm &
+    export SERVER_PID=$!
+    wait_for_server_ready ${SERVER_PID} 1200
+
+    # Test client
+    pushd inflight_batcher_llm/client
+    python3 inflight_batcher_llm_client.py --streaming --check-output
+    popd # inflight_batcher_llm/client
 
     kill ${SERVER_PID}
 

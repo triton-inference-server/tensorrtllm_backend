@@ -3,7 +3,7 @@ backend: "inflight_batcher_llm"
 max_batch_size: 128
 
 model_transaction_policy {
-  decoupled: True
+  decoupled: ${decoupled_mode}
 }
 
 input [
@@ -20,17 +20,105 @@ input [
   },
   {
     name: "request_output_len"
-    data_type: TYPE_INT32
+    data_type: TYPE_UINT32
     dims: [ 1 ]
+  },
+  {
+    name: "end_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "pad_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "beam_width"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "temperature"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_k"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "len_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "repetition_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "min_length"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "presence_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "random_seed"
+    data_type: TYPE_UINT64
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
   }
+#  {
+#    name: "output_log_probs"
+#    data_type: TYPE_BOOL
+#    dims: [ 1 ]
+#    reshape: { shape: [ ] }
+#    optional: true
+#  }
 ]
 output [
-  # FIXME(kaiyu): Change output_ids dims to [-1, -1] after beam width > 1 is supported
   {
     name: "output_ids"
     data_type: TYPE_INT32
-    dims: [ -1 ]
+    dims: [ -1, -1 ]
   }
+#  {
+#    name: "log_probs"
+#    data_type: TYPE_FP32
+#    dims: [ -1, -1 ]
+#  }
 ]
 instance_group [
   {
@@ -38,6 +126,12 @@ instance_group [
     kind : KIND_CPU
   }
 ]
+parameters: {
+  key: "max_beam_width"
+  value: {
+    string_value: "1"
+  }
+}
 parameters: {
   key: "FORCE_CPU_ONLY_INPUT_TENSORS"
   value: {
