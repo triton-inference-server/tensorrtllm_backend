@@ -53,8 +53,9 @@ using namespace ::triton::common;   // TritonJson
 // Mockup of LLM inflight batcher based on triton 'minimal' backend example
 //
 
-using namespace inflight_batcher::common;
-using namespace inflight_batcher::batch_manager;
+using namespace tensorrt_llm::common;
+using namespace tensorrt_llm::batch_manager;
+using namespace tensorrt_llm::runtime;
 using namespace std::placeholders; // for _1, _2 etc.
 //template class inflight_batcher::batch_manager::GPTManager<float>;
 
@@ -151,8 +152,6 @@ class ModelState : public BackendModel {
   static TRITONSERVER_Error* Create(
       TRITONBACKEND_Model* triton_model, ModelState** state);
 
-  TRITONSERVER_Error* ValidateModelConfig();
-
   template <typename T>
   T GetParameter(const std::string& name) {
     assert(false);
@@ -160,14 +159,16 @@ class ModelState : public BackendModel {
 
   virtual ~ModelState() = default;
 
+  common::TritonJson::Value& GetModelConfig();
+
  private:
 
   common::TritonJson::Value model_config_;
   std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
-  ModelState(TRITONBACKEND_Model* triton_model, TritonJson::Value&& model_config) : BackendModel(triton_model), model_config_(std::move(model_config))
+  ModelState(TRITONBACKEND_Model* triton_model, TritonJson::Value&& model_config) : BackendModel(triton_model, true), model_config_(std::move(model_config))
   {
-    mTrtLogger = std::make_shared<TllmLogger>();
+    mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
     initLibNvInferPlugins(mTrtLogger.get(), "tensorrt_llm");
   }
 };
@@ -211,6 +212,9 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
   return nullptr;  // success
 }
+
+common::TritonJson::Value&
+ModelState::GetModelConfig() { return model_config_; }
 
 template <>
 std::string
@@ -304,10 +308,10 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
 class WorkItem
 {
   public:
-    WorkItem(TRITONBACKEND_Request* request)
+    WorkItem(TRITONBACKEND_Request* request, bool isDecoupled)
     {
       mRequestId = (rand() % INT64_MAX) + 1;
-      mInferenceRequest = createInferenceRequest(request, mRequestId);
+      mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
 
       // Create response factory for this request
       TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
@@ -337,12 +341,12 @@ class WorkItem
  private:
 
     // Convert info from original backend request to data structures defined in common/common.h
-    std::shared_ptr<InferenceRequest> createInferenceRequest(TRITONBACKEND_Request* request, uint64_t requestId)
+    std::shared_ptr<InferenceRequest> createInferenceRequest(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
     {
       auto inferenceRequest = std::make_shared<InferenceRequest>(requestId);
 
       // Extract input tensors
-      std::map<std::string, Tensor> input_tensors;
+      std::map<std::string, tensorrt_llm::batch_manager::Tensor> input_tensors;
       uint32_t num_inputs;
       LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
       for (uint32_t idx = 0;  idx < num_inputs;  ++idx)
@@ -368,7 +372,7 @@ class WorkItem
           shapev.push_back(shape[i]);
         }
 
-        auto t = Tensor(input_name, MT_HOST, to_common_datatype(data_type), shapev);
+        auto t = tensorrt_llm::batch_manager::Tensor(input_name, MT_HOST, to_common_datatype(data_type), shapev);
         int64_t buffer_offset = 0;
         for (int64_t buffer_id=0; buffer_id < buffer_count; ++buffer_id)
         {
@@ -405,7 +409,12 @@ class WorkItem
           }
         }
       }
+
       inferenceRequest->setIsStreaming(streaming_flag);
+
+      if (streaming_flag && !isDecoupled) {
+          throw std::runtime_error("Streaming is only supported if model is deployed using decoupled mode.");
+      }
 
       return inferenceRequest;
     }
@@ -442,22 +451,31 @@ class ModelInstanceState : public BackendModelInstance {
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
 
-  bool enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
+  bool isDecoupled() const
   {
-    std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-    for (uint32_t r = 0; r < request_count; ++r) {
-      TRITONBACKEND_Request* request = requests[r];
-      mWorkItems.emplace_back(std::make_shared<WorkItem>(request));
+      return mIsDecoupled;
+  }
+
+  bool enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
+  {
+    try {
+        std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+        for (uint32_t r = 0; r < request_count; ++r) {
+          TRITONBACKEND_Request* request = requests[r];
+          mWorkItems.emplace_back(std::make_shared<WorkItem>(request, isDecoupled));
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error creating work item" << std::endl;
+        return true;
     }
     return false; // return true if any error occured
   }
 
   // Return up to max_num_requests inference requests.
-  std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(int max_num_requests)
+  std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests)
   {
     std::lock_guard<std::mutex> lk(mWorkItemsMutex);
     std::list<std::shared_ptr<InferenceRequest>> rval;
-    if (max_num_requests <= 0) max_num_requests = (int)mWorkItems.size();
 
     int count = 0;
     while (count < max_num_requests && mWorkItems.size() > 0)
@@ -473,7 +491,7 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<Tensor>> const& response_tensors, bool final_response)
+  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response)
   {
     TRITONBACKEND_ResponseFactory* response_factory;
     {
@@ -513,7 +531,7 @@ class ModelInstanceState : public BackendModelInstance {
     return nullptr;
   }
 
-  bool sendResponse(uint64_t requestId, std::list<std::shared_ptr<Tensor>> const& response_tensors, bool final_response)
+  bool sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response)
   {
     auto tritonErr = sendTritonResponse(requestId, response_tensors, final_response);
     LOG_IF_ERROR(tritonErr, "Failed to send Triton response for requestId: " + std::to_string(requestId));
@@ -525,7 +543,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance)
       : BackendModelInstance(model_state, triton_model_instance),
-        model_state_(model_state)
+        model_state_(model_state), mIsDecoupled(false)
   {
       // Note: std::string::compare fails this test (always return non-zero value).
       // Using old school strcmp instead.
@@ -547,6 +565,11 @@ class ModelInstanceState : public BackendModelInstance {
         throw std::runtime_error("Invalid gpt_model_type. Must be v1/inflight_batching/inflight_fused_batching.");
       }
 
+      // Check if model is in decoupled mode:
+      triton::common::TritonJson::Value transaction_policy;
+      model_state_->GetModelConfig().MemberAsObject("model_transaction_policy", &transaction_policy);
+      transaction_policy.MemberAsBool("decoupled", &mIsDecoupled);
+
       // Note: std::string::compare fails this test (always return non-zero value).
       // Using old school strcmp instead.
       mModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
@@ -560,12 +583,13 @@ class ModelInstanceState : public BackendModelInstance {
       auto const& builderConfig = json.at("builder_config");
       int maxInputLen = builderConfig.at("max_input_len");
       int maxOutputLen = builderConfig.at("max_output_len");
-      mMaxSeqLen = maxInputLen + maxOutputLen;
-      mMaxNumRequests = builderConfig.at("max_batch_size");
+      int maxSeqLen = maxInputLen + maxOutputLen;
+      int maxNumRequests = builderConfig.at("max_batch_size");
+      int32_t maxBeamWidth = model_state_->GetParameter<int32_t>("max_beam_width");
 
-      mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, mMaxSeqLen, mMaxNumRequests,
+      mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t requestId, std::list<std::shared_ptr<Tensor>> response_tensors, bool final_response){return sendResponse(requestId, response_tensors, final_response);});
+          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response){return sendResponse(requestId, response_tensors, final_response);});
   }
 
   ModelState* model_state_;
@@ -582,10 +606,9 @@ class ModelInstanceState : public BackendModelInstance {
   //
   TrtGptModelType mTrtGptModelType;
   std::string mModelPath;
+  bool mIsDecoupled;
 
   // Initialize to clearly invalid values, will be overwritten later.
-  int mMaxSeqLen = -1;
-  int mMaxNumRequests = -1;
   std::shared_ptr<GptManager> mBatchManager;
 
   std::list<std::shared_ptr<WorkItem>> mWorkItems;
@@ -674,8 +697,11 @@ TRITONBACKEND_ModelInstanceExecute(
   ModelInstanceState* instance_state;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
       instance, reinterpret_cast<void**>(&instance_state)));
+
+  auto isDecoupled = instance_state->isDecoupled();
+
   RETURN_ERROR_IF_TRUE(
-      instance_state->enqueue(requests, request_count),
+      instance_state->enqueue(requests, request_count, isDecoupled),
       TRITONSERVER_ERROR_INTERNAL,
       std::string("unexpected error in enqueue method"));
 

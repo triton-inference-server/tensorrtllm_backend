@@ -114,3 +114,18 @@ test-gpt-ib-model-job:
     expire_in: 30 mins
   dependencies:
     - build-tensorrt-llm
+
+test-gpt-ib-streaming-model-job:
+  stage: test-model
+  image: $IMAGE
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - mkdir /opt/tritonserver/backends/inflight_batcher_llm
+    - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+    - bash scripts/tests/build_model.sh gpt-ib
+    - bash scripts/tests/test.sh gpt-ib-streaming tekit/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-tensorrt-llm
