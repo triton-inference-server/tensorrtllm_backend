@@ -141,6 +141,18 @@ def llm_backend_gpt_example_root(llm_backend_root, llm_backend_venv):
     return backend_gpt_example_root
 
 
+@pytest.fixture(scope="session")
+def inflight_batcher_llm_client_root(llm_backend_root):
+    inflight_batcher_llm_client_root = os.path.join(llm_backend_root,
+                                                    "inflight_batcher_llm",
+                                                    "client")
+
+    assert os.path.exists(
+        inflight_batcher_llm_client_root
+    ), f"{inflight_batcher_llm_client_root} does not exists."
+    return inflight_batcher_llm_client_root
+
+
 @pytest.fixture(scope="function")
 def engine_dir(llm_backend_venv):
     "Get engine dir"

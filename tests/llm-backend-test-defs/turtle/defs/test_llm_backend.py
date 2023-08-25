@@ -26,3 +26,22 @@ def test_llm_backend_gpt_e2e(llm_backend_gpt_example_root, llm_backend_venv):
         f"{llm_backend_gpt_example_root}/end_to_end_test.py",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
+
+
+def test_inflight_batcher_llm_client_default(inflight_batcher_llm_client_root,
+                                             llm_backend_venv):
+    print("Execute inflight_batcher_llm_client.py on default mode...")
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
+def test_inflight_batcher_llm_client_streaming(
+        inflight_batcher_llm_client_root, llm_backend_venv):
+    print("Execute inflight_batcher_llm_client.py on streaming mode...")
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        "--streaming",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
