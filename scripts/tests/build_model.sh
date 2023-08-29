@@ -118,7 +118,9 @@ if [ "$MODEL" = "gpt-ib" ]; then
     echo "Build GPT: float16 | src FT"
     python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
         --dtype float16 \
-        --use_inflight_batching float16 \
+        --use_inflight_batching \
+        --use_gpt_attention_plugin float16 \
+        --paged_kv_cache \
         --use_gemm_plugin float16 \
         --use_layernorm_plugin float16 \
         --remove_input_padding \

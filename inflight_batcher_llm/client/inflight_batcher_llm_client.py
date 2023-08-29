@@ -173,6 +173,13 @@ if __name__ == "__main__":
         default=1.0,
         help="temperature value",
     )
+    parser.add_argument(
+        "--request-output-len",
+        type=int,
+        required=False,
+        default=16,
+        help="temperature value",
+    )
 
     FLAGS = parser.parse_args()
 
@@ -183,7 +190,7 @@ if __name__ == "__main__":
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
-    request_output_len = [[16]]
+    request_output_len = [[FLAGS.request_output_len]]
     request_output_len_data = np.array(request_output_len, dtype=np.uint32)
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.uint32)

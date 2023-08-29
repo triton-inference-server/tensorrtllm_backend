@@ -198,9 +198,8 @@ class TritonPythonModel:
                     max_input_length=torch.max(input_lengths).item(),
                     max_new_tokens=inputs['request_output_len'])
             else:
-                self.decoder.setup(batch_size=input_ids.size(0),
-                                   max_input_length=input_ids.size(1),
-                                   max_new_tokens=inputs['request_output_len'])
+                self.decoder.setup(input_ids.size(0), input_ids.size(1),
+                                   inputs['request_output_len'])
 
             output_ids = self.decoder.decode(input_ids, input_lengths,
                                              sampling_config)

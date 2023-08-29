@@ -15,6 +15,7 @@ COPY TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz /workspace/
 RUN tar -xvf /workspace/TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz -C /usr/local/ && mv /usr/local/TensorRT-9.0.1.1 /usr/local/tensorrt
 RUN pip install /usr/local/tensorrt/python/tensorrt-9.0.1*cp310-none-linux_x86_64.whl && rm -fr /workspace/TensorRT-9.0.1.1.Linux.x86_64-gnu.cuda-12.2.tar.gz
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
+ENV TRT_ROOT=/usr/local/tensorrt
 
 FROM base as dev
 
@@ -35,7 +36,7 @@ FROM dev as trt_llm_builder
 WORKDIR /app
 COPY scripts scripts
 COPY tekit tekit
-RUN cd tekit; python3 scripts/build_wheel.py -a "80;86" --trt_root=/usr/local/tensorrt; cd ..
+RUN cd tekit; python3 scripts/build_wheel.py -a "80;86" --trt_root="${TRT_ROOT}"; cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
 
