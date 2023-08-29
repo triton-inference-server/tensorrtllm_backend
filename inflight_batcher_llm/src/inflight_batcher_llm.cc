@@ -465,7 +465,7 @@ class ModelInstanceState : public BackendModelInstance {
           mWorkItems.emplace_back(std::make_shared<WorkItem>(request, isDecoupled));
         }
     } catch (const std::exception& e) {
-        std::cerr << "Error creating work item" << std::endl;
+        TLLM_LOG_ERROR("Error creating work item");
         return true;
     }
     return false; // return true if any error occured
@@ -491,7 +491,7 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response)
+  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
   {
     TRITONBACKEND_ResponseFactory* response_factory;
     {
@@ -499,43 +499,57 @@ class ModelInstanceState : public BackendModelInstance {
       auto work_item = mWorkItemsInProgress.at(requestId);
       response_factory = work_item->response_factory();
     }
+
     TRITONBACKEND_Response* response;
     RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
-
-    for (auto it = response_tensors.begin();  it != response_tensors.end();  ++it)
-    {
-      auto tensor = *it;
-      auto shape = tensor->shape(); // returns std::vectorint64_t>
-      TRITONBACKEND_Output* output;
-      RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
-              response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
-              shape.data(), shape.size()));
-
-      uint64_t buffersize = tensor->sizeBytes();
-      void* buffer = 0L;
-      TRITONSERVER_MemoryType memory_type;
-      int64_t memory_type_id;
-      RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
-      tensor->raw_copy_to(buffer, buffersize, 0L);
-    }
-
-    RETURN_IF_ERROR(
-        TRITONBACKEND_ResponseSend(
-          response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, nullptr));
 
     if (final_response)
     {
       std::lock_guard<std::mutex> lk(mWorkItemsMutex);
       mWorkItemsInProgress.erase(requestId);
     }
+
+    // Check if error
+    TRITONSERVER_Error* err = nullptr;
+    if (!errMsg.empty()) {
+        std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
+        TLLM_LOG_ERROR(errStr);
+
+        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+        final_response = true;
+    } else {
+        for (auto it = response_tensors.begin();  it != response_tensors.end();  ++it)
+        {
+          auto tensor = *it;
+          auto shape = tensor->shape(); // returns std::vectorint64_t>
+          TRITONBACKEND_Output* output;
+          RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
+                  response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
+                  shape.data(), shape.size()));
+
+          uint64_t buffersize = tensor->sizeBytes();
+          void* buffer = 0L;
+          TRITONSERVER_MemoryType memory_type;
+          int64_t memory_type_id;
+          RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
+          tensor->raw_copy_to(buffer, buffersize, 0L);
+        }
+
+    }
+
+    RETURN_IF_ERROR(
+        TRITONBACKEND_ResponseSend(
+          response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, err));
+
+
     return nullptr;
   }
 
-  bool sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response)
+  void sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
   {
-    auto tritonErr = sendTritonResponse(requestId, response_tensors, final_response);
+    auto tritonErr = sendTritonResponse(requestId, response_tensors, final_response, errMsg);
     LOG_IF_ERROR(tritonErr, "Failed to send Triton response for requestId: " + std::to_string(requestId));
-    return !tritonErr;
+    return;
   }
 
  private:
@@ -589,7 +603,7 @@ class ModelInstanceState : public BackendModelInstance {
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response){return sendResponse(requestId, response_tensors, final_response);});
+          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);});
   }
 
   ModelState* model_state_;
