@@ -46,6 +46,7 @@
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
 #include <nlohmann/json.hpp>
+#include "mpiUtils.h"
 
 using namespace ::triton::common;   // TritonJson
 
@@ -316,15 +317,25 @@ class WorkItem
       // Create response factory for this request
       TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
     }
+    WorkItem(std::shared_ptr<InferenceRequest> ir,
+        uint64_t RequestId)
+        : mInferenceRequest(ir),
+          mRequestId(RequestId)
+    {
+        factory_ptr_ = nullptr;
+    }
 
     ~WorkItem()
     {
-      // TODO: Verify if this is right way to release request.
-      TRITONBACKEND_ResponseFactoryDelete(factory_ptr_);
+      if (factory_ptr_ != nullptr)
+      {
+          TRITONBACKEND_ResponseFactoryDelete(factory_ptr_);
+      }
     }
 
     TRITONBACKEND_ResponseFactory* response_factory()
     {
+      assert(factory_ptr_ != nullptr);
       return factory_ptr_;
     }
 
@@ -474,75 +485,124 @@ class ModelInstanceState : public BackendModelInstance {
   // Return up to max_num_requests inference requests.
   std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests)
   {
-    std::lock_guard<std::mutex> lk(mWorkItemsMutex);
     std::list<std::shared_ptr<InferenceRequest>> rval;
-
-    int count = 0;
-    while (count < max_num_requests && mWorkItems.size() > 0)
+    if (max_num_requests > 0)
     {
-      auto work_item = mWorkItems.front();
-      mWorkItems.pop_front();
-      rval.emplace_back(work_item->getInferenceRequest());
-      mWorkItemsInProgress.emplace(std::make_pair(work_item->requestId(), work_item));
-
-      ++count;
+      auto world_size = getCommWorldSize();
+      auto rank = getCommWorldRank();
+      if (rank == 0)
+      {
+        std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+        if (world_size > 1)
+        {
+          int64_t rval_size = static_cast<int64_t>(mWorkItems.size());
+          bcast(&rval_size, 1, MPI_TYPE_INT64_T, 0);
+        }
+        if (mWorkItems.size() > 0)
+        {
+          int count = 0;
+          while (count < max_num_requests && mWorkItems.size() > 0)
+          {
+            auto work_item = mWorkItems.front();
+            mWorkItems.pop_front();
+            rval.emplace_back(work_item->getInferenceRequest());
+            mWorkItemsInProgress.emplace(std::make_pair(work_item->requestId(), work_item));
+          }
+          if (world_size > 1)
+          {
+            std::vector<int64_t> packed;
+            for (auto ir : rval)
+            {
+              auto vpacked = ir->serialize();
+              packed.push_back(static_cast<int64_t>(vpacked.size()));
+              packed.insert(packed.end(),
+              std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
+            }
+            int64_t nWords1 = static_cast<int64_t>(packed.size());
+            bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
+                  bcast(packed, 0);
+          }
+        }
+      }
+      else
+      {
+        // subordinate ranks hang until master rank sends work
+        int64_t rval_size;
+        bcast(&rval_size, 1, MPI_TYPE_INT64_T, 0);
+        if (rval_size > 0)
+        {
+          int nWords1;
+          bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
+          std::vector<int64_t> packed(nWords1);
+          bcast(packed, 0);
+          int64_t* packed_ptr = packed.data();
+          for (int64_t count = 0; count < rval_size; ++count)
+          {
+            int64_t n = *(packed_ptr++);
+            auto ir = InferenceRequest::deserialize(packed_ptr);
+            packed_ptr += n;
+            rval.emplace_back(ir);
+          }
+        }
+      }
     }
-
     return rval;
   }
 
   TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
   {
-    TRITONBACKEND_ResponseFactory* response_factory;
+    if (getCommWorldRank() == 0)
     {
-      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-      auto work_item = mWorkItemsInProgress.at(requestId);
-      response_factory = work_item->response_factory();
-    }
-
-    TRITONBACKEND_Response* response;
-    RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
-
-    if (final_response)
-    {
-      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-      mWorkItemsInProgress.erase(requestId);
-    }
-
-    // Check if error
-    TRITONSERVER_Error* err = nullptr;
-    if (!errMsg.empty()) {
-        std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
-        TLLM_LOG_ERROR(errStr);
-
-        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
-        final_response = true;
-    } else {
-        for (auto it = response_tensors.begin();  it != response_tensors.end();  ++it)
+        TRITONBACKEND_ResponseFactory* response_factory;
         {
-          auto tensor = *it;
-          auto shape = tensor->shape(); // returns std::vectorint64_t>
-          TRITONBACKEND_Output* output;
-          RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
-                  response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
-                  shape.data(), shape.size()));
-
-          uint64_t buffersize = tensor->sizeBytes();
-          void* buffer = 0L;
-          TRITONSERVER_MemoryType memory_type;
-          int64_t memory_type_id;
-          RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
-          tensor->raw_copy_to(buffer, buffersize, 0L);
+            std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+            auto work_item = mWorkItemsInProgress.at(requestId);
+            response_factory = work_item->response_factory();
         }
 
-    }
+        TRITONBACKEND_Response* response;
+        RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
 
-    RETURN_IF_ERROR(
-        TRITONBACKEND_ResponseSend(
-          response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, err));
+        if (final_response)
+        {
+            std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+            mWorkItemsInProgress.erase(requestId);
+        }
+
+        // Check if error
+        TRITONSERVER_Error* err = nullptr;
+        if (!errMsg.empty()) {
+            std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
+            TLLM_LOG_ERROR(errStr);
+
+            err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            final_response = true;
+        } else {
+            for (auto it = response_tensors.begin();  it != response_tensors.end();  ++it)
+            {
+              auto tensor = *it;
+              auto shape = tensor->shape(); // returns std::vectorint64_t>
+              TRITONBACKEND_Output* output;
+              RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
+                      response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
+                      shape.data(), shape.size()));
+
+              uint64_t buffersize = tensor->sizeBytes();
+              void* buffer = 0L;
+              TRITONSERVER_MemoryType memory_type;
+              int64_t memory_type_id;
+              RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
+              tensor->raw_copy_to(buffer, buffersize, 0L);
+            }
+        }
+
+        RETURN_IF_ERROR(
+            TRITONBACKEND_ResponseSend(
+              response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, err));
+      }
 
 
-    return nullptr;
+      return nullptr;
   }
 
   void sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
@@ -604,6 +664,11 @@ class ModelInstanceState : public BackendModelInstance {
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
           [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);});
+
+      if (getCommWorldRank() != 0)
+      {
+          while (true) {}
+      }
   }
 
   ModelState* model_state_;
