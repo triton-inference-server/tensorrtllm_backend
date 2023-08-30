@@ -76,7 +76,7 @@ inline void bcast(void* buffer, size_t size, MpiType dtype, int root)
     MPICHECK(MPI_Bcast(buffer, size, getMpiDtype(dtype), root, MPI_COMM_WORLD));
 }
 
-inline void bcast(std::vector<int64_t> packed, int root)
+inline void bcast(std::vector<int64_t>& packed, int root)
 {
     MPICHECK(MPI_Bcast(packed.data(), packed.size(), MPI_INT64_T, root, MPI_COMM_WORLD));
 }
