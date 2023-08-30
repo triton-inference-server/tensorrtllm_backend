@@ -507,6 +507,7 @@ class ModelInstanceState : public BackendModelInstance {
             mWorkItems.pop_front();
             rval.emplace_back(work_item->getInferenceRequest());
             mWorkItemsInProgress.emplace(std::make_pair(work_item->requestId(), work_item));
+            count++;
           }
           if (world_size > 1)
           {
