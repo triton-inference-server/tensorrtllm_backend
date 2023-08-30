@@ -1,7 +1,7 @@
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   GIT_SUBMODULE_STRATEGY: recursive
-  IMAGE: gitlab-master.nvidia.com:5005/ftp/tekit_backend/tensorrt-llm-backend:dev-triton-23.07-trt9.0.1.1
+  IMAGE: urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-trt9.0.1.4_triton23.07
   TRT_ROOT: /usr/local/tensorrt
 
 default:
