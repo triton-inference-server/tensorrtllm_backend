@@ -36,6 +36,7 @@ enum MpiType
     MPI_TYPE_INT,
     MPI_TYPE_INT64_T,
     MPI_TYPE_UINT32_T,
+    MPI_TYPE_UINT64_T,
     MPI_TYPE_UNSIGNED_LONG_LONG,
 };
 
@@ -47,6 +48,7 @@ inline MPI_Datatype getMpiDtype(MpiType dtype)
         {MPI_TYPE_INT, MPI_INT},
         {MPI_TYPE_INT64_T, MPI_INT64_T},
         {MPI_TYPE_UINT32_T, MPI_UINT32_T},
+        {MPI_TYPE_UINT64_T, MPI_UINT64_T},
         {MPI_TYPE_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG},
     };
     return dtype_map.at(dtype);

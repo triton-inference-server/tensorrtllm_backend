@@ -28,6 +28,7 @@
 import argparse
 import queue
 import sys
+import time
 from functools import partial
 
 import numpy as np
@@ -60,6 +61,43 @@ class UserData:
 
     def __init__(self):
         self._completed_requests = queue.Queue()
+
+
+def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
+                   beam_width_data, temperature_data):
+
+    inputs = [
+        grpcclient.InferInput('input_ids', [1, 12], "INT32"),
+        grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
+        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
+        grpcclient.InferInput('beam_width', [1, 1], "UINT32"),
+        grpcclient.InferInput('temperature', [1, 1], "FP32"),
+    ]
+
+    inputs[0].set_data_from_numpy(input_ids_data)
+    inputs[1].set_data_from_numpy(input_lengths_data)
+    inputs[2].set_data_from_numpy(request_output_len_data)
+    inputs[3].set_data_from_numpy(beam_width_data)
+    inputs[4].set_data_from_numpy(temperature_data)
+
+    return inputs
+
+
+def prepare_stop_signals():
+
+    inputs = [
+        grpcclient.InferInput('input_ids', [1, 1], "INT32"),
+        grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
+        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
+        grpcclient.InferInput('stop', [1, 1], "BOOL"),
+    ]
+
+    inputs[0].set_data_from_numpy(np.empty([1, 1], dtype=np.int32))
+    inputs[1].set_data_from_numpy(np.zeros([1, 1], dtype=np.int32))
+    inputs[2].set_data_from_numpy(np.array([[0]], dtype=np.uint32))
+    inputs[3].set_data_from_numpy(np.array([[True]], dtype='bool'))
+
+    return inputs
 
 
 # Define the callback function. Note the last two parameters should be
@@ -180,6 +218,12 @@ if __name__ == "__main__":
         default=16,
         help="temperature value",
     )
+    parser.add_argument(
+        '--stop-after-ms',
+        type=int,
+        required=False,
+        default=0,
+        help='Early stop the generation after a few milliseconds')
 
     FLAGS = parser.parse_args()
 
@@ -197,18 +241,16 @@ if __name__ == "__main__":
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
 
-    inputs = [
-        grpcclient.InferInput('input_ids', [1, 12], "INT32"),
-        grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
-        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
-        grpcclient.InferInput('beam_width', [1, 1], "UINT32"),
-        grpcclient.InferInput('temperature', [1, 1], "FP32"),
-    ]
-    inputs[0].set_data_from_numpy(input_ids_data)
-    inputs[1].set_data_from_numpy(input_lengths_data)
-    inputs[2].set_data_from_numpy(request_output_len_data)
-    inputs[3].set_data_from_numpy(beam_width_data)
-    inputs[4].set_data_from_numpy(temperature_data)
+    inputs = prepare_inputs(input_ids_data, input_lengths_data,
+                            request_output_len_data, beam_width_data,
+                            temperature_data)
+
+    if FLAGS.stop_after_ms > 0:
+        stop_inputs = prepare_stop_signals()
+    else:
+        stop_inputs = None
+
+    request_id = "12345"
 
     expected_output_ids = [
         input_ids[0] + [
@@ -231,45 +273,101 @@ if __name__ == "__main__":
             certificate_chain=FLAGS.certificate_chain,
     ) as triton_client:
         try:
-            # Establish stream
-            triton_client.start_stream(
-                callback=partial(callback, user_data),
-                stream_timeout=FLAGS.stream_timeout,
-            )
-            # Send request
-            triton_client.async_stream_infer(
-                'tensorrt_llm',
-                inputs,
-                request_id="12345",
-                parameters={'Streaming': FLAGS.streaming})
 
-            #Wait for server to close the stream
-            triton_client.stop_stream()
+            if FLAGS.streaming:
 
-            while True:
+                # Establish stream
+                triton_client.start_stream(
+                    callback=partial(callback, user_data),
+                    stream_timeout=FLAGS.stream_timeout,
+                )
+                # Send request
+                triton_client.async_stream_infer(
+                    'tensorrt_llm',
+                    inputs,
+                    request_id=request_id,
+                    parameters={'Streaming': FLAGS.streaming})
 
-                try:
-                    result = user_data._completed_requests.get(block=False)
-                except Exception:
-                    # no more items to get
-                    break
+                if stop_inputs is not None:
 
-                if type(result) == InferenceServerException:
-                    print("Encountered server exception:")
-                    print(result)
-                    sys.exit(1)
-                else:
-                    output_ids = result.as_numpy('output_ids')
+                    time.sleep(FLAGS.stop_after_ms / 1000.0)
 
-                    if (FLAGS.streaming):
-                        # Only one beam is supported
-                        tokens = list(output_ids[0][0])
-                        actual_output_ids[0] = actual_output_ids[0] + tokens
+                    triton_client.async_stream_infer(
+                        'tensorrt_llm',
+                        stop_inputs,
+                        request_id=request_id,
+                        parameters={'Streaming': FLAGS.streaming})
+
+                #Wait for server to close the stream
+                triton_client.stop_stream()
+
+                # Parse the responses
+                while True:
+                    try:
+                        result = user_data._completed_requests.get(block=False)
+                    except Exception:
+                        break
+
+                    if type(result) == InferenceServerException:
+                        print("Received an error from server:")
+                        print(result)
                     else:
-                        for beam_output_ids in output_ids[0]:
-                            tokens = list(beam_output_ids)
-                            actual_output_ids.append(tokens)
+                        output_ids = result.as_numpy('output_ids')
 
+                        if output_ids is not None:
+                            if (FLAGS.streaming):
+                                # Only one beam is supported
+                                tokens = list(output_ids[0][0])
+                                actual_output_ids[
+                                    0] = actual_output_ids[0] + tokens
+                            else:
+                                for beam_output_ids in output_ids[0]:
+                                    tokens = list(beam_output_ids)
+                                    actual_output_ids.append(tokens)
+                        else:
+                            print("Got cancellation response from server")
+            else:
+                # Send request
+                triton_client.async_infer(
+                    'tensorrt_llm',
+                    inputs,
+                    request_id=request_id,
+                    callback=partial(callback, user_data),
+                    parameters={'Streaming': FLAGS.streaming})
+
+                if stop_inputs is not None:
+
+                    time.sleep(FLAGS.stop_after_ms / 1000.0)
+
+                    triton_client.async_infer(
+                        'tensorrt_llm',
+                        stop_inputs,
+                        request_id=request_id,
+                        callback=partial(callback, user_data),
+                        parameters={'Streaming': FLAGS.streaming})
+
+                processed_count = 0
+                expected_responses = 1 + (1 if stop_inputs is not None else 0)
+                while processed_count < expected_responses:
+                    try:
+                        result = user_data._completed_requests.get()
+                        print("Got completed request", flush=True)
+                    except Exception:
+                        break
+
+                    if type(result) == InferenceServerException:
+                        print("Received an error from server:")
+                        print(result)
+                    else:
+                        output_ids = result.as_numpy('output_ids')
+                        if output_ids is not None:
+                            for beam_output_ids in output_ids[0]:
+                                tokens = list(beam_output_ids)
+                                actual_output_ids.append(tokens)
+                        else:
+                            print("Got response for cancellation request")
+
+                    processed_count = processed_count + 1
         except Exception as e:
             print("channel creation failed: " + str(e))
             sys.exit()
