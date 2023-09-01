@@ -62,6 +62,8 @@ using namespace std::placeholders; // for _1, _2 etc.
 
 namespace triton { namespace backend { namespace inflight_batcher_llm {
 
+inline static const std::string kStopInputTensorName = "stop";
+
 Tensor_t to_common_datatype(TRITONSERVER_DataType data_type)
 {
     if (data_type == TRITONSERVER_TYPE_INVALID) {
@@ -317,6 +319,16 @@ class WorkItem
       // Create response factory for this request
       TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
     }
+
+    WorkItem(TRITONBACKEND_Request* request, uint64_t request_id, bool isDecoupled)
+        : mRequestId(request_id)
+    {
+      mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
+
+      // Create response factory for this request
+      TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+    }
+
     WorkItem(std::shared_ptr<InferenceRequest> ir,
         uint64_t RequestId)
         : mInferenceRequest(ir),
@@ -373,8 +385,7 @@ class WorkItem
         uint32_t buffer_count = 0;
         TRITONBACKEND_InputProperties(input, &input_name, &data_type, &shape, &dims_count, &byte_size, &buffer_count);
 
-        //TODO: Should those be ignored?
-        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END") {
+        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END" || std::string(input_name) == kStopInputTensorName) {
             continue;
         }
 
@@ -435,6 +446,151 @@ class WorkItem
     uint64_t mRequestId;
 };
 
+/// @brief Thread-safe queue of work items
+
+class WorkItemsQueue
+{
+  public:
+    void clear()
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        mPendingWorkItems.clear();
+        mPendingWorkItemsReqIds.clear();
+        mInProgressWorkItems.clear();
+        mStoppedReqIds.clear();
+
+    }
+
+    // Note: this function only be called under a lock
+    bool hasInProgressReqId(const uint64_t reqId) const {
+        return (mInProgressWorkItems.find(reqId) != mInProgressWorkItems.end());
+    }
+
+    // Note: this function only be called under a lock
+    bool hasPendingReqId(const uint64_t reqId) const {
+        return (mPendingWorkItemsReqIds.find(reqId) != mPendingWorkItemsReqIds.end());
+    }
+
+    /// @brief Add a new work item to the queue
+    /// Throws an error if requestId already exists
+
+    void push(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        if (hasInProgressReqId(requestId) || hasPendingReqId(requestId))
+        {
+            std::string errStr = "requestId " + std::to_string(requestId) + " is already in progress, request is ignored.";
+            throw std::runtime_error(errStr);
+        }
+        else
+        {
+            auto workItem = std::make_shared<WorkItem>(request, requestId, isDecoupled);
+            mPendingWorkItems.push_back(workItem);
+            mPendingWorkItemsReqIds.insert(workItem->requestId());
+        }
+    }
+
+    void push(TRITONBACKEND_Request* request, bool isDecoupled)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        auto workItem = std::make_shared<WorkItem>(request, isDecoupled);
+        mPendingWorkItems.push_back(workItem);
+        mPendingWorkItemsReqIds.insert(workItem->requestId());
+    }
+
+    /// @brief Get a new work item from the queue, and move it to the list of
+    /// in progress work items if it hasn't been stopped
+    /// @return A tuple of the workItem and a boolean flag indicating if the work item
+    /// has been marked in progress
+    std::tuple<std::shared_ptr<WorkItem>, bool> pop()
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+
+        auto workItem = mPendingWorkItems.front();
+        mPendingWorkItems.pop_front();
+        mPendingWorkItemsReqIds.erase(workItem->requestId());
+
+        bool markedInProgress;
+        // Check if work item has been stopped
+        if (mStoppedReqIds.find(workItem->requestId()) == mStoppedReqIds.end())
+        {
+            mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
+            markedInProgress = true;
+        } else {
+            mStoppedReqIds.erase(workItem->requestId());
+            markedInProgress = false;
+        }
+
+        return {workItem, markedInProgress};
+    }
+
+    size_t numPendingWorkItems()  const
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        return mPendingWorkItems.size();
+    }
+
+    std::shared_ptr<WorkItem> getInProgressWorkItem(uint64_t requestId)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        return mInProgressWorkItems.at(requestId);
+    }
+
+    /// @brief  Mark a request as being finished
+    /// @param requestId
+    void markFinished(const uint64_t requestId)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        if (hasInProgressReqId(requestId))
+        {
+            mInProgressWorkItems.erase(requestId);
+        }
+
+        if (mStoppedReqIds.find(requestId) != mStoppedReqIds.end())
+        {
+            mStoppedReqIds.erase(requestId);
+        }
+    }
+
+    // Stop a request by adding the request Id to a set
+    // The set of stopped request id is used by the poll callback
+    // and the pop function
+    void stopWorkItem(const uint64_t requestId)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        TLLM_LOG_DEBUG("Stopping request");
+        if (hasInProgressReqId(requestId) || hasPendingReqId(requestId))
+        {
+            mStoppedReqIds.emplace(requestId);
+        }
+        else
+        {
+            std::string errStr = std::string("Received stop request for requestId ") + std::to_string(requestId) + std::string(" but it's not active (might be completed already).");
+            throw std::runtime_error(errStr);
+        }
+    }
+
+    std::unordered_set<uint64_t> getStoppedReqIds() const
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        return mStoppedReqIds;
+    }
+
+  private:
+    /// Queue of work items
+    std::list<std::shared_ptr<WorkItem>> mPendingWorkItems;
+    /// requestIds of work items in the queue
+    std::set<uint64_t> mPendingWorkItemsReqIds;
+
+    /// work items currently in progress
+    std::unordered_map<uint64_t, std::shared_ptr<WorkItem>> mInProgressWorkItems;
+
+    /// ids of the work items that have been stopped
+    std::unordered_set<uint64_t> mStoppedReqIds;
+
+    mutable std::mutex mMutex;
+};
+
 //
 // ModelInstanceState
 //
@@ -454,8 +610,7 @@ class ModelInstanceState : public BackendModelInstance {
   {
     // terminate decoupled execution loop
     {
-      std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-      mWorkItems.clear();
+      mWorkItemsQueue.clear();
     }
   }
 
@@ -467,19 +622,124 @@ class ModelInstanceState : public BackendModelInstance {
       return mIsDecoupled;
   }
 
-  bool enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
+  uint64_t getRequestId(TRITONBACKEND_Request* request)
   {
-    try {
-        std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-        for (uint32_t r = 0; r < request_count; ++r) {
-          TRITONBACKEND_Request* request = requests[r];
-          mWorkItems.emplace_back(std::make_shared<WorkItem>(request, isDecoupled));
-        }
-    } catch (const std::exception& e) {
-        TLLM_LOG_ERROR("Error creating work item");
-        return true;
+      const char* charRequestId;
+      TRITONBACKEND_RequestId(request, &charRequestId);
+      uint64_t requestId = 0;
+      if (charRequestId != nullptr)
+      {
+          std::string strRequestId(charRequestId);
+          if (!strRequestId.empty()) {
+              try {
+                  requestId = stoul(strRequestId);
+              } catch (const std::exception& e) {
+                  std::string err = std::string("Invalid requestId, must be uint64_t. Got ") + strRequestId;
+                  throw std::runtime_error(err);
+              }
+          }
+      }
+
+      return requestId;
+  }
+
+  bool
+  getRequestStopSignal(TRITONBACKEND_Request* request)
+  {
+    // Get stop signal from the request
+    TRITONBACKEND_Input* input_stop;
+    TRITONSERVER_Error * error = TRITONBACKEND_RequestInput(request, kStopInputTensorName.c_str(), &input_stop);
+    if (error)
+    {
+      // If the user does not provide input "stop", then regard the request as unstopped
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_VERBOSE,
+          "ModelInstanceState::getRequestStopSignal: user does not provide stop input for the request");
+      return false;
     }
-    return false; // return true if any error occured
+
+    uint64_t input_stop_byte_size = 0;
+    uint32_t buffer_count = 0;
+    TRITONBACKEND_InputProperties(
+              input_stop, nullptr, nullptr, nullptr, nullptr,
+              &input_stop_byte_size, &buffer_count);
+
+    LOG_MESSAGE(
+          TRITONSERVER_LOG_VERBOSE,
+          ("ModelInstanceState::getRequestStopSignal: buffer_count = "
+          + std::to_string(buffer_count)).c_str());
+
+    const void*  stop_buffer = 0L;
+    uint64_t buffer_byte_size = 0;
+    TRITONSERVER_MemoryType memory_type;
+    int64_t memory_type_id = 0;
+    TRITONBACKEND_InputBuffer(input_stop, 0, &stop_buffer, &buffer_byte_size, &memory_type, &memory_type_id);
+
+    assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
+
+    bool stopSignal = *reinterpret_cast<const bool *>(stop_buffer);
+
+    return stopSignal;
+  }
+
+  // For stop requests, or in case of error during enqueue, we need to send a response to the client
+  void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "")
+  {
+      TRITONBACKEND_ResponseFactory* factory_ptr;
+      // Create response factory for this request
+      LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
+
+      TRITONSERVER_Error* err = nullptr;
+      if (!errMsg.empty())
+      {
+          TLLM_LOG_ERROR(errMsg);
+          err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
+      }
+      TRITONBACKEND_Response* response;
+      LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
+      LOG_IF_ERROR(TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
+      LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
+  }
+
+  void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
+  {
+    for (uint32_t r = 0; r < request_count; ++r) {
+
+      TRITONBACKEND_Request* request = requests[r];
+      try {
+          auto requestId = getRequestId(request);
+          bool stopRequest = getRequestStopSignal(request);
+
+          if (requestId != 0)
+          {
+              if (stopRequest)
+              {
+                  // Check if request is in progress or in queue, if not ignore
+                  mWorkItemsQueue.stopWorkItem(requestId);
+                  // Send a response back to client for stop request
+                  sendEnqueueResponse(request);
+              }
+              else
+              {
+                  mWorkItemsQueue.push(request, requestId, isDecoupled);
+              }
+
+          }
+          else if (!stopRequest)
+          {
+              mWorkItemsQueue.push(request, isDecoupled);
+          }
+          else
+          {
+              throw std::runtime_error("Cannot send stop request without specifying a request_id");
+          }
+
+      } catch (const std::exception& e) {
+          // In case of error, no work item is added to queue, so response callback needs to be called
+          sendEnqueueResponse(request,  e.what());
+      }
+    }
+    return;
   }
 
   // Return up to max_num_requests inference requests.
@@ -492,22 +752,29 @@ class ModelInstanceState : public BackendModelInstance {
       auto rank = getCommWorldRank();
       if (rank == 0)
       {
-        std::lock_guard<std::mutex> lk(mWorkItemsMutex);
+        int64_t num_new_work_items = std::min(static_cast<int64_t>(mWorkItemsQueue.numPendingWorkItems()), static_cast<int64_t>(max_num_requests));
         if (world_size > 1)
         {
-          int64_t rval_size = static_cast<int64_t>(mWorkItems.size());
-          bcast(&rval_size, 1, MPI_TYPE_INT64_T, 0);
+          bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0);
         }
-        if (mWorkItems.size() > 0)
+
+        if (num_new_work_items > 0)
         {
           int count = 0;
-          while (count < max_num_requests && mWorkItems.size() > 0)
+          while (count < num_new_work_items)
           {
-            auto work_item = mWorkItems.front();
-            mWorkItems.pop_front();
-            rval.emplace_back(work_item->getInferenceRequest());
-            mWorkItemsInProgress.emplace(std::make_pair(work_item->requestId(), work_item));
-            count++;
+            auto [workItem, markedInProgress] = mWorkItemsQueue.pop();
+
+            if (markedInProgress) {
+                rval.emplace_back(workItem->getInferenceRequest());
+                count++;
+            } else {
+                std::string warnStr =
+                    std::string("request Id ") + std::to_string(workItem->requestId())
+                    + std::string(" has been stopped. Request is ignored.");
+                TLLM_LOG_WARNING(warnStr);
+                sendTritonResponse(workItem, {}, true, warnStr);
+            }
           }
           if (world_size > 1)
           {
@@ -521,23 +788,23 @@ class ModelInstanceState : public BackendModelInstance {
             }
             int64_t nWords1 = static_cast<int64_t>(packed.size());
             bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
-                  bcast(packed, 0);
+            bcast(packed, 0);
           }
         }
       }
       else
       {
         // subordinate ranks hang until master rank sends work
-        int64_t rval_size;
-        bcast(&rval_size, 1, MPI_TYPE_INT64_T, 0);
-        if (rval_size > 0)
+        int64_t num_new_work_items;
+        bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0);
+        if (num_new_work_items > 0)
         {
           int nWords1;
           bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
           std::vector<int64_t> packed(nWords1);
           bcast(packed, 0);
           int64_t* packed_ptr = packed.data();
-          for (int64_t count = 0; count < rval_size; ++count)
+          for (int64_t count = 0; count < num_new_work_items; ++count)
           {
             int64_t n = *(packed_ptr++);
             auto ir = InferenceRequest::deserialize(packed_ptr);
@@ -550,24 +817,18 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  TRITONSERVER_Error* sendTritonResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
+  TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
   {
-    if (getCommWorldRank() == 0)
-    {
         TRITONBACKEND_ResponseFactory* response_factory;
-        {
-            std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-            auto work_item = mWorkItemsInProgress.at(requestId);
-            response_factory = work_item->response_factory();
-        }
+        response_factory = workItem->response_factory();
 
         TRITONBACKEND_Response* response;
         RETURN_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, response_factory));
 
+        auto requestId = workItem->requestId();
         if (final_response)
         {
-            std::lock_guard<std::mutex> lk(mWorkItemsMutex);
-            mWorkItemsInProgress.erase(requestId);
+            mWorkItemsQueue.markFinished(requestId);
         }
 
         // Check if error
@@ -600,17 +861,54 @@ class ModelInstanceState : public BackendModelInstance {
         RETURN_IF_ERROR(
             TRITONBACKEND_ResponseSend(
               response, final_response ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, err));
-      }
-
 
       return nullptr;
   }
 
   void sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
   {
-    auto tritonErr = sendTritonResponse(requestId, response_tensors, final_response, errMsg);
-    LOG_IF_ERROR(tritonErr, "Failed to send Triton response for requestId: " + std::to_string(requestId));
+    if (getCommWorldRank() == 0)
+    {
+        std::string errStr = std::string("Failed to send Triton response for requestId: ") + std::to_string(requestId);
+        try {
+            auto workItem = mWorkItemsQueue.getInProgressWorkItem(requestId);
+            auto tritonErr = sendTritonResponse(workItem, response_tensors, final_response, errMsg);
+            LOG_IF_ERROR(tritonErr, errStr);
+        } catch (const std::exception& e) {
+            TLLM_LOG_ERROR(errStr);
+        }
+    }
     return;
+  }
+
+  std::unordered_set<uint64_t> pollStopSignals()
+  {
+      auto stoppedReqIds = mWorkItemsQueue.getStoppedReqIds();
+      int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
+
+      if (getCommWorldSize() > 1)
+      {
+          // Broadcast number of stopped requests
+          bcast(&nStoppedReqIds, 1, MPI_TYPE_INT64_T, 0);
+
+          if (nStoppedReqIds > 0)
+          {
+              // Broadcast stopped requests Ids
+              if (getCommWorldRank() == 0)
+              {
+                  // Store the requestIds in a contiguous vector
+                  std::vector<uint64_t> stoppedReqIdsVec(stoppedReqIds.begin(), stoppedReqIds.end());
+                  bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0);
+              } else {
+                  std::vector<uint64_t> stoppedReqIdsVec(nStoppedReqIds);
+                  bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0);
+                  // Store the requestIds in the set
+                  stoppedReqIds.clear();
+                  std::copy(stoppedReqIdsVec.begin(), stoppedReqIdsVec.end(), std::inserter(stoppedReqIds, stoppedReqIds.end()));
+              }
+          }
+      }
+      return stoppedReqIds;
   }
 
  private:
@@ -664,7 +962,8 @@ class ModelInstanceState : public BackendModelInstance {
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);});
+          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);},
+          [this](){return pollStopSignals();});
 
       if (getCommWorldRank() != 0)
       {
@@ -688,12 +987,9 @@ class ModelInstanceState : public BackendModelInstance {
   std::string mModelPath;
   bool mIsDecoupled;
 
-  // Initialize to clearly invalid values, will be overwritten later.
   std::shared_ptr<GptManager> mBatchManager;
 
-  std::list<std::shared_ptr<WorkItem>> mWorkItems;
-  std::unordered_map<uint64_t, std::shared_ptr<WorkItem>> mWorkItemsInProgress;
-  std::mutex mWorkItemsMutex;
+  WorkItemsQueue mWorkItemsQueue;
 };
 
 TRITONSERVER_Error*
@@ -780,10 +1076,7 @@ TRITONBACKEND_ModelInstanceExecute(
 
   auto isDecoupled = instance_state->isDecoupled();
 
-  RETURN_ERROR_IF_TRUE(
-      instance_state->enqueue(requests, request_count, isDecoupled),
-      TRITONSERVER_ERROR_INTERNAL,
-      std::string("unexpected error in enqueue method"));
+  instance_state->enqueue(requests, request_count, isDecoupled);
 
   for (uint32_t r = 0; r < request_count; ++r) {
     TRITONBACKEND_Request* request = requests[r];
