@@ -1,6 +1,7 @@
 {
   "needs_turtle_major": [
     3,
-    4
+    4,
+    5
   ]
 }
