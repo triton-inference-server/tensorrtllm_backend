@@ -133,6 +133,12 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     python3 inflight_batcher_llm_client.py --streaming --check-output
     popd # inflight_batcher_llm/client
 
+    # End to end test
+    pushd tools/inflight_batcher_llm
+    python3 end_to_end_streaming_client.py \
+        --output_len 10 --prompt "This is a test "
+    popd
+
     kill ${SERVER_PID}
 
 fi

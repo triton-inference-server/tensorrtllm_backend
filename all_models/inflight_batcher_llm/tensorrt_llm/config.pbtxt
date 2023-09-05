@@ -105,6 +105,12 @@ input [
     data_type: TYPE_BOOL
     dims: [ 1 ]
     optional: true
+  },
+  {
+    name: "streaming"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
   }
 #  {
 #    name: "output_log_probs"
