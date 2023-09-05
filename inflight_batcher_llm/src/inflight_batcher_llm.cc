@@ -63,6 +63,46 @@ using namespace std::placeholders; // for _1, _2 etc.
 namespace triton { namespace backend { namespace inflight_batcher_llm {
 
 inline static const std::string kStopInputTensorName = "stop";
+inline static const std::string kStreamingInputTensorName = "streaming";
+
+bool
+getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName)
+{
+  // Get stop signal from the request
+  TRITONBACKEND_Input* input;
+  TRITONSERVER_Error * error = TRITONBACKEND_RequestInput(request, inputTensorName.c_str(), &input);
+  if (error)
+  {
+    // If the user does not provide input "stop", then regard the request as unstopped
+    std::string msg = "ModelInstanceState::getRequestBooleanInputTensor: user did not not provide " + inputTensorName + " input for the request";
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_VERBOSE, msg.c_str());
+    return false;
+  }
+
+  uint64_t input_byte_size = 0;
+  uint32_t buffer_count = 0;
+  TRITONBACKEND_InputProperties(
+            input, nullptr, nullptr, nullptr, nullptr,
+            &input_byte_size, &buffer_count);
+
+  LOG_MESSAGE(
+        TRITONSERVER_LOG_VERBOSE,
+        ("ModelInstanceState::getRequestStopSignal: buffer_count = "
+        + std::to_string(buffer_count)).c_str());
+
+  const void*  buffer = 0L;
+  uint64_t buffer_byte_size = 0;
+  TRITONSERVER_MemoryType memory_type;
+  int64_t memory_type_id = 0;
+  TRITONBACKEND_InputBuffer(input, 0, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
+
+  assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
+
+  bool boolean = *reinterpret_cast<const bool *>(buffer);
+
+  return boolean;
+}
 
 Tensor_t to_common_datatype(TRITONSERVER_DataType data_type)
 {
@@ -385,7 +425,9 @@ class WorkItem
         uint32_t buffer_count = 0;
         TRITONBACKEND_InputProperties(input, &input_name, &data_type, &shape, &dims_count, &byte_size, &buffer_count);
 
-        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END" || std::string(input_name) == kStopInputTensorName) {
+        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID" || std::string(input_name) == "END" ||
+            std::string(input_name) == kStopInputTensorName || std::string(input_name) == kStreamingInputTensorName)
+        {
             continue;
         }
 
@@ -412,29 +454,10 @@ class WorkItem
         inferenceRequest->emplaceInputTensor(std::string(input_name), std::move(t));
       }
 
-      // Streaming is disabled by default. It can be enabled if request includes parameter "Streaming"
-      // and this parameter is either non-zero int or true bool.
-      bool streaming_flag = false;
-      uint32_t num_params = 0;
-      TRITONBACKEND_RequestParameterCount(request, &num_params);
-      for (uint32_t param_index = 0;  param_index < num_params;  ++param_index)
-      {
-        const char* key = 0L;
-        TRITONSERVER_ParameterType param_type;
-        const void* vvalue = 0L;
-        TRITONBACKEND_RequestParameter(request, param_index, &key, &param_type, &vvalue);
-        if (std::string(key) == "Streaming") {
-          if ((param_type == TRITONSERVER_PARAMETER_BOOL && (int)(*((char*)vvalue)) != 0) ||
-              (param_type == TRITONSERVER_PARAMETER_INT && *((int*)vvalue) != 0))
-          {
-            streaming_flag = true;
-          }
-        }
-      }
+      bool streamingFlag = getRequestBooleanInputTensor(request, kStreamingInputTensorName);
+      inferenceRequest->setIsStreaming(streamingFlag);
 
-      inferenceRequest->setIsStreaming(streaming_flag);
-
-      if (streaming_flag && !isDecoupled) {
+      if (streamingFlag && !isDecoupled) {
           throw std::runtime_error("Streaming is only supported if model is deployed using decoupled mode.");
       }
 
@@ -643,45 +666,6 @@ class ModelInstanceState : public BackendModelInstance {
       return requestId;
   }
 
-  bool
-  getRequestStopSignal(TRITONBACKEND_Request* request)
-  {
-    // Get stop signal from the request
-    TRITONBACKEND_Input* input_stop;
-    TRITONSERVER_Error * error = TRITONBACKEND_RequestInput(request, kStopInputTensorName.c_str(), &input_stop);
-    if (error)
-    {
-      // If the user does not provide input "stop", then regard the request as unstopped
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_VERBOSE,
-          "ModelInstanceState::getRequestStopSignal: user does not provide stop input for the request");
-      return false;
-    }
-
-    uint64_t input_stop_byte_size = 0;
-    uint32_t buffer_count = 0;
-    TRITONBACKEND_InputProperties(
-              input_stop, nullptr, nullptr, nullptr, nullptr,
-              &input_stop_byte_size, &buffer_count);
-
-    LOG_MESSAGE(
-          TRITONSERVER_LOG_VERBOSE,
-          ("ModelInstanceState::getRequestStopSignal: buffer_count = "
-          + std::to_string(buffer_count)).c_str());
-
-    const void*  stop_buffer = 0L;
-    uint64_t buffer_byte_size = 0;
-    TRITONSERVER_MemoryType memory_type;
-    int64_t memory_type_id = 0;
-    TRITONBACKEND_InputBuffer(input_stop, 0, &stop_buffer, &buffer_byte_size, &memory_type, &memory_type_id);
-
-    assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
-
-    bool stopSignal = *reinterpret_cast<const bool *>(stop_buffer);
-
-    return stopSignal;
-  }
-
   // For stop requests, or in case of error during enqueue, we need to send a response to the client
   void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "")
   {
@@ -708,7 +692,7 @@ class ModelInstanceState : public BackendModelInstance {
       TRITONBACKEND_Request* request = requests[r];
       try {
           auto requestId = getRequestId(request);
-          bool stopRequest = getRequestStopSignal(request);
+          bool stopRequest = getRequestBooleanInputTensor(request, kStopInputTensorName);
 
           if (requestId != 0)
           {

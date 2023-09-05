@@ -77,6 +77,12 @@ input [
     data_type: TYPE_UINT32
     dims: [ 1 ]
     optional: true
+  },
+  {
+    name: "streaming"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
   }
 ]
 output [
@@ -171,7 +177,10 @@ ensemble_scheduling {
           key: "beam_width"
           value: "beam_width"
       }
-
+      input_map {
+          key: "streaming"
+          value: "streaming"
+      }
       output_map {
         key: "output_ids"
         value: "_TOKENS_BATCH"
