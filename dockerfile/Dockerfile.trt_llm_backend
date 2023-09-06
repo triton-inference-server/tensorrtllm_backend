@@ -21,7 +21,6 @@ FROM base as dev
 
 # Download and install polygraphy, only required if you need to run TRT-LLM python tests
 RUN pip install https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/9.0.1/tars/polygraphy-0.48.1-py2.py3-none-any.whl
-RUN pip install /workspace/polygraphy-0.48.1-py2.py3-none-any.whl
 
 # CMake
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
@@ -36,6 +35,8 @@ FROM dev as trt_llm_builder
 WORKDIR /app
 COPY scripts scripts
 COPY tensorrt_llm tensorrt_llm
+# We know that the triton container's pytorch is using pre cxx11, so this is safe
+RUN cp tensorrt_llm/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a tensorrt_llm/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a
 RUN cd tensorrt_llm; python3 scripts/build_wheel.py -a "80;86" --trt_root="${TRT_ROOT}"; cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
