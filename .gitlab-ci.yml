@@ -38,14 +38,14 @@ build-tensorrt-llm:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - python3 tekit/scripts/build_wheel.py -a "80;86" --trt_root $TRT_ROOT
+    - python3 tensorrt_llm/scripts/build_wheel.py -a "80;86" --trt_root $TRT_ROOT
     - cd $CI_PROJECT_DIR/inflight_batcher_llm
     - bash scripts/build.sh
   artifacts:
     expire_in: 30 mins
     paths:
-      - tekit/build
-      - tekit/cpp/build
+      - tensorrt_llm/build
+      - tensorrt_llm/cpp/build
       - inflight_batcher_llm/build
 
 test-gpt-model-job:
@@ -53,9 +53,9 @@ test-gpt-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh gpt
-    - bash scripts/tests/test.sh gpt tekit/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -66,9 +66,9 @@ test-opt-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh opt
-    - bash scripts/tests/test.sh opt tekit/examples/opt/trt_engine/opt-125m/fp16/1-gpu/
+    - bash scripts/tests/test.sh opt tensorrt_llm/examples/opt/trt_engine/opt-125m/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -79,9 +79,9 @@ test-llama-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh llama
-    - bash scripts/tests/test.sh llama tekit/examples/llama/llama_outputs
+    - bash scripts/tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -92,9 +92,9 @@ test-gptj-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh gptj
-    - bash scripts/tests/test.sh gptj tekit/examples/gptj/gpt_outputs
+    - bash scripts/tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -105,11 +105,11 @@ test-gpt-ib-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib tekit/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -120,11 +120,11 @@ test-gpt-ib-streaming-model-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tekit/build/tensorrt_llm*.whl
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib-streaming tekit/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
   artifacts:
     expire_in: 30 mins
   dependencies:

@@ -28,15 +28,15 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1
 RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
 ENV PATH="/usr/local/bin:${PATH}"
 
-COPY tekit/requirements-dev.txt /tmp/
+COPY tensorrt_llm/requirements-dev.txt /tmp/
 RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
 FROM dev as trt_llm_builder
 
 WORKDIR /app
 COPY scripts scripts
-COPY tekit tekit
-RUN cd tekit; python3 scripts/build_wheel.py -a "80;86" --trt_root="${TRT_ROOT}"; cd ..
+COPY tensorrt_llm tensorrt_llm
+RUN cd tensorrt_llm; python3 scripts/build_wheel.py -a "80;86" --trt_root="${TRT_ROOT}"; cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
 
