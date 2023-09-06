@@ -53,7 +53,7 @@ from tritonclient.utils import InferenceServerException
 #
 # In order for gpt_model_type 'inflight_batching' to work, you must copy engine from
 #
-# tekit/cpp/tests/resources/models/rt_engine/gpt2/fp16-inflight-batching-plugin/1-gpu/
+# tensorrt_llm/cpp/tests/resources/models/rt_engine/gpt2/fp16-inflight-batching-plugin/1-gpu/
 #
 
 

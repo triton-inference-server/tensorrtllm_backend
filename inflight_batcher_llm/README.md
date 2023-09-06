@@ -4,10 +4,10 @@
 
 To configure a Triton server that runs a model using TensorRT-LLM, it is needed to compile a TensorRT-LLM engine for that model.
 
-For example, for LLaMA 7B, change to the `tekit/examples/llama` directory:
+For example, for LLaMA 7B, change to the `tensorrt_llm/examples/llama` directory:
 
 ```
-cd tekit/examples/llama
+cd tensorrt_llm/examples/llama
 ```
 Prepare the checkpoint of the model by following the instructions [here](https://huggingface.co/docs/transformers/main/en/model_doc/llama) and store it in a model directory. Then, create the engine:
 
@@ -24,9 +24,9 @@ python build.py --model_dir ${model_directory} \
 
 To disable the support for in-flight batching (i.e. use the V1 batching mode), remove `--use_inflight_batching`.
 
-Similarly, for a GPT model, change to `tekit/examples/gpt` directory:
+Similarly, for a GPT model, change to `tensorrt_llm/examples/gpt` directory:
 ```
-cd tekit/examples/gpt
+cd tensorrt_llm/examples/gpt
 
 ```
 Prepare the model checkpoint following the instructions in the README file, store it in a model directory and build the TRT engine with:
@@ -46,7 +46,7 @@ python3 build.py --model_dir=${model_directory} \
 
 ## Build the Triton server image that includes the TRT-LLM in-flight batching backend:
 
-From `tekit_backend` root folder:
+From `tensorrt_llm_backend` root folder:
 
 ```
 docker build -f dockerfile/Dockerfile.trt_llm_backend -t tritonserver:w_trt_llm_backend .
@@ -64,12 +64,12 @@ cp -R all_models/inflight_batcher_llm/ triton_model_repo
 Then copy the TRT engine to `triton_model_repo/tensorrt_llm/1/`. For example for the LLaMA 7B example above, run:
 
 ```
-cp -R tekit/examples/llama/engines/bf16/1-gpu/ triton_model_repo/tensorrt_llm/1
+cp -R tensorrt_llm/examples/llama/engines/bf16/1-gpu/ triton_model_repo/tensorrt_llm/1
 ```
 
 For the GPT example above, run:
 ```
-cp -R tekit/examples/gpt/engines/fp16/1-gpu/ triton_model_repo/tensorrt_llm/1
+cp -R tensorrt_llm/examples/gpt/engines/fp16/1-gpu/ triton_model_repo/tensorrt_llm/1
 ```
 
 

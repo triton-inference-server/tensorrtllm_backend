@@ -5,12 +5,12 @@ MODEL=$1
 set -e
 
 # install deps
-pip3 install -r tekit/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+pip3 install -r tensorrt_llm/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
 if [ "$MODEL" = "gpt" ]; then
 
     # GPT2
-    pushd tekit/examples/gpt
+    pushd tensorrt_llm/examples/gpt
 
     pip3 install -r requirements.txt
 
@@ -32,13 +32,13 @@ if [ "$MODEL" = "gpt" ]; then
 
     python3 run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/
 
-    popd # tekit/examples/gpt
+    popd # tensorrt_llm/examples/gpt
 
 fi
 
 if [ "$MODEL" = "opt" ]; then
 
-    pushd tekit/examples/opt
+    pushd tensorrt_llm/examples/opt
 
     pip install -r requirements.txt
 
@@ -67,13 +67,13 @@ if [ "$MODEL" = "opt" ]; then
                      --pre_norm \
                      --hidden_act relu
 
-    popd # tekit/examples/opt
+    popd # tensorrt_llm/examples/opt
 
 fi
 
 if [ "$MODEL" = "llama" ]; then
 
-    pushd tekit/examples/llama
+    pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
     python3 build.py --dtype=float16 --n_layer=2 \
@@ -81,13 +81,13 @@ if [ "$MODEL" = "llama" ]; then
     wget -q https://huggingface.co/decapoda-research/llama-7b-hf/resolve/main/tokenizer.model
     python3 run.py --max_output_len=1
 
-    popd # tekit/examples/llama
+    popd # tensorrt_llm/examples/llama
 
 fi
 
 if [ "$MODEL" = "gptj" ]; then
 
-    pushd tekit/examples/gptj
+    pushd tensorrt_llm/examples/gptj
 
     pip install -r requirements.txt
     python3 build.py --dtype=float16 --n_layer=2 \
@@ -97,14 +97,14 @@ if [ "$MODEL" = "gptj" ]; then
     # wget https://huggingface.co/EleutherAI/gpt-j-6b/resolve/main/merges.txt -P gptj
     # python3 run.py --max_output_len=1
 
-    popd # tekit/examples/gptj
+    popd # tensorrt_llm/examples/gptj
 
 fi
 
 if [ "$MODEL" = "gpt-ib" ]; then
 
     # GPT2
-    pushd tekit/examples/gpt
+    pushd tensorrt_llm/examples/gpt
 
     pip3 install -r requirements.txt
 
@@ -127,6 +127,6 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
 
-    popd # tekit/examples/gpt
+    popd # tensorrt_llm/examples/gpt
 
 fi
