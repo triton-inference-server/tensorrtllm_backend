@@ -118,4 +118,43 @@ python inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 2
 You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
 
 You can have a look at the client code to see how early stopping is achieved.
+
+## Run the e2e/identity test to benchmark
+
+### End to end test
+End to end test script sends requests to deployed ensemble model.
+
+Ensemble model is ensembled by three models: preprocessing, tensorrt_llm and postprocessing.
+* preprocessing: Tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints).
+* tensorrt_llm: Inferencing.
+* postprocessing: De-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string).
+
+The end to end latency includes the total latency of the three parts of an ensemble model.
+
 ```
+cd tools/inflight_batcher_llm
+python3 end_to_end_test.py --dataset ../dataset/125_data.json
+```
+Expected outputs
+```
+[INFO] Functionality test succeed.
+[INFO] Warm up for benchmarking.
+[INFO] Start benchmarking on 125 prompts.
+[INFO] Total Latency: 11099.243 ms
+```
+
+### Identity test
+
+Identity test script sends requests directly to deployed tensorrt_llm model, the identity test latency indicates the inference latency of TensorRT-LLM, not including the pre/post-processing latency which is usually handled by a third-party library such as HuggingFace.
+
+```
+cd tools/inflight_batcher_llm
+python3 identity_test.py --dataset ../dataset/125_data.json
+```
+Expected outputs
+```
+[INFO] Warm up for benchmarking.
+[INFO] Start benchmarking on 125 prompts.
+[INFO] Total Latency: 10213.462 ms
+```
+*Please note that the expected outputs in that document are only for reference, specific performance numbers depend on the GPU you're using.*
