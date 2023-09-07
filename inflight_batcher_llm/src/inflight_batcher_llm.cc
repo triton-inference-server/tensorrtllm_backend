@@ -31,6 +31,7 @@
 #include <thread>
 #include <atomic>
 #include <cassert>
+#include <fstream>
 
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
@@ -42,10 +43,14 @@
 
 #include "tensorrt_llm/batch_manager/Tensor.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
+#include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
+#include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
 #include <nlohmann/json.hpp>
+#include <NvInferPlugin.h>
+
 #include "mpiUtils.h"
 
 using namespace ::triton::common;   // TritonJson
@@ -54,7 +59,6 @@ using namespace ::triton::common;   // TritonJson
 // Mockup of LLM inflight batcher based on triton 'minimal' backend example
 //
 
-using namespace tensorrt_llm::common;
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::runtime;
 using namespace std::placeholders; // for _1, _2 etc.
