@@ -35,8 +35,6 @@ FROM dev as trt_llm_builder
 WORKDIR /app
 COPY scripts scripts
 COPY tensorrt_llm tensorrt_llm
-# We know that the triton container's pytorch is using pre cxx11, so this is safe
-RUN cp tensorrt_llm/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a tensorrt_llm/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a
 RUN cd tensorrt_llm; python3 scripts/build_wheel.py -a "80;86" --trt_root="${TRT_ROOT}"; cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
