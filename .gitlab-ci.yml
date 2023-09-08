@@ -38,7 +38,7 @@ build-tensorrt-llm:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
-    - python3 tensorrt_llm/scripts/build_wheel.py -a "80;86" --trt_root $TRT_ROOT
+    - python3 tensorrt_llm/scripts/build_wheel.py -a "80" --trt_root $TRT_ROOT
     - cd $CI_PROJECT_DIR/inflight_batcher_llm
     - bash scripts/build.sh
   artifacts:
