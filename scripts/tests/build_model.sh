@@ -22,12 +22,13 @@ if [ "$MODEL" = "gpt" ]; then
     echo "Convert GPT from HF"
     python3 hf_gpt_convert.py -i ${GPT2} -o ./c-model/gpt2/fp16 --storage-type float16
 
-    echo "Build GPT: float16 | src FT"
+    echo "Build GPT: float16 | src FT | remove_input_padding"
     python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
         --dtype float16 \
         --use_gpt_attention_plugin float16 \
         --use_gemm_plugin float16 \
         --use_layernorm_plugin float16 \
+        --remove_input_padding \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/ --hidden_act gelu
 
