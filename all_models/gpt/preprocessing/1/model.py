@@ -1,22 +1,14 @@
 # -*- coding: utf-8 -*-
 import csv
 import json
-from pathlib import Path
 
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
-import utils.gpt_token_encoder as encoder
 from torch.nn.utils.rnn import pad_sequence
-from word_list import to_word_list_format
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
-
-START_ID = 50256
-END_ID = 50256
+from tensorrt_llm.runtime import to_word_list_format
 
 
 class TritonPythonModel:
@@ -40,7 +32,28 @@ class TritonPythonModel:
           * model_name: Model name
         """
         # Parse model configs
-        self.model_config = model_config = json.loads(args['model_config'])
+        model_config = json.loads(args['model_config'])
+        tokenizer_dir = model_config['parameters']['tokenizer_dir'][
+            'string_value']
+        tokenizer_type = model_config['parameters']['tokenizer_type'][
+            'string_value']
+
+        if tokenizer_type == 't5':
+            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
+                                         padding_side='left')
+        elif tokenizer_type == 'auto':
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                           padding_side='left')
+        elif tokenizer_type == 'llama':
+            self.tokenizer = LlamaTokenizer.from_pretrained(
+                tokenizer_dir, legacy=False, padding_side='left')
+        else:
+            raise AttributeError(
+                f'Unexpected tokenizer type: {tokenizer_type}')
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.pad_id = self.tokenizer.encode(self.tokenizer.pad_token,
+                                            add_special_tokens=False)[0]
 
         # Parse model output configs and convert Triton types to numpy types
         input_names = [
@@ -53,10 +66,6 @@ class TritonPythonModel:
                 pb_utils.triton_string_to_numpy(
                     pb_utils.get_output_config_by_name(
                         model_config, input_name)['data_type']))
-
-        cur_folder = Path(__file__).parent
-        self.encoder = encoder.get_encoder(str(cur_folder / VOCAB_FILE),
-                                           str(cur_folder / MERGES_FILE))
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -96,8 +105,8 @@ class TritonPythonModel:
 
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
-            bad_words = to_word_list_format(bad_words_dict)
-            stop_words = to_word_list_format(stop_words_dict)
+            bad_words = to_word_list_format(bad_words_dict, self.tokenizer)
+            stop_words = to_word_list_format(stop_words_dict, self.tokenizer)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -143,13 +152,14 @@ class TritonPythonModel:
             query : batch string (2D numpy array)
         """
         start_ids = [
-            torch.IntTensor(self.encoder.encode(s[0].decode())) for s in query
+            torch.IntTensor(self.tokenizer.encode(s[0].decode()))
+            for s in query
         ]
         start_lengths = torch.IntTensor([[len(ids)] for ids in start_ids])
 
         start_ids = pad_sequence(start_ids,
                                  batch_first=True,
-                                 padding_value=END_ID)
+                                 padding_value=self.pad_id)
         # input_len = min(start_lengths)
         #attn_mask = torch.ones((batch_size, input_len, input_len)).tril()
 
@@ -189,4 +199,4 @@ class TritonPythonModel:
     def _encode(self, sentence):
         sentence = sentence.decode() if isinstance(sentence,
                                                    bytes) else sentence
-        return self.encoder.encode(sentence)
+        return self.tokenizer.encode(sentence)

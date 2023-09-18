@@ -8,12 +8,8 @@ import argparse
 from datetime import datetime
 
 import numpy as np
-from utils import token_encoder, utils
-
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from utils import utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -73,6 +69,16 @@ if __name__ == '__main__':
                         default=10,
                         required=False,
                         help='Specify output length')
+    parser.add_argument('--tokenizer_dir',
+                        type=str,
+                        required=True,
+                        help='Specify tokenizer directory')
+    parser.add_argument('--tokenizer_type',
+                        type=str,
+                        default='auto',
+                        required=False,
+                        choices=['auto', 't5', 'llama'],
+                        help='Specify tokenizer type')
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
@@ -84,11 +90,28 @@ if __name__ == '__main__':
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
-    encoder = token_encoder.get_encoder(VOCAB_FILE, MERGES_FILE)
-    line = encoder.encode(FLAGS.text)
+    if FLAGS.tokenizer_type == 't5':
+        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                padding_side='left')
+    elif FLAGS.tokenizer_type == 'auto':
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  padding_side='left')
+    elif FLAGS.tokenizer_type == 'llama':
+        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                   legacy=False,
+                                                   padding_side='left')
+    else:
+        raise AttributeError(
+            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+    tokenizer.pad_token = tokenizer.eos_token
+    pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
+    end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
+
+    line = tokenizer.encode(FLAGS.text)
     input_start_ids = np.array([line], np.int32)
     input_len = np.array([[len(line)]], np.int32)
-    inputs = utils.prepare_inputs(input_start_ids, input_len, FLAGS)
+    inputs = utils.prepare_inputs(input_start_ids, input_len, pad_id, end_id,
+                                  FLAGS)
 
     start_time = datetime.now()
 
@@ -103,11 +126,12 @@ if __name__ == '__main__':
     output_ids = results[0].as_numpy("output_ids")
 
     stop_time = datetime.now()
-    latencies = (stop_time - start_time).total_seconds() * 1000.0
-    print(f"[INFO] Latency: {latencies} ms")
+    latency = (stop_time - start_time).total_seconds() * 1000.0
+    latency = round(latency, 3)
+    print(f"[INFO] Latency: {latency} ms")
 
     output_ids = output_ids.reshape(
         (output_ids.size, )).tolist()[input_start_ids.shape[1]:]
-    output_text = encoder.decode(output_ids)
+    output_text = tokenizer.decode(output_ids)
     print(f'Input: {FLAGS.text}')
     print(f'Output: {output_text}')

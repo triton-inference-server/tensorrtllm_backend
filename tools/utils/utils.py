@@ -28,7 +28,7 @@ def prepare_tensor(name, input, protocol):
     return t
 
 
-def prepare_inputs(input_start_ids, input_len, flags):
+def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
     output_len = np.ones([input_start_ids.shape[0], 1]).astype(
         np.uint32) * flags.output_len
     runtime_top_k = (flags.topk *
@@ -49,9 +49,9 @@ def prepare_inputs(input_start_ids, input_len, flags):
         np.ones([input_start_ids.shape[0], 1]).astype(bool)
     beam_width = (flags.beam_width *
                   np.ones([input_start_ids.shape[0], 1])).astype(np.uint32)
-    pad_ids = 50256 * \
+    pad_ids = pad_id * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
-    end_ids = 50256 * \
+    end_ids = end_id * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
     min_length = 1 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)

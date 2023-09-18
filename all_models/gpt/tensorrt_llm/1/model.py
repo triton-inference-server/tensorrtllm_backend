@@ -170,8 +170,8 @@ class TritonPythonModel:
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
             input_lengths = inputs['input_lengths'].cuda()
-            end_id = 50256 if inputs['end_id'] is None else inputs['end_id']
-            pad_id = 50256 if inputs['pad_id'] is None else inputs['pad_id']
+            end_id = inputs['end_id']
+            pad_id = inputs['pad_id']
 
             sampling_config = SamplingConfig(end_id=end_id, pad_id=pad_id)
             if inputs['beam_width'] is not None:

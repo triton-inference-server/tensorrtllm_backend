@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import argparse
 
 import numpy as np
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from utils import utils
 
 if __name__ == '__main__':
@@ -60,6 +61,16 @@ if __name__ == '__main__':
                         default=10,
                         required=False,
                         help='Specify output length')
+    parser.add_argument('--tokenizer_dir',
+                        type=str,
+                        required=True,
+                        help='Specify tokenizer directory')
+    parser.add_argument('--tokenizer_type',
+                        type=str,
+                        default='auto',
+                        required=False,
+                        choices=['auto', 't5', 'llama'],
+                        help='Specify tokenizer type')
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
@@ -70,6 +81,23 @@ if __name__ == '__main__':
 
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
+
+    if FLAGS.tokenizer_type == 't5':
+        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                padding_side='left')
+    elif FLAGS.tokenizer_type == 'auto':
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  padding_side='left')
+    elif FLAGS.tokenizer_type == 'llama':
+        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                   legacy=False,
+                                                   padding_side='left')
+    else:
+        raise AttributeError(
+            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+    tokenizer.pad_token = tokenizer.eos_token
+    pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
+    end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
 
     model_name = 'preprocessing'
     with utils.create_inference_server_client(FLAGS.protocol,
@@ -117,7 +145,7 @@ if __name__ == '__main__':
                                               FLAGS.url,
                                               concurrency=1,
                                               verbose=FLAGS.verbose) as client:
-        inputs = utils.prepare_inputs(output0, output1, FLAGS)
+        inputs = utils.prepare_inputs(output0, output1, pad_id, end_id, FLAGS)
 
         try:
             result = client.infer(model_name, inputs)
@@ -186,9 +214,9 @@ if __name__ == '__main__':
                                            ]).astype(bool)
         beam_width = (FLAGS.beam_width *
                       np.ones([input0_data.shape[0], 1])).astype(np.uint32)
-        pad_ids = 50256 * \
+        pad_ids = pad_id * \
             np.ones([input0_data.shape[0], 1]).astype(np.uint32)
-        end_ids = 50256 * \
+        end_ids = end_id * \
             np.ones([input0_data.shape[0], 1]).astype(np.uint32)
         min_length = 1 * \
             np.ones([input0_data.shape[0], 1]).astype(np.uint32)

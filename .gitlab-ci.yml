@@ -3,6 +3,10 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   IMAGE: urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-trt9.0.1.4_triton23.07-public
   TRT_ROOT: /usr/local/tensorrt
+  GPT2: /home/scratch.trt_llm_data/llm-models/gpt2
+  OPT_125M: /home/scratch.trt_llm_data/llm-models/opt-125m
+  LLAMA: /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
+  GPTJ: /home/scratch.trt_llm_data/llm-models/gpt-j-6b
 
 default:
   before_script:
@@ -55,7 +59,7 @@ test-gpt-model-job:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh gpt
-    - bash scripts/tests/test.sh gpt tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -68,7 +72,7 @@ test-opt-model-job:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh opt
-    - bash scripts/tests/test.sh opt tensorrt_llm/examples/opt/trt_engine/opt-125m/fp16/1-gpu/
+    - bash scripts/tests/test.sh opt tensorrt_llm/examples/opt/trt_engine/opt-125m/fp16/1-gpu/ ${OPT_125M} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -81,7 +85,7 @@ test-llama-model-job:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh llama
-    - bash scripts/tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs
+    - bash scripts/tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs ${LLAMA} llama
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -94,7 +98,7 @@ test-gptj-model-job:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash scripts/tests/build_model.sh gptj
-    - bash scripts/tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs
+    - bash scripts/tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs ${GPTJ} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -109,7 +113,7 @@ test-gpt-ib-model-job:
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -124,7 +128,7 @@ test-gpt-ib-streaming-model-job:
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/
+    - bash scripts/tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:

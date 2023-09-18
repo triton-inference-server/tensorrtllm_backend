@@ -9,7 +9,10 @@ The Triton backend for TensorRT-LLM.
 # 1. Pull the docker image
 nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <your/path>:<mount/path> <image> bash
 
-# 2. Modify parameters in all_models/<model>/tensorrt_llm/config.pbtxt
+# 2. Modify parameters:
+1. all_models/<model>/tensorrt_llm/config.pbtxt
+2. all_models/<model>/preprocessing/config.pbtxt
+3. all_models/<model>/postprocessing/config.pbtxt
 
 # 3. Launch triton server
 python3 scripts/launch_triton_server.py --world_size=1 \
@@ -67,12 +70,15 @@ cd tools/gpt/
 
 # Download vocab and merge table for HF models
 # Take GPT as an example:
-wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
-wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
+rm -rf gpt2 && git clone https://huggingface.co/gpt2
+pushd gpt2 && rm pytorch_model.bin model.safetensors && \
+    wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && popd
 
 python3 client.py \
     --text="Born in north-east France, Soyer trained as a" \
-    --output_len=10
+    --output_len=10 \
+    --tokenizer_dir gpt2 \
+    --tokenizer_type auto
 
 # Exmaple output:
 # [INFO] Latency: 92.278 ms

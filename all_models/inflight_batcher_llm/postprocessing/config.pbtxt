@@ -16,6 +16,20 @@ output [
   }
 ]
 
+parameters {
+  key: "tokenizer_dir"
+  value: {
+    string_value: "${tokenizer_dir}"
+  }
+}
+
+parameters {
+  key: "tokenizer_type"
+  value: {
+    string_value: "${tokenizer_type}"
+  }
+}
+
 instance_group [
     {
         count: 1

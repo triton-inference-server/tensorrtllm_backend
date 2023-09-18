@@ -28,6 +28,7 @@ if [ "$MODEL" = "gpt" ]; then
         --use_gpt_attention_plugin float16 \
         --use_gemm_plugin float16 \
         --use_layernorm_plugin float16 \
+        --enable_context_fmha \
         --remove_input_padding \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/ --hidden_act gelu
@@ -53,6 +54,7 @@ if [ "$MODEL" = "opt" ]; then
                      --use_gpt_attention_plugin float16 \
                      --use_gemm_plugin float16 \
                      --use_layernorm_plugin float16 \
+                     --enable_context_fmha \
                      --max_input_len 924 \
                      --max_output_len 100 \
                      --world_size 1 \
@@ -70,8 +72,10 @@ if [ "$MODEL" = "llama" ]; then
     pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
+    # Dummy weights because 7B is the minimal size for LLaMA
     python3 build.py --dtype=float16 --n_layer=2 \
-        --use_gpt_attention_plugin --use_gemm_plugin
+        --enable_context_fmha \
+        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin
     python3 run.py --max_output_len=1 --tokenizer_dir=${LLAMA}
 
     popd # tensorrt_llm/examples/llama
@@ -83,7 +87,9 @@ if [ "$MODEL" = "gptj" ]; then
     pushd tensorrt_llm/examples/gptj
 
     pip install -r requirements.txt
+    # Dummy weights because 7B is the minimal size for GPT-J
     python3 build.py --dtype=float16 --n_layer=2 \
+        --enable_context_fmha \
         --use_gpt_attention_plugin --use_gemm_plugin --use_layernorm_plugin
     python3 run.py --max_output_len=1 --hf_model_location=${GPTJ}
 

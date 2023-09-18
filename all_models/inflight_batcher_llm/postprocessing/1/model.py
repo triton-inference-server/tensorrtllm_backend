@@ -1,15 +1,9 @@
 # -*- coding: utf-8 -*-
 import json
-from pathlib import Path
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
-import utils.gpt_token_encoder as encoder
-
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
 
 class TritonPythonModel:
@@ -33,7 +27,25 @@ class TritonPythonModel:
           * model_name: Model name
         """
         # Parse model configs
-        self.model_config = model_config = json.loads(args['model_config'])
+        model_config = json.loads(args['model_config'])
+        tokenizer_dir = model_config['parameters']['tokenizer_dir'][
+            'string_value']
+        tokenizer_type = model_config['parameters']['tokenizer_type'][
+            'string_value']
+
+        if tokenizer_type == 't5':
+            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
+                                         padding_side='left')
+        elif tokenizer_type == 'auto':
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                           padding_side='left')
+        elif tokenizer_type == 'llama':
+            self.tokenizer = LlamaTokenizer.from_pretrained(
+                tokenizer_dir, legacy=False, padding_side='left')
+        else:
+            raise AttributeError(
+                f'Unexpected tokenizer type: {tokenizer_type}')
+        self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Parse model output configs
         output_config = pb_utils.get_output_config_by_name(
@@ -108,13 +120,9 @@ class TritonPythonModel:
         print('Cleaning up...')
 
     def _postprocessing(self, tokens_batch):
-        cur_folder = Path(__file__).parent
-        enc = encoder.get_encoder(str(cur_folder / VOCAB_FILE),
-                                  str(cur_folder / MERGES_FILE))
-
         outputs = []
         for beam_tokens in tokens_batch:
             for tokens in beam_tokens:
-                output = enc.decode(tokens)
+                output = self.tokenizer.decode(tokens)
                 outputs.append(output.encode('utf8'))
         return outputs

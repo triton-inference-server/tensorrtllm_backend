@@ -117,7 +117,11 @@ if __name__ == '__main__':
                                         dtype=np.int32)
     input_len = np.array([[input_start_ids.shape[1]]
                           for _ in range(input_start_ids.shape[0])], np.int32)
-    inputs = utils.prepare_inputs(input_start_ids, input_len, FLAGS)
+    inputs = utils.prepare_inputs(input_start_ids,
+                                  input_len,
+                                  pad_id=0,
+                                  end_id=2,
+                                  flags=FLAGS)
 
     # warm up
     if FLAGS.warm_up:
