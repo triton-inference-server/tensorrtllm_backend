@@ -834,9 +834,15 @@ class ModelInstanceState : public BackendModelInstance {
 
               uint64_t buffersize = tensor.tensor->getSizeInBytes();
               void* buffer = 0L;
-              TRITONSERVER_MemoryType memory_type;
-              int64_t memory_type_id;
+              TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+              int64_t memory_type_id = 0;
               RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
+              if (memory_type != TRITONSERVER_MEMORY_CPU && memory_type != TRITONSERVER_MEMORY_CPU_PINNED)
+              {
+                  std::string errStr = "Triton failed to allocate output buffer on CPU";
+                  err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+                  break;
+              }
               std::memcpy(buffer, tensor.tensor->data(), buffersize);
             }
         }
