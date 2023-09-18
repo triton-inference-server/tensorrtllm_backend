@@ -41,7 +41,7 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#include "tensorrt_llm/batch_manager/Tensor.h"
+#include "tensorrt_llm/batch_manager/NamedTensor.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
@@ -108,74 +108,61 @@ getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& 
   return boolean;
 }
 
-Tensor_t to_common_datatype(TRITONSERVER_DataType data_type)
+nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
 {
     if (data_type == TRITONSERVER_TYPE_INVALID) {
-        return DT_INVALID;
+        assert(false);
     } else if (data_type == TRITONSERVER_TYPE_BOOL) {
-        return DT_BOOL;
+        return nvinfer1::DataType::kBOOL;
     } else if (data_type == TRITONSERVER_TYPE_UINT8) {
-        return DT_UINT8;
+        return nvinfer1::DataType::kUINT8;
     } else if (data_type == TRITONSERVER_TYPE_UINT16) {
-        return DT_UINT16;
+        assert(false);
     } else if (data_type == TRITONSERVER_TYPE_UINT32) {
-        return DT_UINT32;
+        return nvinfer1::DataType::kINT32;
     } else if (data_type == TRITONSERVER_TYPE_UINT64) {
-        return DT_UINT64;
+        return nvinfer1::DataType::kINT64;
     } else if (data_type == TRITONSERVER_TYPE_INT8) {
-        return DT_INT8;
+        return nvinfer1::DataType::kINT8;
     } else if (data_type == TRITONSERVER_TYPE_INT16) {
-        return DT_INT16;
+        assert(false);
     } else if (data_type == TRITONSERVER_TYPE_INT32) {
-        return DT_INT32;
+        return nvinfer1::DataType::kINT32;
     } else if (data_type == TRITONSERVER_TYPE_INT64) {
-        return DT_INT64;
+        return nvinfer1::DataType::kINT64;
     } else if (data_type == TRITONSERVER_TYPE_FP16) {
-        return DT_FP16;
+        return nvinfer1::DataType::kBF16;
     } else if (data_type == TRITONSERVER_TYPE_FP32) {
-        return DT_FP32;
+        return nvinfer1::DataType::kFLOAT;
     } else if (data_type == TRITONSERVER_TYPE_FP64) {
-        return DT_FP64;
+        assert(false);
     } else if (data_type == TRITONSERVER_TYPE_BYTES) {
-        return DT_BYTES;
+        return nvinfer1::DataType::kINT8;
     } else if (data_type == TRITONSERVER_TYPE_BF16) {
-        return DT_BF16;
+        return nvinfer1::DataType::kBF16;
     } else {
-        return DT_INVALID;
+        assert(false);
     }
+    return nvinfer1::DataType(0);
 }
 
-TRITONSERVER_DataType to_triton_datatype(Tensor_t data_type)
+TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
 {
-    if (data_type == DT_INVALID) {
-        return TRITONSERVER_TYPE_INVALID;
-    } else if (data_type == DT_BOOL) {
+    if (data_type == nvinfer1::DataType::kBOOL) {
         return TRITONSERVER_TYPE_BOOL;
-    } else if (data_type == DT_UINT8) {
+    } else if (data_type == nvinfer1::DataType::kUINT8) {
         return TRITONSERVER_TYPE_UINT8;
-    } else if (data_type == DT_UINT16) {
-        return TRITONSERVER_TYPE_UINT16;
-    } else if (data_type == DT_UINT32) {
-        return TRITONSERVER_TYPE_UINT32;
-    } else if (data_type == DT_UINT64) {
-        return TRITONSERVER_TYPE_UINT64;
-    } else if (data_type == DT_INT8) {
+    } else if (data_type == nvinfer1::DataType::kHALF) {
+        return TRITONSERVER_TYPE_BF16;
+    } else if (data_type == nvinfer1::DataType::kINT8) {
         return TRITONSERVER_TYPE_INT8;
-    } else if (data_type == DT_INT16) {
-        return TRITONSERVER_TYPE_INT16;
-    } else if (data_type == DT_INT32) {
+    } else if (data_type == nvinfer1::DataType::kINT32) {
         return TRITONSERVER_TYPE_INT32;
-    } else if (data_type == DT_INT64) {
+    } else if (data_type == nvinfer1::DataType::kINT64) {
         return TRITONSERVER_TYPE_INT64;
-    } else if (data_type == DT_FP16) {
-        return TRITONSERVER_TYPE_FP16;
-    } else if (data_type == DT_FP32) {
+    } else if (data_type == nvinfer1::DataType::kFLOAT) {
         return TRITONSERVER_TYPE_FP32;
-    } else if (data_type == DT_FP64) {
-        return TRITONSERVER_TYPE_FP64;
-    } else if (data_type == DT_BYTES) {
-        return TRITONSERVER_TYPE_BYTES;
-    } else if (data_type == DT_BF16) {
+    } else if (data_type == nvinfer1::DataType::kBF16) {
         return TRITONSERVER_TYPE_BF16;
     } else {
         return TRITONSERVER_TYPE_INVALID;
@@ -413,7 +400,7 @@ class WorkItem
       auto inferenceRequest = std::make_shared<InferenceRequest>(requestId);
 
       // Extract input tensors
-      std::map<std::string, tensorrt_llm::batch_manager::Tensor> input_tensors;
+      std::map<std::string, NamedTensor> input_tensors;
       uint32_t num_inputs;
       LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
       for (uint32_t idx = 0;  idx < num_inputs;  ++idx)
@@ -440,8 +427,8 @@ class WorkItem
           shapev.push_back(shape[i]);
         }
 
-        auto t = tensorrt_llm::batch_manager::Tensor(input_name, MT_HOST, to_common_datatype(data_type), shapev);
-        int64_t buffer_offset = 0;
+        NamedTensor t(to_trt_datatype(data_type), shapev, input_name);
+        uint64_t buffer_offset = 0;
         for (int64_t buffer_id=0; buffer_id < buffer_count; ++buffer_id)
         {
           const void* buffer = 0L;
@@ -451,11 +438,11 @@ class WorkItem
           TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
           assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
           // TODO: Do we need to handle GPU mem input buffers??
-          t.raw_copy_from(buffer, buffer_byte_size, buffer_offset);
+          std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
           buffer_offset += buffer_byte_size;
         }
 
-        inferenceRequest->emplaceInputTensor(std::string(input_name), std::move(t));
+        inferenceRequest->emplaceInputTensor(t.name, std::move(t.tensor));
       }
 
       bool streamingFlag = getRequestBooleanInputTensor(request, kStreamingInputTensorName);
@@ -805,7 +792,10 @@ class ModelInstanceState : public BackendModelInstance {
     return rval;
   }
 
-  TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
+  TRITONSERVER_Error* sendTritonResponse(
+          std::shared_ptr<WorkItem> workItem,
+          std::list<NamedTensor> const& response_tensors,
+          bool final_response, const std::string& errMsg)
   {
         TRITONBACKEND_ResponseFactory* response_factory;
         response_factory = workItem->response_factory();
@@ -831,18 +821,23 @@ class ModelInstanceState : public BackendModelInstance {
             for (auto it = response_tensors.begin();  it != response_tensors.end();  ++it)
             {
               auto tensor = *it;
-              auto shape = tensor->shape(); // returns std::vectorint64_t>
+              auto shape = tensor.tensor->getShape(); // returns std::vectorint64_t>
+              std::vector<int64_t> vshape(shape.nbDims);
+              for (int i = 0; i < vshape.size(); ++i) {
+                  vshape[i] = shape.d[i];
+              }
+
               TRITONBACKEND_Output* output;
               RETURN_IF_ERROR(TRITONBACKEND_ResponseOutput(
-                      response, &output, tensor->name().c_str(), to_triton_datatype(tensor->datatype()),
-                      shape.data(), shape.size()));
+                      response, &output, tensor.name.c_str(), to_triton_datatype(tensor.tensor->getDataType()),
+                      vshape.data(), shape.nbDims));
 
-              uint64_t buffersize = tensor->sizeBytes();
+              uint64_t buffersize = tensor.tensor->getSizeInBytes();
               void* buffer = 0L;
               TRITONSERVER_MemoryType memory_type;
               int64_t memory_type_id;
               RETURN_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &buffer, buffersize, &memory_type, &memory_type_id));
-              tensor->raw_copy_to(buffer, buffersize, 0L);
+              std::memcpy(buffer, tensor.tensor->data(), buffersize);
             }
         }
 
@@ -853,7 +848,7 @@ class ModelInstanceState : public BackendModelInstance {
       return nullptr;
   }
 
-  void sendResponse(uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> const& response_tensors, bool final_response, const std::string& errMsg)
+  void sendResponse(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
   {
     if (getCommWorldRank() == 0)
     {
@@ -866,7 +861,6 @@ class ModelInstanceState : public BackendModelInstance {
             TLLM_LOG_ERROR(errStr);
         }
     }
-    return;
   }
 
   std::unordered_set<uint64_t> pollStopSignals()
@@ -950,7 +944,7 @@ class ModelInstanceState : public BackendModelInstance {
 
       mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t requestId, std::list<std::shared_ptr<tensorrt_llm::batch_manager::Tensor>> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);},
+          [this](uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);},
           [this](){return pollStopSignals();});
 
       if (getCommWorldRank() != 0)
