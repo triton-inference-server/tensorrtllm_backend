@@ -13,10 +13,8 @@ from datetime import datetime
 from functools import partial
 
 import numpy as np
-from utils import token_encoder, utils
-
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from utils import utils
 
 
 def callback(user_data, start_time, result, error):
@@ -131,6 +129,16 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='Dataset path used for the test.')
+    parser.add_argument('--tokenizer_dir',
+                        type=str,
+                        required=True,
+                        help='Specify tokenizer directory')
+    parser.add_argument('--tokenizer_type',
+                        type=str,
+                        default='auto',
+                        required=False,
+                        choices=['auto', 't5', 'llama'],
+                        help='Specify tokenizer type')
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
@@ -149,13 +157,27 @@ if __name__ == '__main__':
         print("channel creation failed: " + str(e))
         sys.exit(1)
 
-    encoder = token_encoder.get_encoder(VOCAB_FILE, MERGES_FILE)
+    if FLAGS.tokenizer_type == 't5':
+        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                padding_side='left')
+    elif FLAGS.tokenizer_type == 'auto':
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  padding_side='left')
+    elif FLAGS.tokenizer_type == 'llama':
+        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                   legacy=False,
+                                                   padding_side='left')
+    else:
+        raise AttributeError(
+            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+    tokenizer.pad_token = tokenizer.eos_token
+
     input_start_ids = []
     input_lens = []
     with open(FLAGS.dataset) as f:
         for line in f:
             line = json.loads(line)
-            line = encoder.encode(line['prompt'])
+            line = tokenizer.encode(line['prompt'])
             input_start_ids.append(np.array([line], np.int32))
             input_lens.append(np.array([[len(line)]], np.int32))
 

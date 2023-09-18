@@ -1,19 +1,14 @@
 # -*- coding: utf-8 -*-
 import csv
 import json
-from pathlib import Path
 
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
-import utils.gpt_token_encoder as encoder
 from torch.nn.utils.rnn import pad_sequence
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
-# GPT3 Related variables
-# Reference : https://github.com/NVIDIA/FasterTransformer/blob/main/sample/pytorch/gpt_sample.py
-MERGES_FILE = "gpt2-merges.txt"
-VOCAB_FILE = "gpt2-vocab.json"
-END_ID = 50256
+from tensorrt_llm.runtime import to_word_list_format
 
 
 class TritonPythonModel:
@@ -37,10 +32,33 @@ class TritonPythonModel:
           * model_name: Model name
         """
         # Parse model configs
-        self.model_config = model_config = json.loads(args['model_config'])
+        model_config = json.loads(args['model_config'])
+        tokenizer_dir = model_config['parameters']['tokenizer_dir'][
+            'string_value']
+        tokenizer_type = model_config['parameters']['tokenizer_type'][
+            'string_value']
+
+        if tokenizer_type == 't5':
+            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
+                                         padding_side='left')
+        elif tokenizer_type == 'auto':
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                           padding_side='left')
+        elif tokenizer_type == 'llama':
+            self.tokenizer = LlamaTokenizer.from_pretrained(
+                tokenizer_dir, legacy=False, padding_side='left')
+        else:
+            raise AttributeError(
+                f'Unexpected tokenizer type: {tokenizer_type}')
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.pad_id = self.tokenizer.encode(self.tokenizer.pad_token,
+                                            add_special_tokens=False)[0]
 
         # Parse model output configs and convert Triton types to numpy types
-        input_names = ["INPUT_ID", "REQUEST_INPUT_LEN"]
+        input_names = [
+            "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS"
+        ]
         for input_name in input_names:
             setattr(
                 self,
@@ -48,10 +66,6 @@ class TritonPythonModel:
                 pb_utils.triton_string_to_numpy(
                     pb_utils.get_output_config_by_name(
                         model_config, input_name)['data_type']))
-
-        cur_folder = Path(__file__).parent
-        self.encoder = encoder.get_encoder(str(cur_folder / VOCAB_FILE),
-                                           str(cur_folder / MERGES_FILE))
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -84,8 +98,15 @@ class TritonPythonModel:
             request_output_len = pb_utils.get_input_tensor_by_name(
                 request, 'REQUEST_OUTPUT_LEN').as_numpy()
 
+            bad_words_dict = pb_utils.get_input_tensor_by_name(
+                request, 'BAD_WORDS_DICT').as_numpy()
+            stop_words_dict = pb_utils.get_input_tensor_by_name(
+                request, 'STOP_WORDS_DICT').as_numpy()
+
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
+            bad_words = to_word_list_format(bad_words_dict, self.tokenizer)
+            stop_words = to_word_list_format(stop_words_dict, self.tokenizer)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -98,6 +119,9 @@ class TritonPythonModel:
                     self.request_input_len_dtype))
             request_output_len_tensor = pb_utils.Tensor(
                 'REQUEST_OUTPUT_LEN', request_output_len)
+            bad_words_ids_tensor = pb_utils.Tensor('BAD_WORDS_IDS', bad_words)
+            stop_words_ids_tensor = pb_utils.Tensor('STOP_WORDS_IDS',
+                                                    stop_words)
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.
@@ -107,8 +131,8 @@ class TritonPythonModel:
             # pb_utils.InferenceResponse(
             #    output_tensors=..., TritonError("An error occurred"))
             inference_response = pb_utils.InferenceResponse(output_tensors=[
-                input_id_tensor, request_input_len_tensor,
-                request_output_len_tensor
+                input_id_tensor, bad_words_ids_tensor, stop_words_ids_tensor,
+                request_input_len_tensor, request_output_len_tensor
             ])
             responses.append(inference_response)
 
@@ -128,13 +152,14 @@ class TritonPythonModel:
             query : batch string (2D numpy array)
         """
         start_ids = [
-            torch.IntTensor(self.encoder.encode(s[0].decode())) for s in query
+            torch.IntTensor(self.tokenizer.encode(s[0].decode()))
+            for s in query
         ]
         start_lengths = torch.IntTensor([[len(ids)] for ids in start_ids])
 
         start_ids = pad_sequence(start_ids,
                                  batch_first=True,
-                                 padding_value=END_ID)
+                                 padding_value=self.pad_id)
         # input_len = min(start_lengths)
         #attn_mask = torch.ones((batch_size, input_len, input_len)).tril()
 
@@ -174,4 +199,4 @@ class TritonPythonModel:
     def _encode(self, sentence):
         sentence = sentence.decode() if isinstance(sentence,
                                                    bytes) else sentence
-        return self.encoder.encode(sentence)
+        return self.tokenizer.encode(sentence)

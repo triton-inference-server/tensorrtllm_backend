@@ -2,6 +2,8 @@
 
 MODEL=$1
 ENGINE_PATH=$2
+TOKENIZER_PATH=$3
+TOKENIZER_TYPE=$4
 
 set -e
 nvidia-smi
@@ -10,6 +12,8 @@ source tools/utils.sh
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
+    python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    python3 tools/fill_template.py -i all_models/gpt/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
     # Launch Triton Server
     mpirun --allow-run-as-root \
@@ -21,33 +25,41 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
     wait_for_server_ready ${SERVER_PID} 1200
 
     pushd tools/gpt/
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json -O gpt2-vocab.json
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt -O gpt2-merges.txt
 
     # Client
     python3 client.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
-        --protocol=http
+        --protocol=http \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
 
     python3 client.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
-        --protocol=grpc
+        --protocol=grpc \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
 
     # Async Client
     python3 client_async.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
-        --protocol=http
+        --protocol=http \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
 
     python3 client_async.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
-        --protocol=grpc
+        --protocol=grpc \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
 
     # End to end test
-    python3 end_to_end_test.py
+    python3 end_to_end_test.py \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
 
     # Identity test
     python3 identity_test.py \
@@ -90,6 +102,8 @@ fi
 if [ "$MODEL" = "gpt-ib" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
     # Launch Triton Server
     /opt/tritonserver/bin/tritonserver \
@@ -105,13 +119,15 @@ if [ "$MODEL" = "gpt-ib" ]; then
     # End to end test
     pushd tools/inflight_batcher_llm
 
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json -O gpt2-vocab.json
-    wget https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt -O gpt2-merges.txt
-
     python3 end_to_end_test.py \
         --concurrency 2 -i http --output_len 10 --dataset ../dataset/125_data.json
+
     python3 identity_test.py \
-        --concurrency 2 -i http --dataset ../dataset/125_data.json
+        --concurrency 2 \
+        -i http \
+        --dataset ../dataset/125_data.json \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
     popd # tools/inflight_batcher_llm
 
     kill ${SERVER_PID}
@@ -121,6 +137,8 @@ fi
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
     # Launch Triton Server
     /opt/tritonserver/bin/tritonserver \

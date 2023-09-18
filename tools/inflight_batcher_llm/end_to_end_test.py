@@ -24,9 +24,15 @@ def test_functionality(client, prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
         output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        bad_words_list = np.array([[""]], dtype=object)
+        stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
             utils.prepare_tensor("QUERY", input0_data, FLAGS.protocol),
+            utils.prepare_tensor("BAD_WORDS_DICT", bad_words_list,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("STOP_WORDS_DICT", stop_words_list,
+                                 FLAGS.protocol),
             utils.prepare_tensor("REQUEST_OUTPUT_LEN", output0_len,
                                  FLAGS.protocol),
         ]
@@ -59,10 +65,14 @@ def test_functionality(client, prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
         output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        bad_words_list = np.array([[""]], dtype=object)
+        stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
             utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
         ]
 
         result = client.infer(model_name, inputs, request_id=str(i))
@@ -83,15 +93,18 @@ def test_performance(client, prompts):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
         output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        bad_words_list = np.array([[""]], dtype=object)
+        stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
             utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
         ]
 
         client.infer(model_name, inputs, request_id=str(i))
 
-    #sys.exit(1)
     print(f"[INFO] Start benchmarking on {len(prompts)} prompts.")
     latency = 0
     async_requests = []
@@ -102,10 +115,14 @@ def test_performance(client, prompts):
         input0_data = np.array(input0).astype(object)
         output0_len = np.ones_like(input0).astype(
             np.uint32) * output_len[i % 3]
+        bad_words_list = np.array([[""]], dtype=object)
+        stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
             utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
             utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
         ]
 
         async_requests.append(

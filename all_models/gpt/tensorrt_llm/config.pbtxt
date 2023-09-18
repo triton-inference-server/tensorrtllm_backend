@@ -29,14 +29,12 @@ input [
     data_type: TYPE_UINT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
-    optional: true
   },
   {
     name: "pad_id"
     data_type: TYPE_UINT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
-    optional: true
   },
   {
     name: "beam_width"

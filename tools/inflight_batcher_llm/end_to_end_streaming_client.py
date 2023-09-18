@@ -37,12 +37,16 @@ def test(triton_client, prompt):
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+    bad_words_list = np.array([[""]], dtype=object)
+    stop_words_list = np.array([[""]], dtype=object)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
 
     inputs = [
         utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
         utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
+        utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
+        utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
         utils.prepare_tensor("streaming", streaming_data, FLAGS.protocol),
     ]
 
