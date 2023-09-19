@@ -25,8 +25,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 cmake_minimum_required(VERSION 3.17)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/cmake/modules/set_ifndef.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/cmake/modules/find_library_create_target.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/set_ifndef.cmake)
+
+set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm)
+include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
 project(tutorialinflight_batcher_llmbackend LANGUAGES C CXX)
 
@@ -171,8 +173,8 @@ include_directories(${COMMON_HEADER_DIRS})
 target_include_directories(
   triton-inflight_batcher_llm-backend
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/include
+    ${TRTLLM_DIR}/cpp
+    ${TRTLLM_DIR}/cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CUDA_INCLUDE_DIRS}
     ${CUDNN_ROOT_DIR}/include
@@ -194,13 +196,13 @@ target_compile_options(
 )
 
 add_library(tensorrt_llm STATIC IMPORTED)
-set_property(TARGET tensorrt_llm PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
+set_property(TARGET tensorrt_llm PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
 add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
-set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
 
 add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
-set_property(TARGET nvinfer_plugin_tensorrt_llm PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so")
+set_property(TARGET nvinfer_plugin_tensorrt_llm PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so")
 
 target_link_libraries(
   triton-inflight_batcher_llm-backend
