@@ -8,7 +8,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import argparse
 import json
 import sys
-import time
 from datetime import datetime
 from functools import partial
 
@@ -25,7 +24,7 @@ def callback(user_data, start_time, result, error):
     user_data._latencies.append(latency)
 
 
-def test_performance(client, input_start_ids, input_lens):
+def test_performance(client, input_start_ids, input_lens, output_lens):
     model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
@@ -44,11 +43,10 @@ def test_performance(client, input_start_ids, input_lens):
     print(f"[INFO] Start benchmarking on {len(input_start_ids)} prompts.")
     latency = 0
     async_requests = []
-    output_len = [5, 60, 100]
     start_time = datetime.now()
     user_data = utils.UserData()
     for i, ids in enumerate(input_start_ids):
-        output0_len = np.ones_like([[1]]).astype(np.uint32) * output_len[i % 3]
+        output0_len = np.ones_like([[1]]).astype(np.uint32) * output_lens[i]
         inputs = [
             utils.prepare_tensor("input_ids", ids, FLAGS.protocol),
             utils.prepare_tensor("input_lengths", input_lens[i],
@@ -56,9 +54,6 @@ def test_performance(client, input_start_ids, input_lens):
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
         ]
-
-        # Sleep 0, 10 or 20 milliseconds
-        time.sleep(i % 3 * 0.01)
 
         if FLAGS.protocol == "http":
             async_requests.append(
@@ -124,6 +119,10 @@ if __name__ == '__main__':
                         default=128,
                         required=False,
                         help='Specify concurrency')
+    parser.add_argument('--max_input_len',
+                        type=int,
+                        required=True,
+                        help='Specify max input length')
 
     parser.add_argument('--dataset',
                         type=str,
@@ -144,9 +143,6 @@ if __name__ == '__main__':
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
-    # For the HTTP client, need to specify large enough concurrency to
-    # issue all the inference requests to the server in parallel. For
-    # this example we want to be able to send 2 requests concurrently.
     try:
         client = utils.create_inference_server_client(
             FLAGS.protocol,
@@ -174,11 +170,18 @@ if __name__ == '__main__':
 
     input_start_ids = []
     input_lens = []
-    with open(FLAGS.dataset) as f:
-        for line in f:
-            line = json.loads(line)
-            line = tokenizer.encode(line['prompt'])
+    output_lens = []
+    with open(FLAGS.dataset, 'r') as f:
+        data_dict = json.load(f)
+        for req in data_dict:
+            prompt = req['input'] + ' ' + req['instruction']
+            output = req['output']
+            line = tokenizer.encode(prompt)
+            if len(line) > FLAGS.max_input_len:
+                continue
             input_start_ids.append(np.array([line], np.int32))
             input_lens.append(np.array([[len(line)]], np.int32))
+            # 1.3 is a magic number that converts number of words to number of tokens
+            output_lens.append(int(len(output.split(' ')) * 1.3))
 
-    test_performance(client, input_start_ids, input_lens)
+    test_performance(client, input_start_ids, input_lens, output_lens)

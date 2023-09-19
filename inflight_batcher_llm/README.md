@@ -133,7 +133,7 @@ The end to end latency includes the total latency of the three parts of an ensem
 
 ```
 cd tools/inflight_batcher_llm
-python3 end_to_end_test.py --dataset ../dataset/125_data.json
+python3 end_to_end_test.py --dataset <dataset path>
 ```
 Expected outputs
 ```
@@ -149,7 +149,7 @@ Identity test script sends requests directly to deployed tensorrt_llm model, the
 
 ```
 cd tools/inflight_batcher_llm
-python3 identity_test.py --dataset ../dataset/125_data.json
+python3 identity_test.py --dataset <dataset path>
 ```
 Expected outputs
 ```

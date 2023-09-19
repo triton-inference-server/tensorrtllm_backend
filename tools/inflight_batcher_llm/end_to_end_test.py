@@ -9,13 +9,21 @@ import argparse
 import json
 import sys
 from datetime import datetime
+from functools import partial
 
 import numpy as np
-import tritonclient.http as httpclient
 from utils import utils
 
 
-def test_functionality(client, prompts):
+def callback(user_data, start_time, result, error):
+    user_data._completed_requests.put((result, error))
+    stop_time = datetime.now()
+    latency = (stop_time - start_time).total_seconds() * 1000.0
+    latency = round(latency, 3)
+    user_data._latencies.append(latency)
+
+
+def test_functionality(client, prompts, output_lens):
     print(f"[INFO] Start testing on {len(prompts)} prompts.")
     for i, prompt in enumerate(prompts):
 
@@ -23,7 +31,7 @@ def test_functionality(client, prompts):
         model_name = 'preprocessing'
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -64,7 +72,7 @@ def test_functionality(client, prompts):
         model_name = "ensemble"
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -85,14 +93,14 @@ def test_functionality(client, prompts):
     print(f"[INFO] Functionality test succeed.")
 
 
-def test_performance(client, prompts):
+def test_performance(client, prompts, output_lens):
     model_name = "ensemble"
 
     print(f"[INFO] Warm up for benchmarking.")
     for i in range(10):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -108,13 +116,12 @@ def test_performance(client, prompts):
     print(f"[INFO] Start benchmarking on {len(prompts)} prompts.")
     latency = 0
     async_requests = []
-    output_len = [5, 60, 100]
     start_time = datetime.now()
+    user_data = utils.UserData()
     for i, prompt in enumerate(prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(
-            np.uint32) * output_len[i % 3]
+        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -125,10 +132,23 @@ def test_performance(client, prompts):
             utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
         ]
 
-        async_requests.append(
-            client.async_infer(model_name, inputs, request_id=str(i)))
+        if FLAGS.protocol == "http":
+            async_requests.append(
+                client.async_infer(model_name, inputs, request_id=str(i)))
+        elif FLAGS.protocol == "grpc":
+            async_requests.append(
+                client.async_infer(model_name,
+                                   inputs,
+                                   callback=partial(callback, user_data,
+                                                    datetime.now()),
+                                   request_id=str(i)))
 
-    utils.get_http_results(async_requests)
+    if FLAGS.protocol == "http":
+        utils.get_http_results(async_requests)
+    elif FLAGS.protocol == "grpc":
+        utils.get_grpc_results(user_data, len(prompts))
+    else:
+        raise RuntimeError("Invalid protocol")
 
     stop_time = datetime.now()
     latency = (stop_time - start_time).total_seconds() * 1000.0
@@ -164,13 +184,11 @@ if __name__ == '__main__':
                         default=128,
                         required=False,
                         help='Specify concurrency')
-
-    parser.add_argument('-o',
-                        '--output_len',
+    parser.add_argument('--max_input_len',
                         type=int,
-                        default=100,
-                        required=False,
-                        help='Specify output length')
+                        required=True,
+                        help='Specify max input length')
+
     parser.add_argument('--dataset',
                         type=str,
                         required=True,
@@ -180,21 +198,29 @@ if __name__ == '__main__':
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
-    # For the HTTP client, need to specify large enough concurrency to
-    # issue all the inference requests to the server in parallel. For
-    # this example we want to be able to send 2 requests concurrently.
     try:
-        client = httpclient.InferenceServerClient(
-            url=FLAGS.url, concurrency=FLAGS.concurrency)
+        client = utils.create_inference_server_client(
+            FLAGS.protocol,
+            FLAGS.url,
+            concurrency=FLAGS.concurrency,
+            verbose=FLAGS.verbose)
     except Exception as e:
         print("channel creation failed: " + str(e))
         sys.exit(1)
 
     prompts = []
-    with open(FLAGS.dataset) as f:
-        for line in f:
-            line = json.loads(line)
-            prompts.append(line['prompt'])
+    output_lens = []
+    with open(FLAGS.dataset, 'r') as f:
+        data_dict = json.load(f)
+        for req in data_dict:
+            prompt = req['input'] + ' ' + req['instruction']
+            output = req['output']
+            # 1.3 is a magic number that converts number of words to number of tokens
+            if int(len(prompt.split(' ')) / 1.3) > FLAGS.max_input_len:
+                continue
+            prompts.append(prompt)
+            # 1.3 is a magic number that converts number of words to number of tokens
+            output_lens.append(int(len(output.split(' ')) * 1.3))
 
-    test_functionality(client, prompts)
-    test_performance(client, prompts)
+    test_functionality(client, prompts, output_lens)
+    test_performance(client, prompts, output_lens)
