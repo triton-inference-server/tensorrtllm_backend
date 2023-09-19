@@ -8,6 +8,8 @@ def test_llm_backend_gpt_accuracy(llm_backend_gpt_example_root,
         f"{llm_backend_gpt_example_root}/client.py",
         "--text=Born in north-east France, Soyer trained as a",
         "--output_len=10",
+        "--tokenizer_dir=gpt2",
+        "--tokenizer_type=auto",
     ]
 
     output = venv_check_output(llm_backend_venv,
@@ -24,6 +26,8 @@ def test_llm_backend_gpt_e2e(llm_backend_gpt_example_root, llm_backend_venv):
     print("Execute end_to_end_test.py...")
     run_cmd = [
         f"{llm_backend_gpt_example_root}/end_to_end_test.py",
+        "--tokenizer_dir=gpt2",
+        "--tokenizer_type=auto",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
 

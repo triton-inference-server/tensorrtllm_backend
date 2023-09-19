@@ -126,17 +126,11 @@ def llm_backend_venv(trt_py3_venv_factory):
 def llm_backend_gpt_example_root(llm_backend_root, llm_backend_venv):
     backend_gpt_example_root = os.path.join(llm_backend_root, "tools", "gpt")
     workspace = llm_backend_venv.get_working_directory()
-
-    check_call([
-        "wget", "-q",
-        "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json",
-        "--directory-prefix", workspace
-    ])
-    check_call([
-        "wget", "-q",
-        "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt",
-        "--directory-prefix", workspace
-    ])
+    check_call(f"git -C {workspace} clone https://huggingface.co/gpt2",
+               shell=True)
+    check_call(
+        f"pushd {workspace}/gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && popd",
+        shell=True)
 
     return backend_gpt_example_root
 
