@@ -116,7 +116,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --use_gemm_plugin float16 \
         --use_layernorm_plugin float16 \
         --remove_input_padding \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
+        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
 
     popd # tensorrt_llm/examples/gpt

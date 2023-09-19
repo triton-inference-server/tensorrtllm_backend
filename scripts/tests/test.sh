@@ -120,14 +120,31 @@ if [ "$MODEL" = "gpt-ib" ]; then
     pushd tools/inflight_batcher_llm
 
     python3 end_to_end_test.py \
-        --concurrency 2 -i http --output_len 10 --dataset ../dataset/125_data.json
+        --concurrency 8 \
+        -i http \
+        --max_input_len 300 \
+        --dataset ../dataset/mini_cnn_eval.json
+    python3 end_to_end_test.py \
+        --concurrency 8 \
+        -i grpc \
+        --max_input_len 300 \
+        --dataset ../dataset/mini_cnn_eval.json
 
     python3 identity_test.py \
-        --concurrency 2 \
+        --concurrency 8 \
         -i http \
-        --dataset ../dataset/125_data.json \
+        --max_input_len 300 \
+        --dataset ../dataset/mini_cnn_eval.json \
         --tokenizer_dir ${TOKENIZER_PATH} \
         --tokenizer_type ${TOKENIZER_TYPE}
+    python3 identity_test.py \
+        --concurrency 8 \
+        -i grpc \
+        --max_input_len 300 \
+        --dataset ../dataset/mini_cnn_eval.json \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
+
     popd # tools/inflight_batcher_llm
 
     kill ${SERVER_PID}
