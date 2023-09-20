@@ -33,8 +33,9 @@ from functools import partial
 
 import numpy as np
 import tritonclient.grpc as grpcclient
+import tritonclient.http as httpclient
 from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
-from tritonclient.utils import InferenceServerException
+from tritonclient.utils import InferenceServerException, np_to_triton_dtype
 
 #
 # Simple streaming client for TRT-LLM inflight bacthing backend
@@ -64,24 +65,26 @@ class UserData:
         self._completed_requests = queue.Queue()
 
 
+def prepare_tensor(name, input, protocol):
+    client_util = httpclient if protocol == "http" else grpcclient
+    t = client_util.InferInput(name, input.shape,
+                               np_to_triton_dtype(input.dtype))
+    t.set_data_from_numpy(input)
+    return t
+
+
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, streaming_data):
-
+    protocol = 'grpc'
     inputs = [
-        grpcclient.InferInput('input_ids', [1, 12], "INT32"),
-        grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
-        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
-        grpcclient.InferInput('beam_width', [1, 1], "UINT32"),
-        grpcclient.InferInput('temperature', [1, 1], "FP32"),
-        grpcclient.InferInput('streaming', [1, 1], "BOOL"),
+        prepare_tensor("input_ids", input_ids_data, protocol),
+        prepare_tensor("input_lengths", input_lengths_data, protocol),
+        prepare_tensor("request_output_len", request_output_len_data,
+                       protocol),
+        prepare_tensor("beam_width", beam_width_data, protocol),
+        prepare_tensor("temperature", temperature_data, protocol),
+        prepare_tensor("streaming", streaming_data, protocol),
     ]
-
-    inputs[0].set_data_from_numpy(input_ids_data)
-    inputs[1].set_data_from_numpy(input_lengths_data)
-    inputs[2].set_data_from_numpy(request_output_len_data)
-    inputs[3].set_data_from_numpy(beam_width_data)
-    inputs[4].set_data_from_numpy(temperature_data)
-    inputs[5].set_data_from_numpy(streaming_data)
 
     return inputs
 
