@@ -19,8 +19,8 @@ cache:
 
 stages:
   - style-check
-  - build-trt-llm
-  - build-trt-llm-backend
+  - package
+  - build
   - test-model
 
 workflow:
@@ -37,8 +37,19 @@ style-check-job:
     - pip3 install pre-commit
     - pre-commit run -a
 
-build-tensorrt-llm:
-  stage: build-trt-llm
+package-job:
+  stage: package
+  image: $IMAGE
+  script:
+    - cd $CI_PROJECT_DIR/../
+    - mv tekit_backend tensorrt_llm_backend
+    - cp tensorrt_llm_backend/scripts/package_trt_llm_backend.sh package_trt_llm_backend.sh
+    - bash package_trt_llm_backend.sh tensorrt_llm_backend.tar.gz tensorrt_llm_backend
+    - 'curl --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file tensorrt_llm_backend.tar.gz "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/tensorrt_llm_backend/${CI_COMMIT_SHORT_SHA}/tensorrt_llm_backend.tar.gz"'
+    - mv tensorrt_llm_backend tekit_backend
+
+build-job:
+  stage: build
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR
@@ -58,12 +69,12 @@ test-gpt-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - bash scripts/tests/build_model.sh gpt
-    - bash scripts/tests/test.sh gpt tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu/ ${GPT2} auto
+    - bash tests/build_model.sh gpt
+    - bash tests/test.sh gpt tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
 
 test-opt-model-job:
   stage: test-model
@@ -71,12 +82,12 @@ test-opt-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - bash scripts/tests/build_model.sh opt
-    - bash scripts/tests/test.sh opt tensorrt_llm/examples/opt/trt_engine/opt-125m/fp16/1-gpu/ ${OPT_125M} auto
+    - bash tests/build_model.sh opt
+    - bash tests/test.sh opt tensorrt_llm/examples/opt/trt_engine/opt-125m/fp16/1-gpu/ ${OPT_125M} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
 
 test-llama-model-job:
   stage: test-model
@@ -84,12 +95,12 @@ test-llama-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - bash scripts/tests/build_model.sh llama
-    - bash scripts/tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs ${LLAMA} llama
+    - bash tests/build_model.sh llama
+    - bash tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs ${LLAMA} llama
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
 
 test-gptj-model-job:
   stage: test-model
@@ -97,12 +108,12 @@ test-gptj-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - bash scripts/tests/build_model.sh gptj
-    - bash scripts/tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs ${GPTJ} auto
+    - bash tests/build_model.sh gptj
+    - bash tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs ${GPTJ} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
 
 test-gpt-ib-model-job:
   stage: test-model
@@ -112,12 +123,12 @@ test-gpt-ib-model-job:
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
-    - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
+    - bash tests/build_model.sh gpt-ib
+    - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
 
 test-gpt-ib-streaming-model-job:
   stage: test-model
@@ -127,9 +138,9 @@ test-gpt-ib-streaming-model-job:
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
-    - bash scripts/tests/build_model.sh gpt-ib
-    - bash scripts/tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
+    - bash tests/build_model.sh gpt-ib
+    - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
-    - build-tensorrt-llm
+    - build-job
