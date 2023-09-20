@@ -1,0 +1,12 @@
+__pycache__/
+.vscode
+*.cache
+*.nsys-rep
+.VSCodeCounter
+build/
+*.so
+*.egg-info/
+.coverage
+*.csv
+*.onnx
+tmp/
