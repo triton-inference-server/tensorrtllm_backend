@@ -33,6 +33,7 @@ from functools import partial
 
 import numpy as np
 import tritonclient.grpc as grpcclient
+from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from tritonclient.utils import InferenceServerException
 
 #
@@ -133,6 +134,12 @@ if __name__ == "__main__":
         help="Inference server URL. Default is localhost:8001.",
     )
     parser.add_argument(
+        '--text',
+        type=str,
+        required=False,
+        default='Born in north-east France, Soyer trained as a',
+        help='Input text')
+    parser.add_argument(
         "-s",
         "--ssl",
         action="store_true",
@@ -226,13 +233,38 @@ if __name__ == "__main__":
         required=False,
         default=0,
         help='Early stop the generation after a few milliseconds')
+    parser.add_argument('--tokenizer_dir',
+                        type=str,
+                        required=True,
+                        help='Specify tokenizer directory')
+    parser.add_argument('--tokenizer_type',
+                        type=str,
+                        default='auto',
+                        required=False,
+                        choices=['auto', 't5', 'llama'],
+                        help='Specify tokenizer type')
 
     FLAGS = parser.parse_args()
 
     print('=========')
-    input_ids = [[
-        28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257
-    ]]
+    if FLAGS.tokenizer_type == 't5':
+        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                padding_side='left')
+    elif FLAGS.tokenizer_type == 'auto':
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  padding_side='left')
+    elif FLAGS.tokenizer_type == 'llama':
+        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                   legacy=False,
+                                                   padding_side='left')
+    else:
+        raise AttributeError(
+            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+    tokenizer.pad_token = tokenizer.eos_token
+    pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
+    end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
+
+    input_ids = [tokenizer.encode(FLAGS.text)]
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
@@ -379,6 +411,11 @@ if __name__ == "__main__":
         passed = True
 
         print("output_ids = ", actual_output_ids)
+        output_ids = output_ids.reshape(
+            (output_ids.size, )).tolist()[input_ids_data.shape[1]:]
+        output_text = tokenizer.decode(output_ids)
+        print(f'Input: {FLAGS.text}')
+        print(f'Output: {output_text}')
         if (FLAGS.check_output):
             passed = (actual_output_ids == expected_output_ids)
             print("expected_output_ids = ", expected_output_ids)

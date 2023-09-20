@@ -113,7 +113,10 @@ if [ "$MODEL" = "gpt-ib" ]; then
 
     # Test client
     pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py --check-output
+    python3 inflight_batcher_llm_client.py \
+        --check-output \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
     popd # inflight_batcher_llm/client
 
     # End to end test
@@ -165,7 +168,10 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
 
     # Test client
     pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py --streaming --check-output
+    python3 inflight_batcher_llm_client.py \
+        --streaming --check-output \
+        --tokenizer_dir ${TOKENIZER_PATH} \
+        --tokenizer_type ${TOKENIZER_TYPE}
     popd # inflight_batcher_llm/client
 
     # End to end test
