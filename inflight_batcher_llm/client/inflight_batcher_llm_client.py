@@ -116,6 +116,10 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(error)
     else:
         user_data._completed_requests.put(result)
+        if (FLAGS.streaming):
+            output_ids = result.as_numpy('output_ids')
+            tokens = list(output_ids[0][0])
+            print(tokens, flush=True)
 
 
 if __name__ == "__main__":
@@ -289,7 +293,7 @@ if __name__ == "__main__":
     else:
         stop_inputs = None
 
-    request_id = "12345"
+    request_id = ""
 
     expected_output_ids = [
         input_ids[0] + [
