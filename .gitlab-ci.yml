@@ -42,6 +42,7 @@ package-job:
   image: $IMAGE
   script:
     - cd $CI_PROJECT_DIR/../
+    - rm -rf tensorrt_llm_backend
     - mv tekit_backend tensorrt_llm_backend
     - cp tensorrt_llm_backend/scripts/package_trt_llm_backend.sh package_trt_llm_backend.sh
     - bash package_trt_llm_backend.sh tensorrt_llm_backend.tar.gz tensorrt_llm_backend
@@ -118,13 +119,17 @@ test-gptj-model-job:
 test-gpt-ib-model-job:
   stage: test-model
   image: $IMAGE
+  parallel:
+    matrix:
+    - MAX_TOKENS_IN_KV_CACHE: ["", "2048"]
+      BATCH_SCHEDULER_POLICY: ["max_utilization", "guaranteed_completion"]
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash tests/build_model.sh gpt-ib
-    - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
+    - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY}
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -133,13 +138,17 @@ test-gpt-ib-model-job:
 test-gpt-ib-streaming-model-job:
   stage: test-model
   image: $IMAGE
+  parallel:
+    matrix:
+    - MAX_TOKENS_IN_KV_CACHE: ["", "2048"]
+      BATCH_SCHEDULER_POLICY: ["max_utilization", "guaranteed_completion"]
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash tests/build_model.sh gpt-ib
-    - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
+    - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY}
   artifacts:
     expire_in: 30 mins
   dependencies:

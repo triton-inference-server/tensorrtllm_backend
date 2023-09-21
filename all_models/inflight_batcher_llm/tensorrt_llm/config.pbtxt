@@ -162,3 +162,15 @@ parameters: {
     string_value: "${engine_dir}"
   }
 }
+parameters: {
+  key: "max_tokens_in_paged_kv_cache"
+  value: {
+    string_value: "${max_tokens_in_paged_kv_cache}"
+  }
+}
+parameters: {
+  key: "batch_scheduler_policy"
+  value: {
+    string_value: "${batch_scheduler_policy}"
+  }
+}

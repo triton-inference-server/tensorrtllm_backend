@@ -4,6 +4,8 @@ MODEL=$1
 ENGINE_PATH=$2
 TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
+MAX_TOKENS_IN_KV_CACHE=$5
+BATCH_SCHEDULER_POLICY=$6
 
 set -e
 nvidia-smi
@@ -101,7 +103,7 @@ fi
 
 if [ "$MODEL" = "gpt-ib" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY}
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -156,7 +158,7 @@ fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True
+    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY}
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 

@@ -255,12 +255,20 @@ std::string
 ModelState::GetParameter<std::string>(
     const std::string& name)
 {
-  //TODO: Error handling
   TritonJson::Value parameters;
-  model_config_.MemberAsObject("parameters", &parameters);
+  TRITONSERVER_Error* err = model_config_.MemberAsObject("parameters", &parameters);
+  if (err != nullptr) {
+      throw std::runtime_error("Model config doesn't have a parameters section");
+      TRITONSERVER_ErrorDelete(err);
+  }
   TritonJson::Value value;
   std::string str_value;
-  parameters.MemberAsObject(name.c_str(), &value);
+  err = parameters.MemberAsObject(name.c_str(), &value);
+  if (err != nullptr) {
+      std::string errStr = "Cannot find parameter with name: " + name;
+      throw std::runtime_error(errStr);
+      TRITONSERVER_ErrorDelete(err);
+  }
   value.MemberAsString("string_value", &str_value);
   return str_value;
 }
@@ -941,17 +949,46 @@ class ModelInstanceState : public BackendModelInstance {
       auto constexpr ingoreComments = true;
       auto json = nlohmann::json::parse(jsonStream, nullptr, allowExceptions, ingoreComments);
 
-      auto const& builderConfig = json.at("builder_config");
-      int maxInputLen = builderConfig.at("max_input_len");
-      int maxOutputLen = builderConfig.at("max_output_len");
-      int maxSeqLen = maxInputLen + maxOutputLen;
-      int maxNumRequests = builderConfig.at("max_batch_size");
-      int32_t maxBeamWidth = model_state_->GetParameter<int32_t>("max_beam_width");
+      int32_t maxBeamWidth = 1;
+      try {
+        maxBeamWidth = model_state_->GetParameter<int32_t>("max_beam_width");
+      } catch (const std::exception&e) {
+          // If parameter is not specified, just ignore
+          TLLM_LOG_WARNING("max_beam_width is not specified, will use default value of 1");
+      }
 
-      mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxSeqLen, maxNumRequests, maxBeamWidth,
+      std::optional<int32_t> maxTokensInPagedKvCache = std::nullopt;
+      try {
+          maxTokensInPagedKvCache = model_state_->GetParameter<int32_t>("max_tokens_in_paged_kv_cache");
+      } catch (const std::exception&e) {
+          // If parameter is not specified, just ignore
+          TLLM_LOG_WARNING("max_tokens_in_paged_kv_cache is not specified, will use default value");
+      }
+
+      auto schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+      try {
+          std::string schedulerPolicyStr = model_state_->GetParameter<std::string>("batch_scheduler_policy");
+          if (schedulerPolicyStr == "max_utilization") {
+              schedulerPolicy = batch_scheduler::SchedulerPolicy::MAX_UTILIZATION;
+          } else if (schedulerPolicyStr == "guaranteed_completion") {
+              schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+          } else {
+            throw std::runtime_error("batch_scheduler_policy parameter was not found or is invalid (must be max_utilization or guaranteed_completion)");
+          }
+      } catch (const std::exception& e) {
+          TLLM_LOG_WARNING(e.what());
+      }
+
+      if (mIsDecoupled && schedulerPolicy != batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION) {
+          TLLM_LOG_WARNING("The batch scheduler policy will be set to guaranteed_completion since the backend operates in decoupled mode");
+          schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+      }
+
+      mBatchManager = std::make_shared<GptManager>(mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
           [this](int max_num_requests){return get_inference_requests(max_num_requests);},
-          [this](uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);},
-          [this](){return pollStopSignals();});
+          [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response, const std::string& errMsg){return sendResponse(requestId, response_tensors, final_response, errMsg);},
+          [this](){return pollStopSignals();},
+          maxTokensInPagedKvCache);
 
       if (getCommWorldRank() != 0)
       {
