@@ -32,20 +32,51 @@ def test_llm_backend_gpt_e2e(llm_backend_gpt_example_root, llm_backend_venv):
     venv_check_call(llm_backend_venv, run_cmd)
 
 
-def test_inflight_batcher_llm_client_default(inflight_batcher_llm_client_root,
-                                             llm_backend_venv):
+def test_inflight_batcher_llama_default(inflight_batcher_llm_client_root,
+                                        llama_v2_tokenizer_model_root,
+                                        llm_backend_venv):
     print("Execute inflight_batcher_llm_client.py on default mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--tokenizer_dir={llama_v2_tokenizer_model_root}",
+        "--tokenizer_type=llama",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
 
 
-def test_inflight_batcher_llm_client_streaming(
-        inflight_batcher_llm_client_root, llm_backend_venv):
+def test_inflight_batcher_llama_streaming(inflight_batcher_llm_client_root,
+                                          llama_v2_tokenizer_model_root,
+                                          llm_backend_venv):
     print("Execute inflight_batcher_llm_client.py on streaming mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--tokenizer_dir={llama_v2_tokenizer_model_root}",
+        "--tokenizer_type=llama",
+        "--streaming",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
+def test_inflight_batcher_gpt_default(inflight_batcher_llm_client_root,
+                                      gpt_tokenizer_model_root,
+                                      llm_backend_venv):
+    print("Execute inflight_batcher_llm_client.py on default mode...")
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--tokenizer_dir={gpt_tokenizer_model_root}",
+        "--tokenizer_type=auto",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
+def test_inflight_batcher_gpt_streaming(inflight_batcher_llm_client_root,
+                                        gpt_tokenizer_model_root,
+                                        llm_backend_venv):
+    print("Execute inflight_batcher_llm_client.py on streaming mode...")
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--tokenizer_dir={gpt_tokenizer_model_root}",
+        "--tokenizer_type=auto",
         "--streaming",
     ]
     venv_check_call(llm_backend_venv, run_cmd)

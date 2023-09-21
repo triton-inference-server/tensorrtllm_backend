@@ -10,6 +10,18 @@ from trt_test.session_data_writer import SessionDataWriter
 pytest_plugins = ["pytester", "trt_test.pytest_plugin"]
 
 
+def llm_models_root() -> str:
+    '''return LLM_MODELS_ROOT path if it is set in env, assert when it's set but not a valid path
+    '''
+    LLM_MODELS_ROOT = os.environ.get("LLM_MODELS_ROOT", None)
+    if LLM_MODELS_ROOT is not None:
+        assert os.path.isabs(
+            LLM_MODELS_ROOT), "LLM_MODELS_ROOT must be absolute path"
+        assert os.path.exists(
+            LLM_MODELS_ROOT), "LLM_MODELS_ROOT must exists when its specified"
+    return LLM_MODELS_ROOT
+
+
 def venv_check_call(venv, cmd):
 
     def _war_check_call(*args, **kwargs):
@@ -174,3 +186,28 @@ def get_device_count():
     device_count = len(output.strip().split('\n'))
 
     return device_count
+
+
+@pytest.fixture(scope="session")
+def llama_v2_tokenizer_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    llama_v2_tokenizer_model_root = os.path.join(models_root,
+                                                 "llama-models-v2")
+
+    assert os.path.exists(
+        llama_v2_tokenizer_model_root
+    ), f"{llama_v2_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return llama_v2_tokenizer_model_root
+
+
+@pytest.fixture(scope="session")
+def gpt_tokenizer_model_root(llm_backend_venv):
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    gpt_tokenizer_model_root = os.path.join(models_root, "gpt2")
+
+    assert os.path.exists(
+        gpt_tokenizer_model_root
+    ), f"{gpt_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return gpt_tokenizer_model_root
