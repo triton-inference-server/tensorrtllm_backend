@@ -1,7 +1,76 @@
 # TensorRT-LLM Backend
-The Triton backend for TensorRT-LLM.
+The Triton backend for [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
 
-## Usage
+## Introduction
+
+This document describes how to serve models by TensorRT-LLM Triton backend. This backend is only an interface to call TensorRT-LLM in Triton. The heavy lifting, in terms of implementation, can be found in the TensorRT-LLM source code.
+
+## Setup Environment
+
+### Prepare the repository
+
+Clone the repository, and update submodules recursively.
+```
+git clone git@github.com:NVIDIA/TensorRT-LLM.git
+git submodule update --init --recursive
+```
+
+### Build the Docker image.
+```
+cd tensorrtllm_backend
+docker build -f dockerfile/Dockerfile.trt_llm_backend -t tritonserver:w_trt_llm_backend .
+```
+
+The rest of the documentation assumes that the Docker image has already been built.
+
+### How to select the models
+There are two models under `all_models/`:
+- gpt: A Python implementation of the TensorRT-LLM Triton backend
+- inflight_batcher_llm: A C++ implementation of the TensorRT-LLM Triton backend
+
+### Prepare TensorRT-LLM engines
+Follow the [guide](https://github.com/NVIDIA/TensorRT-LLM/blob/main/README.md) in TensorRT-LLM to prepare the engines for deployment.
+
+For example, please find the details in the document of TensorRT-LLM GPT for instrutions to build GPT engines: [link](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/gpt#usage)
+
+### How to set the model configuration
+
+**TensorRT-LLM Triton Serving Configuration: config.pbtxt**
+
+- This will be loaded by Triton servers
+- This mainly describes the server and TensorRT-LLM inference hyperparameters.
+
+There are several components in each implemented backend, and there is a config.pbtxt for each component, take `all_models/inflight_batcher_llm` as an example:
+- preprocessing: Used for tokenizing.
+- tensorrt_llm: Inferencing.
+- postprocessing: Used for de-tokenizing.
+- ensemble: Connect preprocessing -> tensorrt_llm -> postprocessing
+
+The following table shows the fields that need to be modified before deployment:
+
+*all_models/inflight_batcher_llm/preprocessing/config.pbtxt*
+
+| Name | Description
+| :----------------------: | :-----------------------------: |
+| `tokenizer_dir` | The path to the tokenizer for the model |
+| `tokenizer_type` | The type of the tokenizer for the model, t5, auto and llama are supported |
+
+*all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt*
+
+| Name | Description
+| :----------------------: | :-----------------------------: |
+| `decoupled` | Controls streaming. Decoupled mode must be set to true if using the streaming option from the client. |
+| `gpt_model_type` | "inflight_fused_batching" or "V1" (disable in-flight batching) |
+| `gpt_model_path` | Path to the TensorRT-LLM engines for deployment |
+
+*all_models/inflight_batcher_llm/postprocessing/config.pbtxt*
+
+| Name | Description
+| :----------------------: | :-----------------------------: |
+| `tokenizer_dir` | The path to the tokenizer for the model |
+| `tokenizer_type` | The type of the tokenizer for the model, t5, auto and llama are supported |
+
+## Run Serving on Single Node
 
 ### Launch the backend *within Docker*
 
@@ -15,7 +84,7 @@ nvidia-docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --shm-size=2g -v <yo
 3. all_models/<model>/postprocessing/config.pbtxt
 
 # 3. Launch triton server
-python3 scripts/launch_triton_server.py --world_size=1 \
+python3 scripts/launch_triton_server.py --world_size=<num_gpus> \
     --model_repo=all_models/<model>
 ```
 
@@ -56,20 +125,28 @@ ${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config 
 sbatch tensorrt_llm_triton.sub
 ```
 
+When successfully deployed, the server produces logs similar to the following ones.
+```
+I0919 14:52:10.475738 293 grpc_server.cc:2451] Started GRPCInferenceService at 0.0.0.0:8001
+I0919 14:52:10.475968 293 http_server.cc:3558] Started HTTPService at 0.0.0.0:8000
+I0919 14:52:10.517138 293 http_server.cc:187] Started Metrics Service at 0.0.0.0:8002
+```
+
 ### Kill the backend
 
 ```bash
 pgrep tritonserver | xargs kill -9
 ```
 
-## Examples
+## C++ backend examples (support inflight batching)
+Please follow the guide in [`inflight_batcher_llm/README.md`](inflight_batcher_llm/README.md).
 
-### GPT/OPT/LLaMA/GPT-J...
+## Python backend examples (not support inflight batching)
+
+### GPT
 ```bash
 cd tools/gpt/
 
-# Download vocab and merge table for HF models
-# Take GPT as an example:
 rm -rf gpt2 && git clone https://huggingface.co/gpt2
 pushd gpt2 && rm pytorch_model.bin model.safetensors && \
     wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && popd
