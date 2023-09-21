@@ -1,25 +1,38 @@
 diff --git a/inflight_batcher_llm/CMakeLists.txt b/inflight_batcher_llm/CMakeLists.txt
-index 3f0df3b..86cf113 100644
+index ab4d15f..35d38ea 100644
 --- a/inflight_batcher_llm/CMakeLists.txt
 +++ b/inflight_batcher_llm/CMakeLists.txt
-@@ -197,7 +197,19 @@ add_library(tensorrt_llm STATIC IMPORTED)
- set_property(TARGET tensorrt_llm PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
+@@ -201,12 +201,27 @@ set_property(
+            "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
  add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
--set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
+-set_property(
+-  TARGET tensorrt_llm_batch_manager
+-  PROPERTY
+-    IMPORTED_LOCATION
+-    "${TRTLLM_DIR}/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a"
+-)
 +execute_process(
-+    COMMAND
-+      ${Python3_EXECUTABLE} "-c"
-+      "import torch; print(torch.compiled_with_cxx11_abi(),end='');"
-+    RESULT_VARIABLE _PYTHON_SUCCESS
-+    OUTPUT_VARIABLE USE_CXX11_ABI)
++  COMMAND ${Python3_EXECUTABLE} "-c"
++          "import torch; print(torch.compiled_with_cxx11_abi(),end='');"
++  RESULT_VARIABLE _PYTHON_SUCCESS
++  OUTPUT_VARIABLE USE_CXX11_ABI)
 +message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
 +if(USE_CXX11_ABI)
-+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
++  set_property(
++    TARGET tensorrt_llm_batch_manager
++    PROPERTY
++      IMPORTED_LOCATION
++      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a"
++  )
 +else()
-+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a")
++  set_property(
++    TARGET tensorrt_llm_batch_manager
++    PROPERTY
++      IMPORTED_LOCATION
++      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a"
++  )
 +endif()
-+
 
  add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
- set_property(TARGET nvinfer_plugin_tensorrt_llm PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so")
+ set_property(
