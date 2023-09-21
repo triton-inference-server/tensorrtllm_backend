@@ -44,14 +44,6 @@ python3 build.py --model_dir=${model_directory} \
                  --output_dir=engines/fp16/1-gpu
 ```
 
-## Build the Triton server image that includes the TRT-LLM in-flight batching backend:
-
-From `tensorrt_llm_backend` root folder:
-
-```
-docker build -f dockerfile/Dockerfile.trt_llm_backend -t tritonserver:w_trt_llm_backend .
-```
-
 ## Create a model repository folder
 
 First run:
