@@ -11,8 +11,10 @@ This document describes how to serve models by TensorRT-LLM Triton backend. This
 
 Clone the repository, and update submodules recursively.
 ```
-git clone git@github.com:NVIDIA/TensorRT-LLM.git
+git clone git@github.com:triton-inference-server/tensorrtllm_backend.git
 git submodule update --init --recursive
+git lfs install
+git lfs pull
 ```
 
 ### Build the Docker image.
