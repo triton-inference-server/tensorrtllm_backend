@@ -35,13 +35,13 @@ FROM dev as trt_llm_builder
 WORKDIR /app
 COPY scripts scripts
 COPY tensorrt_llm tensorrt_llm
-RUN cd tensorrt_llm; python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" -i; cd ..
+RUN cd tensorrt_llm && python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" -i && cd ..
 
 FROM trt_llm_builder as trt_llm_backend_builder
 
 WORKDIR /app/
 COPY inflight_batcher_llm inflight_batcher_llm
-RUN cd inflight_batcher_llm; bash scripts/build.sh; cd ..
+RUN cd inflight_batcher_llm && bash scripts/build.sh && cd ..
 
 FROM trt_llm_backend_builder as final
 
