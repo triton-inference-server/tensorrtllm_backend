@@ -46,9 +46,9 @@
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "tensorrt_llm/common/logger.h"
+#include "tensorrt_llm/plugins/api/tllmPlugin.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
-#include <NvInferPlugin.h>
 #include <nlohmann/json.hpp>
 
 #include "mpiUtils.h"
@@ -256,7 +256,7 @@ private:
         , model_config_(std::move(model_config))
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
-        initLibNvInferPlugins(mTrtLogger.get(), "tensorrt_llm");
+        initTrtLlmPlugins(mTrtLogger.get());
     }
 };
 
