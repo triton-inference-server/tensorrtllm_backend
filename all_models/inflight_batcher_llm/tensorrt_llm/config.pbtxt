@@ -174,3 +174,9 @@ parameters: {
     string_value: "${batch_scheduler_policy}"
   }
 }
+parameters: {
+  key: "max_num_sequences"
+  value: {
+    string_value: "${max_num_sequences}"
+  }
+}

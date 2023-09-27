@@ -1084,13 +1084,24 @@ private:
             schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
         }
 
+        std::optional<int32_t> maxNumSequences = std::nullopt;
+        try
+        {
+            maxNumSequences = model_state_->GetParameter<int32_t>("max_num_sequences");
+        }
+        catch (const std::exception& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
+        }
+
         mBatchManager = std::make_shared<GptManager>(
             mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
             [this](int max_num_requests) { return get_inference_requests(max_num_requests); },
             [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
                 const std::string& errMsg)
             { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-            [this]() { return pollStopSignals(); }, maxTokensInPagedKvCache);
+            [this]() { return pollStopSignals(); }, maxTokensInPagedKvCache, maxNumSequences);
 
         if (getCommWorldRank() != 0)
         {

@@ -123,13 +123,14 @@ test-gpt-ib-model-job:
     matrix:
     - MAX_TOKENS_IN_KV_CACHE: ["", "2048"]
       BATCH_SCHEDULER_POLICY: ["max_utilization", "guaranteed_completion"]
+      MAX_NUM_SEQUENCES: ["", "4", "32"]
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash tests/build_model.sh gpt-ib
-    - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY}
+    - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY} ${MAX_NUM_SEQUENCES}
   artifacts:
     expire_in: 30 mins
   dependencies:
@@ -142,13 +143,14 @@ test-gpt-ib-streaming-model-job:
     matrix:
     - MAX_TOKENS_IN_KV_CACHE: ["", "2048"]
       BATCH_SCHEDULER_POLICY: ["max_utilization", "guaranteed_completion"]
+      MAX_NUM_SEQUENCES: ["", "4", "32"]
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - mkdir /opt/tritonserver/backends/inflight_batcher_llm
     - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
     - bash tests/build_model.sh gpt-ib
-    - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY}
+    - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto ${MAX_TOKENS_IN_KV_CACHE} ${BATCH_SCHEDULER_POLICY} ${MAX_NUM_SEQUENCES}
   artifacts:
     expire_in: 30 mins
   dependencies:
