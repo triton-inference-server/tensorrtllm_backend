@@ -101,7 +101,7 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
 
     const void* buffer = 0L;
     uint64_t buffer_byte_size = 0;
-    TRITONSERVER_MemoryType memory_type;
+    TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
     int64_t memory_type_id = 0;
     TRITONBACKEND_InputBuffer(input, 0, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
 
@@ -488,7 +488,7 @@ private:
             {
                 const void* buffer = 0L;
                 uint64_t buffer_byte_size = 0;
-                TRITONSERVER_MemoryType memory_type;
+                TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
                 int64_t memory_type_id = 0;
                 TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id);
                 assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
