@@ -88,8 +88,9 @@ def test_functionality(client, prompts, output_lens):
         # 3. Check the results between manually ensembled models and the ensemble model
         ensemble_output = result.as_numpy('OUTPUT_0')
         assert output0 == ensemble_output
-        print('Response: {}'.format(result.get_response()))
-        print('Output: {}'.format(ensemble_output))
+        if FLAGS.verbose:
+            print('Response: {}'.format(result.get_response()))
+            print('Output: {}'.format(ensemble_output))
     print(f"[INFO] Functionality test succeed.")
 
 

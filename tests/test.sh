@@ -4,9 +4,6 @@ MODEL=$1
 ENGINE_PATH=$2
 TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
-MAX_TOKENS_IN_KV_CACHE=$5
-BATCH_SCHEDULER_POLICY=$6
-MAX_NUM_SEQUENCES=$7
 
 set -e
 nvidia-smi
@@ -102,87 +99,139 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
 
 fi
 
+MAX_NUM_SEQUENCES=( "" "4" "32" )
+MAX_TOKENS_IN_KV_CACHES=( "" "2048" )
+BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_completion" )
+KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "" "0.2" )
+
 if [ "$MODEL" = "gpt-ib" ]; then
-    # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCES}
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
+    for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
+    for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
 
-    # Launch Triton Server
-    /opt/tritonserver/bin/tritonserver \
-        --model-repository=all_models/inflight_batcher_llm &
-    export SERVER_PID=$!
-    wait_for_server_ready ${SERVER_PID} 1200
+        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # if max_tokens_in_kv_cache is also empty
+        if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
+            continue
+        fi
 
-    # Test client
-    pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py \
-        --check-output \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
-    popd # inflight_batcher_llm/client
+        echo "----------------------------------"
+        echo "MAX_NUM_SEQUENCES: ${MAX_NUM_SEQUENCE}"
+        echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
+        echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
+        echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
+        echo "----------------------------------"
+        rm -rf ./triton_repo
+        cp -R all_models/inflight_batcher_llm triton_repo
+        # Modify config.pbtxt
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION}
+        python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+        python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
-    # End to end test
-    pushd tools/inflight_batcher_llm
+        # Launch Triton Server
+        /opt/tritonserver/bin/tritonserver \
+            --model-repository=triton_repo &
+        export SERVER_PID=$!
+        wait_for_server_ready ${SERVER_PID} 1200
 
-    python3 end_to_end_test.py \
-        --concurrency 8 \
-        -i http \
-        --max_input_len 300 \
-        --dataset ../dataset/mini_cnn_eval.json
-    python3 end_to_end_test.py \
-        --concurrency 8 \
-        -i grpc \
-        --max_input_len 300 \
-        --dataset ../dataset/mini_cnn_eval.json
+        # Test client
+        pushd inflight_batcher_llm/client
+        python3 inflight_batcher_llm_client.py \
+            --check-output \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE}
+        popd # inflight_batcher_llm/client
 
-    python3 identity_test.py \
-        --concurrency 8 \
-        -i http \
-        --max_input_len 300 \
-        --dataset ../dataset/mini_cnn_eval.json \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
-    python3 identity_test.py \
-        --concurrency 8 \
-        -i grpc \
-        --max_input_len 300 \
-        --dataset ../dataset/mini_cnn_eval.json \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        # End to end test
+        pushd tools/inflight_batcher_llm
 
-    popd # tools/inflight_batcher_llm
+        python3 end_to_end_test.py \
+            --concurrency 8 \
+            -i http \
+            --max_input_len 300 \
+            --dataset ../dataset/mini_cnn_eval.json
+        python3 end_to_end_test.py \
+            --concurrency 8 \
+            -i grpc \
+            --max_input_len 300 \
+            --dataset ../dataset/mini_cnn_eval.json
 
-    kill ${SERVER_PID}
+        python3 identity_test.py \
+            --concurrency 8 \
+            -i http \
+            --max_input_len 300 \
+            --dataset ../dataset/mini_cnn_eval.json \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE}
+        python3 identity_test.py \
+            --concurrency 8 \
+            -i grpc \
+            --max_input_len 300 \
+            --dataset ../dataset/mini_cnn_eval.json \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE}
 
+        popd # tools/inflight_batcher_llm
+
+        kill -9 ${SERVER_PID}
+
+    done
+    done
+    done
+    done
 fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
-    # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCES}
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
-    python3 tools/fill_template.py -i all_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
+    for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
+    for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
 
-    # Launch Triton Server
-    /opt/tritonserver/bin/tritonserver \
-        --model-repository=all_models/inflight_batcher_llm &
-    export SERVER_PID=$!
-    wait_for_server_ready ${SERVER_PID} 1200
+        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # if max_tokens_in_kv_cache is also empty
+        if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
+            continue
+        fi
 
-    # Test client
-    pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py \
-        --streaming --check-output \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
-    popd # inflight_batcher_llm/client
+        echo "----------------------------------"
+        echo "MAX_NUM_SEQUENCES: ${MAX_NUM_SEQUENCE}"
+        echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
+        echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
+        echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
+        echo "----------------------------------"
 
-    # End to end test
-    pushd tools/inflight_batcher_llm
-    python3 end_to_end_streaming_client.py \
-        --output_len 10 --prompt "This is a test "
-    popd
+        rm -rf ./triton_repo
+        cp -R all_models/inflight_batcher_llm triton_repo
+        # Modify config.pbtxt
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION}
+        python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+        python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
-    kill ${SERVER_PID}
+        # Launch Triton Server
+        /opt/tritonserver/bin/tritonserver \
+            --model-repository=triton_repo &
+        export SERVER_PID=$!
+        wait_for_server_ready ${SERVER_PID} 1200
 
+        # Test client
+        pushd inflight_batcher_llm/client
+        python3 inflight_batcher_llm_client.py \
+            --streaming --check-output \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE}
+        popd # inflight_batcher_llm/client
+
+        # End to end test
+        pushd tools/inflight_batcher_llm
+        python3 end_to_end_streaming_client.py \
+            --output_len 10 --prompt "This is a test "
+        popd
+
+        kill -9 ${SERVER_PID}
+
+    done
+    done
+    done
+    done
 fi

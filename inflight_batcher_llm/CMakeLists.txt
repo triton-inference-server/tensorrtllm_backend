@@ -225,6 +225,7 @@ target_link_libraries(
           triton-core-serverstub # from repo-core
           triton-backend-utils # from repo-backend
           ${MPI_LIBRARIES}
+          ${NCCL_LIB}
           nvinfer
           nvinfer_plugin_tensorrt_llm)
 

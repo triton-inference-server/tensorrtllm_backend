@@ -175,6 +175,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "kv_cache_free_gpu_mem_fraction"
+  value: {
+    string_value: "${kv_cache_free_gpu_mem_fraction}"
+  }
+}
+parameters: {
   key: "max_num_sequences"
   value: {
     string_value: "${max_num_sequences}"
