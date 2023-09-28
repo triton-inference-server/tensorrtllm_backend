@@ -347,6 +347,12 @@ uint64_t ModelState::GetParameter<uint64_t>(const std::string& name)
     return std::stoull(GetParameter<std::string>(name));
 }
 
+template <>
+float ModelState::GetParameter<float>(const std::string& name)
+{
+    return std::stof(GetParameter<std::string>(name));
+}
+
 extern "C"
 {
 
@@ -1084,6 +1090,19 @@ private:
             schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
         }
 
+        std::optional<float> kvCacheFreeGpuMemFraction = std::nullopt;
+        try
+        {
+            kvCacheFreeGpuMemFraction = model_state_->GetParameter<float>("kv_cache_free_gpu_mem_fraction");
+        }
+        catch (const std::exception& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING(
+                "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.85 or "
+                "max_tokens_in_paged_kv_cache");
+        }
+
         std::optional<int32_t> maxNumSequences = std::nullopt;
         try
         {
@@ -1095,13 +1114,15 @@ private:
             TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
         }
 
+        TrtGptModelOptionalParams optionalParams(maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction);
+
         mBatchManager = std::make_shared<GptManager>(
             mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
             [this](int max_num_requests) { return get_inference_requests(max_num_requests); },
             [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
                 const std::string& errMsg)
             { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-            [this]() { return pollStopSignals(); }, maxTokensInPagedKvCache, maxNumSequences);
+            [this]() { return pollStopSignals(); }, optionalParams);
 
         if (getCommWorldRank() != 0)
         {
