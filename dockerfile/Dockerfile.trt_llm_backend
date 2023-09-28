@@ -11,6 +11,8 @@ RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvi
 RUN apt-get remove --purge -y tensorrt*
 RUN pip uninstall -y tensorrt
 
+FROM base as dev
+
 # Download & install internal TRT release
 ARG TENSOR_RT_VERSION="9.1.0.1"
 ARG CUDA_VERSION="12.2"
@@ -33,6 +35,7 @@ RUN --mount=type=cache,target=/root/.cache \
     rm -rf /workspace/TensorRT.tar
 
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
+ENV TRT_ROOT=/usr/local/tensorrt
 
 # Install latest Polygraphy
 ARG RELEASE_URL_PG=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/9.0.1/tars/polygraphy-0.48.1-py2.py3-none-any.whl
