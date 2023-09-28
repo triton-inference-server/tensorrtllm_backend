@@ -162,3 +162,27 @@ parameters: {
     string_value: "${engine_dir}"
   }
 }
+parameters: {
+  key: "max_tokens_in_paged_kv_cache"
+  value: {
+    string_value: "${max_tokens_in_paged_kv_cache}"
+  }
+}
+parameters: {
+  key: "batch_scheduler_policy"
+  value: {
+    string_value: "${batch_scheduler_policy}"
+  }
+}
+parameters: {
+  key: "kv_cache_free_gpu_mem_fraction"
+  value: {
+    string_value: "${kv_cache_free_gpu_mem_fraction}"
+  }
+}
+parameters: {
+  key: "max_num_sequences"
+  value: {
+    string_value: "${max_num_sequences}"
+  }
+}
