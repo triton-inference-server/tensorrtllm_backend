@@ -5,10 +5,9 @@ import json
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
+from tensorrt_llm.runtime import to_word_list_format
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
-
-from tensorrt_llm.runtime import to_word_list_format
 
 
 class TritonPythonModel:
