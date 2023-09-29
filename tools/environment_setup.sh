@@ -25,7 +25,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-apt-get update && apt-get install git-lfs rapidjson-dev -y
+apt-get update && apt-get install git-lfs rapidjson-dev python3-pip -y
 # Update submodule
 git submodule update --init --recursive
 git lfs install
@@ -40,8 +40,7 @@ pip uninstall -y tensorrt
 # Download & install internal TRT release
 TENSOR_RT_VERSION="9.1.0.1"
 CUDA_VERSION="12.2"
-TARGETARCH=$(uname -i)
-ARCH=${TARGETARCH} && \
+ARCH=$(uname -i)
 if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
 if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
 if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\

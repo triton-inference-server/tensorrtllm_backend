@@ -48,10 +48,14 @@ option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 set(TRITON_COMMON_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/common repo")
 set(TRITON_CORE_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_BACKEND_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/backend repo")
-set(TRITON_BUILD_CONTAINER_VERSION "23.07" CACHE STRING "Triton container version to target")
+set(TRTLLM_BUILD_CONTAINER "" CACHE STRING "Base image for building TRT-LLM")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(NOT TRTLLM_BUILD_CONTAINER)
+  message(FATAL_ERROR "TRTLLM_BUILD_CONTAINER must be set")
 endif()
 
 set(COMMON_HEADER_DIRS ${PROJECT_SOURCE_DIR} ${CUDA_PATH}/include)
@@ -103,13 +107,14 @@ add_custom_command(
   OUTPUT
     tensorrt_llm_build
     COMMENT "Building TensorRT-LLM"
-    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py  --trtllm-build-config="${CMAKE_BUILD_TYPE}" --triton-container-version="${TRITON_BUILD_CONTAINER_VERSION}" --output=Dockerfile.trtllm
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py  --trtllm-build-config="${CMAKE_BUILD_TYPE}" --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build --no-cache -t ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
-    COMMAND docker rm tensorrtllm_backend_trtllm || echo 'error ignored...' || true
-    COMMAND docker create --name tensorrtllm_backend_trtllm ${TRITON_TRTLLM_DOCKER_NAME}
+    COMMAND docker rm trtllm_build || echo 'error ignored...' || true
+    COMMAND docker create --name trtllm_build ${TRITON_TRTLLM_DOCKER_NAME}
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && rm -fr tensorrt_llm
-    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker cp tensorrtllm_backend_trtllm:/app/tensorrt_llm tensorrt_llm
-    COMMAND docker rm tensorrtllm_backend_trtllm
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker cp trtllm_build:/app/tensorrt_llm tensorrt_llm
+    COMMAND docker cp trtllm_build:/opt/trtllm_lib trtllm_build
+    COMMAND docker rm trtllm_build
 )
 
 #
@@ -297,6 +302,12 @@ install(
     triton-tensorrt-llm-backend-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm
+)
+
+install(
+  DIRECTORY
+    ${CMAKE_CURRENT_BINARY_DIR}/trtllm_build/
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm
 )
 
 install(

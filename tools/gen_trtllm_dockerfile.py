@@ -39,13 +39,9 @@ RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip uninstall -y tensorrt
 
 # Download & install internal TRT release
-ARG TENSOR_RT_VERSION="9.1.0.1"
-ARG CUDA_VERSION="12.2"
-ARG RELEASE_URL_TRT
-ARG TARGETARCH=$(uname -i)
-
-RUN --mount=type=cache,target=/root/.cache \
-    ARCH=${TARGETARCH} && \
+RUN ARCH="$(uname -i)" && \
+    CUDA_VERSION="12.2" && \
+    TENSOR_RT_VERSION="9.1.0.1" && \
     if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
     if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
     if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
@@ -54,7 +50,6 @@ RUN --mount=type=cache,target=/root/.cache \
     wget ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
     tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
     mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
-    pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
     rm -rf /workspace/TensorRT.tar
 
 # Uninstall unused nvidia packages
@@ -63,7 +58,7 @@ RUN if pip freeze | grep -q "nvidia.*"; then \
     fi
 RUN pip cache purge
 
-ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:/opt/tritonserver/backends/tensorrtllm:$LD_LIBRARY_PATH
 ENV TRT_ROOT=/usr/local/tensorrt
     """
     return df
@@ -71,14 +66,15 @@ ENV TRT_ROOT=/usr/local/tensorrt
 
 def dockerfile_for_linux(output_file):
     df = """
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:{}-py3
-""".format(FLAGS.triton_container_version)
+ARG BASE_IMAGE={}
+""".format(FLAGS.trtllm_base_image)
     df += """
 FROM ${BASE_IMAGE} as base
 WORKDIR /workspace
 """
 
     df += """
+RUN apt-get update && apt-get install python3-pip -y
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
@@ -90,10 +86,9 @@ RUN pip uninstall -y tensorrt
 ARG TENSOR_RT_VERSION="9.1.0.1"
 ARG CUDA_VERSION="12.2"
 ARG RELEASE_URL_TRT
-ARG TARGETARCH=$(uname -i)
 
 RUN --mount=type=cache,target=/root/.cache \
-    ARCH=${TARGETARCH} && \
+    ARCH="$(uname -i)" && \
     if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
     if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
     if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
@@ -111,8 +106,8 @@ ENV TRT_ROOT=/usr/local/tensorrt
 FROM base as dev
 
 # CMake
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
-RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
+RUN ARCH="$(uname -i)" && wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmake-3.27.6-linux-${ARCH}.sh
+RUN bash cmake-3.27.6-linux-*.sh --prefix=/usr/local --exclude-subdir && rm cmake-3.27.6-linux-*.sh
 ENV PATH="/usr/local/bin:${PATH}"
 
 COPY tensorrt_llm/requirements-dev.txt /tmp/
@@ -129,6 +124,18 @@ ARG TRTLLM_BUILD_CONFIG={}
 """.format(FLAGS.trtllm_build_config)
     df += """
 RUN cd tensorrt_llm && python3 scripts/build_wheel.py --build_type=${TRTLLM_BUILD_CONFIG} --trt_root="${TRT_ROOT}" -i --clean
+
+# Copy all artifacts needed by the backend to /opt/tensorrtllm
+ARG TRTLLM_BUILD_LIB=tensorrt_llm/cpp/build/tensorrt_llm
+RUN mkdir -p /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/libtensorrt_llm.so /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/thop/libth_common.so /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so \
+        /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so.9 \
+        /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so.9.1.0 \
+        /opt/trtllm_lib
 """
 
     with open(output_file, "w") as dfile:
@@ -139,10 +146,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--triton-container-version",
+        "--trtllm-base-image",
         type=str,
         required=True,
-        help="Triton container to use for TRT-LLM build.",
+        help="Base image for building TRT-LLM.",
     )
     parser.add_argument(
         "--trtllm-build-config",
