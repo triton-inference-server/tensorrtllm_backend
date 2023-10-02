@@ -25,6 +25,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
+GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
+
 function build_tensorrt_engine_gpt {
     cd ${GPT_DIR}
     rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
