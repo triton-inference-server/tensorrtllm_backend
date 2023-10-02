@@ -228,11 +228,9 @@ TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
 //
 // State associated with a model that is using this backend. An object
 // of this class is created and associated with each
-// TRITONBACKEND_Model. ModelState is derived from BackendModel class
-// provided in the backend utilities that provides many common
-// functions.
+// TRITONBACKEND_Model.
 //
-class ModelState : public BackendModel
+class ModelState
 {
 public:
     static TRITONSERVER_Error* Create(TRITONBACKEND_Model* triton_model, ModelState** state);
@@ -252,8 +250,7 @@ private:
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
     ModelState(TRITONBACKEND_Model* triton_model, TritonJson::Value&& model_config)
-        : BackendModel(triton_model, true)
-        , model_config_(std::move(model_config))
+        : model_config_(std::move(model_config))
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
@@ -285,11 +282,10 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model, ModelS
     {
         *state = new ModelState(triton_model, std::move(model_config));
     }
-    catch (const BackendModelException& ex)
+    catch (const std::exception& ex)
     {
-        RETURN_ERROR_IF_TRUE(ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
-            std::string("unexpected nullptr in BackendModelException"));
-        RETURN_IF_ERROR(ex.err_);
+        std::string errStr = std::string("unexpected error when creating modelState: ") + ex.what();
+        return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
     }
 
     return nullptr; // success
@@ -680,10 +676,8 @@ private:
 // State associated with a model instance. An object of this class is
 // created and associated with each
 // TRITONBACKEND_ModelInstance. ModelInstanceState is derived from
-// BackendModelInstance class provided in the backend utilities that
-// provides many common functions.
 //
-class ModelInstanceState : public BackendModelInstance
+class ModelInstanceState
 {
 public:
     static TRITONSERVER_Error* Create(
@@ -993,8 +987,7 @@ public:
 
 private:
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
-        : BackendModelInstance(model_state, triton_model_instance)
-        , model_state_(model_state)
+        : model_state_(model_state)
         , mIsDecoupled(false)
     {
         // Note: std::string::compare fails this test (always return non-zero
@@ -1160,11 +1153,10 @@ TRITONSERVER_Error* ModelInstanceState::Create(
     {
         *state = new ModelInstanceState(model_state, triton_model_instance);
     }
-    catch (const BackendModelInstanceException& ex)
+    catch (const std::exception& ex)
     {
-        RETURN_ERROR_IF_TRUE(ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
-            std::string("unexpected nullptr in BackendModelInstanceException"));
-        RETURN_IF_ERROR(ex.err_);
+        std::string errStr = std::string("unexpected error when creating modelInstanceState: ") + ex.what();
+        return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
     }
 
     return nullptr; // success
