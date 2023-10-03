@@ -92,6 +92,10 @@ function reset_model_repo {
     mkdir ${MODEL_DIR}
 }
 
+function kill_server {
+    pgrep tritonserver | xargs kill -9
+}
+
 # =======================================
 
 rm -f $SERVER_LOG* $CLIENT_LOG*
@@ -120,7 +124,7 @@ replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/conf
 cp -r ${BASE_DIR}/engines/inflight_single_gpu/ triton_model_repo/tensorrt_llm/1
 #docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --runtime=nvidia --shm-size=2g --gpus all -v /home/fpetrini/Desktop/rrtllm/:/workspace tritonserver:w_trt_llm_backend bash
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
-run_server $SERVER_ARGS
+run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
@@ -155,7 +159,7 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
 # 1-GPU TRT engine 
@@ -164,7 +168,7 @@ sleep 2
 replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
-run_server $SERVER_ARGS
+run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
@@ -199,7 +203,7 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
 # 1-GPU TRT engine 
@@ -208,7 +212,7 @@ sleep 2
 replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
-run_server $SERVER_ARGS
+run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
@@ -229,7 +233,7 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
 # 4-GPU TRT engine 
@@ -260,7 +264,6 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-exit 1
 set +e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
     --prompt="My name is"
@@ -272,7 +275,7 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
 # 4-GPU TRT engine 
@@ -281,7 +284,7 @@ sleep 2
 replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
-run_server $SERVER_ARGS
+run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
@@ -302,7 +305,7 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
 # 4-GPU TRT engine 
@@ -311,7 +314,7 @@ sleep 2
 replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
-run_server $SERVER_ARGS
+run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
@@ -332,6 +335,6 @@ if [ $? -ne 0 ]; then
 fi
 set -e
 
-kill -9 $SERVER_PID
+kill_server
 sleep 2
 
