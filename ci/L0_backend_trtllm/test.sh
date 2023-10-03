@@ -95,9 +95,10 @@ function reset_model_repo {
 # =======================================
 
 rm -f $SERVER_LOG* $CLIENT_LOG*
-pip install transformers
-pip install torch
-pip install tritonclient[all]
+python3 -m pip install --upgrade pip && \
+    pip3 install transformers && \
+    pip3 install torch && \
+    pip3 install tritonclient[all] && \
 
 RET=0
 # 1-GPU TRT engine with inflight_batcher_llm 
