@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import argparse
 import json
 import sys
+import time
 from datetime import datetime
 from functools import partial
 
@@ -16,15 +17,18 @@ from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from utils import utils
 
 
-def callback(user_data, start_time, result, error):
+def callback(user_data, start_time, req_id, result, error):
     user_data._completed_requests.put((result, error))
     stop_time = datetime.now()
     latency = (stop_time - start_time).total_seconds() * 1000.0
     latency = round(latency, 3)
     user_data._latencies.append(latency)
+    user_data._latency_dict[req_id] = latency
+    user_data._start_time_dict[req_id] = start_time
+    user_data._stop_time_dict[req_id] = stop_time
 
 
-def test_performance(client, input_start_ids, input_lens, output_lens):
+def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
     model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
@@ -55,6 +59,11 @@ def test_performance(client, input_start_ids, input_lens, output_lens):
                                  FLAGS.protocol),
         ]
 
+        if len(FLAGS.time_bet_reqs) == 1:
+            time.sleep(FLAGS.time_bet_reqs[0])
+        else:
+            time.sleep(FLAGS.time_bet_reqs[i % len(FLAGS.time_bet_reqs)])
+
         if FLAGS.protocol == "http":
             async_requests.append(
                 client.async_infer(model_name, inputs, request_id=str(i)))
@@ -63,14 +72,14 @@ def test_performance(client, input_start_ids, input_lens, output_lens):
                 client.async_infer(model_name,
                                    inputs,
                                    callback=partial(callback, user_data,
-                                                    datetime.now()),
+                                                    datetime.now(), i),
                                    request_id=str(i)))
 
     try:
         if FLAGS.protocol == "http":
             utils.get_http_results(async_requests)
         elif FLAGS.protocol == "grpc":
-            utils.get_grpc_results(user_data, len(input_start_ids))
+            responses = utils.get_grpc_results(user_data, len(input_start_ids))
         else:
             raise RuntimeError("Invalid protocol")
 
@@ -79,12 +88,20 @@ def test_performance(client, input_start_ids, input_lens, output_lens):
         latency = round(latency, 3)
         print(f"[INFO] Total Latency: {latency} ms")
 
-        # Get latencies per request
+        # TODO(kaiyu): support `extract_print_stats` for http
         if FLAGS.protocol == "grpc":
             request_latencies = 0.0
             for latency in user_data._latencies:
                 request_latencies += latency
             print(f"[INFO] Total request latencies: {request_latencies} ms")
+
+            ip_token_len_list = []
+            for ip in input_lens:
+                ip_token_len_list.append(
+                    ip[0][0])  #for some reason, two level nesting
+
+            utils.extract_print_stats(ip_token_len_list, responses, user_data,
+                                      FLAGS)
 
     except Exception as e:
         print("Failed receiving responses: " + str(e))
@@ -138,6 +155,33 @@ if __name__ == '__main__':
                         required=False,
                         choices=['auto', 't5', 'llama'],
                         help='Specify tokenizer type')
+    parser.add_argument(
+        '--time_bet_reqs',
+        type=float,
+        required=False,
+        nargs='+',
+        help="Input time(s) in (secs) bet requests separated by spaces",
+        default=[0])
+    parser.add_argument(
+        '--dump_perfetto_trace',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'Dumps trace of requests in a json (perfetto.json) to be visualized in perfetto'
+    ),
+    parser.add_argument('--op_stats_csv',
+                        type=str,
+                        default=None,
+                        help='csv filename to dump stats'),
+    parser.add_argument(
+        '--op_tokens_per_word',
+        type=float,
+        default=1.3,
+        required=False,
+        help=
+        'Specify op tokens/word ratio. Useful to have model generate as many number of words as in dataset'
+    )
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
@@ -171,6 +215,7 @@ if __name__ == '__main__':
     input_start_ids = []
     input_lens = []
     output_lens = []
+    ratio = []
     with open(FLAGS.dataset, 'r') as f:
         data_dict = json.load(f)
         for req in data_dict:
@@ -181,7 +226,12 @@ if __name__ == '__main__':
                 continue
             input_start_ids.append(np.array([line], np.int32))
             input_lens.append(np.array([[len(line)]], np.int32))
-            # 1.3 is a magic number that converts number of words to number of tokens
-            output_lens.append(int(len(output.split(' ')) * 1.3))
+            output_lens.append(
+                int(len(output.split(' ')) * FLAGS.op_tokens_per_word))
+            prompt_tokens = len(line)
+            prompt_words = len(prompt.split())
+            ratio.append(prompt_tokens / prompt_words)
 
-    test_performance(client, input_start_ids, input_lens, output_lens)
+    print("Tokens per word: ", round(np.mean(ratio), 3))
+    test_performance(client, input_start_ids, input_lens, output_lens, FLAGS)
+    print("Expected op tokens", round(np.mean(output_lens), 3))

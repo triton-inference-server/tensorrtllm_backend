@@ -12,6 +12,7 @@ default:
   before_script:
     - export LD_LIBRARY_PATH="$TRT_ROOT/lib/:$LD_LIBRARY_PATH"
     - echo $LD_LIBRARY_PATH
+    - pip3 install -r requirements.txt
 
 cache:
   paths:
