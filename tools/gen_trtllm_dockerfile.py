@@ -41,8 +41,7 @@ RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip uninstall -y tensorrt
 
 # Download & install internal TRT release
-RUN --mount=type=cache,target=/root/.cache \
-    ARCH="$(uname -i)" && \
+RUN ARCH="$(uname -i)" && \
     if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
     if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
     if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
