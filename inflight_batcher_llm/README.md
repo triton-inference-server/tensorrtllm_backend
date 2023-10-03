@@ -50,7 +50,7 @@ First run:
 ```
 rm -rf triton_model_repo
 mkdir triton_model_repo
-cp -R all_models/inflight_batcher_llm/ triton_model_repo
+cp -R all_models/inflight_batcher_llm/* triton_model_repo
 ```
 
 Then copy the TRT engine to `triton_model_repo/tensorrt_llm/1/`. For example for the LLaMA 7B example above, run:
@@ -65,7 +65,7 @@ cp -R tensorrt_llm/examples/gpt/engines/fp16/1-gpu/ triton_model_repo/tensorrt_l
 ```
 
 
-Edit the `triton_model_repo/tensorrt_llm/config.pbtxt` file and replace `${decoupled_mode}` with `True` or `False`, and `${engine_dir}` with `/triton_model_repo/tensorrt_llm/1/` since the `triton_model_repo` folder created above will be mounted to `/triton_model_repo` in the Docker container. Decoupled mode must be set to true if using the streaming option from the client.
+Edit the `triton_model_repo/tensorrt_llm/config.pbtxt` file and replace `${decoupled_mode}` with `True` or `False`, and `${engine_dir}` with `/triton_model_repo/tensorrt_llm/1/1-gpu/` since the `triton_model_repo` folder created above will be mounted to `/triton_model_repo` in the Docker container. Decoupled mode must be set to true if using the streaming option from the client.
 
 
 To use V1 batching, the `config.pbtxt` should have:
