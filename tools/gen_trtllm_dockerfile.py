@@ -32,8 +32,8 @@ FLAGS = None
 
 def install_new_version_of_TRT(trt_version, cuda_version):
     df = """
-ARG TENSORRT_VERSION={}
-ARG CUDA_VERSION={}
+ARG NEW_TRT_VERSION={}
+ARG NEW_CUDA_VERSION={}
 """.format(trt_version, cuda_version)
     df += """
 # Remove prevous TRT installation
@@ -46,10 +46,10 @@ RUN ARCH="$(uname -i)" && \
     if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
     if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
     if [ "$ARCH" = "aarch64" ];then OS1="Ubuntu22_04" && OS2="Ubuntu-22.04"; else OS1="Linux" && OS2="Linux";fi &&\
-    RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TENSORRT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TENSORRT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz && \
+    RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${NEW_TRT_VERSION}-b6aa91dc/${NEW_CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${NEW_TRT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${NEW_CUDA_VERSION}.tar.gz && \
     wget ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
     tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
-    mv /usr/local/TensorRT-${TENSORRT_VERSION} /usr/local/tensorrt && \
+    mv /usr/local/TensorRT-${NEW_TRT_VERSION} /usr/local/tensorrt && \
     pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
     rm -rf /workspace/TensorRT.tar
 
