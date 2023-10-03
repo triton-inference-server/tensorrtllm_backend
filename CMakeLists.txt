@@ -37,18 +37,21 @@ project(tritontensorrtllmbackend  LANGUAGES C CXX)
 #
 # Must include options required for this project as well as any
 # projects included in this one by FetchContent.
-#
-# GPU support is disabled by default because TRT-LLM backend doesn't
-# use GPUs.
-#
-option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
+option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 
 # The tags here should match the tag of base image in Dockerfile
-set(TRITON_COMMON_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/common repo")
-set(TRITON_CORE_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/core repo")
-set(TRITON_BACKEND_REPO_TAG "r23.07" CACHE STRING "Tag for triton-inference-server/backend repo")
+# The TRTLLM_BUILD_CONTAINER is used to compile the TRT-LLM libraries that are
+# needed for the TRT-LLM backend. The TRTLLM_BUILD_CONTAINER is launched
+# separately, and the artifacts will be copied back to the backend installation
+# directory.
 set(TRTLLM_BUILD_CONTAINER "" CACHE STRING "Base image for building TRT-LLM")
+set(TENSORRT_VERSION "9.1.0.1" CACHE STRING "The TRT version for TRT-LLM backend")
+set(CUDA_VERSION "12.2" CACHE STRING "The CUDA version for TRT-LLM backend")
+
+set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
+set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
+set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -63,13 +66,16 @@ message(STATUS "COMMON_HEADER_DIRS: ${COMMON_HEADER_DIRS}")
 
 # Install build time dependencies. This section is excuted during cmake
 # configure time.
+set(ENV{TENSORRT_VERSION} ${TENSORRT_VERSION})
+set(ENV{CUDA_VERSION} ${CUDA_VERSION})
+
 execute_process(
   COMMAND bash -x ./tools/environment_setup.sh
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   RESULT_VARIABLE CMD_RESULT
 )
 if(NOT CMD_RESULT EQUAL "0")
-    message(FATAL_ERROR "Failed to install build time dependencies")
+  message(FATAL_ERROR "Failed to install build time dependencies")
 endif()
 
 
@@ -107,7 +113,7 @@ add_custom_command(
   OUTPUT
     tensorrt_llm_build
     COMMENT "Building TensorRT-LLM"
-    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py  --trtllm-build-config="${CMAKE_BUILD_TYPE}" --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py  --trtllm-build-config="${CMAKE_BUILD_TYPE}" --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm --trt-version="${TENSORRT_VERSION}" --cuda-version="${CUDA_VERSION}"
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build --no-cache -t ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
     COMMAND docker rm trtllm_build || echo 'error ignored...' || true
     COMMAND docker create --name trtllm_build ${TRITON_TRTLLM_DOCKER_NAME}
@@ -240,9 +246,9 @@ execute_process(
     OUTPUT_VARIABLE USE_CXX11_ABI)
 message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
 if(USE_CXX11_ABI)
-set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${CMAKE_SYSTEM_PROCESSOR}/libtensorrt_llm_batch_manager_static.a")
 else()
-set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a")
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${CMAKE_SYSTEM_PROCESSOR}/libtensorrt_llm_batch_manager_static.pre_cxx11.a")
 endif()
 
 

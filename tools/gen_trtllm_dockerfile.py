@@ -30,27 +30,47 @@ import argparse
 FLAGS = None
 
 
-def create_postbuild():
+def install_new_version_of_TRT(trt_version, cuda_version):
     df = """
-WORKDIR /workspace
-
+ARG TRT_VERSION={}
+ARG CUDA_VERSION={}
+""".format(trt_version, cuda_version)
+    df += """
 # Remove prevous TRT installation
 RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip uninstall -y tensorrt
 
 # Download & install internal TRT release
-RUN ARCH="$(uname -i)" && \
-    CUDA_VERSION="12.2" && \
-    TENSOR_RT_VERSION="9.1.0.1" && \
+RUN --mount=type=cache,target=/root/.cache \
+    ARCH="$(uname -i)" && \
     if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
     if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
     if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
     if [ "$ARCH" = "aarch64" ];then OS1="Ubuntu22_04" && OS2="Ubuntu-22.04"; else OS1="Linux" && OS2="Linux";fi &&\
-    RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TENSOR_RT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TENSOR_RT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz && \
+    RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TRT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TRT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz && \
     wget ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
     tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
-    mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
+    mv /usr/local/TensorRT-${TRT_VERSION} /usr/local/tensorrt && \
+    pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
     rm -rf /workspace/TensorRT.tar
+
+ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
+ENV TRT_ROOT=/usr/local/tensorrt
+    """
+    return df
+
+
+def create_postbuild(trt_version, cuda_version):
+    df = """
+WORKDIR /workspace
+"""
+    df += install_new_version_of_TRT(trt_version, cuda_version)
+    df += """
+# Remove TRT contents that are not needed in runtime
+RUN ARCH="$(uname -i)" && \
+    rm -fr ${TRT_ROOT}/bin ${TRT_ROOT}/targets/${ARCH}-linux-gnu/bin ${TRT_ROOT}/data && \
+    rm -fr  ${TRT_ROOT}/doc ${TRT_ROOT}/onnx_graphsurgeon ${TRT_ROOT}/python && \
+    rm -fr ${TRT_ROOT}/samples  ${TRT_ROOT}/targets/${ARCH}-linux-gnu/samples
 
 # Uninstall unused nvidia packages
 RUN if pip freeze | grep -q "nvidia.*"; then \
@@ -59,50 +79,23 @@ RUN if pip freeze | grep -q "nvidia.*"; then \
 RUN pip cache purge
 
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:/opt/tritonserver/backends/tensorrtllm:$LD_LIBRARY_PATH
-ENV TRT_ROOT=/usr/local/tensorrt
-    """
+"""
     return df
 
 
-def dockerfile_for_linux(output_file):
+def dockerfile_for_linux():
     df = """
 ARG BASE_IMAGE={}
 """.format(FLAGS.trtllm_base_image)
     df += """
 FROM ${BASE_IMAGE} as base
 WORKDIR /workspace
-"""
-
-    df += """
 RUN apt-get update && apt-get install python3-pip -y
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
-
-# Remove prevous TRT installation
-RUN apt-get remove --purge -y tensorrt* libnvinfer*
-RUN pip uninstall -y tensorrt
-
-# Download & install internal TRT release
-ARG TENSOR_RT_VERSION="9.1.0.1"
-ARG CUDA_VERSION="12.2"
-ARG RELEASE_URL_TRT
-
-RUN --mount=type=cache,target=/root/.cache \
-    ARCH="$(uname -i)" && \
-    if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
-    if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
-    if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
-    if [ "$ARCH" = "aarch64" ];then OS1="Ubuntu22_04" && OS2="Ubuntu-22.04"; else OS1="Linux" && OS2="Linux";fi &&\
-    RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TENSOR_RT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TENSOR_RT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz && \
-    wget ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
-    tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
-    mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
-    pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
-    rm -rf /workspace/TensorRT.tar
-
-ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
-ENV TRT_ROOT=/usr/local/tensorrt
-
+"""
+    df += install_new_version_of_TRT(FLAGS.trt_version, FLAGS.cuda_version)
+    df += """
 FROM base as dev
 
 # CMake
@@ -138,7 +131,7 @@ RUN mkdir -p /opt/trtllm_lib && \
         /opt/trtllm_lib
 """
 
-    with open(output_file, "w") as dfile:
+    with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
 
 
@@ -162,7 +155,19 @@ if __name__ == "__main__":
                         type=str,
                         required=True,
                         help="File to write Dockerfile to.")
+    parser.add_argument(
+        "--trt-version",
+        type=str,
+        required=True,
+        help="TRT version for building TRT-LLM.",
+    )
+    parser.add_argument(
+        "--cuda-version",
+        type=str,
+        required=True,
+        help="CUDA version for building TRT-LLM.",
+    )
 
     FLAGS = parser.parse_args()
 
-    dockerfile_for_linux(FLAGS.output)
+    dockerfile_for_linux()
