@@ -5,7 +5,6 @@ import json
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
-from tensorrt_llm.runtime import to_word_list_format
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
@@ -200,7 +199,7 @@ class TritonPythonModel:
                                                    bytes) else sentence
         return self.tokenizer.encode(sentence)
 
-def to_word_list_format(word_dict: List[List[str]], tokenizer=None):
+def to_word_list_format(word_dict, tokenizer=None):
     '''
     format of word_dict
         len(word_dict) should be same to batch_size

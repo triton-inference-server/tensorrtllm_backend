@@ -28,20 +28,17 @@
 BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
 GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
 
-function build_tensorrt_engine_gpt {
+function build_base_model {
     cd ${GPT_DIR}
     rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
     pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
     python3 hf_gpt_convert.py -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 1 --storage-type float16
-    python3 build.py --model_dir=./c-model/gpt2/1-gpu/ \
-                    --use_gpt_attention_plugin
-    #TODO find out where top-level directory is
     cd ${BASE_DIR}
 }
 
 function build_tensorrt_engine_inflight_batcher {
     cd ${GPT_DIR}
-    # ./c-model/gpt2/ must already exist (it will if build_tensorrt_engine_gpt)
+    # ./c-model/gpt2/ must already exist (it will if build_base_model)
     # has already been run
     python3 build.py --model_dir=./c-model/gpt2/1-gpu/ \
                  --dtype float16 \
@@ -52,14 +49,14 @@ function build_tensorrt_engine_inflight_batcher {
                  --remove_input_padding \
                  --use_layernorm_plugin float16 \
                  --hidden_act gelu \
-                 --output_dir=engines/inflight_single_gpu/
+                 --output_dir=inflight_single_gpu/
     cd ${BASE_DIR}
 
 }
 
 function build_tensorrt_engine_inflight_batcher_multi_gpu {
     cd ${GPT_DIR}
-    python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism --tensor-parallelism 4 --storage-type float16
+    python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 4 --storage-type float16
     python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
                  --world_size=4 \
                  --dtype float16 \
@@ -70,9 +67,13 @@ function build_tensorrt_engine_inflight_batcher_multi_gpu {
                  --remove_input_padding \
                  --use_layernorm_plugin float16 \
                  --hidden_act gelu \
-                 --output_dir=engines/inflight_multi_gpu/
+                 --output_dir=inflight_multi_gpu/
     cd ${BASE_DIR}
 }
+
+
+apt-get remove --purge -y tensorrt* libnvinfer*
+pip uninstall -y tensorrt
 
 # Install TRT version > 9.0
 TENSOR_RT_VERSION="9.1.0.1"
@@ -88,10 +89,29 @@ tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
 mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
 pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
 rm -rf /workspace/TensorRT.tar
-cp tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
+pip install git+https://gitlab-master.nvidia.com/fpetrini/TensorRT-LLM.git
+
+mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
+cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
 
 export LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
 export TRT_ROOT=/usr/local/tensorrt
 
-build_tensorrt_engine_gpt
+# Generate the TRT_LLM model engines
+build_base_model
 build_tensorrt_engine_inflight_batcher
+build_tensorrt_engine_inflight_batcher_multi_gpu
+
+# Move the TRT_LLM model engines to the CI directory
+mkdir engines
+mv ${GPT_DIR}/inflight_single_gpu engines/
+mv ${GPT_DIR}/inflight_multi_gpu engines/
+
+# Move the tokenizer into the CI directory
+mkdir tokenizer
+mv ${GPT_DIR}/gpt2/* tokenizer/
+
+# FIXME: Current model in all_models contains a tensorrt_llm module dependency.
+# The copy of model.py that overwrites the all_models/model.py inlines the
+# dependent function.
+cp model.py ../../all_models/inflight_batcher_llm/preprocessing/1/model.py
