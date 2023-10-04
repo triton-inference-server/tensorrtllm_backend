@@ -89,8 +89,9 @@ tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
 mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
 pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
 rm -rf /workspace/TensorRT.tar
-pip install git+https://gitlab-master.nvidia.com/fpetrini/TensorRT-LLM.git
 
+# Install TRT LLM
+pip install git+https://gitlab-master.nvidia.com/fpetrini/TensorRT-LLM.git
 mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
 cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
 
@@ -111,7 +112,8 @@ mv ${GPT_DIR}/inflight_multi_gpu engines/
 mkdir tokenizer
 mv ${GPT_DIR}/gpt2/* tokenizer/
 
-# FIXME: Current model in all_models contains a tensorrt_llm module dependency.
-# The copy of model.py that overwrites the all_models/model.py inlines the
-# dependent function.
-cp model.py ../../all_models/inflight_batcher_llm/preprocessing/1/model.py
+# Now that the engines are generated, we should remove the
+# tensorrt_llm module to ensure the C++ backend tests are
+# not using it
+rm -rf /usr/local/lib/python3.10/dist-packages/tensorrt_llm
+

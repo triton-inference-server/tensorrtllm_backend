@@ -51,25 +51,28 @@ function replace_config_tags {
 function run_server {
   SERVER_ARGS="${1}"
   python3 /opt/tritonserver/tensorrtllm_backend/scripts/launch_triton_server.py ${SERVER_ARGS} > ${SERVER_LOG} 2>&1 &
-  sleep 2 # allow time to obtain the pid
+  sleep 2 # allow time to obtain the pid(s)
   SERVER_PID=$(pgrep tritonserver)
 }
 
 # Wait until server health endpoint shows ready. Sets WAIT_RET to 0 on
 # success, 1 on failure
 function wait_for_server_ready() {
-    local spid="${1}"; shift
+    local spids="${1}"; shift
     local wait_time_secs="${1:-30}"; shift
 
     WAIT_RET=0
 
     local wait_secs=$wait_time_secs
     until test $wait_secs -eq 0 ; do
-        if ! kill -0 $spid > /dev/null 2>&1; then
-            echo "=== Server not running."
-            WAIT_RET=1
-            return
-        fi
+        # Multi-GPU will spawn multiple pids
+        for pid in "${spids[@]}"; do
+            if ! kill -0 $pid > /dev/null 2>&1; then
+                echo "=== Server not running."
+                WAIT_RET=1
+                return
+            fi
+        done
 
         sleep 1;
 
@@ -99,6 +102,7 @@ function kill_server {
 # =======================================
 
 rm -f $SERVER_LOG* $CLIENT_LOG*
+#source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
     pip3 install transformers && \
     pip3 install torch && \
@@ -106,7 +110,7 @@ python3 -m pip install --upgrade pip && \
 
 RET=0
 
-reset_model_repo
+#reset_model_repo
 
 # 1-GPU TRT engine 
 # inflight batching OFF
@@ -236,6 +240,13 @@ set -e
 kill_server
 sleep 2
 
+# Do not move on to multi-GPU tests
+# unless sufficient GPUs exist
+NUM_GPUS=$(nvidia-smi -L | wc -l)
+if [ "$NUM_GPUS" -ne 4 ]; then
+    exit $RET
+fi
+
 # 4-GPU TRT engine 
 # inflight batching OFF
 # streaming OFF
@@ -338,3 +349,4 @@ set -e
 kill_server
 sleep 2
 
+exit $RET
