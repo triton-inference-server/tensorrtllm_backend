@@ -246,9 +246,9 @@ execute_process(
     OUTPUT_VARIABLE USE_CXX11_ABI)
 message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
 if(USE_CXX11_ABI)
-set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${CMAKE_SYSTEM_PROCESSOR}/libtensorrt_llm_batch_manager_static.a")
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a")
 else()
-set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${CMAKE_SYSTEM_PROCESSOR}/libtensorrt_llm_batch_manager_static.pre_cxx11.a")
+set_property(TARGET tensorrt_llm_batch_manager PROPERTY IMPORTED_LOCATION "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a")
 endif()
 
 
