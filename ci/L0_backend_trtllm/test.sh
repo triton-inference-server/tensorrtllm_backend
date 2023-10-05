@@ -28,7 +28,7 @@
 #TENSORRTLLM_BRANCH=${TENSORRTLLM_BRANCH:="https://github.com/triton-inference-server/tensorrtllm_backend.git"}
 SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
-SERVER_LOG="$PWD/server_log"
+SERVER_LOG="$PWD/server.log"
 CLIENT_LOG="$PWD/client"
 DATASET="$PWD/simple_data.json"
 TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
@@ -102,7 +102,7 @@ function kill_server {
 # =======================================
 
 rm -f $SERVER_LOG* $CLIENT_LOG*
-#source ./generate_engines.sh
+source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
     pip3 install transformers && \
     pip3 install torch && \
@@ -110,7 +110,7 @@ python3 -m pip install --upgrade pip && \
 
 RET=0
 
-#reset_model_repo
+reset_model_repo
 
 # 1-GPU TRT engine 
 # inflight batching OFF
@@ -243,7 +243,7 @@ sleep 2
 # Do not move on to multi-GPU tests
 # unless sufficient GPUs exist
 NUM_GPUS=$(nvidia-smi -L | wc -l)
-if [ "$NUM_GPUS" -ne 4 ]; then
+if [ "$NUM_GPUS" -le 4 ]; then
     exit $RET
 fi
 
