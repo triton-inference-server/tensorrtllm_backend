@@ -26,7 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
-SERVER_LOG="$PWD/server.log"
 DATASET="$PWD/simple_data.json"
 TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
 MODEL_DIR="$PWD/triton_model_repo"
@@ -97,7 +96,7 @@ function kill_server {
 
 # =======================================
 
-rm -f $SERVER_LOG*
+rm -f *.log
 # Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
@@ -110,8 +109,9 @@ RET=0
 reset_model_repo
 
 # 1-GPU TRT engine 
-# inflight batching OFF
-# # streaming OFF
+# inflight batching OFF (V1)
+# streaming OFF
+SERVER_LOG="./1gpu_v1_no_streaming_server.log"
 cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
 replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
@@ -165,6 +165,7 @@ sleep 2
 # 1-GPU TRT engine 
 # inflight batching ON
 # streaming OFF
+SERVER_LOG="./1gpu_IFB_no_streaming_server.log"
 replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
@@ -209,6 +210,7 @@ sleep 2
 # 1-GPU TRT engine 
 # inflight batching ON
 # streaming ON
+SERVER_LOG="./1gpu_IFB_streaming_server.log"
 replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
@@ -244,8 +246,9 @@ if [ "$NUM_GPUS" -le 4 ]; then
 fi
 
 # 4-GPU TRT engine 
-# inflight batching OFF
+# inflight batching OFF (V1)
 # streaming OFF
+SERVER_LOG="./4gpu_v1_no_streaming_server.log"
 reset_model_repo
 
 cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
@@ -287,6 +290,7 @@ sleep 2
 # 4-GPU TRT engine 
 # inflight batching ON
 # streaming OFF
+SERVER_LOG="./4gpu_IFB_no_streaming_server.log"
 replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
@@ -317,6 +321,7 @@ sleep 2
 # 4-GPU TRT engine 
 # inflight batching ON
 # streaming ON
+SERVER_LOG="./4gpu_IFB_streaming_server.log"
 replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
 SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
