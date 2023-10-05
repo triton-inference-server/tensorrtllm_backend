@@ -73,7 +73,7 @@ function build_tensorrt_engine_inflight_batcher_multi_gpu {
 
 # Install TRT LLM
 # FIXME: Update the url
-pip install git+https://gitlab-master.nvidia.com/fpetrini/TensorRT-LLM.git
+pip install git+https://gitlab-master.nvidia.com/krish/TensorRT-LLM.git
 mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
 cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
 
