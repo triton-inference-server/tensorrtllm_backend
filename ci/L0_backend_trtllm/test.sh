@@ -24,19 +24,15 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#TENSORRTLLM_BRANCH_TAG=${TENSORRTLLM_BRANCH_TAG:="main"}
-#TENSORRTLLM_BRANCH=${TENSORRTLLM_BRANCH:="https://github.com/triton-inference-server/tensorrtllm_backend.git"}
 SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
 SERVER_LOG="$PWD/server.log"
-CLIENT_LOG="$PWD/client"
 DATASET="$PWD/simple_data.json"
 TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
 MODEL_DIR="$PWD/triton_model_repo"
 SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm/tokenizer
 BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
-GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
 SERVER_PID=0
 
 # Helpers ===============================
@@ -101,7 +97,8 @@ function kill_server {
 
 # =======================================
 
-rm -f $SERVER_LOG* $CLIENT_LOG*
+rm -f $SERVER_LOG*
+# Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
     pip3 install transformers && \
@@ -126,7 +123,7 @@ replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postpro
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
 # Copy the engine and place it into the model folder
 cp -r ${BASE_DIR}/engines/inflight_single_gpu/ triton_model_repo/tensorrt_llm/1
-#docker run -it --rm -e LOCAL_USER_ID=`id -u ${USER}` --runtime=nvidia --shm-size=2g --gpus all -v /home/fpetrini/Desktop/rrtllm/:/workspace tritonserver:w_trt_llm_backend bash
+
 SERVER_ARGS="--model_repo=${MODEL_DIR}"
 run_server "${SERVER_ARGS}"
 wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
