@@ -82,7 +82,11 @@ class TritonPythonModel:
         num_layers = config['builder_config']['num_layers']
         num_kv_heads = num_heads
         if "num_kv_heads" in config['builder_config'].keys():
-            num_kv_heads = config['builder_config']['num_kv_heads']
+            num_kv_heads = (config['builder_config']['num_kv_heads'] +
+                            world_size - 1) // world_size
+        elif "multi_query_mode" in config['builder_config'].keys():
+            num_kv_heads = 1 if config['builder_config'][
+                'multi_query_mode'] else num_heads
 
         self.comm = mpi_comm()
         self.rank = mpi_rank()
