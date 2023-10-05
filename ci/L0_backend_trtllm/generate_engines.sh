@@ -38,8 +38,8 @@ function build_base_model {
 
 function build_tensorrt_engine_inflight_batcher {
     cd ${GPT_DIR}
-    # ./c-model/gpt2/ must already exist (it will if build_base_model)
-    # has already been run
+    # ./c-model/gpt2/ must already exist (it will if build_base_model
+    # has already been run)
     python3 build.py --model_dir=./c-model/gpt2/1-gpu/ \
                  --dtype float16 \
                  --use_inflight_batching \
