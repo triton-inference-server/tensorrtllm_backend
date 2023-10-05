@@ -71,21 +71,6 @@ function build_tensorrt_engine_inflight_batcher_multi_gpu {
     cd ${BASE_DIR}
 }
 
-# Install TRT version > 9.0
-TENSOR_RT_VERSION="9.1.0.1"
-CUDA_VERSION="12.2"
-ARCH=$(uname -i)
-if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
-if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
-if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
-if [ "$ARCH" = "aarch64" ];then OS1="Ubuntu22_04" && OS2="Ubuntu-22.04"; else OS1="Linux" && OS2="Linux";fi &&\
-RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TENSOR_RT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TENSOR_RT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz && \
-wget ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
-tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
-mv /usr/local/TensorRT-${TENSOR_RT_VERSION}/python /usr/local/tensorrt && \
-pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
-rm -rf /workspace/TensorRT.tar
-
 # Install TRT LLM
 # FIXME: Update the url
 pip install git+https://gitlab-master.nvidia.com/fpetrini/TensorRT-LLM.git
