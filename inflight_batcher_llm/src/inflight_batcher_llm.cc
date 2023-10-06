@@ -985,6 +985,11 @@ public:
         return stoppedReqIds;
     }
 
+    void logStats(const std::string& s)
+    {
+        LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
+    }
+
 private:
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
         : model_state_(model_state)
@@ -1115,7 +1120,8 @@ private:
             [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
                 const std::string& errMsg)
             { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-            [this]() { return pollStopSignals(); }, optionalParams);
+            [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); },
+            optionalParams);
 
         if (getCommWorldRank() != 0)
         {
