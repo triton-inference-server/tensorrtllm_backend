@@ -174,8 +174,10 @@ set_ifndef(NCCL_LIB_DIR /usr/lib/x86_64-linux-gnu/)
 set_ifndef(NCCL_INCLUDE_DIR /usr/include/)
 find_library(NCCL_LIB nccl HINTS ${NCCL_LIB_DIR})
 
-set_ifndef(TRT_LIB_DIR ${CMAKE_BINARY_DIR})
-set_ifndef(TRT_INCLUDE_DIR /usr/include/x86_64-linux-gnu)
+# TRT_LIB_DIR and TRT_INCLUDE_DIR should be aligned with the path in the environment_setup.sh script
+set_ifndef(TRT_LIB_DIR /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/lib)
+set_ifndef(TRT_INCLUDE_DIR /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+
 set(TRT_LIB nvinfer)
 find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
 find_library_create_target(nvuffparser nvparsers SHARED ${TRT_LIB_DIR})
