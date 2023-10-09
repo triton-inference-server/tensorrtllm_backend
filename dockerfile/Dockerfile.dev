@@ -3,7 +3,7 @@ ARG BASE_TAG=23.08-py3
 
 FROM ${BASE_IMAGE}:${BASE_TAG} as base
 
-RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev
+RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev python-is-python3
 
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
@@ -17,35 +17,15 @@ RUN apt-get remove --purge -y tensorrt*
 RUN pip uninstall -y tensorrt
 
 # Download & install internal TRT release
-ARG TENSOR_RT_VERSION="9.1.0.1"
-ARG CUDA_VERSION="12.2"
-ARG RELEASE_URL_TRT
-ARG TARGETARCH
-
-RUN --mount=type=cache,target=/root/.cache \
-    if [ -z "$RELEASE_URL_TRT"];then \
-        ARCH=${TARGETARCH} && \
-        if [ "$ARCH" = "arm64" ];then ARCH="aarch64";fi && \
-        if [ "$ARCH" = "amd64" ];then ARCH="x86_64";fi && \
-        if [ "$ARCH" = "x86_64" ];then DIR_NAME="x64-agnostic"; else DIR_NAME=${ARCH};fi &&\
-        if [ "$ARCH" = "aarch64" ];then OS1="Ubuntu22_04" && OS2="Ubuntu-22.04"; else OS1="Linux" && OS2="Linux";fi &&\
-        RELEASE_URL_TRT=http://cuda-repo.nvidia.com/release-candidates/Libraries/TensorRT/v9.1/${TENSOR_RT_VERSION}-b6aa91dc/${CUDA_VERSION}-r535/${OS1}-${DIR_NAME}/tar/TensorRT-${TENSOR_RT_VERSION}.${OS2}.${ARCH}-gnu.cuda-${CUDA_VERSION}.tar.gz;\
-    fi &&\
-    wget --no-verbose ${RELEASE_URL_TRT} -O /workspace/TensorRT.tar && \
-    tar -xf /workspace/TensorRT.tar -C /usr/local/ && \
-    mv /usr/local/TensorRT-${TENSOR_RT_VERSION} /usr/local/tensorrt && \
-    pip install /usr/local/tensorrt/python/tensorrt-*-cp310-*.whl && \
-    rm -rf /workspace/TensorRT.tar
-
+COPY tensorrt_llm/docker/common/install_tensorrt.sh /tmp/
+RUN bash /tmp/install_tensorrt.sh && rm /tmp/install_tensorrt.sh
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 
 # Install latest Polygraphy
-ARG RELEASE_URL_PG=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/9.0.1/tars/polygraphy-0.48.1-py2.py3-none-any.whl
-RUN --mount=type=cache,target=/root/.cache \
-    pip uninstall -y polygraphy && \
-    pip install ${RELEASE_URL_PG}
+COPY tensorrt_llm/docker/common/install_polygraphy.sh /tmp/
+RUN bash /tmp/install_polygraphy.sh && rm /tmp/install_polygraphy.sh
 
 # CMake
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.1/cmake-3.18.1-Linux-x86_64.sh
-RUN bash cmake-3.18.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir
-ENV PATH="/usr/local/bin:${PATH}"
+COPY tensorrt_llm/docker/common/install_cmake.sh /tmp/
+RUN bash /tmp/install_cmake.sh && rm /tmp/install_cmake.sh
+ENV PATH="/usr/local/cmake/bin:${PATH}"
