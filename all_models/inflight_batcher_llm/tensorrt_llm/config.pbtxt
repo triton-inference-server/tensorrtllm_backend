@@ -186,3 +186,9 @@ parameters: {
     string_value: "${max_num_sequences}"
   }
 }
+parameters: {
+  key: "enable_trt_overlap"
+  value: {
+    string_value: "${enable_trt_overlap}"
+  }
+}

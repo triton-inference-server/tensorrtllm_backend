@@ -349,6 +349,25 @@ float ModelState::GetParameter<float>(const std::string& name)
     return std::stof(GetParameter<std::string>(name));
 }
 
+template <>
+bool ModelState::GetParameter<bool>(const std::string& name)
+{
+    auto val = GetParameter<std::string>(name);
+    if (val == "True" || val == "true" || val == "TRUE" || val == "1")
+    {
+        return true;
+    }
+    else if (val == "False" || val == "false" || val == "FALSE" || val == "0")
+    {
+        return false;
+    }
+    else
+    {
+        std::string err = "Cannot convert " + val + " to a boolean.";
+        throw std::runtime_error(err);
+    }
+}
+
 extern "C"
 {
 
@@ -1056,7 +1075,7 @@ private:
                 "use default value");
         }
 
-        auto schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+        auto schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
         try
         {
             std::string schedulerPolicyStr = model_state_->GetParameter<std::string>("batch_scheduler_policy");
@@ -1064,15 +1083,15 @@ private:
             {
                 schedulerPolicy = batch_scheduler::SchedulerPolicy::MAX_UTILIZATION;
             }
-            else if (schedulerPolicyStr == "guaranteed_completion")
+            else if (schedulerPolicyStr == "guaranteed_no_evict")
             {
-                schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+                schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
             }
             else
             {
                 throw std::runtime_error(
                     "batch_scheduler_policy parameter was not found or is invalid "
-                    "(must be max_utilization or guaranteed_completion)");
+                    "(must be max_utilization or guaranteed_no_evict)");
             }
         }
         catch (const std::exception& e)
@@ -1080,12 +1099,12 @@ private:
             TLLM_LOG_WARNING(e.what());
         }
 
-        if (mIsDecoupled && schedulerPolicy != batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION)
+        if (mIsDecoupled && schedulerPolicy != batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT)
         {
             TLLM_LOG_WARNING(
-                "The batch scheduler policy will be set to guaranteed_completion "
+                "The batch scheduler policy will be set to guaranteed_no_evict"
                 "since the backend operates in decoupled mode");
-            schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+            schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
         }
 
         std::optional<float> kvCacheFreeGpuMemFraction = std::nullopt;
@@ -1112,7 +1131,19 @@ private:
             TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
         }
 
-        TrtGptModelOptionalParams optionalParams(maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction);
+        std::optional<bool> enableTrtOverlap = std::nullopt;
+        try
+        {
+            enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
+        }
+        catch (const std::exception& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
+        }
+
+        TrtGptModelOptionalParams optionalParams(
+            maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction, enableTrtOverlap);
 
         mBatchManager = std::make_shared<GptManager>(
             mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
