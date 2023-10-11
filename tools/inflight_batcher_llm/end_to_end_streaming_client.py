@@ -27,7 +27,7 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(error)
     else:
         user_data._completed_requests.put(result)
-        output = result.as_numpy('OUTPUT_0')
+        output = result.as_numpy('text_output')
         print(output[0], flush=True)
 
 
@@ -43,11 +43,11 @@ def test(triton_client, prompt):
     streaming_data = np.array(streaming, dtype=bool)
 
     inputs = [
-        utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
-        utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
-        utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
-        utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
-        utils.prepare_tensor("streaming", streaming_data, FLAGS.protocol),
+        utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
+        utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+        utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+        utils.prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
+        utils.prepare_tensor("stream", streaming_data, FLAGS.protocol),
     ]
 
     user_data = UserData()
@@ -70,7 +70,7 @@ def test(triton_client, prompt):
             print("Received an error from server:")
             print(result)
         else:
-            result.as_numpy('OUTPUT_0')
+            result.as_numpy('text_output')
 
 
 if __name__ == '__main__':

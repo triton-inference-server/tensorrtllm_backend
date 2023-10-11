@@ -3,10 +3,10 @@ import os
 
 import torch
 import triton_python_backend_utils as pb_utils
-from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 from torch import from_numpy
 
 import tensorrt_llm
+from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 
 
 def mpi_comm():
@@ -73,7 +73,11 @@ class TritonPythonModel:
             'remove_input_padding']
         model = config['builder_config']['name']
         dtype = config['builder_config']['precision']
-        world_size = config['builder_config']['tensor_parallel']
+        tensor_parallel = config['builder_config']['tensor_parallel']
+        pipeline_parallel = 1
+        if 'pipeline_parallel' in config['builder_config']:
+            pipeline_parallel = config['builder_config']['pipeline_parallel']
+        world_size = tensor_parallel * pipeline_parallel
         assert world_size == tensorrt_llm.mpi_world_size(), \
             f'Engine world size ({world_size}) != Runtime world size ({tensorrt_llm.mpi_world_size()})'
         num_heads = config['builder_config']['num_heads'] // world_size
@@ -82,7 +86,11 @@ class TritonPythonModel:
         num_layers = config['builder_config']['num_layers']
         num_kv_heads = num_heads
         if "num_kv_heads" in config['builder_config'].keys():
-            num_kv_heads = config['builder_config']['num_kv_heads']
+            num_kv_heads = (config['builder_config']['num_kv_heads'] +
+                            world_size - 1) // world_size
+        elif "multi_query_mode" in config['builder_config'].keys():
+            num_kv_heads = 1 if config['builder_config'][
+                'multi_query_mode'] else num_heads
 
         self.comm = mpi_comm()
         self.rank = mpi_rank()
@@ -99,7 +107,11 @@ class TritonPythonModel:
         serialize_path = os.path.join(engine_dir, engine_name)
         with open(serialize_path, 'rb') as f:
             engine_buffer = f.read()
-        runtime_mapping = tensorrt_llm.Mapping(world_size, self.rank)
+        runtime_mapping = tensorrt_llm.Mapping(world_size=world_size,
+                                               rank=self.rank,
+                                               gpus_per_node=8,
+                                               tp_size=tensor_parallel,
+                                               pp_size=pipeline_parallel)
         torch.cuda.set_device(self.rank % runtime_mapping.gpus_per_node)
         self.decoder = GenerationSession(model_config, engine_buffer,
                                          runtime_mapping)

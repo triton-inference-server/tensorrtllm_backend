@@ -223,19 +223,19 @@ if __name__ == '__main__':
         presence_penalty = 0.0 * \
             np.ones([input0_data.shape[0], 1]).astype(np.float32)
         inputs = [
-            utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
+            utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
+            utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("stop_words", stop_words_list,
+                                 FLAGS.protocol),
             utils.prepare_tensor("pad_id", pad_ids, FLAGS.protocol),
             utils.prepare_tensor("end_id", end_ids, FLAGS.protocol),
             utils.prepare_tensor("beam_width", beam_width, FLAGS.protocol),
-            utils.prepare_tensor("runtime_top_k", runtime_top_k,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("runtime_top_p", runtime_top_p,
-                                 FLAGS.protocol),
+            utils.prepare_tensor("top_k", runtime_top_k, FLAGS.protocol),
+            utils.prepare_tensor("top_p", runtime_top_p, FLAGS.protocol),
             utils.prepare_tensor("temperature", temperature, FLAGS.protocol),
-            utils.prepare_tensor("len_penalty", len_penalty, FLAGS.protocol),
+            utils.prepare_tensor("length_penalty", len_penalty,
+                                 FLAGS.protocol),
             utils.prepare_tensor("repetition_penalty", repetition_penalty,
                                  FLAGS.protocol),
             utils.prepare_tensor("min_length", min_length, FLAGS.protocol),
@@ -248,7 +248,7 @@ if __name__ == '__main__':
 
         try:
             result = client.infer(model_name, inputs)
-            ensemble_output0 = result.as_numpy("OUTPUT_0")
+            ensemble_output0 = result.as_numpy("text_output")
             print("============After ensemble============")
             batch_size = len(input0)
             ensemble_output0 = ensemble_output0.reshape([-1, batch_size

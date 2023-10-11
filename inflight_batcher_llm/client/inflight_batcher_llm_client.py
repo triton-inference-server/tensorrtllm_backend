@@ -418,6 +418,7 @@ if __name__ == "__main__":
         passed = True
 
         print("output_ids = ", actual_output_ids)
+        output_ids = np.array(actual_output_ids)
         output_ids = output_ids.reshape(
             (output_ids.size, )).tolist()[input_ids_data.shape[1]:]
         output_text = tokenizer.decode(output_ids)
