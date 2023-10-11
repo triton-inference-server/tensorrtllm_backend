@@ -1,9 +1,15 @@
+import csv
+import json
+import math
 import queue
+from datetime import timedelta
 from functools import partial
 
 import numpy as np
+import pandas as pd
 import tritonclient.grpc as grpcclient
 import tritonclient.http as httpclient
+from tabulate import tabulate
 from tritonclient.utils import np_to_triton_dtype
 
 
@@ -12,6 +18,9 @@ class UserData:
     def __init__(self):
         self._completed_requests = queue.Queue()
         self._latencies = []
+        self._latency_dict = {}
+        self._start_time_dict = {}
+        self._stop_time_dict = {}
 
 
 # Callback function used for async_stream_infer()
@@ -153,3 +162,184 @@ def append_start_and_end_ids(inputs,
     if end_id is not None:
         end_ids = end_id * np.ones([batch_size, 1]).astype(np.uint32)
         inputs.append(prepare_tensor("end_id", end_ids, flags.protocol))
+
+
+def get_inflight_reqs_profile(start_times, end_times, requests_per_sec):
+    """
+    Receives start and end times of all requests,
+    divides total E2E time into equal intervals and assigns how many requests are in flight
+    in each interval.
+    """
+    # Calculate min of start time and max of end time
+    min_start_time = min(start_times)
+    max_end_time = max(end_times)
+
+    # need to have enough resolution intervals depending on avg. latency per request. 10 times smaller than request processing time
+    sec_per_request = 1.0 / requests_per_sec
+    NUM_INTERVALS = int((max_end_time - min_start_time) /
+                        timedelta(seconds=(sec_per_request / 10)))
+    print(NUM_INTERVALS)
+    # Calculate interval length
+    interval_length = (max_end_time - min_start_time) / NUM_INTERVALS
+
+    # Initialize a list to store the count of requests in each interval
+    interval_counts = [0] * NUM_INTERVALS
+
+    # Iterate through the requests and update interval counts
+    for i in range(len(start_times)):
+        start = start_times[i]
+        end = end_times[i]
+
+        # Calculate which interval the request falls into
+        interval_index = int((start - min_start_time) / interval_length)
+
+        # Increment the count for that interval and subsequent intervals until end
+        while start < end and interval_index < NUM_INTERVALS:
+            interval_counts[interval_index] += 1
+            interval_index += 1
+            start += interval_length
+
+    return interval_counts
+
+
+def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
+
+    #### Gather info about requests
+    op_token_len_list = []
+    op_token_len_ooo = {}
+
+    for response in responses:
+        #JG: long sequence to extract output length from response json dict. Responses are out of order
+        op_token_len_ooo[response.get_response(as_json=True)['id']] = \
+            int(response.get_response(as_json=True)['outputs'][0]['shape'][2])
+
+    op_token_len_list = [
+        value for key, value in sorted(op_token_len_ooo.items())
+    ]
+
+    assert (len(op_token_len_list) == len(ip_token_len_list))
+    for i in range(len(op_token_len_list)):
+        op_token_len_list[i] = op_token_len_list[i] - ip_token_len_list[i]
+
+    # Get latencies per request
+    # Order latencies based on issue order.
+    latency_list_in_order = [
+        value for key, value in sorted(user_data._latency_dict.items())
+    ]
+    start_time_list_in_order = [
+        value for key, value in sorted(user_data._start_time_dict.items())
+    ]
+    stop_time_list_in_order = [
+        value for key, value in sorted(user_data._stop_time_dict.items())
+    ]
+
+    latency_sorted = np.sort(latency_list_in_order)
+    index_99 = math.ceil(len(latency_sorted) * 0.99)
+    index_90 = math.ceil(len(latency_sorted) * 0.90)
+
+    data = {
+        'latency': latency_list_in_order,
+        'start_time': start_time_list_in_order,
+        'stop_time': stop_time_list_in_order,
+        'num_ip_tokens': ip_token_len_list,
+        'num_op_tokens': op_token_len_list
+    }
+
+    # Bundle everything in a single DF
+    df = pd.DataFrame(data)
+
+    #stats
+    df['num_ip_tokens'].sum()
+    avg_ip_tokens = df['num_ip_tokens'].mean()
+    df['num_ip_tokens'].median()
+    df['num_ip_tokens'].std()
+    total_op_tokens = df['num_op_tokens'].sum()
+    avg_op_tokens = df['num_op_tokens'].mean()
+    df['num_op_tokens'].median()
+    df['num_op_tokens'].std()
+
+    tend = max(df['stop_time'].tolist())
+    t0 = min(df['start_time'].tolist())
+    total_latency = (tend - t0).total_seconds()
+    requests_per_sec = len(responses) / total_latency
+    tokens_generated_per_sec = total_op_tokens / total_latency
+
+    in_flight_requests_intervals = get_inflight_reqs_profile(
+        df['start_time'].tolist(), df['stop_time'].tolist(), requests_per_sec)
+    avg_in_flight_requests = np.mean(in_flight_requests_intervals)
+
+    print_data_dict = {}
+    print_data_dict["Requests/Sec"] = requests_per_sec
+    print_data_dict["OP tokens/sec"] = tokens_generated_per_sec
+    print_data_dict["Avg. latency (ms)"] = np.mean(latency_list_in_order)
+    print_data_dict["P99 latency (ms)"] = latency_sorted[index_99 - 1]
+    print_data_dict["P90 latency (ms)"] = latency_sorted[index_90 - 1]
+    print_data_dict["Avg. Input tokens per request"] = avg_ip_tokens
+    print_data_dict["Avg. Output tokens per request"] = avg_op_tokens
+    print_data_dict["Avg. InFlight requests"] = avg_in_flight_requests
+    print_data_dict["Total latency (ms)"] = total_latency * 1000
+    print_data_dict["Total requests"] = len(responses)
+
+    print_data = [["Requests/Sec", requests_per_sec],
+                  ["OP tokens/sec", tokens_generated_per_sec],
+                  ["Avg. latency (ms)",
+                   np.mean(latency_list_in_order)],
+                  ["P99 latency (ms)", latency_sorted[index_99 - 1]],
+                  ["P90 latency (ms)", latency_sorted[index_90 - 1]],
+                  ["Avg. IP tokens per request", avg_ip_tokens],
+                  ["Avg. OP tokens per request", avg_op_tokens],
+                  ["Avg. InFlight requests", avg_in_flight_requests],
+                  ["Total latency (ms)", total_latency * 1000],
+                  ["Total requests", len(responses)]]
+
+    # Format numerical values to 2 decimal places
+    formatted_data = [[item, f"{value:.2f}"] for item, value in print_data]
+    headers = ["Stat", "Value"]
+    table = tabulate(formatted_data, headers=headers, tablefmt="pretty")
+
+    if FLAGS.op_stats_csv is not None:
+        with open(".csv", "a", newline="") as file:
+            filednames = print_data_dict.keys()
+            writer = csv.DictWriter(file, fieldnames=filednames)
+
+            # Check if the file is empty, and write the header if needed
+            if file.tell() == 0:
+                writer.writeheader()
+
+            # Write the dictionaries as new rows
+            writer.writerow(print_data_dict)
+
+    print(table)
+
+    if FLAGS.dump_perfetto_trace:
+        json_dict = []
+        for i in range(len(op_token_len_list)):
+            req_dict = {}
+            req_dict['name'] = 'req_{}'.format(i)
+            req_dict["cat"] = "batch"
+            req_dict["ph"] = "X"
+            req_dict["ts"] = (start_time_list_in_order[i].timestamp() -
+                              t0.timestamp()) * 1000000  #perfetto expects us
+            req_dict["dur"] = (
+                stop_time_list_in_order[i] -
+                start_time_list_in_order[i]).total_seconds() * 1000000
+            req_dict["pid"] = "1"
+            req_dict["args"] = {
+                "isl": int(ip_token_len_list[i]),
+                "osl": int(op_token_len_list[i])
+            }
+            json_dict.append(req_dict)
+
+        with open("prfetto_dump.json", "w") as file:
+            json.dump(json_dict, file, indent=4)
+
+
+def extract_string_from_nested_list(nested_list):
+    if isinstance(nested_list, str):
+        return nested_list
+    elif isinstance(nested_list, list):
+        for item in nested_list:
+            extracted_string = extract_string_from_nested_list(item)
+            if extracted_string:
+                return extracted_string
+    return ""

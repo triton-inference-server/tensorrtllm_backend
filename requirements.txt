@@ -2,3 +2,5 @@ regex
 fire
 tritonclient[all]
 transformers==4.31.0
+pandas
+tabulate

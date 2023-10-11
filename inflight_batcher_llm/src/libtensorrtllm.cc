@@ -1,4 +1,4 @@
-// Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -228,11 +228,9 @@ TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
 //
 // State associated with a model that is using this backend. An object
 // of this class is created and associated with each
-// TRITONBACKEND_Model. ModelState is derived from BackendModel class
-// provided in the backend utilities that provides many common
-// functions.
+// TRITONBACKEND_Model.
 //
-class ModelState : public BackendModel
+class ModelState
 {
 public:
     static TRITONSERVER_Error* Create(TRITONBACKEND_Model* triton_model, ModelState** state);
@@ -252,8 +250,7 @@ private:
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
     ModelState(TRITONBACKEND_Model* triton_model, TritonJson::Value&& model_config)
-        : BackendModel(triton_model, true)
-        , model_config_(std::move(model_config))
+        : model_config_(std::move(model_config))
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
@@ -285,11 +282,10 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model, ModelS
     {
         *state = new ModelState(triton_model, std::move(model_config));
     }
-    catch (const BackendModelException& ex)
+    catch (const std::exception& ex)
     {
-        RETURN_ERROR_IF_TRUE(ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
-            std::string("unexpected nullptr in BackendModelException"));
-        RETURN_IF_ERROR(ex.err_);
+        std::string errStr = std::string("unexpected error when creating modelState: ") + ex.what();
+        return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
     }
 
     return nullptr; // success
@@ -351,6 +347,25 @@ template <>
 float ModelState::GetParameter<float>(const std::string& name)
 {
     return std::stof(GetParameter<std::string>(name));
+}
+
+template <>
+bool ModelState::GetParameter<bool>(const std::string& name)
+{
+    auto val = GetParameter<std::string>(name);
+    if (val == "True" || val == "true" || val == "TRUE" || val == "1")
+    {
+        return true;
+    }
+    else if (val == "False" || val == "false" || val == "FALSE" || val == "0")
+    {
+        return false;
+    }
+    else
+    {
+        std::string err = "Cannot convert " + val + " to a boolean.";
+        throw std::runtime_error(err);
+    }
 }
 
 extern "C"
@@ -680,10 +695,8 @@ private:
 // State associated with a model instance. An object of this class is
 // created and associated with each
 // TRITONBACKEND_ModelInstance. ModelInstanceState is derived from
-// BackendModelInstance class provided in the backend utilities that
-// provides many common functions.
 //
-class ModelInstanceState : public BackendModelInstance
+class ModelInstanceState
 {
 public:
     static TRITONSERVER_Error* Create(
@@ -991,10 +1004,14 @@ public:
         return stoppedReqIds;
     }
 
+    void logStats(const std::string& s)
+    {
+        LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
+    }
+
 private:
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
-        : BackendModelInstance(model_state, triton_model_instance)
-        , model_state_(model_state)
+        : model_state_(model_state)
         , mIsDecoupled(false)
     {
         // Note: std::string::compare fails this test (always return non-zero
@@ -1058,7 +1075,7 @@ private:
                 "use default value");
         }
 
-        auto schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+        auto schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
         try
         {
             std::string schedulerPolicyStr = model_state_->GetParameter<std::string>("batch_scheduler_policy");
@@ -1066,15 +1083,15 @@ private:
             {
                 schedulerPolicy = batch_scheduler::SchedulerPolicy::MAX_UTILIZATION;
             }
-            else if (schedulerPolicyStr == "guaranteed_completion")
+            else if (schedulerPolicyStr == "guaranteed_no_evict")
             {
-                schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+                schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
             }
             else
             {
                 throw std::runtime_error(
                     "batch_scheduler_policy parameter was not found or is invalid "
-                    "(must be max_utilization or guaranteed_completion)");
+                    "(must be max_utilization or guaranteed_no_evict)");
             }
         }
         catch (const std::exception& e)
@@ -1082,12 +1099,12 @@ private:
             TLLM_LOG_WARNING(e.what());
         }
 
-        if (mIsDecoupled && schedulerPolicy != batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION)
+        if (mIsDecoupled && schedulerPolicy != batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT)
         {
             TLLM_LOG_WARNING(
-                "The batch scheduler policy will be set to guaranteed_completion "
+                "The batch scheduler policy will be set to guaranteed_no_evict"
                 "since the backend operates in decoupled mode");
-            schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_COMPLETION;
+            schedulerPolicy = batch_scheduler::SchedulerPolicy::GUARANTEED_NO_EVICT;
         }
 
         std::optional<float> kvCacheFreeGpuMemFraction = std::nullopt;
@@ -1114,7 +1131,19 @@ private:
             TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
         }
 
-        TrtGptModelOptionalParams optionalParams(maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction);
+        std::optional<bool> enableTrtOverlap = std::nullopt;
+        try
+        {
+            enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
+        }
+        catch (const std::exception& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
+        }
+
+        TrtGptModelOptionalParams optionalParams(
+            maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction, enableTrtOverlap);
 
         mBatchManager = std::make_shared<GptManager>(
             mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
@@ -1122,7 +1151,8 @@ private:
             [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
                 const std::string& errMsg)
             { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-            [this]() { return pollStopSignals(); }, optionalParams);
+            [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); },
+            optionalParams);
 
         if (getCommWorldRank() != 0)
         {
@@ -1160,11 +1190,10 @@ TRITONSERVER_Error* ModelInstanceState::Create(
     {
         *state = new ModelInstanceState(model_state, triton_model_instance);
     }
-    catch (const BackendModelInstanceException& ex)
+    catch (const std::exception& ex)
     {
-        RETURN_ERROR_IF_TRUE(ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
-            std::string("unexpected nullptr in BackendModelInstanceException"));
-        RETURN_IF_ERROR(ex.err_);
+        std::string errStr = std::string("unexpected error when creating modelInstanceState: ") + ex.what();
+        return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
     }
 
     return nullptr; // success

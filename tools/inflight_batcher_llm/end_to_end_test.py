@@ -77,16 +77,17 @@ def test_functionality(client, prompts, output_lens):
         stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
-            utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
+            utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
+            utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("stop_words", stop_words_list,
+                                 FLAGS.protocol),
         ]
 
         result = client.infer(model_name, inputs, request_id=str(i))
 
         # 3. Check the results between manually ensembled models and the ensemble model
-        ensemble_output = result.as_numpy('OUTPUT_0')
+        ensemble_output = result.as_numpy('text_output')
         assert output0 == ensemble_output
         if FLAGS.verbose:
             print('Response: {}'.format(result.get_response()))
@@ -106,10 +107,11 @@ def test_performance(client, prompts, output_lens):
         stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
-            utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
+            utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
+            utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("stop_words", stop_words_list,
+                                 FLAGS.protocol),
         ]
 
         client.infer(model_name, inputs, request_id=str(i))
@@ -127,10 +129,11 @@ def test_performance(client, prompts, output_lens):
         stop_words_list = np.array([[""]], dtype=object)
 
         inputs = [
-            utils.prepare_tensor("INPUT_0", input0_data, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_1", output0_len, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_2", bad_words_list, FLAGS.protocol),
-            utils.prepare_tensor("INPUT_3", stop_words_list, FLAGS.protocol),
+            utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
+            utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+            utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+            utils.prepare_tensor("stop_words", stop_words_list,
+                                 FLAGS.protocol),
         ]
 
         if FLAGS.protocol == "http":

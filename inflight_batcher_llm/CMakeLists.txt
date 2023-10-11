@@ -1,4 +1,4 @@
-# Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met: *
@@ -24,10 +24,28 @@
 cmake_minimum_required(VERSION 3.17)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/set_ifndef.cmake)
 
-set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm)
+set(TRITON_BUILD
+    OFF
+    CACHE STRING "Using Triton build process")
+
+if(TRITON_BUILD)
+  set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tensorrt_llm)
+  # Install build time dependencies. This section is excuted during cmake
+  # configure time.
+  execute_process(
+    COMMAND bash -x ./tools/environment_setup.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    RESULT_VARIABLE CMD_RESULT)
+  if(NOT CMD_RESULT EQUAL "0")
+    message(FATAL_ERROR "Failed to install build time dependencies")
+  endif()
+else()
+  set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm)
+endif()
+
 include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
-project(tutorialinflight_batcher_llmbackend LANGUAGES C CXX)
+project(tritontensorrtllmbackend LANGUAGES C CXX)
 
 #
 # Options
@@ -35,21 +53,29 @@ project(tutorialinflight_batcher_llmbackend LANGUAGES C CXX)
 # Must include options required for this project as well as any projects
 # included in this one by FetchContent.
 #
-# GPU support is disabled by default because inflight_batcher_llm backend
-# doesn't use GPUs.
-#
+# TRITON_ENABLE_GPU is set to OFF as currently the code does not use any GPU
+# related features since TRT-LLM backend manages the usage on GPUs itself.
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 
-# The tags here should match the tag of base image in Dockerfile
+# The TRTLLM_BUILD_CONTAINER is used to compile the TRT-LLM libraries that are
+# needed for the TRT-LLM backend. The TRTLLM_BUILD_CONTAINER is launched
+# separately, and the artifacts will be copied back to the backend installation
+# directory.
+if(TRITON_BUILD)
+  set(TRTLLM_BUILD_CONTAINER
+      ""
+      CACHE STRING "Base image for building TRT-LLM")
+endif()
+
 set(TRITON_COMMON_REPO_TAG
-    "r23.07"
+    "main"
     CACHE STRING "Tag for triton-inference-server/common repo")
 set(TRITON_CORE_REPO_TAG
-    "r23.07"
+    "main"
     CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_BACKEND_REPO_TAG
-    "r23.07"
+    "main"
     CACHE STRING "Tag for triton-inference-server/backend repo")
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -84,18 +110,42 @@ FetchContent_Declare(
   GIT_SHALLOW ON)
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
+# Compile TRT-LLM
+if(TRITON_BUILD)
+  set(TRITON_TRTLLM_DOCKER_NAME "tritonserver-trtllm")
+  add_custom_command(
+    OUTPUT tensorrt_llm_build
+    COMMENT "Building TensorRT-LLM"
+    COMMAND
+      cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py
+      --trtllm-build-config="${CMAKE_BUILD_TYPE}"
+      --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build --no-cache -t
+            ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
+    COMMAND docker rm trtllm_build || echo 'error ignored...' || true
+    COMMAND docker create --name trtllm_build ${TRITON_TRTLLM_DOCKER_NAME}
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && rm -fr tensorrt_llm
+    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker cp
+            trtllm_build:/app/tensorrt_llm tensorrt_llm
+    COMMAND docker cp trtllm_build:/opt/trtllm_lib trtllm_build
+    COMMAND docker rm trtllm_build)
+endif()
+
 #
 # The backend must be built into a shared library. Use an ldscript to hide all
 # symbols except for the TRITONBACKEND API.
 #
-configure_file(src/libtriton_inflight_batcher_llm.ldscript
-               libtriton_inflight_batcher_llm.ldscript COPYONLY)
+configure_file(src/libtriton_tensorrtllm.ldscript
+               libtriton_tensorrtllm.ldscript COPYONLY)
+add_library(triton-tensorrt-llm-backend SHARED src/libtensorrtllm.cc)
 
-add_library(triton-inflight_batcher_llm-backend SHARED
-            src/inflight_batcher_llm.cc)
+if(TRITON_BUILD)
+  add_custom_target(trtllm_target DEPENDS tensorrt_llm_build)
+  add_dependencies(triton-tensorrt-llm-backend trtllm_target)
+endif()
 
-add_library(InflightBatcherLLM::triton-inflight_batcher_llm-backend ALIAS
-            triton-inflight_batcher_llm-backend)
+add_library(TritonTensorRTLLMBackend::triton-tensorrt-llm-backend ALIAS
+            triton-tensorrt-llm-backend)
 
 enable_language(CUDA)
 
@@ -132,8 +182,12 @@ set_ifndef(NCCL_LIB_DIR /usr/lib/x86_64-linux-gnu/)
 set_ifndef(NCCL_INCLUDE_DIR /usr/include/)
 find_library(NCCL_LIB nccl HINTS ${NCCL_LIB_DIR})
 
-set_ifndef(TRT_LIB_DIR ${CMAKE_BINARY_DIR})
-set_ifndef(TRT_INCLUDE_DIR /usr/include/x86_64-linux-gnu)
+# TRT_LIB_DIR and TRT_INCLUDE_DIR should be aligned with the path in the
+# environment_setup.sh script
+set_ifndef(TRT_LIB_DIR
+           /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/lib)
+set_ifndef(TRT_INCLUDE_DIR /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+
 set(TRT_LIB nvinfer)
 find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
 find_library_create_target(nvuffparser nvparsers SHARED ${TRT_LIB_DIR})
@@ -167,7 +221,7 @@ list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
 include_directories(${COMMON_HEADER_DIRS})
 
 target_include_directories(
-  triton-inflight_batcher_llm-backend
+  triton-tensorrt-llm-backend
   PRIVATE ${TRTLLM_DIR}/cpp
           ${TRTLLM_DIR}/cpp/include
           ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -178,12 +232,9 @@ target_include_directories(
           ${MPI_INCLUDE_PATH}
           ${COMMON_HEADER_DIR})
 
-# include_directories(${CUDA_INCLUDE_DIRS} ${CUDNN_ROOT_DIR}/include
-# ${NCCL_INCLUDE_DIR} ${3RDPARTY_DIR}/cutlass/include)
-
-target_compile_features(triton-inflight_batcher_llm-backend PRIVATE cxx_std_17)
+target_compile_features(triton-tensorrt-llm-backend PRIVATE cxx_std_17)
 target_compile_options(
-  triton-inflight_batcher_llm-backend
+  triton-tensorrt-llm-backend
   PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall
@@ -231,8 +282,14 @@ set_property(
     "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so"
 )
 
+if(TRITON_BUILD)
+  add_dependencies(tensorrt_llm trtllm_target)
+  add_dependencies(tensorrt_llm_batch_manager trtllm_target)
+  add_dependencies(nvinfer_plugin_tensorrt_llm trtllm_target)
+endif()
+
 target_link_libraries(
-  triton-inflight_batcher_llm-backend
+  triton-tensorrt-llm-backend
   PRIVATE tensorrt_llm_batch_manager
           tensorrt_llm
           triton-core-serverapi # from repo-core
@@ -240,7 +297,6 @@ target_link_libraries(
           triton-core-serverstub # from repo-core
           triton-backend-utils # from repo-backend
           ${MPI_LIBRARIES}
-          ${NCCL_LIB}
           nvinfer
           nvinfer_plugin_tensorrt_llm)
 
@@ -251,58 +307,61 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json)
 
-target_link_libraries(triton-inflight_batcher_llm-backend
+target_link_libraries(triton-tensorrt-llm-backend
                       PRIVATE nlohmann_json::nlohmann_json)
 
 if(WIN32)
   set_target_properties(
-    triton-inflight_batcher_llm-backend
-    PROPERTIES POSITION_INDEPENDENT_CODE ON OUTPUT_NAME
-                                            triton_inflight_batcher_llm)
+    triton-tensorrt-llm-backend PROPERTIES POSITION_INDEPENDENT_CODE ON
+                                           OUTPUT_NAME triton_tensorrtllm)
 else()
   set_target_properties(
-    triton-inflight_batcher_llm-backend
-    PROPERTIES
-      POSITION_INDEPENDENT_CODE ON
-      OUTPUT_NAME triton_inflight_batcher_llm
-      LINK_DEPENDS
-      ${CMAKE_CURRENT_BINARY_DIR}/libtriton_inflight_batcher_llm.ldscript
-      LINK_FLAGS "-Wl,--version-script libtriton_inflight_batcher_llm.ldscript")
+    triton-tensorrt-llm-backend
+    PROPERTIES POSITION_INDEPENDENT_CODE ON
+               OUTPUT_NAME triton_tensorrtllm
+               LINK_DEPENDS
+               ${CMAKE_CURRENT_BINARY_DIR}/libtriton_tensorrtllm.ldscript
+               LINK_FLAGS "-Wl,--version-script libtriton_tensorrtllm.ldscript")
 endif()
 
 #
 # Install
 #
 include(GNUInstallDirs)
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/InflightBatcherLLMBackend)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonTensorRTLLMBackend)
 
 install(
-  TARGETS triton-inflight_batcher_llm-backend
-  EXPORT triton-inflight_batcher_llm-backend-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/inflight_batcher_llm
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/inflight_batcher_llm)
+  TARGETS triton-tensorrt-llm-backend
+  EXPORT triton-tensorrt-llm-backend-targets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm
+  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
+
+if(TRITON_BUILD)
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/trtllm_build/
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
+endif()
 
 install(
-  EXPORT triton-inflight_batcher_llm-backend-targets
-  FILE InflightBatcherLLMBackendTargets.cmake
-  NAMESPACE InflightBatcherLLMBackend::
+  EXPORT triton-tensorrt-llm-backend-targets
+  FILE TritonTensorRTLLMBackendTargets.cmake
+  NAMESPACE TritonTensorRTLLMBackend::
   DESTINATION ${INSTALL_CONFIGDIR})
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
-  ${CMAKE_CURRENT_LIST_DIR}/cmake/InflightBatcherLLMBackendConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/InflightBatcherLLMBackendConfig.cmake
+  ${CMAKE_CURRENT_LIST_DIR}/cmake/TritonTensorRTLLMBackendConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendConfig.cmake
   INSTALL_DESTINATION ${INSTALL_CONFIGDIR})
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/InflightBatcherLLMBackendConfig.cmake
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendConfig.cmake
         DESTINATION ${INSTALL_CONFIGDIR})
 
 #
 # Export from build tree
 #
 export(
-  EXPORT triton-inflight_batcher_llm-backend-targets
-  FILE ${CMAKE_CURRENT_BINARY_DIR}/InflightBatcherLLMBackendTargets.cmake
-  NAMESPACE InflightBatcherLLMBackend::)
+  EXPORT triton-tensorrt-llm-backend-targets
+  FILE ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendTargets.cmake
+  NAMESPACE TritonTensorRTLLMBackend::)
 
-export(PACKAGE InflightBatcherLLMBackend)
+export(PACKAGE TritonTensorRTLLMBackend)
