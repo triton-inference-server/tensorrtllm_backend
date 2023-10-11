@@ -101,14 +101,16 @@ fi
 
 MAX_NUM_SEQUENCES=( "" "4" "32" )
 MAX_TOKENS_IN_KV_CACHES=( "" "2048" )
-BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_completion" )
+BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_no_evict" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "" "0.2" )
+ENABLE_TRT_OVERLAPS=( "true" "false" )
 
 if [ "$MODEL" = "gpt-ib" ]; then
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
+    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
 
         # Because the runners are shared, the default value of 0.85 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -121,11 +123,12 @@ if [ "$MODEL" = "gpt-ib" ]; then
         echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
         echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
         echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
+        echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
         echo "----------------------------------"
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -180,6 +183,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     done
     done
     done
+    done
 fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
@@ -187,6 +191,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
+    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
 
         # Because the runners are shared, the default value of 0.85 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -199,12 +204,13 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
         echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
         echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
+        echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
         echo "----------------------------------"
 
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -230,6 +236,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
 
         kill -9 ${SERVER_PID}
 
+    done
     done
     done
     done
