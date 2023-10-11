@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,41 +25,20 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-name: "postprocessing"
-backend: "python"
-max_batch_size: 128
-input [
-  {
-    name: "TOKENS_BATCH"
-    data_type: TYPE_INT32
-    dims: [ -1, -1 ]
-  }
-]
-output [
-  {
-    name: "OUTPUT"
-    data_type: TYPE_STRING
-    dims: [ -1, -1 ]
-  }
-]
+apt-get update && apt-get install git-lfs rapidjson-dev python3-pip python-is-python3 -y --no-install-recommends
+# Update submodule
+git submodule update --init --recursive
+git lfs install
+(cd tensorrt_llm/cpp/tensorrt_llm/batch_manager && git lfs pull)
 
-parameters {
-  key: "tokenizer_dir"
-  value: {
-    string_value: "${tokenizer_dir}"
-  }
-}
+pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
-parameters {
-  key: "tokenizer_type"
-  value: {
-    string_value: "${tokenizer_type}"
-  }
-}
+# Remove prevous TRT installation
+apt-get remove --purge -y tensorrt* libnvinfer*
+pip uninstall -y tensorrt
 
-instance_group [
-    {
-        count: 1
-        kind: KIND_CPU
-    }
-]
+# Download & install internal TRT release
+bash tensorrt_llm/docker/common/install_tensorrt.sh
+
+export LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
+export TRT_ROOT=/usr/local/tensorrt

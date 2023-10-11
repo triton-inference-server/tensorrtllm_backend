@@ -1,8 +1,6 @@
-diff --git a/inflight_batcher_llm/CMakeLists.txt b/inflight_batcher_llm/CMakeLists.txt
-index ab4d15f..35d38ea 100644
---- a/inflight_batcher_llm/CMakeLists.txt
-+++ b/inflight_batcher_llm/CMakeLists.txt
-@@ -201,12 +201,27 @@ set_property(
+--- CMakeLists.txt	2023-10-09 22:16:21.813010695 -0700
++++ CMakeLists.txt.new	2023-10-09 22:17:55.846645690 -0700
+@@ -261,12 +261,27 @@
             "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
  add_library(tensorrt_llm_batch_manager STATIC IMPORTED)

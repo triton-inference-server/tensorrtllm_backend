@@ -123,8 +123,8 @@ test-gpt-ib-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - mkdir /opt/tritonserver/backends/inflight_batcher_llm
-    - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+    - mkdir /opt/tritonserver/backends/tensorrtllm
+    - cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
     - bash tests/build_model.sh gpt-ib
     - bash tests/test.sh gpt-ib tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
@@ -138,8 +138,8 @@ test-gpt-ib-streaming-model-job:
   script:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
-    - mkdir /opt/tritonserver/backends/inflight_batcher_llm
-    - cp inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+    - mkdir /opt/tritonserver/backends/tensorrtllm
+    - cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
     - bash tests/build_model.sh gpt-ib
     - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
   artifacts:
