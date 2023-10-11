@@ -48,7 +48,6 @@ RUN cd inflight_batcher_llm && bash scripts/build.sh && cd ..
 
 FROM trt_llm_backend_builder as final
 
-#Install inflight batcher backend
-RUN mkdir /opt/tritonserver/backends/inflight_batcher_llm
-RUN mkdir -p /opt/tensorrt_llm/lib
-COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_inflight_batcher_llm.so /opt/tritonserver/backends/inflight_batcher_llm
+# Install tensorrtllm backend
+RUN mkdir /opt/tritonserver/backends/tensorrtllm
+COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm

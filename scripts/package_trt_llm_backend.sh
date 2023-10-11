@@ -26,6 +26,10 @@ rm -rf tests
 
 rm -rf tools/dataset
 
+rm -rf ci
+
+rm tools/gen_trtllm_dockerfile.py
+
 #
 # Closed-source Batch Manager changes
 #
