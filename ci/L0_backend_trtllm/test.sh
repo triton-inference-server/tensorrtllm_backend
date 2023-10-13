@@ -91,7 +91,7 @@ function reset_model_repo {
 }
 
 function kill_server {
-    pgrep tritonserver | xargs kill -9
+    pgrep tritonserver | xargs kill -SIGINT
 }
 
 # =======================================
@@ -100,9 +100,9 @@ rm -f *.log
 # Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
-    pip3 install transformers && \
-    pip3 install torch && \
     pip3 install tritonclient[all] && \
+    pip3 install pandas && \
+    pip3 install tabulate
 
 RET=0
 
@@ -134,7 +134,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
     --max_input_len=500 \
     --dataset=${DATASET} \
@@ -145,9 +145,9 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
-
 set +e
+
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
     --max_input_len=500 \
     --dataset=${DATASET}
@@ -157,10 +157,10 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 # 1-GPU TRT engine
 # inflight batching ON
@@ -179,7 +179,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
     --max_input_len=500 \
     --dataset=${DATASET} \
@@ -190,9 +190,9 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
-
 set +e
+
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
     --max_input_len=500 \
     --dataset=${DATASET}
@@ -202,10 +202,10 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 # 1-GPU TRT engine
 # inflight batching ON
@@ -224,7 +224,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
     --prompt="My name is"
 
@@ -233,15 +233,15 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 # Do not move on to multi-GPU tests
 # unless sufficient GPUs exist
 NUM_GPUS=$(nvidia-smi -L | wc -l)
-if [ "$NUM_GPUS" -le 4 ]; then
+if [ "$NUM_GPUS" -lt 4 ]; then
     exit $RET
 fi
 
@@ -273,7 +273,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
     --prompt="My name is"
 
@@ -282,10 +282,10 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 # 4-GPU TRT engine
 # inflight batching ON
@@ -304,7 +304,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
     --prompt="My name is"
 
@@ -313,10 +313,10 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 # 4-GPU TRT engine
 # inflight batching ON
@@ -335,7 +335,7 @@ if [ "$WAIT_RET" != "0" ]; then
     exit 1
 fi
 
-set +e
+set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
     --prompt="My name is"
 
@@ -344,9 +344,9 @@ if [ $? -ne 0 ]; then
     echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
     RET=1
 fi
-set -e
+set +e
 
 kill_server
-sleep 2
+sleep 5
 
 exit $RET
