@@ -1,0 +1,10 @@
+--- generate_engines.sh	2023-10-13 11:45:12.583105420 -0700
++++ generate_engines_new.sh	2023-10-13 11:48:28.286118191 -0700
+@@ -74,7 +74,7 @@
+
+ # Install TRT LLM
+ # FIXME: Update the url
+-pip install git+https://${REMOVE_ME_TRTLLM_USERNAME}:${REMOVE_ME_TRTLLM_TOKEN}@gitlab-master.nvidia.com/ftp/tekit.git@${TENSORRTLLM_BACKEND_REPO_TAG}
++pip install git+https://github.com/NVIDIA/TensorRT-LLM.git@${TENSORRTLLM_BACKEND_REPO_TAG}
+ mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
+ cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
