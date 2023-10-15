@@ -20,7 +20,12 @@ git lfs pull
 ### Build the Docker image.
 ```
 cd tensorrtllm_backend
+
+# For x86_64, we install Pytorch through PyPI.
 docker build -f dockerfile/Dockerfile.trt_llm_backend -t tritonserver:w_trt_llm_backend .
+
+# For aarch64, we install Pytorch from source codes.
+docker build -f dockerfile/Dockerfile.trt_llm_backend --build-arg TORCH_INSTALL_TYPE="src_non_cxx11_abi" -t tritonserver:w_trt_llm_backend .
 ```
 
 The rest of the documentation assumes that the Docker image has already been built.
