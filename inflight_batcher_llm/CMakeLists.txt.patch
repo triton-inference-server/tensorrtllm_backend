@@ -1,6 +1,6 @@
 --- CMakeLists.txt	2023-10-09 22:16:21.813010695 -0700
 +++ CMakeLists.txt.new	2023-10-09 22:17:55.846645690 -0700
-@@ -261,12 +261,27 @@
+@@ -252,12 +252,41 @@ set_property(
             "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
  add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
@@ -16,19 +16,33 @@
 +  RESULT_VARIABLE _PYTHON_SUCCESS
 +  OUTPUT_VARIABLE USE_CXX11_ABI)
 +message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
++
++set(BATCH_MANAGER_ARCH "unknown")
++
++message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++  set(BATCH_MANAGER_ARCH "x86_64-linux-gnu")
++elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
++  set(BATCH_MANAGER_ARCH "aarch64-linux-gnu")
++else()
++  message(
++    FATAL_ERROR
++      "The system processor type is unsupported: ${CMAKE_SYSTEM_PROCESSOR}")
++endif()
++
 +if(USE_CXX11_ABI)
 +  set_property(
 +    TARGET tensorrt_llm_batch_manager
 +    PROPERTY
 +      IMPORTED_LOCATION
-+      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a"
++      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${BATCH_MANAGER_ARCH}/libtensorrt_llm_batch_manager_static.a"
 +  )
 +else()
 +  set_property(
 +    TARGET tensorrt_llm_batch_manager
 +    PROPERTY
 +      IMPORTED_LOCATION
-+      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.pre_cxx11.a"
++      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${BATCH_MANAGER_ARCH}/libtensorrt_llm_batch_manager_static.pre_cxx11.a"
 +  )
 +endif()
 
