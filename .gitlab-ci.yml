@@ -56,13 +56,17 @@ build-job:
   script:
     - cd $CI_PROJECT_DIR
     - python3 tensorrt_llm/scripts/build_wheel.py -a "80" --trt_root $TRT_ROOT
+    - mkdir tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu/
+    - mv tensorrt_llm/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu/libtensorrt_llm_batch_manager_static.pre_cxx11.a
     - cd $CI_PROJECT_DIR/inflight_batcher_llm
+    - patch CMakeLists.txt < CMakeLists.txt.patch
     - bash scripts/build.sh
   artifacts:
     expire_in: 30 mins
     paths:
       - tensorrt_llm/build
       - tensorrt_llm/cpp/build
+      - tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu
       - inflight_batcher_llm/build
 
 test-gpt-model-job:
