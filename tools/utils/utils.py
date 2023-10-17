@@ -298,7 +298,7 @@ def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
     table = tabulate(formatted_data, headers=headers, tablefmt="pretty")
 
     if FLAGS.op_stats_csv is not None:
-        with open(".csv", "a", newline="") as file:
+        with open(FLAGS.op_stats_csv, "a", newline="") as file:
             filednames = print_data_dict.keys()
             writer = csv.DictWriter(file, fieldnames=filednames)
 
