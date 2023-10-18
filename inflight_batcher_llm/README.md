@@ -88,6 +88,27 @@ parameters: {
 }
 ```
 
+By default, in-flight batching will try to overlap the execution of batches of
+requests. It may have a negative impact on performance when the number of
+requests is too small. To disable that feature, set the `enable_trt_overlap`
+parameter to `False` in the `config.pbtxt` file:
+
+```
+parameters: {
+  key: "enable_trt_overlap"
+  value: {
+    string_value: "False"
+  }
+}
+```
+
+Or, equivalently, add `enable_trt_overlap:False` to the invocation of the
+`fill_template.py` tool:
+
+```bash
+python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:False"
+```
+
 ## Launch the Triton server container using the model_repository you just created
 
 ```
