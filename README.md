@@ -47,7 +47,7 @@ repo. If you don't find your answer there you can ask questions on the
 
 There are several ways to access the TensorRT-LLM Backend.
 
-**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via CMake](#option-3-build-via-cmake)**
+**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via CMake](#option-3-build-via-docker)**
 
 ### Option 1. Run the Docker Container
 
@@ -96,7 +96,7 @@ the TensorRT-LLM backend and Python backend repositories that will be used
 to build the container. You can also remove the features or endpoints that you
 don't need by removing the corresponding flags.
 
-### Option 3. Build via CMake
+### Option 3. Build via Docker
 
 ```bash
 # Update the submodules
@@ -105,42 +105,9 @@ git submodule update --init --recursive
 git lfs install
 git lfs pull
 
-# Patch the CMakeLists.txt file for different ABI builds
-patch inflight_batcher_llm/CMakeLists.txt  < inflight_batcher_llm/CMakeLists.txt.patch
-
-# Move the source code to the current directory
-mv inflight_batcher_llm/src .
-mv inflight_batcher_llm/cmake .
-mv inflight_batcher_llm/CMakeLists.txt .
-
-# Create a build directory and run cmake
-mkdir build
-cd build
-cmake -DTRITON_BUILD=ON -DTRTLLM_BUILD_CONTAINER=nvcr.io/nvidia/tritonserver:23.09-py3-min -DTRITON_BACKEND_REPO_TAG=<GIT_BRANCH_NAME> -DTRITON_COMMON_REPO_TAG=<GIT_BRANCH_NAME> -DTRITON_CORE_REPO_TAG=<GIT_BRANCH_NAME> -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ..
-make install
+# Use the Dockerfile to build the backend in a container
+DOCKER_BUILDKIT=1 docker build -t triton_trt_llm -f dockerfile/Dockerfile.trt_llm_backend .
 ```
-
-The resulting `install/backends/tensorrtllm directory` can be added to a
-Triton installation as `/opt/tritonserver/backends/tensorrtllm` within the Triton
-NGC container.
-
-When building the TensorRT-LLM Backend with the flag `TRITON_BUILD` set to `ON`,
-it will launch a separate docker image to build an appropriate TRT-LLM
-implementation as part of the build. This setting is useful to avoid having
-extra dependencies that are not needed for building the backend. The image used
-to build the TRT-LLM is specified by the CMake variable
-`TRTLLM_BUILD_CONTAINER`. It is recommended to use the Triton min image on the
-NGC that matches the Triton release you are building for so that it contains
-the required CUDA dependencies.
-
-The following required Triton repositories will be pulled and used in
-the build. If the CMake variables below are not specified, "main" branch
-of those repositories will be used. `[tag]` should be the same
-as the TensorRT-LLM backend repository branch that you are trying to compile.
-
-* triton-inference-server/backend: `-DTRITON_BACKEND_REPO_TAG=[tag]`
-* triton-inference-server/common: `-DTRITON_COMMON_REPO_TAG=[tag]`
-* triton-inference-server/core: `-DTRITON_CORE_REPO_TAG=[tag]`
 
 ## Using the TensorRT-LLM Backend
 
@@ -247,11 +214,11 @@ The following table shows the fields that need to be modified before deployment:
 Before the Triton 23.10 release, you can launch the Triton 23.09 container
 `nvcr.io/nvidia/tritonserver:23.09-py3` and add the directory
 `/opt/tritonserver/backends/tensorrtllm` within the container following the
-instructions in [Option 3 Build via CMake](#option-3-build-via-cmake).
+instructions in [Option 3 Build via Docker](#option-3-build-via-docker).
 
 ```bash
 # Launch the Triton container
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-py3 bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend triton_trt_llm bash
 
 cd /tensorrtllm_backend
 # --world_size is the number of GPUs you want to use for serving
@@ -360,7 +327,7 @@ You can have a look at the client code to see how early stopping is achieved.
 
 sudo nvidia-smi -lgc 1410,1410
 
-srun --mpi=pmix --container-image nvcr.io/nvidia/tritonserver:23.10-trtllm-py3 \
+srun --mpi=pmix --container-image triton_trt_llm \
     --container-mounts /path/to/tensorrtllm_backend:/tensorrtllm_backend \
     --container-workdir /tensorrtllm_backend \
     --output logs/tensorrt_llm_%t.out \
