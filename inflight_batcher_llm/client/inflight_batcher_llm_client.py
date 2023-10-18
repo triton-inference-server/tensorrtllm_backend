@@ -118,8 +118,9 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(result)
         if (FLAGS.streaming):
             output_ids = result.as_numpy('output_ids')
-            tokens = list(output_ids[0][0])
-            print(tokens, flush=True)
+            if output_ids != None:
+                tokens = list(output_ids[0][0])
+                print(tokens, flush=True)
 
 
 if __name__ == "__main__":
@@ -413,7 +414,7 @@ if __name__ == "__main__":
                                 tokens = list(beam_output_ids)
                                 actual_output_ids.append(tokens)
                         else:
-                            print("Got response for cancellation request")
+                            print("Got cancellation response from server")
 
                     processed_count = processed_count + 1
         except Exception as e:

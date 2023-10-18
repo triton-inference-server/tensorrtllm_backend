@@ -1,5 +1,7 @@
 #!/usr/bin/bash
 
+set -x
+
 MODEL=$1
 ENGINE_PATH=$2
 TOKENIZER_PATH=$3
@@ -144,6 +146,16 @@ if [ "$MODEL" = "gpt-ib" ]; then
             --check-output \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
+
+        python3 inflight_batcher_llm_client.py \
+            --request-output-len=128 \
+            --stop-after-ms 100 \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE} &> output_w_stop
+
+        cat output_w_stop
+        grep "Got cancellation response" output_w_stop
+
         popd # inflight_batcher_llm/client
 
         # End to end test
@@ -226,6 +238,17 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
             --streaming --check-output \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
+
+        python3 inflight_batcher_llm_client.py \
+            --streaming \
+            --request-output-len=128 \
+            --stop-after-ms 100 \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE} &> output_w_stop
+
+        cat output_w_stop
+        grep "Got cancellation response" output_w_stop
+
         popd # inflight_batcher_llm/client
 
         # End to end test
