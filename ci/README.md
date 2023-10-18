@@ -1,132 +1,88 @@
-# Instructions to run TRT-LLM in-flight batching Triton backend:
+<!--
+# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
 
-## Build TensorRT-LLM engine for inflight batching
+# Testing TensorRT-LLM backend
 
-To configure a Triton server that runs a model using TensorRT-LLM, it is needed to compile a TensorRT-LLM engine for that model.
+Tests in this CI directory can be run manually to provide extensive testing.
 
-For example, for LLaMA 7B, change to the `tensorrt_llm/examples/llama` directory:
+## Run QA Tests
 
+**The NGC container will be available with Triton 23.10 release soon**
+
+Before the Triton 23.10 release, you can launch the Triton 23.09 container
+`nvcr.io/nvidia/tritonserver:23.09-py3` and add the directory
+`/opt/tritonserver/backends/tensorrtllm` within the container following the
+instructions in [Option 3 Build via CMake](../README.md#option-3-build-via-cmake).
+
+Run the testing within the Triton container.
+
+```bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-py3 bash
+
+# Change directory to the test and run the test.sh script
+cd /tensorrtllm_backend/ci/<test directory>
+bash -x ./test.sh
 ```
-cd tensorrt_llm/examples/llama
-```
-Prepare the checkpoint of the model by following the instructions [here](https://huggingface.co/docs/transformers/main/en/model_doc/llama) and store it in a model directory. Then, create the engine:
-
-```
-python build.py --model_dir ${model_directory} \
-                --dtype bfloat16 \
-                --use_gpt_attention_plugin bfloat16 \
-                --use_inflight_batching \
-                --paged_kv_cache \
-                --remove_input_padding \
-                --use_gemm_plugin bfloat16 \
-                --output_dir engines/bf16/1-gpu/
-```
-
-To disable the support for in-flight batching (i.e. use the V1 batching mode), remove `--use_inflight_batching`.
-
-Similarly, for a GPT model, change to `tensorrt_llm/examples/gpt` directory:
-```
-cd tensorrt_llm/examples/gpt
-
-```
-Prepare the model checkpoint following the instructions in the README file, store it in a model directory and build the TRT engine with:
-
-```
-python3 build.py --model_dir=${model_directory} \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --use_layernorm_plugin float16 \
-                 --hidden_act gelu \
-                 --output_dir=engines/fp16/1-gpu
-```
-
-## Create a model repository folder
-
-First run:
-```
-rm -rf triton_model_repo
-mkdir triton_model_repo
-cp -R all_models/inflight_batcher_llm/ triton_model_repo
-```
-
-Then copy the TRT engine to `triton_model_repo/tensorrt_llm/1/`. For example for the LLaMA 7B example above, run:
-
-```
-cp -R tensorrt_llm/examples/llama/engines/bf16/1-gpu/ triton_model_repo/tensorrt_llm/1
-```
-
-For the GPT example above, run:
-```
-cp -R tensorrt_llm/examples/gpt/engines/fp16/1-gpu/ triton_model_repo/tensorrt_llm/1
-```
-
-
-Edit the `triton_model_repo/tensorrt_llm/config.pbtxt` file and replace `${decoupled_mode}` with `True` or `False`, and `${engine_dir}` with `/triton_model_repo/tensorrt_llm/1/` since the `triton_model_repo` folder created above will be mounted to `/triton_model_repo` in the Docker container. Decoupled mode must be set to true if using the streaming option from the client.
-
-
-To use V1 batching, the `config.pbtxt` should have:
-```
-parameters: {
-  key: "gpt_model_type"
-  value: {
-    string_value: "V1"
-  }
-}
-```
-
-For in-flight batching, use:
-```
-parameters: {
-  key: "gpt_model_type"
-  value: {
-    string_value: "inflight_fused_batching"
-  }
-}
-```
-
-## Launch the Triton server container using the model_repository you just created
-
-```
-docker run --rm -it --net host --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --gpus='"'device=0'"' -v $(pwd)/triton_model_repo:/triton_model_repo tritonserver:w_trt_llm_backend /bin/bash -c "tritonserver --model-repository=/triton_model_repo"
-```
-
-## Run the provided client to send a request
-
-You can test the inflight batcher server with the provided reference python client as following:
-```
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200
-```
-
-You can also stop the generation process early by using the `--stop-after-ms` option to send a stop request after a few milliseconds:
-
-```
-python inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200
-```
-
-You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
-
-You can have a look at the client code to see how early stopping is achieved.
 
 ## Run the e2e/identity test to benchmark
 
-### End to end test
-End to end test script sends requests to deployed ensemble model.
+These two tests are ran in the [L0_backend_trtllm](./L0_backend_trtllm/)
+test. Below are the instructions to run the tests manually.
 
-Ensemble model is ensembled by three models: preprocessing, tensorrt_llm and postprocessing.
-* preprocessing: Tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints).
-* tensorrt_llm: Inferencing.
-* postprocessing: De-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string).
+### Generate the model repository
+
+Follow the instructions in the
+[Create the model repository](../README.md#create-the-model-repository)
+section to prepare the model repository.
+
+### Modify the model configuration
+
+Follow the instructions in the
+[Modify the model configuration](../README.md#modify-the-model-configuration)
+section to modify the model configuration based on the needs.
+
+### End to end test
+
+[End to end test script](../tools/inflight_batcher_llm/end_to_end_test.py) sends
+requests to the deployed `ensemble` model.
+
+Ensemble model is ensembled by three models: `preprocessing`, `tensorrt_llm` and `postprocessing`:
+- "preprocessing": This model is used for tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints).
+- "tensorrt_llm": This model is a wrapper of your TensorRT-LLM model and is used for inferencing
+- "postprocessing": This model is used for de-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string).
 
 The end to end latency includes the total latency of the three parts of an ensemble model.
 
-```
+```bash
 cd tools/inflight_batcher_llm
 python3 end_to_end_test.py --dataset <dataset path>
 ```
+
 Expected outputs
 ```
 [INFO] Functionality test succeed.
@@ -137,13 +93,19 @@ Expected outputs
 
 ### Identity test
 
-Identity test script sends requests directly to deployed tensorrt_llm model, the identity test latency indicates the inference latency of TensorRT-LLM, not including the pre/post-processing latency which is usually handled by a third-party library such as HuggingFace.
+[Identity test script](../tools/inflight_batcher_llm/identity_test.py)
+sends requests directly to the deployed `tensorrt_llm` model, the identity test
+latency indicates the inference latency of TensorRT-LLM, not including the
+pre/post-processing latency which is usually handled by a third-party library
+such as HuggingFace.
 
-```
+```bash
 cd tools/inflight_batcher_llm
 python3 identity_test.py --dataset <dataset path>
 ```
+
 Expected outputs
+
 ```
 [INFO] Warm up for benchmarking.
 [INFO] Start benchmarking on 125 prompts.
