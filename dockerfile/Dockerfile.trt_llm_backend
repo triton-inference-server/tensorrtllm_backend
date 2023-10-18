@@ -30,8 +30,10 @@ COPY tensorrt_llm/docker/common/install_cmake.sh /tmp/
 RUN bash /tmp/install_cmake.sh && rm /tmp/install_cmake.sh
 ENV PATH="/usr/local/cmake/bin:${PATH}"
 
-COPY tensorrt_llm/requirements-dev.txt /tmp/
-RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+# `pypi` for x86_64 arch and `src_cxx11_abi` for aarch64 arch
+ARG TORCH_INSTALL_TYPE="pypi"
+COPY tensorrt_llm/docker/common/install_pytorch.sh install_pytorch.sh
+RUN bash ./install_pytorch.sh $TORCH_INSTALL_TYPE && rm install_pytorch.sh
 
 FROM dev as trt_llm_builder
 

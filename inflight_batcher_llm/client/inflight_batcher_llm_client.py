@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -250,6 +250,11 @@ if __name__ == "__main__":
                         required=False,
                         choices=['auto', 't5', 'llama'],
                         help='Specify tokenizer type')
+    parser.add_argument('--request_id',
+                        type=str,
+                        default='1',
+                        required=False,
+                        help='The request_id for the stop request')
 
     FLAGS = parser.parse_args()
 
@@ -293,7 +298,7 @@ if __name__ == "__main__":
     else:
         stop_inputs = None
 
-    request_id = ""
+    request_id = FLAGS.request_id
 
     expected_output_ids = [
         input_ids[0] + [
