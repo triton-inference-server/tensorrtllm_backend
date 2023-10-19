@@ -228,6 +228,13 @@ cd /tensorrtllm_backend
 python3 scripts/launch_triton_server.py --world_size=4 --model_repo=/tensorrtllm_backend/triton_model_repo
 ```
 
+When successfully deployed, the server produces logs similar to the following ones.
+```
+I0919 14:52:10.475738 293 grpc_server.cc:2451] Started GRPCInferenceService at 0.0.0.0:8001
+I0919 14:52:10.475968 293 http_server.cc:3558] Started HTTPService at 0.0.0.0:8000
+I0919 14:52:10.517138 293 http_server.cc:187] Started Metrics Service at 0.0.0.0:8002
+```
+
 ### Query the server with the Triton generate endpoint
 
 **This feature will be available with Triton 23.10 release soon**
@@ -321,16 +328,17 @@ You can have a look at the client code to see how early stopping is achieved.
 #!/bin/bash
 #SBATCH -o logs/tensorrt_llm.out
 #SBATCH -e logs/tensorrt_llm.error
-#SBATCH -J gpu-comparch-ftp:mgmn
-#SBATCH -A gpu-comparch
-#SBATCH -p luna
+#SBATCH -J <REPLACE WITH YOUR JOB's NAME>
+#SBATCH -A <REPLACE WITH YOUR ACCOUNT's NAME>
+#SBATCH -p <REPLACE WITH YOUR PARTITION's NAME>
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --time=00:30:00
 
 sudo nvidia-smi -lgc 1410,1410
 
-srun --mpi=pmix --container-image triton_trt_llm \
+srun --mpi=pmix \
+    --container-image triton_trt_llm \
     --container-mounts /path/to/tensorrtllm_backend:/tensorrtllm_backend \
     --container-workdir /tensorrtllm_backend \
     --output logs/tensorrt_llm_%t.out \
@@ -351,12 +359,7 @@ ${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config 
 sbatch tensorrt_llm_triton.sub
 ```
 
-When successfully deployed, the server produces logs similar to the following ones.
-```
-I0919 14:52:10.475738 293 grpc_server.cc:2451] Started GRPCInferenceService at 0.0.0.0:8001
-I0919 14:52:10.475968 293 http_server.cc:3558] Started HTTPService at 0.0.0.0:8000
-I0919 14:52:10.517138 293 http_server.cc:187] Started Metrics Service at 0.0.0.0:8002
-```
+You might have to contact your cluster's administrator to help you customize the above script.
 
 ### Kill the Triton server
 
