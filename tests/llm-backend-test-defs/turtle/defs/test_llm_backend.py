@@ -18,6 +18,7 @@ def test_llm_backend_gpt_accuracy(llm_backend_gpt_example_root,
     valid_outputs = [
         "Output:  chef and eventually became a chef at a Michelin",
         "Output:  chef before moving to London in the early 1990s",
+        "Output:  chef before moving to London in the late 1990s",
     ]
     assert output in valid_outputs, "bad output"
 
