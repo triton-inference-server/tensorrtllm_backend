@@ -29,4 +29,4 @@ def get_cmd(world_size, tritonserver, model_repo):
 if __name__ == '__main__':
     args = parse_arguments()
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.model_repo)
-    subprocess.call(cmd, shell=True)
+    subprocess.Popen(cmd, shell=True)

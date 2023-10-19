@@ -234,4 +234,3 @@ if __name__ == '__main__':
 
     print("Tokens per word: ", round(np.mean(ratio), 3))
     test_performance(client, input_start_ids, input_lens, output_lens, FLAGS)
-    print("Expected op tokens", round(np.mean(output_lens), 3))
