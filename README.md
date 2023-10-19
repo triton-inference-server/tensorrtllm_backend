@@ -106,7 +106,10 @@ git lfs install
 git lfs pull
 
 # Use the Dockerfile to build the backend in a container
+# For x86_64
 DOCKER_BUILDKIT=1 docker build -t triton_trt_llm -f dockerfile/Dockerfile.trt_llm_backend .
+# For aarch64
+DOCKER_BUILDKIT=1 docker build -t triton_trt_llm --build-arg TORCH_INSTALL_TYPE="src_non_cxx11_abi" -f dockerfile/Dockerfile.trt_llm_backend .
 ```
 
 ## Using the TensorRT-LLM Backend
