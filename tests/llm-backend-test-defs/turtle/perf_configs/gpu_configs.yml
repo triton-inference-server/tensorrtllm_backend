@@ -31,6 +31,12 @@ GPUs:
     H100 PCIe:
         sm_clk: 1000
         mem_clk: 1593
+    GH200 120GB:
+        sm_clk: 1980
+        mem_clk: 2619
+    GH200 480GB:
+        sm_clk: 1980
+        mem_clk: 2619
     L40S:
         sm_clk: 2520
         mem_clk: 9001
@@ -79,9 +85,3 @@ GPUs:
     Quadro RTX A6000:
         sm_clk: 1440
         mem_clk: 7001
-    e3550_t194a:
-        sm_clk: 1109
-        mem_clk: 1440
-    p3710-0010:
-        sm_clk: 1275
-        mem_clk: 3200
