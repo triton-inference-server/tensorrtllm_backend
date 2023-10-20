@@ -20,13 +20,13 @@ dataset_dict["<dataset_name>"]="<dataset_path>"
 if true; then
     echo "TRUE"
 
-    BATCH_ALGOS=( "v1" "inflight_fused_batching" )
+    BATCHING_STRATEGIES=( "v1" "inflight_fused_batching" )
     DATASETS=( ) # names of keys in dataset_dict to iterate over
 
-    for BATCH_ALGO in "${BATCH_ALGOS[@]}"; do
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-        if [ "$BATCH_ALGO" = "inflight_fused_batching" ]; then
-            BATCH_SCHEDULER_POLICIES=( "guaranteed_completion" )
+        if [ "$BATCHING_STRATEGY" = "inflight_fused_batching" ]; then
+            BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" )
         else
             BATCH_SCHEDULER_POLICIES=( "max_utilization" )
         fi
@@ -35,14 +35,14 @@ if true; then
 
             echo -e " \n ================= INITIALIZING TRITONSERVER FOR =============== \n"
             echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
-            echo "BATCHING SCHEME: ${BATCH_ALGO}"
+            echo "BATCHING SCHEME: ${BATCHING_STRATEGY}"
 
             # Start each server with fresh configuration
             rm -rf my_models
             cp -R all_models my_models
 
             # Modify config.pbtxt
-            python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,batching_strategy:${BATCH_ALGO},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},enable_trt_overlap:True
+            python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,batching_strategy:${BATCHING_STRATEGY},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},enable_trt_overlap:True
             python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
             python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
             python3 scripts/benchmarking/replace_bs.py my_models/inflight_batcher_llm/ ${BS}
@@ -75,7 +75,7 @@ if true; then
                 fi
 
                 for DATASET in "${DATASETS[@]}"; do
-                    op_stats_csv_name="${MACHINE}__${MODEL}__${BATCH_ALGO}__${BATCH_SCHEDULER_POLICY}__${DATASET}.csv"
+                    op_stats_csv_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__${DATASET}.csv"
                     echo -e "DATASET: $DATASET \n\n"
                     echo -e " ======== IDENTITY_TEST --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
                     dataset_path="${dataset_dict[$DATASET]}"

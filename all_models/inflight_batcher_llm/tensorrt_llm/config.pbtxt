@@ -167,7 +167,7 @@ parameters: {
 parameters: {
   key: "gpt_model_type"
   value: {
-    string_value: "inflight_fused_batching"
+    string_value: "${batching_strategy}"
   }
 }
 parameters: {

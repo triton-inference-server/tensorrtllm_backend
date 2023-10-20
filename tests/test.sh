@@ -106,10 +106,12 @@ MAX_TOKENS_IN_KV_CACHES=( "" "2048" )
 BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_no_evict" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "" "0.2" )
 ENABLE_TRT_OVERLAPS=( "true" "false" )
+BATCHING_STRATEGIES=( "inflight_fused_batching" )
 
 if [ "$MODEL" = "gpt-ib" ]; then
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
@@ -130,7 +132,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -196,11 +198,13 @@ if [ "$MODEL" = "gpt-ib" ]; then
     done
     done
     done
+    done
 fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
@@ -222,7 +226,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -259,6 +263,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
 
         kill -9 ${SERVER_PID}
 
+    done
     done
     done
     done
