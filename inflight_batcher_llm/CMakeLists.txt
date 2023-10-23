@@ -190,7 +190,6 @@ set_ifndef(TRT_INCLUDE_DIR /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
 
 set(TRT_LIB nvinfer)
 find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
-find_library_create_target(nvuffparser nvparsers SHARED ${TRT_LIB_DIR})
 
 file(STRINGS "${TRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS
      REGEX "#define NV_TENSORRT_.*")
@@ -282,6 +281,7 @@ target_link_libraries(
           triton-core-serverstub # from repo-core
           triton-backend-utils # from repo-backend
           ${MPI_LIBRARIES}
+          ${CUDA_LIBRARIES}
           nvinfer
           nvinfer_plugin_tensorrt_llm)
 
