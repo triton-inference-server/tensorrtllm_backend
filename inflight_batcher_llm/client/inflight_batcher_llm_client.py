@@ -74,7 +74,8 @@ def prepare_tensor(name, input, protocol):
 
 
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
-                   beam_width_data, temperature_data, streaming_data):
+                   beam_width_data, temperature_data, streaming_data, end_id,
+                   pad_id):
     protocol = 'grpc'
     inputs = [
         prepare_tensor("input_ids", input_ids_data, protocol),
@@ -84,6 +85,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("beam_width", beam_width_data, protocol),
         prepare_tensor("temperature", temperature_data, protocol),
         prepare_tensor("streaming", streaming_data, protocol),
+        prepare_tensor("end_id", end_id, protocol),
+        prepare_tensor("pad_id", pad_id, protocol),
     ]
 
     return inputs
@@ -276,6 +279,8 @@ if __name__ == "__main__":
     tokenizer.pad_token = tokenizer.eos_token
     pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
     end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
+    end_id_data = np.array([[end_id]], dtype=np.uint32)
+    pad_id_data = np.array([[pad_id]], dtype=np.uint32)
 
     input_ids = [tokenizer.encode(FLAGS.text)]
     input_ids_data = np.array(input_ids, dtype=np.int32)
@@ -292,7 +297,8 @@ if __name__ == "__main__":
 
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
-                            temperature_data, streaming_data)
+                            temperature_data, streaming_data, end_id_data,
+                            pad_id_data)
 
     if FLAGS.stop_after_ms > 0:
         stop_inputs = prepare_stop_signals()
