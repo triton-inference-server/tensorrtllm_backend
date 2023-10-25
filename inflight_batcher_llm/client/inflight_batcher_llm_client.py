@@ -307,16 +307,17 @@ if __name__ == "__main__":
 
     request_id = FLAGS.request_id
 
-    expected_output_ids = [
-        input_ids[0] + [
-            21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852,
-            2564, 494, 13, 679
-        ]
+    expected_output_ids = input_ids[0] + [
+        21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852, 2564,
+        494, 13, 679
     ]
+
     if FLAGS.streaming:
         actual_output_ids = [input_ids[0]]
     else:
         actual_output_ids = []
+
+    sequence_lengths = []
 
     user_data = UserData()
     with grpcclient.InferenceServerClient(
@@ -368,17 +369,12 @@ if __name__ == "__main__":
                         print(result)
                     else:
                         output_ids = result.as_numpy('output_ids')
-
+                        sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
-                            if (FLAGS.streaming):
-                                # Only one beam is supported
-                                tokens = list(output_ids[0][0])
-                                actual_output_ids[
-                                    0] = actual_output_ids[0] + tokens
-                            else:
-                                for beam_output_ids in output_ids[0]:
-                                    tokens = list(beam_output_ids)
-                                    actual_output_ids.append(tokens)
+                            # Only one beam is supported
+                            tokens = list(output_ids[0][0])
+                            actual_output_ids[
+                                0] = actual_output_ids[0] + tokens
                         else:
                             print("Got cancellation response from server")
             else:
@@ -415,6 +411,7 @@ if __name__ == "__main__":
                         print(result)
                     else:
                         output_ids = result.as_numpy('output_ids')
+                        sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
                             for beam_output_ids in output_ids[0]:
                                 tokens = list(beam_output_ids)
@@ -429,18 +426,21 @@ if __name__ == "__main__":
 
         passed = True
 
-        print("output_ids = ", actual_output_ids)
-        output_ids = np.array(actual_output_ids)
-        output_ids = output_ids.reshape(
-            (output_ids.size, )).tolist()[input_ids_data.shape[1]:]
-        output_text = tokenizer.decode(output_ids)
-        print(f'Input: {FLAGS.text}')
-        print(f'Output: {output_text}')
-        if (FLAGS.check_output):
-            passed = (actual_output_ids == expected_output_ids)
-            print("expected_output_ids = ", expected_output_ids)
-            print("\n=====")
-            print("PASS!" if passed else "FAIL!")
-            print("=====")
+        for beam in range(FLAGS.beam_width):
+            seq_len = sequence_lengths[0][
+                beam] if not FLAGS.streaming else len(actual_output_ids[beam])
+            output_ids_w_prompt = actual_output_ids[beam][:seq_len]
+            output_ids_wo_prompt = output_ids_w_prompt[input_ids_data.
+                                                       shape[1]:]
+            output_text = tokenizer.decode(output_ids_wo_prompt)
+            print(f'Input: {FLAGS.text}')
+            print(f'Output beam {beam}: {output_text}')
+            if (FLAGS.check_output and beam == 0):
+                passed = (output_ids_w_prompt == expected_output_ids)
+                print("output_ids = ", output_ids_w_prompt)
+                print("expected_output_ids = ", expected_output_ids)
+                print("\n=====")
+                print("PASS!" if passed else "FAIL!")
+                print("=====")
 
         sys.exit(not passed)
