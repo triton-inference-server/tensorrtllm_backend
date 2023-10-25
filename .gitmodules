@@ -1,3 +1,3 @@
 [submodule "tensorrt_llm"]
 	path = tensorrt_llm
-	url = git@github.com:NVIDIA/TensorRT-LLM.git
+	url = git@github.com:cohere-ai/TensorRT-LLM.git
