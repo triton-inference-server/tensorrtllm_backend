@@ -147,11 +147,7 @@ class TritonPythonModel:
     def _postprocessing(self, tokens_batch):
         outputs = []
         for beam_tokens in tokens_batch:
-            if beam_tokens.ndim == 1:
-                output = self.tokenizer.decode(beam_tokens)
+            for tokens in beam_tokens:
+                output = self.tokenizer.decode(tokens)
                 outputs.append(output.encode('utf8'))
-            elif beam_tokens.ndim == 2:
-                for tokens in beam_tokens:
-                    output = self.tokenizer.decode(tokens)
-                    outputs.append(output.encode('utf8'))
         return outputs
