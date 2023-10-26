@@ -109,6 +109,9 @@ ENABLE_TRT_OVERLAPS=( "true" "false" )
 BATCHING_STRATEGIES=( "inflight_fused_batching" )
 
 if [ "$MODEL" = "gpt-ib" ]; then
+    # To make sure that torch is not a dependency for C++ backend
+    pip3 uninstall -y torch
+
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
@@ -202,6 +205,9 @@ if [ "$MODEL" = "gpt-ib" ]; then
 fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
+    # To make sure that torch is not a dependency for C++ backend
+    pip3 uninstall -y torch
+
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
