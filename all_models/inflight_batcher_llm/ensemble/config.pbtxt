@@ -125,7 +125,7 @@ output [
   {
     name: "text_output"
     data_type: TYPE_STRING
-    dims: [ -1, -1 ]
+    dims: [ -1 ]
   }
 ]
 ensemble_scheduling {
@@ -229,6 +229,10 @@ ensemble_scheduling {
         key: "output_ids"
         value: "_TOKENS_BATCH"
       }
+      output_map {
+        key: "sequence_length"
+        value: "_SEQUENCE_LENGTH"
+      }
     },
     {
       model_name: "postprocessing"
@@ -236,6 +240,10 @@ ensemble_scheduling {
       input_map {
         key: "TOKENS_BATCH"
         value: "_TOKENS_BATCH"
+      }
+      input_map {
+        key: "SEQUENCE_LENGTH"
+        value: "_SEQUENCE_LENGTH"
       }
       output_map {
         key: "OUTPUT"
