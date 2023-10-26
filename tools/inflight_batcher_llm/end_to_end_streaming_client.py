@@ -28,10 +28,10 @@ def callback(user_data, result, error):
     else:
         user_data._completed_requests.put(result)
         output = result.as_numpy('text_output')
-        print(output[0], flush=True)
+        print(output, flush=True)
 
 
-def test(triton_client, prompt):
+def test(triton_client, prompt, request_id):
     model_name = "ensemble"
 
     input0 = [[prompt]]
@@ -41,6 +41,8 @@ def test(triton_client, prompt):
     stop_words_list = np.array([[""]], dtype=object)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
+    beam_width = [[FLAGS.beam_width]]
+    beam_width_data = np.array(beam_width, dtype=np.uint32)
 
     inputs = [
         utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
@@ -48,13 +50,14 @@ def test(triton_client, prompt):
         utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
         utils.prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
         utils.prepare_tensor("stream", streaming_data, FLAGS.protocol),
+        utils.prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
     ]
 
     user_data = UserData()
     # Establish stream
     triton_client.start_stream(callback=partial(callback, user_data))
     # Send request
-    triton_client.async_stream_infer(model_name, inputs)
+    triton_client.async_stream_infer(model_name, inputs, request_id=request_id)
 
     #Wait for server to close the stream
     triton_client.stop_stream()
@@ -102,6 +105,15 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "-b",
+        "--beam-width",
+        required=False,
+        type=int,
+        default=1,
+        help="Beam width value",
+    )
+
+    parser.add_argument(
         '-i',
         '--protocol',
         type=str,
@@ -118,6 +130,12 @@ if __name__ == '__main__':
                         required=False,
                         help='Specify output length')
 
+    parser.add_argument('--request_id',
+                        type=str,
+                        default='1',
+                        required=False,
+                        help='The request_id for the stop request')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
@@ -128,4 +146,4 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
-    test(client, FLAGS.prompt)
+    test(client, FLAGS.prompt, FLAGS.request_id)

@@ -32,13 +32,18 @@ input [
     name: "TOKENS_BATCH"
     data_type: TYPE_INT32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "SEQUENCE_LENGTH"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
   }
 ]
 output [
   {
     name: "OUTPUT"
     data_type: TYPE_STRING
-    dims: [ -1, -1 ]
+    dims: [ -1 ]
   }
 ]
 
