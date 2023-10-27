@@ -101,9 +101,8 @@ don't need by removing the corresponding flags.
 ```bash
 # Update the submodules
 cd tensorrtllm_backend
-git submodule update --init --recursive
 git lfs install
-git lfs pull
+git submodule update --init --recursive
 
 # Use the Dockerfile to build the backend in a container
 # For x86_64

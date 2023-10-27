@@ -18,15 +18,25 @@ def parse_arguments():
 
 
 def get_cmd(world_size, tritonserver, model_repo):
-    cmd = 'mpirun --allow-run-as-root '
+    cmd = ['mpirun', '--allow-run-as-root']
     for i in range(world_size):
-        cmd += ' -n 1 {} --model-repository={} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix{}_ : '.format(
-            tritonserver, model_repo, i)
-    cmd += '&'
+        cmd += [
+            '-n', '1', tritonserver, f'--model-repository={model_repo}',
+            '--disable-auto-complete-config',
+            f'--backend-config=python,shm-region-prefix-name=prefix{i}_', ':'
+        ]
     return cmd
 
 
 if __name__ == '__main__':
     args = parse_arguments()
+    res = subprocess.run(['pgrep', 'tritonserver'],
+                         capture_output=True,
+                         encoding='utf-8')
+    if res.stdout:
+        pids = res.stdout.replace('\n', ' ').rstrip()
+        raise RuntimeError(
+            f'tritonserver process(es) already found with PID(s): {pids}.\n\tUse `kill {pids}` to stop them.'
+        )
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.model_repo)
-    subprocess.call(cmd, shell=True)
+    subprocess.Popen(cmd)

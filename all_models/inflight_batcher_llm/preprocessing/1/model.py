@@ -29,9 +29,7 @@ import json
 from typing import List
 
 import numpy as np
-import torch
 import triton_python_backend_utils as pb_utils
-from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
 
@@ -135,12 +133,10 @@ class TritonPythonModel:
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
             input_id_tensor = pb_utils.Tensor(
-                'INPUT_ID',
-                np.array(input_id).astype(self.input_id_dtype))
+                'INPUT_ID', input_id.astype(self.input_id_dtype))
             request_input_len_tensor = pb_utils.Tensor(
                 'REQUEST_INPUT_LEN',
-                np.array(request_input_len).astype(
-                    self.request_input_len_dtype))
+                request_input_len.astype(self.request_input_len_dtype))
             request_output_len_tensor = pb_utils.Tensor(
                 'REQUEST_OUTPUT_LEN', request_output_len)
             bad_words_ids_tensor = pb_utils.Tensor('BAD_WORDS_IDS', bad_words)
@@ -176,16 +172,19 @@ class TritonPythonModel:
             query : batch string (2D numpy array)
         """
         start_ids = [
-            torch.IntTensor(self.tokenizer.encode(s[0].decode()))
+            np.array(self.tokenizer.encode(s[0].decode())).astype(int)
             for s in query
         ]
-        start_lengths = torch.IntTensor([[len(ids)] for ids in start_ids])
+        start_lengths = np.array([[len(ids)] for ids in start_ids]).astype(int)
 
-        start_ids = pad_sequence(start_ids,
-                                 batch_first=True,
-                                 padding_value=self.pad_id)
-        # input_len = min(start_lengths)
-        #attn_mask = torch.ones((batch_size, input_len, input_len)).tril()
+        max_len = 0
+        for seq in start_ids:
+            max_len = max(max_len, seq.shape[0])
+        start_ids = np.stack([
+            np.pad(seq, (0, max_len - seq.shape[0]),
+                   'constant',
+                   constant_values=(0, self.pad_id)) for seq in start_ids
+        ])
 
         return start_ids, start_lengths
 
