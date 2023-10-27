@@ -46,12 +46,11 @@
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "tensorrt_llm/common/logger.h"
+#include "tensorrt_llm/common/mpiUtils.h"
 #include "tensorrt_llm/plugins/api/tllmPlugin.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
 #include <nlohmann/json.hpp>
-
-#include "mpiUtils.h"
 
 using namespace ::triton::common; // TritonJson
 
@@ -61,6 +60,7 @@ using namespace ::triton::common; // TritonJson
 
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::runtime;
+using namespace tensorrt_llm::mpi;
 using namespace std::placeholders; // for _1, _2 etc.
 
 // template class inflight_batcher::batch_manager::GPTManager<float>;
@@ -825,7 +825,7 @@ public:
                     static_cast<int64_t>(max_num_requests));
                 if (world_size > 1)
                 {
-                    bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0);
+                    bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
                 }
 
                 if (num_new_work_items > 0)
@@ -859,8 +859,7 @@ public:
                                 packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                         }
                         int64_t nWords1 = static_cast<int64_t>(packed.size());
-                        bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
-                        bcast(packed, 0);
+                        bcast(packed, 0, COMM_WORLD);
                     }
                 }
             }
@@ -868,13 +867,11 @@ public:
             {
                 // subordinate ranks hang until master rank sends work
                 int64_t num_new_work_items;
-                bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0);
+                bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
                 if (num_new_work_items > 0)
                 {
-                    int nWords1;
-                    bcast(&nWords1, 1, MPI_TYPE_INT64_T, 0);
-                    std::vector<int64_t> packed(nWords1);
-                    bcast(packed, 0);
+                    std::vector<int64_t> packed;
+                    bcast(packed, 0, COMM_WORLD);
                     int64_t* packed_ptr = packed.data();
                     for (int64_t count = 0; count < num_new_work_items; ++count)
                     {
@@ -979,7 +976,7 @@ public:
         if (getCommWorldSize() > 1)
         {
             // Broadcast number of stopped requests
-            bcast(&nStoppedReqIds, 1, MPI_TYPE_INT64_T, 0);
+            bcast(&nStoppedReqIds, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
 
             if (nStoppedReqIds > 0)
             {
@@ -988,12 +985,12 @@ public:
                 {
                     // Store the requestIds in a contiguous vector
                     std::vector<uint64_t> stoppedReqIdsVec(stoppedReqIds.begin(), stoppedReqIds.end());
-                    bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0);
+                    bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
                 }
                 else
                 {
                     std::vector<uint64_t> stoppedReqIdsVec(nStoppedReqIds);
-                    bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0);
+                    bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
                     // Store the requestIds in the set
                     stoppedReqIds.clear();
                     std::copy(stoppedReqIdsVec.begin(), stoppedReqIdsVec.end(),

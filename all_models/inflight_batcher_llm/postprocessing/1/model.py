@@ -109,12 +109,16 @@ class TritonPythonModel:
             tokens_batch = pb_utils.get_input_tensor_by_name(
                 request, 'TOKENS_BATCH').as_numpy()
 
+            # Get sequence length
+            sequence_lengths = pb_utils.get_input_tensor_by_name(
+                request, 'SEQUENCE_LENGTH').as_numpy()
+
             # Reshape Input
             # tokens_batch = tokens_batch.reshape([-1, tokens_batch.shape[0]])
             # tokens_batch = tokens_batch.T
 
             # Postprocessing output data.
-            outputs = self._postprocessing(tokens_batch)
+            outputs = self._postprocessing(tokens_batch, sequence_lengths)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -144,10 +148,11 @@ class TritonPythonModel:
         """
         print('Cleaning up...')
 
-    def _postprocessing(self, tokens_batch):
+    def _postprocessing(self, tokens_batch, sequence_lengths):
         outputs = []
-        for beam_tokens in tokens_batch:
-            for tokens in beam_tokens:
-                output = self.tokenizer.decode(tokens)
+        for batch_idx, beam_tokens in enumerate(tokens_batch):
+            for beam_idx, tokens in enumerate(beam_tokens):
+                seq_len = sequence_lengths[batch_idx][beam_idx]
+                output = self.tokenizer.decode(tokens[:seq_len])
                 outputs.append(output.encode('utf8'))
         return outputs

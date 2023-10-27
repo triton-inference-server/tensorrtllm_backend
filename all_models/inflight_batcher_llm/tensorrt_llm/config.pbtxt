@@ -144,6 +144,11 @@ output [
     name: "output_ids"
     data_type: TYPE_INT32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "sequence_length"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
   }
 ]
 instance_group [
@@ -167,7 +172,7 @@ parameters: {
 parameters: {
   key: "gpt_model_type"
   value: {
-    string_value: "inflight_fused_batching"
+    string_value: "${batching_strategy}"
   }
 }
 parameters: {
