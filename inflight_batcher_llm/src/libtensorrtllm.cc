@@ -607,17 +607,22 @@ public:
         mPendingWorkItems.pop_front();
         mPendingWorkItemsReqIds.erase(workItem->requestId());
 
-        bool markedInProgress;
         // Check if work item has been stopped
-        if (mStoppedReqIds.find(workItem->requestId()) == mStoppedReqIds.end())
+        bool is_stopped = mStoppedReqIds.find(workItem->requestId()) != mStoppedReqIds.end();
+
+        // Check if the Triton request behind is cancelled
+        bool is_cancelled = false;
+        TRITONBACKEND_ResponseFactoryIsCancelled(workItem->response_factory(), &is_cancelled);
+
+        bool markedInProgress = false;
+        if (!is_stopped && !is_cancelled)
         {
             mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
             markedInProgress = true;
         }
-        else
+        else if (is_stopped)
         {
             mStoppedReqIds.erase(workItem->requestId());
-            markedInProgress = false;
         }
 
         return {workItem, markedInProgress};
@@ -906,10 +911,18 @@ public:
         TRITONSERVER_Error* err = nullptr;
         if (!errMsg.empty())
         {
-            std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
-            TLLM_LOG_ERROR(errStr);
-
-            err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            bool is_cancelled = false;
+            TRITONBACKEND_ResponseFactoryIsCancelled(response_factory, &is_cancelled);
+            if (is_cancelled)
+            {
+                err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_CANCELLED, errMsg.c_str());
+            }
+            else
+            {
+                std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
+                TLLM_LOG_ERROR(errStr);
+                err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            }
             final_response = true;
         }
         else
