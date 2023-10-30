@@ -33,7 +33,7 @@ FLAGS = None
 
 def install_new_version_of_TRT(clone_repo=False, trtllm_be_repo_tag="main"):
     df = """
-# Remove prevous TRT installation
+# Remove previous TRT installation
 RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip uninstall -y tensorrt
 
