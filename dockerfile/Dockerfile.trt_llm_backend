@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev p
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
-# Remove prevous TRT installation
+# Remove previous TRT installation
 # We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
 RUN apt-get remove --purge -y tensorrt*
 RUN pip uninstall -y tensorrt

@@ -30,7 +30,7 @@ set(TRITON_BUILD
 
 if(TRITON_BUILD)
   set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tensorrt_llm)
-  # Install build time dependencies. This section is excuted during cmake
+  # Install build time dependencies. This section is executed during cmake
   # configure time.
   execute_process(
     COMMAND bash -x ./tools/environment_setup.sh

@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "substitutions",
         help=
-        "substitions to perform, in the format variable_name_1:value_1,variable_name_2:value_2..."
+        "substitutions to perform, in the format variable_name_1:value_1,variable_name_2:value_2..."
     )
     parser.add_argument("--in_place",
                         "-i",
