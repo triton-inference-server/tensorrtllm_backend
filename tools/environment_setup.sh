@@ -33,7 +33,7 @@ git lfs install
 
 pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
-# Remove prevous TRT installation
+# Remove previous TRT installation
 apt-get remove --purge -y tensorrt* libnvinfer*
 pip uninstall -y tensorrt
 

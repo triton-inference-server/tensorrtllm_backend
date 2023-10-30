@@ -858,7 +858,6 @@ public:
                             packed.insert(
                                 packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                         }
-                        int64_t nWords1 = static_cast<int64_t>(packed.size());
                         bcast(packed, 0, COMM_WORLD);
                     }
                 }
@@ -1128,7 +1127,7 @@ private:
             TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
         }
 
-        std::optional<bool> enableTrtOverlap = std::nullopt;
+        bool enableTrtOverlap = true;
         try
         {
             enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
@@ -1139,8 +1138,11 @@ private:
             TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
         }
 
-        TrtGptModelOptionalParams optionalParams(
-            maxNumSequences, maxTokensInPagedKvCache, kvCacheFreeGpuMemFraction, enableTrtOverlap);
+        TrtGptModelOptionalParams optionalParams;
+        optionalParams.maxNumSequences = maxNumSequences;
+        optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
+        optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
+        optionalParams.enableTrtOverlap = enableTrtOverlap;
 
         mBatchManager = std::make_shared<GptManager>(
             mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,

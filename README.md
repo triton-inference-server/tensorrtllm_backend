@@ -363,7 +363,7 @@ You might have to contact your cluster's administrator to help you customize the
 ### Kill the Triton server
 
 ```bash
-pgrep tritonserver | xargs kill -9
+pkill tritonserver
 ```
 
 ## Testing the TensorRT-LLM Backend
