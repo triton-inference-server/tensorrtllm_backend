@@ -26,6 +26,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import csv
+import os
 import queue
 import sys
 import time
@@ -58,6 +60,21 @@ from tritonclient.utils import InferenceServerException, np_to_triton_dtype
 # tensorrt_llm/cpp/tests/resources/models/rt_engine/gpt2/fp16-inflight-batching-plugin/1-gpu/
 #
 
+np_bfloat16 = np.dtype('V2', metadata={"dtype": "bfloat16"})
+
+_str_to_np_dict = dict(
+    float16=np.float16,
+    float32=np.float32,
+    int32=np.int32,
+    bfloat16=np_bfloat16,
+)
+
+
+def str_dtype_to_np(dtype):
+    ret = _str_to_np_dict.get(dtype)
+    assert ret is not None, f'Unsupported dtype: {dtype}'
+    return ret
+
 
 class UserData:
 
@@ -75,7 +92,8 @@ def prepare_tensor(name, input, protocol):
 
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, streaming_data, end_id,
-                   pad_id):
+                   pad_id, prompt_embedding_table_data,
+                   prompt_vocab_size_data):
     protocol = 'grpc'
     inputs = [
         prepare_tensor("input_ids", input_ids_data, protocol),
@@ -88,6 +106,13 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("end_id", end_id, protocol),
         prepare_tensor("pad_id", pad_id, protocol),
     ]
+    if prompt_embedding_table_data is not None:
+        inputs += [
+            prepare_tensor("prompt_embedding_table",
+                           prompt_embedding_table_data, protocol),
+            prepare_tensor("prompt_vocab_size", prompt_vocab_size_data,
+                           protocol)
+        ]
 
     return inputs
 
@@ -150,6 +175,36 @@ if __name__ == "__main__":
         required=False,
         default='Born in north-east France, Soyer trained as a',
         help='Input text')
+
+    parser.add_argument('--input_tokens_csv',
+                        type=str,
+                        required=False,
+                        default='',
+                        help='Path to csv file containing the input tokens')
+
+    parser.add_argument(
+        '--output_tokens_csv',
+        type=str,
+        required=False,
+        default='',
+        help='Path to csv file containing the expected output tokens')
+
+    parser.add_argument(
+        '--end_id',
+        type=int,
+        required=False,
+        default=50256,
+        help='The token id for end token. Only needed if tokenizer is not used.'
+    )
+
+    parser.add_argument(
+        '--pad_id',
+        type=int,
+        required=False,
+        default=50256,
+        help='The token id for pad token. Only needed if tokenizer is not used.'
+    )
+
     parser.add_argument(
         "-s",
         "--ssl",
@@ -246,7 +301,8 @@ if __name__ == "__main__":
         help='Early stop the generation after a few milliseconds')
     parser.add_argument('--tokenizer_dir',
                         type=str,
-                        required=True,
+                        required=False,
+                        default='',
                         help='Specify tokenizer directory')
     parser.add_argument('--tokenizer_type',
                         type=str,
@@ -260,29 +316,88 @@ if __name__ == "__main__":
                         required=False,
                         help='The request_id for the stop request')
 
+    parser.add_argument('--prompt_embedding_table_path',
+                        type=str,
+                        default='',
+                        required=False,
+                        help='The prompt embedding table to use for ptuning')
+
+    parser.add_argument(
+        '--prompt_task_id',
+        type=int,
+        default=0,
+        required=False,
+        help='The prompt task id in the prompt embedding table')
+
+    parser.add_argument('--dtype',
+                        type=str,
+                        default='float16',
+                        choices=['float16', 'float32', 'bfloat16'])
+
     FLAGS = parser.parse_args()
 
-    print('=========')
-    if FLAGS.tokenizer_type == 't5':
-        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
-                                padding_side='left')
-    elif FLAGS.tokenizer_type == 'auto':
-        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                  padding_side='left')
-    elif FLAGS.tokenizer_type == 'llama':
-        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                   legacy=False,
-                                                   padding_side='left')
+    tokenizer = None
+    if FLAGS.input_tokens_csv != "":
+        with open(FLAGS.input_tokens_csv) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=",")
+            for row in csv_reader:
+                input_ids = [[int(val) for val in row]]
+                break
+            print(input_ids)
+
+        end_id = FLAGS.end_id
+        pad_id = FLAGS.pad_id
+
     else:
-        raise AttributeError(
-            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
-    tokenizer.pad_token = tokenizer.eos_token
-    pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
-    end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
+        print('=========')
+        if not os.path.exists(FLAGS.tokenizer_dir):
+            print(
+                "Input tokens are not provided and tokenizer directory does not exist: ",
+                FLAGS.tokenizer_dir)
+            exit()
+
+        if FLAGS.tokenizer_type == 't5':
+            tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                    padding_side='left')
+        elif FLAGS.tokenizer_type == 'auto':
+            tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                      padding_side='left')
+        elif FLAGS.tokenizer_type == 'llama':
+            tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                       legacy=False,
+                                                       padding_side='left')
+        else:
+            raise AttributeError(
+                f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+
+        tokenizer.pad_token = tokenizer.eos_token
+        pad_id = tokenizer.encode(tokenizer.pad_token,
+                                  add_special_tokens=False)[0]
+        end_id = tokenizer.encode(tokenizer.eos_token,
+                                  add_special_tokens=False)[0]
+
+        input_ids = [tokenizer.encode(FLAGS.text)]
+        print(input_ids)
+
     end_id_data = np.array([[end_id]], dtype=np.uint32)
     pad_id_data = np.array([[pad_id]], dtype=np.uint32)
 
-    input_ids = [tokenizer.encode(FLAGS.text)]
+    #Get the prompt embedding table for the task id
+    prompt_embedding_table_data = None
+    prompt_vocab_size_data = None
+    if (FLAGS.prompt_embedding_table_path != ""):
+        prompt_table = np.load(FLAGS.prompt_embedding_table_path)
+        prompt_table = prompt_table.astype(str_dtype_to_np(FLAGS.dtype))
+        task_vocab_size = prompt_table.shape[1]
+
+        # squeeze the first 2 dimensions
+        prompt_embedding_table_data = prompt_table[FLAGS.prompt_task_id]
+        prompt_embedding_table_data = np.expand_dims(
+            prompt_table[FLAGS.prompt_task_id], axis=0)
+
+        prompt_vocab_size = [[task_vocab_size]]
+        prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.uint32)
+
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
@@ -298,7 +413,8 @@ if __name__ == "__main__":
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
                             temperature_data, streaming_data, end_id_data,
-                            pad_id_data)
+                            pad_id_data, prompt_embedding_table_data,
+                            prompt_vocab_size_data)
 
     if FLAGS.stop_after_ms > 0:
         stop_inputs = prepare_stop_signals()
@@ -307,10 +423,17 @@ if __name__ == "__main__":
 
     request_id = FLAGS.request_id
 
-    expected_output_ids = input_ids[0] + [
-        21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852, 2564,
-        494, 13, 679
-    ]
+    if FLAGS.output_tokens_csv != "":
+        with open(FLAGS.output_tokens_csv) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=",")
+            for row in csv_reader:
+                expected_output_ids = [int(val) for val in row]
+                break
+    else:
+        expected_output_ids = input_ids[0] + [
+            21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852,
+            2564, 494, 13, 679
+        ]
 
     if FLAGS.streaming:
         actual_output_ids = [input_ids[0]]
@@ -432,12 +555,14 @@ if __name__ == "__main__":
             output_ids_w_prompt = actual_output_ids[beam][:seq_len]
             output_ids_wo_prompt = output_ids_w_prompt[input_ids_data.
                                                        shape[1]:]
-            output_text = tokenizer.decode(output_ids_wo_prompt)
-            print(f'Input: {FLAGS.text}')
-            print(f'Output beam {beam}: {output_text}')
+            if tokenizer != None:
+                output_text = tokenizer.decode(output_ids_wo_prompt)
+                print(f'Input: {FLAGS.text}')
+                print(f'Output beam {beam}: {output_text}')
+
+            print("output_ids = ", output_ids_w_prompt)
             if (FLAGS.check_output and beam == 0):
                 passed = (output_ids_w_prompt == expected_output_ids)
-                print("output_ids = ", output_ids_w_prompt)
                 print("expected_output_ids = ", expected_output_ids)
                 print("\n=====")
                 print("PASS!" if passed else "FAIL!")

@@ -4,6 +4,7 @@ variables:
   IMAGE: urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton23.08-trt9.1.0.4
   TRT_ROOT: /usr/local/tensorrt
   GPT2: /home/scratch.trt_llm_data/llm-models/gpt2
+  GPT2_NEXT_PTUNING: /home/scratch.trt_llm_data/llm-models/email_composition
   OPT_125M: /home/scratch.trt_llm_data/llm-models/opt-125m
   LLAMA: /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
   GPTJ: /home/scratch.trt_llm_data/llm-models/gpt-j-6b
@@ -146,6 +147,21 @@ test-gpt-ib-streaming-model-job:
     - cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
     - bash tests/build_model.sh gpt-ib
     - bash tests/test.sh gpt-ib-streaming tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${GPT2} auto
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-job
+
+test-gpt-ib-ptuning-model-job:
+  stage: test-model
+  image: $IMAGE
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
+    - mkdir /opt/tritonserver/backends/tensorrtllm
+    - cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
+    - bash tests/build_model.sh gpt-ib-ptuning
+    - bash tests/test.sh gpt-ib-ptuning ${CI_PROJECT_DIR}/tensorrt_llm/examples/gpt/trt_engine/email_composition/fp16/1-gpu/ ${GPT2} auto
   artifacts:
     expire_in: 30 mins
   dependencies:

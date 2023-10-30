@@ -45,6 +45,8 @@
 #include "tensorrt_llm/batch_manager/NamedTensor.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
+#include "tensorrt_llm/batch_manager/kvCacheConfig.h"
+#include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/common/mpiUtils.h"
 #include "tensorrt_llm/plugins/api/tllmPlugin.h"
@@ -156,7 +158,7 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
     }
     else if (data_type == TRITONSERVER_TYPE_FP16)
     {
-        return nvinfer1::DataType::kBF16;
+        return nvinfer1::DataType::kHALF;
     }
     else if (data_type == TRITONSERVER_TYPE_FP32)
     {

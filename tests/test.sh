@@ -276,3 +276,56 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     done
 fi
+
+if [ "$MODEL" = "gpt-ib-ptuning" ]; then
+
+    #Generate reference output
+    pushd tensorrt_llm/examples/gpt
+
+    # Input with virtual tokens:
+    python3 run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table=email_composition.npy --input_tokens=input.csv --engine_dir ${ENGINE_PATH} --output_csv output_w_prompt.csv
+
+    #Input w/o virtual tokens:
+    echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
+    python3 run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --input_tokens=input_wo_prompt.csv --engine_dir ${ENGINE_PATH} --output_csv output_wo_prompt.csv
+
+    popd
+
+    BATCHING_STRATEGIES=( "inflight_fused_batching" "v1")
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+        MAX_NUM_SEQUENCE=""
+        MAX_TOKENS_IN_KV_CACHE=""
+        BATCH_SCHEDULER_POLICIE="guaranteed_no_evict"
+        KV_CACHE_FREE_GPU_MEM_FRACTION="0.2"
+        ENABLE_TRT_OVERLAP="false"
+
+        echo "----------------------------------"
+        rm -rf ./triton_repo
+        cp -R all_models/inflight_batcher_llm triton_repo
+
+        # Modify config.pbtxt
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+        python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+        python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+
+        # Launch Triton Server
+        /opt/tritonserver/bin/tritonserver \
+            --model-repository=triton_repo &
+        export SERVER_PID=$!
+        wait_for_server_ready ${SERVER_PID} 1200
+
+        # Test client
+        pushd inflight_batcher_llm/client
+
+        python3 inflight_batcher_llm_client.py --prompt_embedding_table ../../tensorrt_llm/examples/gpt/email_composition.npy --prompt_task_id 0 --input_tokens_csv ../../tensorrt_llm/examples/gpt/input.csv --output_tokens_csv ../../tensorrt_llm/examples/gpt/output_w_prompt.csv --check-output --request-output-len 8
+
+        python3 inflight_batcher_llm_client.py --input_tokens_csv ../../tensorrt_llm/examples/gpt/input_wo_prompt.csv --output_tokens_csv ../../tensorrt_llm/examples/gpt/output_wo_prompt.csv --check-output --request-output-len 8
+
+        popd # inflight_batcher_llm/client
+
+        kill -9 ${SERVER_PID}
+
+    done
+fi

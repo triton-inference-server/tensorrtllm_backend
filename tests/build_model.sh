@@ -3,6 +3,7 @@
 MODEL=$1
 
 GPT2=/home/scratch.trt_llm_data/llm-models/gpt2
+GPT2_NEXT_PTUNING=/home/scratch.trt_llm_data/llm-models/email_composition
 OPT_125M=/home/scratch.trt_llm_data/llm-models/opt-125m
 LLAMA=/home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
 GPTJ=/home/scratch.trt_llm_data/llm-models/gpt-j-6b
@@ -118,6 +119,38 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --remove_input_padding \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
+
+    popd # tensorrt_llm/examples/gpt
+
+fi
+
+if [ "$MODEL" = "gpt-ib-ptuning" ]; then
+
+    # GPT2
+    pushd tensorrt_llm/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    echo "Convert GPT from HF"
+    python3 nemo_ckpt_convert.py -i ${GPT2_NEXT_PTUNING}/megatron_converted_8b_tp4_pp1.nemo -o ./c-model/email_composition/fp16 --storage-type float16 --tensor-parallelism 1 --processes 1
+#
+    echo "Convert ptuning table"
+    python3 nemo_prompt_convert.py -i ${GPT2_NEXT_PTUNING}/email_composition.nemo -o email_composition.npy
+
+    cp ${GPT2_NEXT_PTUNING}/input.csv ./
+
+    echo "Build GPT: float16 | src FT"
+    python3 build.py --model_dir=./c-model/email_composition/fp16/1-gpu \
+        --dtype float16 \
+        --use_inflight_batching \
+        --use_gpt_attention_plugin float16 \
+        --paged_kv_cache \
+        --use_gemm_plugin float16 \
+        --use_layernorm_plugin float16 \
+        --remove_input_padding \
+        --max_batch_size 8 --max_input_len 924 --max_output_len 128 --max_beam_width 1 \
+        --output_dir trt_engine/email_composition/fp16/1-gpu/ --hidden_act gelu --enable_context_fmha \
+        --max_prompt_embedding_table_size 800
 
     popd # tensorrt_llm/examples/gpt
 
