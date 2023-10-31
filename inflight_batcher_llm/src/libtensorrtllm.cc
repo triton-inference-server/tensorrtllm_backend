@@ -608,7 +608,7 @@ public:
         mPendingWorkItemsReqIds.erase(workItem->requestId());
 
         // Check if work item has been stopped
-        bool is_stopped = mStoppedReqIds.find(workItem->requestId()) != mStoppedReqIds.end();
+        bool is_stopped = mStoppedReqIds.count(workItem->requestId());
 
         // Check if the Triton request behind is cancelled
         bool is_cancelled = false;
