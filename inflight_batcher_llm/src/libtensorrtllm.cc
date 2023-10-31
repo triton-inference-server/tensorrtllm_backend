@@ -620,7 +620,7 @@ public:
             mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
             markedInProgress = true;
         }
-        else if (is_stopped)
+        else
         {
             mStoppedReqIds.erase(workItem->requestId());
         }
