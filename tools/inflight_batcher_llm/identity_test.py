@@ -37,7 +37,7 @@ def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
         inputs = [
             utils.prepare_tensor("input_ids", input_start_ids[0],
                                  FLAGS.protocol),
-            utils.prepare_tensor("input_lengths", input_lens[i],
+            utils.prepare_tensor("input_lengths", input_lens[0],
                                  FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
