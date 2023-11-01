@@ -186,7 +186,9 @@ find_library(NCCL_LIB nccl HINTS ${NCCL_LIB_DIR})
 # environment_setup.sh script
 set_ifndef(TRT_LIB_DIR
            /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/lib)
-set_ifndef(TRT_INCLUDE_DIR /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+set_ifndef(
+  TRT_INCLUDE_DIR
+  /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/include)
 
 set(TRT_LIB nvinfer)
 find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
