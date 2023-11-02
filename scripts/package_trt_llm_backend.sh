@@ -35,15 +35,6 @@ patch inflight_batcher_llm/CMakeLists.txt  < inflight_batcher_llm/CMakeLists.txt
 rm inflight_batcher_llm/CMakeLists.txt.patch
 [[ -e inflight_batcher_llm/CMakeLists.txt.orig ]] && rm inflight_batcher_llm/CMakeLists.txt.orig
 
-# patch the scripts to point to the TensorRT-LLM GitHub repo and remove the patch from release package
-patch ci/L0_backend_trtllm/generate_engines.sh  < ci/L0_backend_trtllm/generate_engines.sh.patch
-rm ci/L0_backend_trtllm/generate_engines.sh.patch
-[[ -e ici/L0_backend_trtllm/generate_engines.sh.orig ]] && rm ci/L0_backend_trtllm/generate_engines.sh.orig
-
-patch tools/gen_trtllm_dockerfile.py  < tools/gen_trtllm_dockerfile.py.patch
-rm tools/gen_trtllm_dockerfile.py.patch
-[[ -e tools/gen_trtllm_dockerfile.py.orig ]] && rm tools/gen_trtllm_dockerfile.py.orig
-
 # exit if the keyword is found
 grep "__LUNOWUD" -R > /dev/null && exit 1
 grep "tekit" -R > /dev/null && exit 1
