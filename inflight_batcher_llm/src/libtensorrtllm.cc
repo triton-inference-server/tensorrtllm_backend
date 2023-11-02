@@ -911,18 +911,19 @@ public:
         TRITONSERVER_Error* err = nullptr;
         if (!errMsg.empty())
         {
+            std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
+            TLLM_LOG_ERROR(errStr);
+
             bool is_cancelled = false;
             TRITONBACKEND_ResponseFactoryIsCancelled(response_factory, &is_cancelled);
+
+            auto err_code = TRITONSERVER_ERROR_INTERNAL;
             if (is_cancelled)
             {
-                err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_CANCELLED, errMsg.c_str());
+                err_code = TRITONSERVER_ERROR_CANCELLED;
             }
-            else
-            {
-                std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
-                TLLM_LOG_ERROR(errStr);
-                err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
-            }
+
+            err = TRITONSERVER_ErrorNew(err_code, errStr.c_str());
             final_response = true;
         }
         else
