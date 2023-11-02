@@ -1,6 +1,6 @@
---- CMakeLists.txt	2023-10-09 22:16:21.813010695 -0700
-+++ CMakeLists.txt.new	2023-10-09 22:17:55.846645690 -0700
-@@ -252,12 +252,41 @@ set_property(
+--- CMakeLists.txt	2023-10-25 17:20:17.459187937 -0700
++++ CMakeLists.txt.patch.new	2023-10-25 17:25:38.282546643 -0700
+@@ -255,12 +255,41 @@
             "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
 
  add_library(tensorrt_llm_batch_manager STATIC IMPORTED)

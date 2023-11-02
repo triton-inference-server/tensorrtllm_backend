@@ -120,8 +120,12 @@ if(TRITON_BUILD)
       cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py
       --trtllm-build-config="${CMAKE_BUILD_TYPE}"
       --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm
-    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build --no-cache -t
-            ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
+    COMMAND
+      cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}_cache0
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}_cache1 -t
+      ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
     COMMAND docker rm trtllm_build || echo 'error ignored...' || true
     COMMAND docker create --name trtllm_build ${TRITON_TRTLLM_DOCKER_NAME}
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && rm -fr tensorrt_llm

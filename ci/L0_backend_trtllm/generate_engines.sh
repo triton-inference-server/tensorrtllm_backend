@@ -29,36 +29,23 @@ BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
 GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
 
 function build_base_model {
+    local NUM_GPUS=$1
     cd ${GPT_DIR}
     rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
     pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
-    python3 hf_gpt_convert.py -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 1 --storage-type float16
+    python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism ${NUM_GPUS} --storage-type float16
     cd ${BASE_DIR}
 }
 
 function build_tensorrt_engine_inflight_batcher {
+    local NUM_GPUS=$1
     cd ${GPT_DIR}
+    local GPT_MODEL_DIR=./c-model/gpt2/${NUM_GPUS}-gpu/
+    local OUTPUT_DIR=inflight_${NUM_GPUS}_gpu/
     # ./c-model/gpt2/ must already exist (it will if build_base_model
     # has already been run)
-    python3 build.py --model_dir=./c-model/gpt2/1-gpu/ \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --use_layernorm_plugin float16 \
-                 --hidden_act gelu \
-                 --output_dir=inflight_single_gpu/
-    cd ${BASE_DIR}
-
-}
-
-function build_tensorrt_engine_inflight_batcher_multi_gpu {
-    cd ${GPT_DIR}
-    python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 4 --storage-type float16
-    python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
-                 --world_size=4 \
+    python3 build.py --model_dir="${GPT_MODEL_DIR}" \
+                 --world_size="${NUM_GPUS}" \
                  --dtype float16 \
                  --use_inflight_batching \
                  --use_gpt_attention_plugin float16 \
@@ -68,28 +55,43 @@ function build_tensorrt_engine_inflight_batcher_multi_gpu {
                  --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --parallel_build \
-                 --output_dir=inflight_multi_gpu/
+                 --output_dir="${OUTPUT_DIR}"
     cd ${BASE_DIR}
 }
 
-# Install TRT LLM
-# FIXME: Update the url
-pip install git+https://${REMOVE_ME_TRTLLM_USERNAME}:${REMOVE_ME_TRTLLM_TOKEN}@gitlab-master.nvidia.com/ftp/tekit.git@${TENSORRTLLM_BACKEND_REPO_TAG}
-mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
-cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
+function install_trt_llm {
+    # Install CMake
+    bash /opt/tritonserver/tensorrtllm_backend/tensorrt_llm/docker/common/install_cmake.sh
+    export PATH="/usr/local/cmake/bin:${PATH}"
 
-export LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
-export TRT_ROOT=/usr/local/tensorrt
+    # PyTorch needs to be built from source for aarch64
+    ARCH="$(uname -i)"
+    if [ "${ARCH}" = "aarch64" ]; then TORCH_INSTALL_TYPE="src_non_cxx11_abi"; \
+    else TORCH_INSTALL_TYPE="pypi"; fi && \
+    (cd /opt/tritonserver/tensorrtllm_backend/tensorrt_llm &&
+        bash docker/common/install_pytorch.sh $TORCH_INSTALL_TYPE &&
+        python3 ./scripts/build_wheel.py --trt_root="${TRT_ROOT}" &&
+        pip3 install ./build/tensorrt_llm*.whl)
+}
+
+# Install TRT LLM
+install_trt_llm
 
 # Generate the TRT_LLM model engines
-build_base_model
-build_tensorrt_engine_inflight_batcher
-build_tensorrt_engine_inflight_batcher_multi_gpu
+NUM_GPUS_TO_TEST=("1" "2" "4")
+for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
+    AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
+    if [ "$AVAILABLE_GPUS" -lt "$NUM_GPU" ]; then
+        continue
+    fi
+
+    build_base_model "${NUM_GPU}"
+    build_tensorrt_engine_inflight_batcher "${NUM_GPU}"
+done
 
 # Move the TRT_LLM model engines to the CI directory
 mkdir engines
-mv ${GPT_DIR}/inflight_single_gpu engines/
-mv ${GPT_DIR}/inflight_multi_gpu engines/
+mv ${GPT_DIR}/inflight_*_gpu/ engines/
 
 # Move the tokenizer into the CI directory
 mkdir tokenizer
@@ -98,4 +100,4 @@ mv ${GPT_DIR}/gpt2/* tokenizer/
 # Now that the engines are generated, we should remove the
 # tensorrt_llm module to ensure the C++ backend tests are
 # not using it
-rm -rf /usr/local/lib/python3.10/dist-packages/tensorrt_llm
+pip3 uninstall -y torch tensorrt_llm
