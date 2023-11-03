@@ -29,7 +29,7 @@ backend: "tensorrtllm"
 max_batch_size: 128
 
 model_transaction_policy {
-  decoupled: ${decoupled_mode}
+  decoupled: False
 }
 
 input [
