@@ -46,13 +46,13 @@ def test_functionality(client, prompts, output_lens):
         ]
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("INPUT_ID")
-        output1 = result.as_numpy("REQUEST_INPUT_LEN")
+        request_input_len = result.as_numpy("REQUEST_INPUT_LEN")
         output2 = result.as_numpy("REQUEST_OUTPUT_LEN")
 
         model_name = "tensorrt_llm"
         inputs = [
             utils.prepare_tensor("input_ids", output0, FLAGS.protocol),
-            utils.prepare_tensor("input_lengths", output1, FLAGS.protocol),
+            utils.prepare_tensor("input_lengths", request_input_len, FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output2,
                                  FLAGS.protocol),
         ]
@@ -63,11 +63,12 @@ def test_functionality(client, prompts, output_lens):
         model_name = "postprocessing"
         inputs = [
             utils.prepare_tensor("TOKENS_BATCH", output0, FLAGS.protocol),
+            utils.prepare_tensor("REQUEST_INPUT_LEN", request_input_len, FLAGS.protocol),
             utils.prepare_tensor("SEQUENCE_LENGTH", seq_lengths,
                                  FLAGS.protocol)
         ]
         inputs[0].set_data_from_numpy(output0)
-        inputs[1].set_data_from_numpy(seq_lengths)
+        inputs[2].set_data_from_numpy(seq_lengths)
 
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
