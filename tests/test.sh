@@ -103,9 +103,9 @@ fi
 
 MAX_NUM_SEQUENCES=( "" "4" "32" )
 MAX_TOKENS_IN_KV_CACHES=( "" "2048" )
-BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_no_evict" )
+BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization")
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "" "0.2" )
-ENABLE_TRT_OVERLAPS=( "true" "false" )
+ENABLE_TRT_OVERLAPS=( "false" "true" )
 BATCHING_STRATEGIES=( "inflight_fused_batching" )
 EXCLUDE_INPUT_IN_OUTPUTS=( "true" "false" )
 
@@ -113,6 +113,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     # To make sure that torch is not a dependency for C++ backend
     pip3 uninstall -y torch
 
+    test_count=0
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
@@ -150,23 +151,49 @@ if [ "$MODEL" = "gpt-ib" ]; then
 
         # Test client
         pushd inflight_batcher_llm/client
+
+        # test to run for all combinations of flags
         EXCL_INPUT_IN_OUTPUT_FLAG=""
         [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
+
         python3 inflight_batcher_llm_client.py \
             --check-output \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
 
-        python3 inflight_batcher_llm_client.py \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --request-output-len=128 \
-            --stop-after-ms 100 \
-            --tokenizer_dir ${TOKENIZER_PATH} \
-            --tokenizer_type ${TOKENIZER_TYPE} &> output_w_stop
 
-        cat output_w_stop
-        grep "Got cancellation response" output_w_stop
+        if [[ "$test_count" == "0" ]]; then
+
+            # test without stop words
+            python3 end_to_end_grpc_client.py \
+                -o 10 \
+                -p "The only thing we have to fear is"  \
+                 &> output_wo_stop_words
+            cat output_wo_stop_words
+            grep "that the government will" output_wo_stop_words
+            echo "grep exit code: $?"
+
+            # test with stop words
+            python3 end_to_end_grpc_client.py \
+                -o 10 \
+                -p "The only thing we have to fear is"  \
+                --stop_words " government" \
+                &> output_w_stop_words
+            cat output_w_stop_words
+            grep -v "that the government will" output_w_stop_words
+            echo "grep exit code: $?"
+
+            # test with request cancellation
+            python3 inflight_batcher_llm_client.py \
+                --request-output-len=128 \
+                --stop-after-ms 100 \
+                --tokenizer_dir ${TOKENIZER_PATH} \
+                --tokenizer_type ${TOKENIZER_TYPE} &> output_w_stop
+
+            cat output_w_stop
+            grep "Got cancellation response" output_w_stop
+        fi
 
         popd # inflight_batcher_llm/client
 
@@ -178,11 +205,14 @@ if [ "$MODEL" = "gpt-ib" ]; then
             -i http \
             --max_input_len 300 \
             --dataset ../dataset/mini_cnn_eval.json
-        python3 end_to_end_test.py \
-            --concurrency 8 \
-            -i grpc \
-            --max_input_len 300 \
-            --dataset ../dataset/mini_cnn_eval.json
+
+        if [[ "$test_count" == "0" ]]; then
+            python3 end_to_end_test.py \
+                --concurrency 8 \
+                -i grpc \
+                --max_input_len 300 \
+                --dataset ../dataset/mini_cnn_eval.json
+        fi
 
         EXCL_INPUT_IN_OUTPUT_FLAG=""
         [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude_input_in_output"
@@ -194,19 +224,23 @@ if [ "$MODEL" = "gpt-ib" ]; then
             --dataset ../dataset/mini_cnn_eval.json \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
-        python3 identity_test.py \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --concurrency 8 \
-            -i grpc \
-            --max_input_len 300 \
-            --dataset ../dataset/mini_cnn_eval.json \
-            --tokenizer_dir ${TOKENIZER_PATH} \
-            --tokenizer_type ${TOKENIZER_TYPE}
+
+        if [[ "$test_count" == "0" ]]; then
+            python3 identity_test.py \
+                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+                --concurrency 8 \
+                -i grpc \
+                --max_input_len 300 \
+                --dataset ../dataset/mini_cnn_eval.json \
+                --tokenizer_dir ${TOKENIZER_PATH} \
+                --tokenizer_type ${TOKENIZER_TYPE}
+        fi
 
         popd # tools/inflight_batcher_llm
 
         kill -9 ${SERVER_PID}
 
+        ((test_count=test_count+1))
     done
     done
     done
@@ -277,11 +311,9 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         cat output_w_stop
         grep "Got cancellation response" output_w_stop
 
-        popd # inflight_batcher_llm/client
 
         # End to end test
-        pushd tools/inflight_batcher_llm
-        python3 end_to_end_streaming_client.py \
+        python3 end_to_end_grpc_client.py \
             --output_len 10 --prompt "This is a test "
         popd
 

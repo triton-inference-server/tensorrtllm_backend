@@ -64,6 +64,24 @@ input [
     optional: true
   },
   {
+    name: "stop_words_list"
+    data_type: TYPE_INT32
+    dims: [ 2, -1 ]
+    optional: true
+  },
+  {
+    name: "bad_words_list"
+    data_type: TYPE_INT32
+    dims: [ 2, -1 ]
+    optional: true
+  },
+  {
+    name: "embedding_bias"
+    data_type: TYPE_FP16
+    dims: [ -1 ]
+    optional: true
+  },
+  {
     name: "beam_width"
     data_type: TYPE_UINT32
     dims: [ 1 ]

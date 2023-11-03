@@ -61,6 +61,12 @@ input [
     optional: true
   },
   {
+    name: "embedding_bias"
+    data_type: TYPE_FP16
+    dims: [ -1 ]
+    optional: true
+  },
+  {
     name: "top_k"
     data_type: TYPE_UINT32
     dims: [ 1 ]
@@ -173,6 +179,14 @@ ensemble_scheduling {
         key: "REQUEST_OUTPUT_LEN"
         value: "_REQUEST_OUTPUT_LEN"
       }
+      output_map {
+        key: "STOP_WORDS_IDS"
+        value: "_STOP_WORDS_IDS"
+      }
+      output_map {
+        key: "BAD_WORDS_IDS"
+        value: "_BAD_WORDS_IDS"
+      }
     },
     {
       model_name: "tensorrt_llm"
@@ -196,6 +210,10 @@ ensemble_scheduling {
       input_map {
           key: "pad_id"
           value: "pad_id"
+      }
+      input_map {
+          key: "embedding_bias"
+          value: "embedding_bias"
       }
       input_map {
           key: "runtime_top_k"
@@ -244,6 +262,14 @@ ensemble_scheduling {
       input_map {
         key: "prompt_vocab_size"
         value: "prompt_vocab_size"
+      }
+      input_map {
+        key: "stop_words_list"
+        value: "_STOP_WORDS_IDS"
+      }
+      input_map {
+        key: "bad_words_list"
+        value: "_BAD_WORDS_IDS"
       }
       output_map {
         key: "output_ids"
