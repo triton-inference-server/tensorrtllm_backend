@@ -107,6 +107,7 @@ BATCH_SCHEDULER_POLICIES=( "max_utilization" "guaranteed_no_evict" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "" "0.2" )
 ENABLE_TRT_OVERLAPS=( "true" "false" )
 BATCHING_STRATEGIES=( "inflight_fused_batching" )
+EXCLUDE_INPUT_IN_OUTPUTS=( "true" "false" )
 
 if [ "$MODEL" = "gpt-ib" ]; then
     # To make sure that torch is not a dependency for C++ backend
@@ -118,6 +119,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
+    for EXCLUDE_INPUT_IN_OUTPUT in "${EXCLUDE_INPUT_IN_OUTPUTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.85 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -131,11 +133,12 @@ if [ "$MODEL" = "gpt-ib" ]; then
         echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
         echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
         echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
+        echo "EXCLUDE_INPUT_IN_OUTPUT: ${EXCLUDE_INPUT_IN_OUTPUT}"
         echo "----------------------------------"
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:False,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -147,12 +150,16 @@ if [ "$MODEL" = "gpt-ib" ]; then
 
         # Test client
         pushd inflight_batcher_llm/client
+        EXCL_INPUT_IN_OUTPUT_FLAG=""
+        [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
         python3 inflight_batcher_llm_client.py \
             --check-output \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
 
         python3 inflight_batcher_llm_client.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --request-output-len=128 \
             --stop-after-ms 100 \
             --tokenizer_dir ${TOKENIZER_PATH} \
@@ -177,7 +184,10 @@ if [ "$MODEL" = "gpt-ib" ]; then
             --max_input_len 300 \
             --dataset ../dataset/mini_cnn_eval.json
 
+        EXCL_INPUT_IN_OUTPUT_FLAG=""
+        [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude_input_in_output"
         python3 identity_test.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --concurrency 8 \
             -i http \
             --max_input_len 300 \
@@ -185,6 +195,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
         python3 identity_test.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --concurrency 8 \
             -i grpc \
             --max_input_len 300 \
@@ -196,6 +207,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
 
         kill -9 ${SERVER_PID}
 
+    done
     done
     done
     done
@@ -214,6 +226,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
+    for EXCLUDE_INPUT_IN_OUTPUT in "${EXCLUDE_INPUT_IN_OUTPUTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.85 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -227,12 +240,13 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
         echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
         echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
+        echo "EXCLUDE_INPUT_IN_OUTPUT: ${EXCLUDE_INPUT_IN_OUTPUT}"
         echo "----------------------------------"
 
         rm -rf ./triton_repo
         cp -R all_models/inflight_batcher_llm triton_repo
         # Modify config.pbtxt
-        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+        python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:True,max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT}
         python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
         python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -244,12 +258,16 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
 
         # Test client
         pushd inflight_batcher_llm/client
+        EXCL_INPUT_IN_OUTPUT_FLAG=""
+        [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
         python3 inflight_batcher_llm_client.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --streaming --check-output \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
 
         python3 inflight_batcher_llm_client.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --streaming \
             --request-output-len=128 \
             --stop-after-ms 100 \
@@ -269,6 +287,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
 
         kill -9 ${SERVER_PID}
 
+    done
     done
     done
     done

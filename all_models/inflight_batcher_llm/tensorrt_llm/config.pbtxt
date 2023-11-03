@@ -224,3 +224,9 @@ parameters: {
     string_value: "${enable_trt_overlap}"
   }
 }
+parameters: {
+  key: "exclude_input_in_output"
+  value: {
+    string_value: "${exclude_input_in_output}"
+  }
+}

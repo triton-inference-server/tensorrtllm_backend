@@ -218,8 +218,9 @@ def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
     ]
 
     assert (len(op_token_len_list) == len(ip_token_len_list))
-    for i in range(len(op_token_len_list)):
-        op_token_len_list[i] = op_token_len_list[i] - ip_token_len_list[i]
+    if not FLAGS.exclude_input_in_output:
+        for i in range(len(op_token_len_list)):
+            op_token_len_list[i] = op_token_len_list[i] - ip_token_len_list[i]
 
     # Get latencies per request
     # Order latencies based on issue order.
