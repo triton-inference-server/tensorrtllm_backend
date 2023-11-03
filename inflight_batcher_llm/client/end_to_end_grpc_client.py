@@ -12,8 +12,16 @@ import sys
 
 import numpy as np
 import tritonclient.grpc as grpcclient
-from tritonclient.utils import InferenceServerException
-from utils import utils
+import tritonclient.http as httpclient
+from tritonclient.utils import InferenceServerException, np_to_triton_dtype
+
+
+def prepare_tensor(name, input, protocol):
+    client_util = httpclient if protocol == "http" else grpcclient
+    t = client_util.InferInput(name, input.shape,
+                               np_to_triton_dtype(input.dtype))
+    t.set_data_from_numpy(input)
+    return t
 
 
 class UserData:
@@ -31,26 +39,26 @@ def callback(user_data, result, error):
         print(output, flush=True)
 
 
-def test(triton_client, prompt, request_id):
+def test(triton_client, prompt, request_id, stop_words, bad_words):
     model_name = "ensemble"
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
-    bad_words_list = np.array([[""]], dtype=object)
-    stop_words_list = np.array([[""]], dtype=object)
+    bad_words_list = np.array([bad_words], dtype=object)
+    stop_words_list = np.array([stop_words], dtype=object)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.uint32)
 
     inputs = [
-        utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
-        utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
-        utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
-        utils.prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
-        utils.prepare_tensor("stream", streaming_data, FLAGS.protocol),
-        utils.prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
+        prepare_tensor("text_input", input0_data, FLAGS.protocol),
+        prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
+        prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
+        prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
+        prepare_tensor("stream", streaming_data, FLAGS.protocol),
+        prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
     ]
 
     user_data = UserData()
@@ -136,9 +144,27 @@ if __name__ == '__main__':
                         required=False,
                         help='The request_id for the stop request')
 
+    parser.add_argument('--stop_words',
+                        nargs='+',
+                        default=[],
+                        help='The stop words')
+
+    parser.add_argument('--bad_words',
+                        nargs='+',
+                        default=[],
+                        help='The bad words')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
+
+    stop_words = FLAGS.stop_words
+    if not stop_words:
+        stop_words = [""]
+
+    bad_words = FLAGS.bad_words
+    if not bad_words:
+        bad_words = [""]
 
     try:
         client = grpcclient.InferenceServerClient(url=FLAGS.url)
@@ -146,4 +172,4 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
-    test(client, FLAGS.prompt, FLAGS.request_id)
+    test(client, FLAGS.prompt, FLAGS.request_id, stop_words, bad_words)
