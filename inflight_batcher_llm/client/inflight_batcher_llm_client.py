@@ -321,6 +321,13 @@ if __name__ == "__main__":
                         default='',
                         required=False,
                         help='The prompt embedding table to use for ptuning')
+    parser.add_argument(
+        "--exclude-input-in-output",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Expect that output IDs do not contain input IDs",
+    )
 
     parser.add_argument(
         '--prompt_task_id',
@@ -430,13 +437,16 @@ if __name__ == "__main__":
                 expected_output_ids = [int(val) for val in row]
                 break
     else:
-        expected_output_ids = input_ids[0] + [
-            21221, 290, 257, 4255, 379, 262, 1957, 7072, 11, 4689, 347, 2852,
-            2564, 494, 13, 679
-        ]
+        expected_output_ids = ([] if FLAGS.exclude_input_in_output else
+                               input_ids[0]) + [
+                                   21221, 290, 257, 4255, 379, 262, 1957, 7072,
+                                   11, 4689, 347, 2852, 2564, 494, 13, 679
+                               ]
 
     if FLAGS.streaming:
-        actual_output_ids = [input_ids[0]]
+        actual_output_ids = [
+            [] if FLAGS.exclude_input_in_output else input_ids[0]
+        ]
     else:
         actual_output_ids = []
 
@@ -552,9 +562,11 @@ if __name__ == "__main__":
         for beam in range(FLAGS.beam_width):
             seq_len = sequence_lengths[0][
                 beam] if not FLAGS.streaming else len(actual_output_ids[beam])
+            # These should be equal when input IDs are excluded from output
             output_ids_w_prompt = actual_output_ids[beam][:seq_len]
-            output_ids_wo_prompt = output_ids_w_prompt[input_ids_data.
-                                                       shape[1]:]
+            output_ids_wo_prompt = (
+                output_ids_w_prompt if FLAGS.exclude_input_in_output else
+                output_ids_w_prompt[input_ids_data.shape[1]:])
             if tokenizer != None:
                 output_text = tokenizer.decode(output_ids_wo_prompt)
                 print(f'Input: {FLAGS.text}')

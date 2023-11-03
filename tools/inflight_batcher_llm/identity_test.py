@@ -182,6 +182,13 @@ if __name__ == '__main__':
         help=
         'Specify op tokens/word ratio. Useful to have model generate as many number of words as in dataset'
     )
+    parser.add_argument(
+        "--exclude_input_in_output",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Expect that output IDs do not contain input IDs",
+    )
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
