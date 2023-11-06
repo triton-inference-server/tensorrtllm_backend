@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 
 MODEL=$1
+RECORD_SERVER_STATS="${2:-"false"}"
 
 TOKENIZER_DIR=/trt_llm_data/llm-models/llama-models/llama-7b-hf
 TOKENIZER_TYPE=llama
@@ -19,13 +20,15 @@ script_dir=$(dirname "$(realpath "$0")")
 
 declare -A bs_dict
 if [[ $gpu_info == *"A100"* ]] ||  [[ $gpu_info == *"H100"* ]]; then
-    bs_dict["llama-7b-fp8"]=64
+    bs_dict["llama-7b-fp8"]=2048
+    bs_dict["llama-13b-fp8"]=1024
     bs_dict["gptj-6b-fp8"]=96
     bs_dict["llama-70b-fp8-tp2"]=64
     bs_dict["llama-70b-fp8-tp4"]=128
     bs_dict["falcon-180b-fp8-tp8"]=64
-elif [[ $gpu_info == *"A100"* ]]; then
-    bs_dict["llama-7b-fp8"]=32
+elif [[ $gpu_info == *"L40S"* ]]; then
+    bs_dict["llama-7b-fp8"]=1024
+    bs_dict["llama-13b-fp8"]=512
     bs_dict["gptj-6b-fp8"]=48
 fi
 
@@ -35,7 +38,7 @@ if [ -z "$MODEL" ]; then
         model_list=(  "llama-7b-fp16" "gptj-6b-fp16" "llama-70b-fp16-tp4"  "falcon-180b-fp16-tp8" )
         machine="a100"
     elif [[ $gpu_info == *"H100"* ]]; then
-        model_list=(  "llama-7b-fp8" "llama-70b-fp8-tp4" ) # "gptj-6b-fp8" ) #"llama-70b-fp8-tp2" "falcon-180b-fp8-tp8" )
+        model_list=(  "llama-7b-fp8" "llama-70b-fp8-tp4"  "gptj-6b-fp8" "llama-70b-fp8-tp2" "falcon-180b-fp8-tp8" )
         machine="h100"
     elif [[ $gpu_info == *"L40S"* ]]; then
         model_list=(  "llama-7b-fp8" "gptj-6b-fp8"  )
@@ -44,7 +47,8 @@ if [ -z "$MODEL" ]; then
         echo -e "Nothing to run for this machine"
     fi
 else
-    echo "The selected model is: $MODEL"
+    model_list=( "$MODEL" )
+    machine="h100"
 fi
 
 for MODEL in "${model_list[@]}"; do
@@ -63,7 +67,17 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh llama-7b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh llama-7b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1
+        bash test.sh llama-7b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1 $RECORD_SERVER_STATS
+
+    fi
+
+    if [ "$MODEL" = "llama-13b-fp8" ]; then
+
+        echo -e " \n ********  BUILDING $MODEL ************* \n"
+        bash build_model.sh llama-13b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
+
+        echo -e " \n ******** RUNNING $MODEL *************** \n"
+        bash test.sh llama-13b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1 $RECORD_SERVER_STATS
 
     fi
 
@@ -73,7 +87,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh llama-7b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh llama-7b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1
+        bash test.sh llama-7b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1 $RECORD_SERVER_STATS
 
     fi
 
@@ -83,7 +97,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh llama-70b-fp8-tp2 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh llama-70b-fp8-tp2 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 2
+        bash test.sh llama-70b-fp8-tp2 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 2 $RECORD_SERVER_STATS
 
     fi
 
@@ -93,7 +107,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh llama-70b-fp8-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh llama-70b-fp8-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 4
+        bash test.sh llama-70b-fp8-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 4 $RECORD_SERVER_STATS
 
     fi
 
@@ -103,7 +117,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh llama-70b-fp16-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh llama-70b-fp16-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 4
+        bash test.sh llama-70b-fp16-tp4 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 4 $RECORD_SERVER_STATS
 
     fi
 
@@ -113,7 +127,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh gptj-6b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh gptj-6b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1
+        bash test.sh gptj-6b-fp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1 $RECORD_SERVER_STATS
 
     fi
 
@@ -123,7 +137,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh gptj-6b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh gptj-6b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1
+        bash test.sh gptj-6b-fp16 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 1 $RECORD_SERVER_STATS
 
     fi
 
@@ -133,7 +147,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh falcon-180b-fp8-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh falcon-180b-fp8-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 8
+        bash test.sh falcon-180b-fp8-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 8 $RECORD_SERVER_STATS
 
     fi
 
@@ -143,7 +157,7 @@ for MODEL in "${model_list[@]}"; do
         bash build_model.sh falcon-180b-fp16-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $BS
 
         echo -e " \n ******** RUNNING $MODEL *************** \n"
-        bash test.sh falcon-180b-fp16-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 8
+        bash test.sh falcon-180b-fp16-tp8 ${script_dir}/../../tensorrt_llm/trt_engines/${machine}/${MODEL}/${dir_name} $TOKENIZER_DIR $TOKENIZER_TYPE $BS 8 $RECORD_SERVER_STATS
 
     fi
 

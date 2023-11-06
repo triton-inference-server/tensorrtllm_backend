@@ -221,20 +221,27 @@ if [ "$MODEL" = "gpt-ib" ]; then
             --concurrency 8 \
             -i http \
             --max_input_len 300 \
+            dataset \
             --dataset ../dataset/mini_cnn_eval.json \
             --tokenizer_dir ${TOKENIZER_PATH} \
             --tokenizer_type ${TOKENIZER_TYPE}
-
-        if [[ "$test_count" == "0" ]]; then
-            python3 identity_test.py \
-                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-                --concurrency 8 \
-                -i grpc \
-                --max_input_len 300 \
-                --dataset ../dataset/mini_cnn_eval.json \
-                --tokenizer_dir ${TOKENIZER_PATH} \
-                --tokenizer_type ${TOKENIZER_TYPE}
-        fi
+        python3 identity_test.py \
+            --concurrency 8 \
+            -i grpc \
+            --max_input_len 300 \
+            dataset \
+            --dataset ../dataset/mini_cnn_eval.json \
+            --tokenizer_dir ${TOKENIZER_PATH} \
+            --tokenizer_type ${TOKENIZER_TYPE}
+        python3 identity_test.py \
+            --concurrency 8 \
+            -i grpc \
+            --max_input_len 300 \
+            --request_rate -1 \
+            token_norm_dist \
+            --input_mean 128 --input_stdev 0 \
+            --output_mean 20 --output_stdev 0 \
+            --num_requests 100
 
         popd # tools/inflight_batcher_llm
 
