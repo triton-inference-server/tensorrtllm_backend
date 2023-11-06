@@ -610,7 +610,7 @@ public:
         // Check if work item has been stopped
         bool is_stopped = mStoppedReqIds.count(workItem->requestId());
 
-        // Check if the Triton request behind is cancelled
+        // Check if the Triton request has been cancelled
         bool is_cancelled = false;
         TRITONBACKEND_ResponseFactoryIsCancelled(workItem->response_factory(), &is_cancelled);
 
