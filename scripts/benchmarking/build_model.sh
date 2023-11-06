@@ -47,7 +47,30 @@ if [ "$MODEL" = "llama-7b-fp8" ]; then
       --use_rmsnorm_plugin float16  \
       --enable_context_fmha --remove_input_padding \
       --use_inflight_batching --paged_kv_cache \
-      --enable_fp8 --fp8_kv_cache
+      --enable_fp8 --fp8_kv_cache \
+      --max_num_tokens 35000
+
+    popd
+
+fi
+
+if [ "$MODEL" = "llama-13b-fp8" ]; then
+
+    pushd tensorrt_llm/examples/llama
+
+    pip install -r requirements.txt
+
+    python3 build.py --meta_ckpt_dir /llama-models/v2/7B  --dtype float16 \
+      --use_gpt_attention_plugin float16  \
+      --use_gemm_plugin float16  \
+      --output_dir "$ENGINE_PATH"  \
+      --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+      --use_rmsnorm_plugin float16  \
+      --enable_context_fmha --remove_input_padding \
+      --use_inflight_batching --paged_kv_cache \
+      --enable_fp8 --fp8_kv_cache \
+      --strongly_typed --n_layer 40 --n_head 40 --n_embd 5120 --inter_size 13824 --vocab_size 32000 --n_positions 4096 --hidden_act silu \
+      --max_num_tokens 35000
 
     popd
 
