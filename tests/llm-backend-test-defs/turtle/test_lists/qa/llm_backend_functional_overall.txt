@@ -1,6 +1,18 @@
+# Old tests, to be removed.
 test_llm_backend.py::test_inflight_batcher_gpt_default
 test_llm_backend.py::test_inflight_batcher_gpt_streaming
 test_llm_backend.py::test_inflight_batcher_llama_default
 test_llm_backend.py::test_inflight_batcher_llama_streaming
 test_llm_backend.py::test_llm_backend_gpt_accuracy
 test_llm_backend.py::test_llm_backend_gpt_e2e
+# New tests.
+test_triton_llm.py::test_gpt_350m_normal[accuracy]
+test_triton_llm.py::test_gpt_350m_normal[e2e]
+test_triton_llm.py::test_llama_v2_7b_ib[disableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict]
+test_triton_llm.py::test_llama_v2_7b_ib[disableDecoupleMode-V1-disableTrtOverlap-max_utilization]
+test_triton_llm.py::test_llama_v2_7b_ib[disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict]
+test_triton_llm.py::test_llama_v2_7b_ib[disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization]
+test_triton_llm.py::test_llama_v2_7b_ib[enableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict]
+test_triton_llm.py::test_llama_v2_7b_ib[enableDecoupleMode-V1-disableTrtOverlap-max_utilization]
+test_triton_llm.py::test_llama_v2_7b_ib[enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict]
+test_triton_llm.py::test_llama_v2_7b_ib[enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization]
