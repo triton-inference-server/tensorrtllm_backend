@@ -935,11 +935,7 @@ public:
             bool is_cancelled = false;
             TRITONBACKEND_ResponseFactoryIsCancelled(response_factory, &is_cancelled);
 
-            auto err_code = TRITONSERVER_ERROR_INTERNAL;
-            if (is_cancelled)
-            {
-                err_code = TRITONSERVER_ERROR_CANCELLED;
-            }
+            auto err_code = is_cancelled ? TRITONSERVER_ERROR_CANCELLED : TRITONSERVER_ERROR_INTERNAL;
 
             err = TRITONSERVER_ErrorNew(err_code, errStr.c_str());
             final_response = true;
@@ -1061,10 +1057,7 @@ public:
 
         // Merge cancelled requests into stopped requests Ids
         auto cancelledReqIds = mWorkItemsQueue.getCancelledInProgressReqIds();
-        for (const auto& reqId : cancelledReqIds)
-        {
-            stoppedReqIds.insert(reqId);
-        }
+        stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
 
         int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
