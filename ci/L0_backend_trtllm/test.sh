@@ -137,9 +137,10 @@ fi
 
 set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
-    --max_input_len=500 \
+    --max-input-len=500 \
+    dataset \
     --dataset=${DATASET} \
-    --tokenizer_dir=${TOKENIZER_DIR}
+    --tokenizer-dir=${TOKENIZER_DIR}
 
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
@@ -150,7 +151,7 @@ set +e
 
 set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
-    --max_input_len=500 \
+    --max-input-len=500 \
     --dataset=${DATASET}
 
 if [ $? -ne 0 ]; then
@@ -180,9 +181,9 @@ fi
 
 set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
-    --max_input_len=500 \
+    --max-input-len=500 \
     --dataset=${DATASET} \
-    --tokenizer_dir=${TOKENIZER_DIR}
+    --tokenizer-dir=${TOKENIZER_DIR}
 
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
@@ -193,7 +194,7 @@ set +e
 
 set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
-    --max_input_len=500 \
+    --max-input-len=500 \
     --dataset=${DATASET}
 
 if [ $? -ne 0 ]; then

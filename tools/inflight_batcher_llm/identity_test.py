@@ -115,18 +115,18 @@ if __name__ == '__main__':
                                 type=str,
                                 required=True,
                                 help='Dataset path used for the test.')
-    parser_dataset.add_argument('--tokenizer_dir',
+    parser_dataset.add_argument('--tokenizer-dir',
                                 type=str,
                                 required=True,
                                 help='Specify tokenizer directory')
-    parser_dataset.add_argument('--tokenizer_type',
+    parser_dataset.add_argument('--tokenizer-type',
                                 type=str,
                                 default='auto',
                                 required=False,
                                 choices=['auto', 't5', 'llama'],
                                 help='Specify tokenizer type')
     parser_dataset.add_argument(
-        '--op_tokens_per_word',
+        '--op-tokens-per-word',
         type=float,
         default=1.3,
         required=False,
@@ -134,30 +134,30 @@ if __name__ == '__main__':
         'Specify op tokens/word ratio. Useful to have model generate exactly as many tokens as needed by the dataset'
     )
 
-    parser_token_norm_dist = subparsers.add_parser('token_norm_dist')
+    parser_token_norm_dist = subparsers.add_parser('token-norm-dist')
     parser_token_norm_dist.add_argument(
-        '--num_requests',
+        '--num-requests',
         type=int,
         required=False,
         default=1000,
         help='number of requests to be generatated')
     parser_token_norm_dist.add_argument(
-        '--input_mean',
+        '--input-mean',
         type=int,
         required=True,
         help='normal dist mean for input tokens')
     parser_token_norm_dist.add_argument(
-        '--input_stdev',
+        '--input-stdev',
         type=int,
         required=True,
         help='normal dist stdev for input tokens')
     parser_token_norm_dist.add_argument(
-        '--output_mean',
+        '--output-mean',
         type=int,
         required=True,
         help='normal dist mean for output tokens')
     parser_token_norm_dist.add_argument(
-        '--output_stdev',
+        '--output-stdev',
         type=int,
         required=True,
         help='normal dist stdev for output tokens')
@@ -188,35 +188,35 @@ if __name__ == '__main__':
                         default=128,
                         required=False,
                         help='Specify concurrency')
-    parser.add_argument('--max_input_len',
+    parser.add_argument('--max-input-len',
                         type=int,
                         required=True,
                         help='Specify max input length')
-    parser.add_argument('--request_rate',
+    parser.add_argument('--request-rate',
                         type=float,
                         required=False,
                         help="# of reqs/sec. -1 indicates SOL/Offline",
                         default=-1.0)
-    parser.add_argument('--time_delay_dist',
+    parser.add_argument('--time-delay-dist',
                         type=str,
                         required=False,
                         choices=["constant", "exponential_dist"],
                         default="exponential_dist",
                         help="# of reqs/sec. -1 indicates SOL/Offline")
     parser.add_argument(
-        '--dump_perfetto_trace',
+        '--dump-perfetto-trace',
         action="store_true",
         required=False,
         default=False,
         help=
         'Dumps trace of requests in a json (perfetto.json) to be visualized in perfetto'
     ),
-    parser.add_argument('--op_stats_csv',
+    parser.add_argument('--op-stats-csv',
                         type=str,
                         default=None,
                         help='csv filename to dump stats'),
     parser.add_argument(
-        "--exclude_input_in_output",
+        "--exclude-input-in-output",
         action="store_true",
         required=False,
         default=False,

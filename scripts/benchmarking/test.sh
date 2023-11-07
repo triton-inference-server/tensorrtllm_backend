@@ -94,11 +94,11 @@ if true; then
                         dataset_path="${dataset_dict[$DATASET]}"
                         # Identity test
                         python3 identity_test.py \
-                            -i grpc --max_input_len $MAX_INPUT_LEN \
-                            --request_rate $REQ_RATE --op_stats_csv "$op_stats_csv_name" \
+                            -i grpc --max-input-len $MAX_INPUT_LEN \
+                            --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
                             dataset \
                             --dataset $dataset_path \
-                            --tokenizer_dir "$TOKENIZER_PATH" --tokenizer_type "$TOKENIZER_TYPE"
+                            --tokenizer-dir "$TOKENIZER_PATH" --tokenizer-type "$TOKENIZER_TYPE"
 
                         sleep 5
                     done
@@ -110,11 +110,11 @@ if true; then
                         echo -e "DATASET: normal-token-dist \n\n"
                         echo -e " ======== IDENTITY_TEST --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
                         python3 identity_test.py \
-                            -i grpc --max_input_len $MAX_INPUT_LEN \
-                            --request_rate $REQ_RATE --op_stats_csv "$op_stats_csv_name" \
-                            token_norm_dist \
-                            --input_mean 128 --input_stdev 0 --output_mean 20 --output_stdev 0 \
-                            --num_requests 1000
+                            -i grpc --max-input-len $MAX_INPUT_LEN \
+                            --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
+                            token-norm-dist \
+                            --input-mean 128 --input-stdev 0 --output-mean 20 --output-stdev 0 \
+                            --num-requests 1000
 
                         sleep 5
                     done

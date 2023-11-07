@@ -99,7 +99,7 @@ such as HuggingFace.
 
 ```bash
 cd tools/inflight_batcher_llm
-python3 identity_test.py --dataset <dataset path>
+python3 identity_test.py dataset --dataset <dataset path>
 ```
 
 Expected outputs
