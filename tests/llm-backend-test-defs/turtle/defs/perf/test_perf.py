@@ -219,7 +219,7 @@ class InflightBatchingMetricPerfTest(AbstractPerfScriptTestClass):
             self._benchmark_script,
             f"--concurrency={self._config.concurrency}",
             f"--max-input-len={self._config.max_input_len}",
-            f"--dataset={self._dataset}",
+            f"dataset --dataset={self._dataset}",
             f"--tokenizer-dir={self._tokenizer_dir}",
             f"--tokenizer-type={self._tokenizer_type}"
         ]
