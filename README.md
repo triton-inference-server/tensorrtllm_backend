@@ -26,8 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 
-[![License](https://img.shields.io/badge/License-BSD3-lightgrey.svg)](https://opensource.org/licenses/BSD-3-Clause)
-
 # TensorRT-LLM Backend
 The Triton backend for [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
 You can learn more about Triton backends in the [backend repo](https://github.com/triton-inference-server/backend).
@@ -51,18 +49,14 @@ There are several ways to access the TensorRT-LLM Backend.
 
 ### Option 1. Run the Docker Container
 
-**The NGC container will be available with Triton 23.10 release soon**
-
-Starting with release 23.10, Triton includes a container with the TensorRT-LLM
+Starting with Triton 23.10 release, Triton includes a container with the TensorRT-LLM
 Backend and Python Backend. This container should have everything to run a
 TensorRT-LLM model. You can find this container on the
 [Triton NGC page](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver).
 
 ### Option 2. Build via the build.py Script in Server Repo
 
-**Building via the build.py script will be available with Triton 23.10 release soon**
-
-You can follow steps described in the
+Starting with Triton 23.10 release, you can follow steps described in the
 [Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
 guide and use the
 [build.py](https://github.com/triton-inference-server/server/blob/main/build.py)
@@ -73,7 +67,7 @@ shown below, which will build the same TRT-LLM container as the one on the NGC.
 
 ```bash
 BASE_CONTAINER_IMAGE_NAME=nvcr.io/nvidia/tritonserver:23.10-py3-min
-TENSORRTLLM_BACKEND_REPO_TAG=r23.10
+TENSORRTLLM_BACKEND_REPO_TAG=release/0.5.0
 PYTHON_BACKEND_REPO_TAG=r23.10
 
 # Run the build script. The flags for some features or endpoints can be removed if not needed.
@@ -97,6 +91,9 @@ to build the container. You can also remove the features or endpoints that you
 don't need by removing the corresponding flags.
 
 ### Option 3. Build via Docker
+
+The version of Triton Server used in this build option can be found in the
+[Dockerfile](./dockerfile/Dockerfile.trt_llm_backend).
 
 ```bash
 # Update the submodules
@@ -126,13 +123,17 @@ TensorRT-LLM repository for more details on how to to prepare the engines for de
 ```bash
 # Update the submodule TensorRT-LLM repository
 git submodule update --init --recursive
+git lfs install
+git lfs pull
 
 # TensorRT-LLM is required for generating engines. You can skip this step if
 # you already have the package installed. If you are generating engines within
 # the Triton container, you have to install the TRT-LLM package.
-pip install git+https://github.com/NVIDIA/TensorRT-LLM.git
-mkdir /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
-cp /opt/tritonserver/backends/tensorrtllm/* /usr/local/lib/python3.10/dist-packages/tensorrt_llm/libs/
+(cd tensorrt_llm &&
+    bash docker/common/install_cmake.sh &&
+    export PATH=/usr/local/cmake/bin:$PATH &&
+    python3 ./scripts/build_wheel.py --trt_root="/usr/local/tensorrt" &&
+    pip3 install ./build/tensorrt_llm*.whl)
 
 # Go to the tensorrt_llm/examples/gpt directory
 cd tensorrt_llm/examples/gpt
@@ -209,19 +210,31 @@ The following table shows the fields that need to be modified before deployment:
 | `tokenizer_dir` | The path to the tokenizer for the model. In this example, the path should be set to `/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
 | `tokenizer_type` | The type of the tokenizer for the model, `t5`, `auto` and `llama` are supported. In this example, the type should be set to `auto` |
 
-### Launch Triton server *within NGC container*
+### Launch Triton server
 
-**The NGC container will be available with Triton 23.10 release soon**
+Please follow the option corresponding to the way you build the TensorRT-LLM backend.
 
-Before the Triton 23.10 release, you can launch the Triton 23.09 container
-`nvcr.io/nvidia/tritonserver:23.09-py3` and add the directory
-`/opt/tritonserver/backends/tensorrtllm` within the container following the
-instructions in [Option 3 Build via Docker](#option-3-build-via-docker).
+#### Option 1. Launch Triton server *within Triton NGC container*
 
 ```bash
-# Launch the Triton container
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend triton_trt_llm bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3 bash
+```
 
+#### Option 2. Launch Triton server *within the Triton container built via build.py script*
+
+```bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend tritonserver bash
+```
+
+#### Option 3. Launch Triton server *within the Triton container built via Docker*
+
+```bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend triton_trt_llm bash
+```
+
+Once inside the container, you can launch the Triton server with the following command:
+
+```bash
 cd /tensorrtllm_backend
 # --world_size is the number of GPUs you want to use for serving
 python3 scripts/launch_triton_server.py --world_size=4 --model_repo=/tensorrtllm_backend/triton_model_repo
@@ -236,9 +249,7 @@ I0919 14:52:10.517138 293 http_server.cc:187] Started Metrics Service at 0.0.0.0
 
 ### Query the server with the Triton generate endpoint
 
-**This feature will be available with Triton 23.10 release soon**
-
-You can query the server using Triton's
+Starting with Triton 23.10 release, you can query the server using Triton's
 [generate endpoint](https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_generate.md)
 with a curl command based on the following general format within your client
 environment/container:

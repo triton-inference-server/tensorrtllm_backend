@@ -28,7 +28,8 @@ def callback(user_data, start_time, req_id, result, error):
     user_data._stop_time_dict[req_id] = stop_time
 
 
-def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
+def test_performance(client, input_start_ids, input_lens, output_lens, delays,
+                     FLAGS):
     model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
@@ -37,7 +38,7 @@ def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
         inputs = [
             utils.prepare_tensor("input_ids", input_start_ids[0],
                                  FLAGS.protocol),
-            utils.prepare_tensor("input_lengths", input_lens[i],
+            utils.prepare_tensor("input_lengths", input_lens[0],
                                  FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
@@ -59,10 +60,7 @@ def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
                                  FLAGS.protocol),
         ]
 
-        if len(FLAGS.time_bet_reqs) == 1:
-            time.sleep(FLAGS.time_bet_reqs[0])
-        else:
-            time.sleep(FLAGS.time_bet_reqs[i % len(FLAGS.time_bet_reqs)])
+        time.sleep(delays[i])
 
         if FLAGS.protocol == "http":
             async_requests.append(
@@ -110,6 +108,60 @@ def test_performance(client, input_start_ids, input_lens, output_lens, FLAGS):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest='workload')
+
+    parser_dataset = subparsers.add_parser('dataset')
+    parser_dataset.add_argument('--dataset',
+                                type=str,
+                                required=True,
+                                help='Dataset path used for the test.')
+    parser_dataset.add_argument('--tokenizer-dir',
+                                type=str,
+                                required=True,
+                                help='Specify tokenizer directory')
+    parser_dataset.add_argument('--tokenizer-type',
+                                type=str,
+                                default='auto',
+                                required=False,
+                                choices=['auto', 't5', 'llama'],
+                                help='Specify tokenizer type')
+    parser_dataset.add_argument(
+        '--op-tokens-per-word',
+        type=float,
+        default=1.3,
+        required=False,
+        help=
+        'Specify op tokens/word ratio. Useful to have model generate exactly as many tokens as needed by the dataset'
+    )
+
+    parser_token_norm_dist = subparsers.add_parser('token-norm-dist')
+    parser_token_norm_dist.add_argument(
+        '--num-requests',
+        type=int,
+        required=False,
+        default=1000,
+        help='number of requests to be generatated')
+    parser_token_norm_dist.add_argument(
+        '--input-mean',
+        type=int,
+        required=True,
+        help='normal dist mean for input tokens')
+    parser_token_norm_dist.add_argument(
+        '--input-stdev',
+        type=int,
+        required=True,
+        help='normal dist stdev for input tokens')
+    parser_token_norm_dist.add_argument(
+        '--output-mean',
+        type=int,
+        required=True,
+        help='normal dist mean for output tokens')
+    parser_token_norm_dist.add_argument(
+        '--output-stdev',
+        type=int,
+        required=True,
+        help='normal dist stdev for output tokens')
+
     parser.add_argument('-v',
                         '--verbose',
                         action="store_true",
@@ -136,51 +188,39 @@ if __name__ == '__main__':
                         default=128,
                         required=False,
                         help='Specify concurrency')
-    parser.add_argument('--max_input_len',
+    parser.add_argument('--max-input-len',
                         type=int,
                         required=True,
                         help='Specify max input length')
-
-    parser.add_argument('--dataset',
-                        type=str,
-                        required=True,
-                        help='Dataset path used for the test.')
-    parser.add_argument('--tokenizer_dir',
-                        type=str,
-                        required=True,
-                        help='Specify tokenizer directory')
-    parser.add_argument('--tokenizer_type',
-                        type=str,
-                        default='auto',
+    parser.add_argument('--request-rate',
+                        type=float,
                         required=False,
-                        choices=['auto', 't5', 'llama'],
-                        help='Specify tokenizer type')
+                        help="# of reqs/sec. -1 indicates SOL/Offline",
+                        default=-1.0)
+    parser.add_argument('--time-delay-dist',
+                        type=str,
+                        required=False,
+                        choices=["constant", "exponential_dist"],
+                        default="exponential_dist",
+                        help="# of reqs/sec. -1 indicates SOL/Offline")
     parser.add_argument(
-        '--time_bet_reqs',
-        type=float,
-        required=False,
-        nargs='+',
-        help="Input time(s) in (secs) bet requests separated by spaces",
-        default=[0])
-    parser.add_argument(
-        '--dump_perfetto_trace',
+        '--dump-perfetto-trace',
         action="store_true",
         required=False,
         default=False,
         help=
         'Dumps trace of requests in a json (perfetto.json) to be visualized in perfetto'
     ),
-    parser.add_argument('--op_stats_csv',
+    parser.add_argument('--op-stats-csv',
                         type=str,
                         default=None,
                         help='csv filename to dump stats'),
     parser.add_argument(
-        '--op_tokens_per_word',
-        type=float,
-        default=1.3,
+        "--exclude-input-in-output",
+        action="store_true",
         required=False,
-        help=
-        'Specify op tokens/word ratio. Useful to have model generate as many number of words as in dataset'
+        default=False,
+        help="Expect that output IDs do not contain input IDs",
     )
 
     FLAGS = parser.parse_args()
@@ -197,40 +237,73 @@ if __name__ == '__main__':
         print("channel creation failed: " + str(e))
         sys.exit(1)
 
-    if FLAGS.tokenizer_type == 't5':
-        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
-                                padding_side='left')
-    elif FLAGS.tokenizer_type == 'auto':
-        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                  padding_side='left')
-    elif FLAGS.tokenizer_type == 'llama':
-        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                   legacy=False,
-                                                   padding_side='left')
+    if FLAGS.request_rate == -1:
+        mean_time_bet_reqs = 0
     else:
-        raise AttributeError(
-            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
-    tokenizer.pad_token = tokenizer.eos_token
+        mean_time_bet_reqs = 1.0 / FLAGS.request_rate
 
     input_start_ids = []
     input_lens = []
     output_lens = []
     ratio = []
-    with open(FLAGS.dataset, 'r') as f:
-        data_dict = json.load(f)
-        for req in data_dict:
-            prompt = req['input'] + ' ' + req['instruction']
-            output = req['output']
-            line = tokenizer.encode(prompt)
-            if len(line) > FLAGS.max_input_len:
-                continue
-            input_start_ids.append(np.array([line], np.int32))
-            input_lens.append(np.array([[len(line)]], np.int32))
-            output_lens.append(
-                int(len(output.split(' ')) * FLAGS.op_tokens_per_word))
-            prompt_tokens = len(line)
-            prompt_words = len(prompt.split())
-            ratio.append(prompt_tokens / prompt_words)
 
-    print("Tokens per word: ", round(np.mean(ratio), 3))
-    test_performance(client, input_start_ids, input_lens, output_lens, FLAGS)
+    if FLAGS.workload == "dataset":
+
+        if FLAGS.tokenizer_type == 't5':
+            tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
+                                    padding_side='left')
+        elif FLAGS.tokenizer_type == 'auto':
+            tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                      padding_side='left')
+        elif FLAGS.tokenizer_type == 'llama':
+            tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                       legacy=False,
+                                                       padding_side='left')
+        else:
+            raise AttributeError(
+                f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+        tokenizer.pad_token = tokenizer.eos_token
+
+        with open(FLAGS.dataset, 'r') as f:
+            data_dict = json.load(f)
+            for req in data_dict:
+                prompt = req['input'] + ' ' + req['instruction']
+                output = req['output']
+                line = tokenizer.encode(prompt)
+                if len(line) > FLAGS.max_input_len:
+                    continue
+
+                input_start_ids.append(np.array([line], np.int32))
+                input_lens.append(np.array([[len(line)]], np.int32))
+                output_lens.append(
+                    int(len(output.split(' ')) * FLAGS.op_tokens_per_word))
+                prompt_tokens = len(line)
+                prompt_words = len(prompt.split())
+                ratio.append(prompt_tokens / prompt_words)
+
+        print("Tokenizer: Tokens per word = ", round(np.mean(ratio), 3))
+        num_reqs = len(input_lens)
+        delays = utils.get_list_of_delays(FLAGS.time_delay_dist,
+                                          mean_time_bet_reqs, num_reqs)
+        test_performance(client, input_start_ids, input_lens, output_lens,
+                         delays, FLAGS)
+
+    elif FLAGS.workload == "token_norm_dist":
+        input_lens = utils.get_norm_dist_tokens(FLAGS.input_mean,
+                                                FLAGS.input_stdev,
+                                                FLAGS.num_requests)
+        pruned_ip_list = [
+            ip_len for ip_len in input_lens if ip_len <= FLAGS.max_input_len
+        ]
+        num_reqs = len(pruned_ip_list)
+        ip_lens_2d_array = [
+            np.array([[ip_len]], np.int32) for ip_len in pruned_ip_list
+        ]
+        output_lens = utils.get_norm_dist_tokens(FLAGS.output_mean,
+                                                 FLAGS.output_stdev, num_reqs)
+        delays = utils.get_list_of_delays(FLAGS.time_delay_dist,
+                                          mean_time_bet_reqs, num_reqs)
+
+        input_start_ids = utils.gen_random_start_ids(pruned_ip_list)
+        test_performance(client, input_start_ids, ip_lens_2d_array,
+                         output_lens, delays, FLAGS)
