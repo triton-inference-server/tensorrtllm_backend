@@ -39,8 +39,8 @@ def test_inflight_batcher_llama_default(inflight_batcher_llm_client_root,
     print("Execute inflight_batcher_llm_client.py on default mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer_dir={llama_v2_tokenizer_model_root}",
-        "--tokenizer_type=llama",
+        f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
+        "--tokenizer-type=llama",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
 
@@ -51,8 +51,8 @@ def test_inflight_batcher_llama_streaming(inflight_batcher_llm_client_root,
     print("Execute inflight_batcher_llm_client.py on streaming mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer_dir={llama_v2_tokenizer_model_root}",
-        "--tokenizer_type=llama",
+        f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
+        "--tokenizer-type=llama",
         "--streaming",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
@@ -64,8 +64,8 @@ def test_inflight_batcher_gpt_default(inflight_batcher_llm_client_root,
     print("Execute inflight_batcher_llm_client.py on default mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer_dir={gpt_tokenizer_model_root}",
-        "--tokenizer_type=auto",
+        f"--tokenizer-dir={gpt_tokenizer_model_root}",
+        "--tokenizer-type=auto",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
 
@@ -76,8 +76,8 @@ def test_inflight_batcher_gpt_streaming(inflight_batcher_llm_client_root,
     print("Execute inflight_batcher_llm_client.py on streaming mode...")
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer_dir={gpt_tokenizer_model_root}",
-        "--tokenizer_type=auto",
+        f"--tokenizer-dir={gpt_tokenizer_model_root}",
+        "--tokenizer-type=auto",
         "--streaming",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
