@@ -52,6 +52,7 @@
 #include <nlohmann/json.hpp>
 
 #include "metrics/triton_metrics.h"
+#include "mpiUtils.h"
 using namespace ::triton::common; // TritonJson
 
 //
