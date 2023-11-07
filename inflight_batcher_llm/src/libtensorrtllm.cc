@@ -681,6 +681,24 @@ public:
         return mStoppedReqIds;
     }
 
+    std::unordered_set<uint64_t> getCancelledInProgressReqIds() const
+    {
+        std::unordered_set<uint64_t> cancelledInProgressReqIds;
+        {
+            std::lock_guard<std::mutex> lk(mMutex);
+            for (const auto& pair : mInProgressWorkItems)
+            {
+                bool is_cancelled = false;
+                TRITONBACKEND_ResponseFactoryIsCancelled(pair.second->response_factory(), &is_cancelled);
+                if (is_cancelled)
+                {
+                    cancelledInProgressReqIds.emplace(pair.first);
+                }
+            }
+        }
+        return cancelledInProgressReqIds;
+    }
+
 private:
     /// Queue of work items
     std::list<std::shared_ptr<WorkItem>> mPendingWorkItems;
@@ -1040,6 +1058,14 @@ public:
     std::unordered_set<uint64_t> pollStopSignals()
     {
         auto stoppedReqIds = mWorkItemsQueue.getStoppedReqIds();
+
+        // Merge cancelled requests into stopped requests Ids
+        auto cancelledReqIds = mWorkItemsQueue.getCancelledInProgressReqIds();
+        for (const auto& reqId : cancelledReqIds)
+        {
+            stoppedReqIds.insert(reqId);
+        }
+
         int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
         if (getCommWorldSize() > 1)
