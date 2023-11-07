@@ -26,10 +26,15 @@
 
 name: "tensorrt_llm"
 backend: "tensorrtllm"
-max_batch_size: 128
+max_batch_size: ${triton_max_batch_size}
 
 model_transaction_policy {
   decoupled: ${decoupled_mode}
+}
+
+dynamic_batching {
+    preferred_batch_size: [ ${triton_max_batch_size} ]
+    max_queue_delay_microseconds: ${max_queue_delay_microseconds}
 }
 
 input [
@@ -37,6 +42,7 @@ input [
     name: "input_ids"
     data_type: TYPE_INT32
     dims: [ -1 ]
+    allow_ragged_batch: true
   },
   {
     name: "input_lengths"
@@ -68,18 +74,21 @@ input [
     data_type: TYPE_INT32
     dims: [ 2, -1 ]
     optional: true
+    allow_ragged_batch: true
   },
   {
     name: "bad_words_list"
     data_type: TYPE_INT32
     dims: [ 2, -1 ]
     optional: true
+    allow_ragged_batch: true
   },
   {
     name: "embedding_bias"
     data_type: TYPE_FP16
     dims: [ -1 ]
     optional: true
+    allow_ragged_batch: true
   },
   {
     name: "beam_width"
@@ -161,6 +170,7 @@ input [
     data_type: TYPE_FP16
     dims: [ -1, -1 ]
     optional: true
+    allow_ragged_batch: true
   },
   {
     name: "prompt_vocab_size"
@@ -191,7 +201,7 @@ instance_group [
 parameters: {
   key: "max_beam_width"
   value: {
-    string_value: "1"
+    string_value: "${max_beam_width}"
   }
 }
 parameters: {
