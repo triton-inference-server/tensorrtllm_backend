@@ -218,10 +218,10 @@ class InflightBatchingMetricPerfTest(AbstractPerfScriptTestClass):
         benchmark_cmd = [
             self._benchmark_script,
             f"--concurrency={self._config.concurrency}",
-            f"--max_input_len={self._config.max_input_len}",
+            f"--max-input-len={self._config.max_input_len}",
             f"--dataset={self._dataset}",
-            f"--tokenizer_dir={self._tokenizer_dir}",
-            f"--tokenizer_type={self._tokenizer_type}"
+            f"--tokenizer-dir={self._tokenizer_dir}",
+            f"--tokenizer-type={self._tokenizer_type}"
         ]
 
         benchmark_cmd = PerfScriptTestCmd(benchmark_cmd, isPython=True)

@@ -91,9 +91,9 @@ def prepare_tensor(name, input, protocol):
 
 
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
-                   beam_width_data, temperature_data, streaming_data, end_id,
-                   pad_id, prompt_embedding_table_data,
-                   prompt_vocab_size_data):
+                   beam_width_data, temperature_data, repetition_penalty_data,
+                   presence_penalty_data, streaming_data, end_id, pad_id,
+                   prompt_embedding_table_data, prompt_vocab_size_data):
     protocol = 'grpc'
     inputs = [
         prepare_tensor("input_ids", input_ids_data, protocol),
@@ -112,6 +112,16 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                            prompt_embedding_table_data, protocol),
             prepare_tensor("prompt_vocab_size", prompt_vocab_size_data,
                            protocol)
+        ]
+    if repetition_penalty_data is not None:
+        inputs += [
+            prepare_tensor("repetition_penalty", repetition_penalty_data,
+                           protocol),
+        ]
+    if presence_penalty_data is not None:
+        inputs += [
+            prepare_tensor("presence_penalty", presence_penalty_data,
+                           protocol),
         ]
 
     return inputs
@@ -176,21 +186,21 @@ if __name__ == "__main__":
         default='Born in north-east France, Soyer trained as a',
         help='Input text')
 
-    parser.add_argument('--input_tokens_csv',
+    parser.add_argument('--input-tokens-csv',
                         type=str,
                         required=False,
                         default='',
                         help='Path to csv file containing the input tokens')
 
     parser.add_argument(
-        '--output_tokens_csv',
+        '--output-tokens-csv',
         type=str,
         required=False,
         default='',
         help='Path to csv file containing the expected output tokens')
 
     parser.add_argument(
-        '--end_id',
+        '--end-id',
         type=int,
         required=False,
         default=50256,
@@ -198,7 +208,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--pad_id',
+        '--pad-id',
         type=int,
         required=False,
         default=50256,
@@ -287,11 +297,26 @@ if __name__ == "__main__":
         help="temperature value",
     )
     parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The repetition penalty value",
+    )
+    parser.add_argument(
+        "--presence-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The presence penalty value",
+    )
+
+    parser.add_argument(
         "--request-output-len",
         type=int,
         required=False,
         default=16,
-        help="temperature value",
+        help="Request output length",
     )
     parser.add_argument(
         '--stop-after-ms',
@@ -299,24 +324,24 @@ if __name__ == "__main__":
         required=False,
         default=0,
         help='Early stop the generation after a few milliseconds')
-    parser.add_argument('--tokenizer_dir',
+    parser.add_argument('--tokenizer-dir',
                         type=str,
                         required=False,
                         default='',
                         help='Specify tokenizer directory')
-    parser.add_argument('--tokenizer_type',
+    parser.add_argument('--tokenizer-type',
                         type=str,
                         default='auto',
                         required=False,
                         choices=['auto', 't5', 'llama'],
                         help='Specify tokenizer type')
-    parser.add_argument('--request_id',
+    parser.add_argument('--request-id',
                         type=str,
                         default='1',
                         required=False,
                         help='The request_id for the stop request')
 
-    parser.add_argument('--prompt_embedding_table_path',
+    parser.add_argument('--prompt-embedding-table-path',
                         type=str,
                         default='',
                         required=False,
@@ -330,7 +355,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--prompt_task_id',
+        '--prompt-task-id',
         type=int,
         default=0,
         required=False,
@@ -414,12 +439,22 @@ if __name__ == "__main__":
     beam_width_data = np.array(beam_width, dtype=np.uint32)
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
+    repetition_penalty_data = None
+    if FLAGS.repetition_penalty is not None:
+        repetition_penalty = [[FLAGS.repetition_penalty]]
+        repetition_penalty_data = np.array(repetition_penalty,
+                                           dtype=np.float32)
+    presence_penalty_data = None
+    if FLAGS.presence_penalty is not None:
+        presence_penalty = [[FLAGS.presence_penalty]]
+        presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
 
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
-                            temperature_data, streaming_data, end_id_data,
+                            temperature_data, repetition_penalty_data,
+                            presence_penalty_data, streaming_data, end_id_data,
                             pad_id_data, prompt_embedding_table_data,
                             prompt_vocab_size_data)
 
@@ -500,6 +535,7 @@ if __name__ == "__main__":
                     if type(result) == InferenceServerException:
                         print("Received an error from server:")
                         print(result)
+                        raise result
                     else:
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
@@ -542,6 +578,7 @@ if __name__ == "__main__":
                     if type(result) == InferenceServerException:
                         print("Received an error from server:")
                         print(result)
+                        raise result
                     else:
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
@@ -554,8 +591,9 @@ if __name__ == "__main__":
 
                     processed_count = processed_count + 1
         except Exception as e:
-            print("channel creation failed: " + str(e))
-            sys.exit()
+            err = "Encountered error: " + str(e)
+            print(err)
+            sys.exit(err)
 
         passed = True
 

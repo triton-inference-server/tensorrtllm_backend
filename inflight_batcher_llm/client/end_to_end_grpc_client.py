@@ -39,7 +39,8 @@ def callback(user_data, result, error):
         print(output, flush=True)
 
 
-def test(triton_client, prompt, request_id, stop_words, bad_words):
+def test(triton_client, prompt, request_id, repetition_penalty,
+         presence_penalty, temperatuure, stop_words, bad_words):
     model_name = "ensemble"
 
     input0 = [[prompt]]
@@ -51,6 +52,8 @@ def test(triton_client, prompt, request_id, stop_words, bad_words):
     streaming_data = np.array(streaming, dtype=bool)
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.uint32)
+    temperature = [[FLAGS.temperature]]
+    temperature_data = np.array(temperature, dtype=np.float32)
 
     inputs = [
         prepare_tensor("text_input", input0_data, FLAGS.protocol),
@@ -59,7 +62,25 @@ def test(triton_client, prompt, request_id, stop_words, bad_words):
         prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
         prepare_tensor("stream", streaming_data, FLAGS.protocol),
         prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
+        prepare_tensor("temperature", temperature_data, FLAGS.protocol),
     ]
+
+    if repetition_penalty is not None:
+        repetition_penalty = [[repetition_penalty]]
+        repetition_penalty_data = np.array(repetition_penalty,
+                                           dtype=np.float32)
+        inputs += [
+            prepare_tensor("repetition_penalty", repetition_penalty_data,
+                           FLAGS.protocol),
+        ]
+
+    if presence_penalty is not None:
+        presence_penalty = [[presence_penalty]]
+        presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
+        inputs += [
+            prepare_tensor("presence_penalty", presence_penalty_data,
+                           FLAGS.protocol),
+        ]
 
     user_data = UserData()
     # Establish stream
@@ -122,6 +143,30 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "--temperature",
+        type=float,
+        required=False,
+        default=1.0,
+        help="temperature value",
+    )
+
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The repetition penalty value",
+    )
+
+    parser.add_argument(
+        "--presence-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The presence penalty value",
+    )
+
+    parser.add_argument(
         '-i',
         '--protocol',
         type=str,
@@ -132,24 +177,24 @@ if __name__ == '__main__':
         'communicate with inference service. Default is "http".')
 
     parser.add_argument('-o',
-                        '--output_len',
+                        '--output-len',
                         type=int,
                         default=100,
                         required=False,
                         help='Specify output length')
 
-    parser.add_argument('--request_id',
+    parser.add_argument('--request-id',
                         type=str,
                         default='1',
                         required=False,
                         help='The request_id for the stop request')
 
-    parser.add_argument('--stop_words',
+    parser.add_argument('--stop-words',
                         nargs='+',
                         default=[],
                         help='The stop words')
 
-    parser.add_argument('--bad_words',
+    parser.add_argument('--bad-words',
                         nargs='+',
                         default=[],
                         help='The bad words')
@@ -172,4 +217,5 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
-    test(client, FLAGS.prompt, FLAGS.request_id, stop_words, bad_words)
+    test(client, FLAGS.prompt, FLAGS.request_id, FLAGS.repetition_penalty,
+         FLAGS.presence_penalty, FLAGS.temperature, stop_words, bad_words)
