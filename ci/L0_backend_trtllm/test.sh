@@ -28,10 +28,13 @@ SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
 DATASET="$PWD/simple_data.json"
 TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
+STREAM_DIR='/opt/tritonserver/tensorrtllm_backend/inflight_batcher_llm/client'
 MODEL_DIR="$PWD/triton_model_repo"
 SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm/tokenizer
 BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
+CLIENT_TEST=metric_verification_tests.py
+CLIENT_LOG="client.log"
 SERVER_PID=0
 
 # Helpers ===============================
@@ -47,14 +50,15 @@ function run_server {
   SERVER_ARGS="${1}"
   python3 /opt/tritonserver/tensorrtllm_backend/scripts/launch_triton_server.py ${SERVER_ARGS} > ${SERVER_LOG} 2>&1 &
   sleep 2 # allow time to obtain the pid(s)
-  SERVER_PID=$(pgrep tritonserver)
+  # Read PIDs into an array, trimming whitespaces
+  readarray -t SERVER_PID < <(pgrep "tritonserver")
 }
 
 # Wait until server health endpoint shows ready. Sets WAIT_RET to 0 on
 # success, 1 on failure
 function wait_for_server_ready() {
-    local spids="${1}"; shift
     local wait_time_secs="${1:-30}"; shift
+    local spids=("$@");
 
     WAIT_RET=0
 
@@ -75,6 +79,8 @@ function wait_for_server_ready() {
         code=`curl -s -w %{http_code} ${SERVER_IPADDR}:8000/v2/health/ready`
         set -e
         if [ "$code" == "200" ]; then
+            code=`curl -s -w %{http_code} -o ./curl.out -d'{"log_verbose_level":1}' localhost:8000/v2/logging`
+            assert_curl_success "Failed to change log settings necessary for verification" ${BASH_LINENO}
             return
         fi
 
@@ -94,9 +100,35 @@ function kill_server {
     pgrep tritonserver | xargs kill -SIGINT
 }
 
+function wait_for_server_terminated {
+    local spids=("$@");
+    for pid in "${spids[@]}"; do
+        echo "Waiting for proc ${pid} to terminate..."
+        while true; do
+            if ! (kill -0 $pid) > /dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    done
+}
+
+function assert_curl_success {
+  message="${1}"
+  original_line_no="${2}"
+  RET=0
+  if [ "$code" != "200" ]; then
+    cat ./curl.out
+    cat ${SERVER_LOG}
+    echo -e "\n***\n*** ${message} : line ${original_line_no}\n***"
+    RET=1
+  fi
+  return ${RET}
+}
+
 # =======================================
 
-rm -f *.log
+rm -f *.log *.out
 # Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
 python3 -m pip install --upgrade pip && \
@@ -108,7 +140,9 @@ RET=0
 
 reset_model_repo
 
-# 1-GPU TRT engine
+### 1-GPU TRT engine
+SERVER_ARGS="--model_repo=${MODEL_DIR}"
+
 # inflight batching OFF (V1)
 # streaming OFF
 SERVER_LOG="./1gpu_v1_no_streaming_server.log"
@@ -116,16 +150,15 @@ cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${
 replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags 'inflight_fused_batching' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${engine_dir}' "${BASE_DIR}/engines/inflight_single_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_1_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
 # Copy the engine and place it into the model folder
-cp -r ${BASE_DIR}/engines/inflight_single_gpu/ triton_model_repo/tensorrt_llm/1
+cp -r ${BASE_DIR}/engines/inflight_1_gpu/ triton_model_repo/tensorrt_llm/1
 
-SERVER_ARGS="--model_repo=${MODEL_DIR}"
 run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
+wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
     kill $SERVER_PID > /dev/null 2>&1 || true
@@ -143,6 +176,8 @@ python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
     echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
     RET=1
 fi
 set +e
@@ -155,22 +190,24 @@ python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
     echo -e "\n***\n*** Error executing inflight batching end-to-end test: line ${LINENO}\n***"
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
     RET=1
 fi
 set +e
 
-kill_server
-sleep 5
+curl localhost:8002/metrics -o 1gpu_v1_no_stream_metrics.out
 
-# 1-GPU TRT engine
+kill_server
+wait_for_server_terminated ${SERVER_PID[@]}
+
 # inflight batching ON
 # streaming OFF
 SERVER_LOG="./1gpu_IFB_no_streaming_server.log"
 replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
-SERVER_ARGS="--model_repo=${MODEL_DIR}"
 run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
+wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
     kill $SERVER_PID > /dev/null 2>&1 || true
@@ -188,6 +225,8 @@ python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
     echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
     RET=1
 fi
 set +e
@@ -200,22 +239,24 @@ python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
     echo -e "\n***\n*** Error executing inflight batching end-to-end test: line ${LINENO}\n***"
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
     RET=1
 fi
 set +e
 
-kill_server
-sleep 5
+curl localhost:8002/metrics -o 1gpu_IFB_no_stream_metrics.out
 
-# 1-GPU TRT engine
+kill_server
+wait_for_server_terminated ${SERVER_PID[@]}
+
 # inflight batching ON
 # streaming ON
 SERVER_LOG="./1gpu_IFB_streaming_server.log"
 replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
-SERVER_ARGS="--model_repo=${MODEL_DIR}"
 run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
+wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 if [ "$WAIT_RET" != "0" ]; then
     # Cleanup
     kill $SERVER_PID > /dev/null 2>&1 || true
@@ -225,128 +266,160 @@ if [ "$WAIT_RET" != "0" ]; then
 fi
 
 set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
+python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
     --prompt="My name is"
 
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
     echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
     RET=1
 fi
 set +e
 
+curl localhost:8002/metrics -o 1gpu_IFB_stream_metrics.out
+
 kill_server
-sleep 5
+wait_for_server_terminated ${SERVER_PID[@]}
 
-# Do not move on to multi-GPU tests
-# unless sufficient GPUs exist
-NUM_GPUS=$(nvidia-smi -L | wc -l)
-if [ "$NUM_GPUS" -lt 4 ]; then
-    exit $RET
-fi
+### Multi GPU TRT engine
+NUM_GPUS_TO_TEST=("2" "4")
+for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
+    AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
+    if [ "$AVAILABLE_GPUS" -lt "$NUM_GPU" ]; then
+        exit $RET
+    fi
 
-# 4-GPU TRT engine
-# inflight batching OFF (V1)
-# streaming OFF
-SERVER_LOG="./4gpu_v1_no_streaming_server.log"
-reset_model_repo
+    SERVER_ARGS="--world_size=${NUM_GPU} --model_repo=${MODEL_DIR}"
 
-cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
-replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags 'inflight_fused_batching' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${engine_dir}' "${BASE_DIR}/engines/inflight_multi_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
-# Copy the engine and place it into the model folder
-cp -r ${BASE_DIR}/engines/inflight_multi_gpu/ triton_model_repo/tensorrt_llm/1
+    # inflight batching OFF (V1)
+    # streaming OFF
+    SERVER_LOG="./${NUM_GPU}gpu_v1_no_streaming_server.log"
 
-SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
-run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
+    reset_model_repo
 
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
-    --prompt="My name is"
+    cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
+    replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
+    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
+    replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${engine_dir}' "${BASE_DIR}/engines/inflight_${NUM_GPU}_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
+    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
 
+    # Copy the engine and place it into the model folder
+    cp -r ${BASE_DIR}/engines/inflight_${NUM_GPU}_gpu/ triton_model_repo/tensorrt_llm/1
+
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+
+    set -e
+    python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
+        --prompt="My name is"
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_PID[@]}
+        RET=1
+    fi
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
+
+    curl localhost:8002/metrics -o ${NUM_GPU}gpu_v1_no_stream_metrics.out
+
+    # inflight batching ON
+    # streaming OFF
+    SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_server.log"
+    replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+
+    set -e
+    python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
+        --prompt="My name is"
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_PID[@]}
+        RET=1
+    fi
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
+
+    curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
+
+    # inflight batching ON
+    # streaming ON
+    SERVER_LOG="./${NUM_GPU}gpu_IFB_streaming_server.log"
+    replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+
+    set -e
+    python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
+        --prompt="My name is"
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_PID[@]}
+        RET=1
+    fi
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
+    curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_stream_metrics.out
+
+done
+
+# Run python unit tests
+python3 $CLIENT_TEST >>$CLIENT_LOG 2>&1
 if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
+    cat $CLIENT_LOG
     RET=1
-fi
-set +e
-
-kill_server
-sleep 5
-
-# 4-GPU TRT engine
-# inflight batching ON
-# streaming OFF
-SERVER_LOG="./4gpu_IFB_no_streaming_server.log"
-replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-
-SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
-run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
+    kill_server
 fi
 
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
-    --prompt="My name is"
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
-    RET=1
+if [ $RET -eq 0 ]; then
+  echo -e "\n***\n*** Test Passed\n***"
+else
+  echo -e "\n***\n*** Test FAILED\n***"
 fi
-set +e
-
-kill_server
-sleep 5
-
-# 4-GPU TRT engine
-# inflight batching ON
-# streaming ON
-SERVER_LOG="./4gpu_IFB_streaming_server.log"
-replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-
-SERVER_ARGS="--world_size=4 --model_repo=${MODEL_DIR}"
-run_server "${SERVER_ARGS}"
-wait_for_server_ready $SERVER_PID $SERVER_TIMEOUT
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
-    --prompt="My name is"
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
-    RET=1
-fi
-set +e
-
-kill_server
-sleep 5
 
 exit $RET

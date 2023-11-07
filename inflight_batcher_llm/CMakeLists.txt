@@ -30,7 +30,7 @@ set(TRITON_BUILD
 
 if(TRITON_BUILD)
   set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tensorrt_llm)
-  # Install build time dependencies. This section is excuted during cmake
+  # Install build time dependencies. This section is executed during cmake
   # configure time.
   execute_process(
     COMMAND bash -x ./tools/environment_setup.sh
@@ -57,6 +57,12 @@ project(tritontensorrtllmbackend LANGUAGES C CXX)
 # related features since TRT-LLM backend manages the usage on GPUs itself.
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_ENABLE_METRICS "Include metrics support in server" ON)
+
+if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
+  message(
+    FATAL_ERROR "TRITON_ENABLE_METRICS=ON requires TRITON_ENABLE_STATS=ON")
+endif()
 
 # The TRTLLM_BUILD_CONTAINER is used to compile the TRT-LLM libraries that are
 # needed for the TRT-LLM backend. The TRTLLM_BUILD_CONTAINER is launched
@@ -120,8 +126,12 @@ if(TRITON_BUILD)
       cd ${CMAKE_CURRENT_SOURCE_DIR} && python3 tools/gen_trtllm_dockerfile.py
       --trtllm-build-config="${CMAKE_BUILD_TYPE}"
       --trtllm-base-image="${TRTLLM_BUILD_CONTAINER}" --output=Dockerfile.trtllm
-    COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build --no-cache -t
-            ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
+    COMMAND
+      cd ${CMAKE_CURRENT_SOURCE_DIR} && docker build
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}_cache0
+      --cache-from=${TRITON_TRTLLM_DOCKER_NAME}_cache1 -t
+      ${TRITON_TRTLLM_DOCKER_NAME} -f ./Dockerfile.trtllm .
     COMMAND docker rm trtllm_build || echo 'error ignored...' || true
     COMMAND docker create --name trtllm_build ${TRITON_TRTLLM_DOCKER_NAME}
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR} && rm -fr tensorrt_llm
@@ -186,7 +196,9 @@ find_library(NCCL_LIB nccl HINTS ${NCCL_LIB_DIR})
 # environment_setup.sh script
 set_ifndef(TRT_LIB_DIR
            /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/lib)
-set_ifndef(TRT_INCLUDE_DIR /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+set_ifndef(
+  TRT_INCLUDE_DIR
+  /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/include)
 
 set(TRT_LIB nvinfer)
 find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
@@ -295,6 +307,44 @@ set_property(
     IMPORTED_LOCATION
     "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so"
 )
+
+if(TRITON_ENABLE_METRICS)
+  message("Compiling metrics...")
+  list(APPEND METRICS_SRCS src/metrics/triton_metrics.cc)
+  list(APPEND METRICS_HDRS src/metrics/triton_metrics.h)
+
+  add_library(triton-metrics-library EXCLUDE_FROM_ALL ${METRICS_SRCS}
+                                                      ${METRICS_HDRS})
+  target_compile_features(triton-metrics-library PRIVATE cxx_std_17)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(triton-metrics-library
+                           PRIVATE /W1 /D_WIN32_WINNT=0x0A00 /EHsc)
+  else()
+    target_compile_options(
+      triton-metrics-library PRIVATE -Wall -Wextra -Wno-unused-parameter
+                                     -Wno-deprecated-declarations -Werror)
+  endif()
+
+  set_target_properties(triton-metrics-library
+                        PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  target_link_libraries(
+    triton-metrics-library
+    PUBLIC triton-common-json # from repo-common
+           triton-common-logging # from repo-common
+           triton-core-serverapi # from repo-core
+           triton-core-serverstub # from repo-core
+           triton-backend-utils # from repo-backend
+           tensorrt_llm_batch_manager)
+
+  target_link_libraries(triton-metrics-library
+                        PRIVATE nlohmann_json::nlohmann_json)
+
+  target_compile_definitions(triton-tensorrt-llm-backend
+                             PRIVATE TRITON_ENABLE_METRICS=1)
+  target_link_libraries(triton-tensorrt-llm-backend
+                        PRIVATE triton-metrics-library)
+endif()
 
 if(TRITON_BUILD)
   add_dependencies(tensorrt_llm trtllm_target)
