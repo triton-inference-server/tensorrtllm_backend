@@ -567,9 +567,35 @@ public:
         return (mPendingWorkItemsReqIds.find(reqId) != mPendingWorkItemsReqIds.end());
     }
 
+    /// @brief Add a batch of new work item to the queue
+    /// Throws an error if requestId already exists
+    std::vector<std::shared_ptr<std::exception>> pushBatch(
+        std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>>& requestsToPush, bool isDecoupled)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        std::vector<std::shared_ptr<std::exception>> reqExceptions;
+        for (auto& [requestId, request] : requestsToPush)
+        {
+            if (requestId != 0 && (hasInProgressReqId(requestId) || hasPendingReqId(requestId)))
+            {
+                std::string errStr
+                    = "requestId " + std::to_string(requestId) + " is already in progress, request is ignored.";
+                reqExceptions.emplace_back(std::make_shared<std::runtime_error>(errStr));
+            }
+            else
+            {
+                auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, isDecoupled)
+                                               : std::make_shared<WorkItem>(request, isDecoupled);
+                mPendingWorkItems.push_back(workItem);
+                mPendingWorkItemsReqIds.insert(workItem->requestId());
+                reqExceptions.push_back(nullptr);
+            }
+        }
+        return reqExceptions;
+    }
+
     /// @brief Add a new work item to the queue
     /// Throws an error if requestId already exists
-
     void push(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
     {
         std::lock_guard<std::mutex> lk(mMutex);
@@ -771,18 +797,19 @@ public:
 
     void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
     {
+        std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>> requestsToPush;
+
         for (uint32_t r = 0; r < request_count; ++r)
         {
-
             TRITONBACKEND_Request* request = requests[r];
             try
             {
                 auto requestId = getRequestId(request);
                 bool stopRequest = getRequestBooleanInputTensor(request, kStopInputTensorName);
 
-                if (requestId != 0)
+                if (stopRequest)
                 {
-                    if (stopRequest)
+                    if (requestId != 0)
                     {
                         // Check if request is in progress or in queue, if not ignore
                         mWorkItemsQueue.stopWorkItem(requestId);
@@ -791,16 +818,12 @@ public:
                     }
                     else
                     {
-                        mWorkItemsQueue.push(request, requestId, isDecoupled);
+                        throw std::runtime_error("Cannot send stop request without specifying a request_id");
                     }
-                }
-                else if (!stopRequest)
-                {
-                    mWorkItemsQueue.push(request, isDecoupled);
                 }
                 else
                 {
-                    throw std::runtime_error("Cannot send stop request without specifying a request_id");
+                    requestsToPush.emplace_back(requestId, request);
                 }
             }
             catch (const std::exception& e)
@@ -810,6 +833,19 @@ public:
                 sendEnqueueResponse(request, e.what());
             }
         }
+
+        auto exceptions = mWorkItemsQueue.pushBatch(requestsToPush, isDecoupled);
+
+        for (uint32_t r = 0; r < requestsToPush.size(); ++r)
+        {
+            auto request = requestsToPush.at(r).second;
+            auto e = exceptions.at(r);
+            if (e)
+            {
+                sendEnqueueResponse(request, e->what());
+            }
+        }
+
         return;
     }
 
