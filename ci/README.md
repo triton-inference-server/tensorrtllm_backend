@@ -32,8 +32,6 @@ Tests in this CI directory can be run manually to provide extensive testing.
 
 ## Run QA Tests
 
-**The NGC container will be available with Triton 23.10 release soon**
-
 Before the Triton 23.10 release, you can launch the Triton 23.09 container
 `nvcr.io/nvidia/tritonserver:23.09-py3` and add the directory
 `/opt/tritonserver/backends/tensorrtllm` within the container following the
@@ -42,7 +40,7 @@ instructions in [Option 3 Build via CMake](../README.md#option-3-build-via-cmake
 Run the testing within the Triton container.
 
 ```bash
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-py3 bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3 bash
 
 # Change directory to the test and run the test.sh script
 cd /tensorrtllm_backend/ci/<test directory>
@@ -101,7 +99,7 @@ such as HuggingFace.
 
 ```bash
 cd tools/inflight_batcher_llm
-python3 identity_test.py --dataset <dataset path>
+python3 identity_test.py dataset --dataset <dataset path>
 ```
 
 Expected outputs

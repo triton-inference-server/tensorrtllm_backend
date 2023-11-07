@@ -160,14 +160,42 @@ Expected outputs
 
 Identity test script sends requests directly to deployed tensorrt_llm model, the identity test latency indicates the inference latency of TensorRT-LLM, not including the pre/post-processing latency which is usually handled by a third-party library such as HuggingFace.
 
+Identity test can generate traffic from 2 sources.
+1 - dataset (json file containning prompts and optional responses)
+2 - token normal distribution (user specified input, output seqlen)
+
+By default, the test uses exponential distrution to control arrival rate of requests. It can be changed to constant arrival time.
+
 ```
 cd tools/inflight_batcher_llm
-python3 identity_test.py --dataset <dataset path>
+```
+Example: Run dataset with 10 req/sec requested rate with provided tokenizer.
+```
+python3 identity_test.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --tokenizer_type <>
+```
+Example: Generate I/O seqlen tokens with input normal distribution with mean_seqlen=128, stdev=10. Output normal distribution with mean_seqlen=20, stdev=2. Set stdev=0 to get constant seqlens.
+```
+python3 identity_test.py -i grpc --request_rate 10 token_norm_dist --input_mean 128 --input_stdev 5 --output_mean 20 --output_stdev 2 --num_requests 5000
 ```
 Expected outputs
 ```
 [INFO] Warm up for benchmarking.
-[INFO] Start benchmarking on 125 prompts.
-[INFO] Total Latency: 10213.462 ms
+[INFO] Start benchmarking on 5000 prompts.
+[INFO] Total Latency: 26585.349 ms
+[INFO] Total request latencies: 11569672.000999955 ms
++----------------------------+----------+
+|            Stat            |  Value   |
++----------------------------+----------+
+|        Requests/Sec        |  188.09  |
+|       OP tokens/sec        | 3857.66  |
+|     Avg. latency (ms)      | 2313.93  |
+|      P99 latency (ms)      | 3624.95  |
+|      P90 latency (ms)      | 3127.75  |
+| Avg. IP tokens per request |  128.53  |
+| Avg. OP tokens per request |  20.51   |
+|     Total latency (ms)     | 26582.72 |
+|       Total requests       | 5000.00  |
++----------------------------+----------+
+
 ```
 *Please note that the expected outputs in that document are only for reference, specific performance numbers depend on the GPU you're using.*

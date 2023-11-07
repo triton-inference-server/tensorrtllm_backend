@@ -57,7 +57,7 @@ def test_functionality(client, prompts, output_lens):
                                  FLAGS.protocol),
         ]
         result = client.infer(model_name, inputs, request_id=str(i))
-        output0 = result.as_numpy("output_ids")
+        output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
 
         model_name = "postprocessing"
@@ -192,7 +192,7 @@ if __name__ == '__main__':
                         default=128,
                         required=False,
                         help='Specify concurrency')
-    parser.add_argument('--max_input_len',
+    parser.add_argument('--max-input-len',
                         type=int,
                         required=True,
                         help='Specify max input length')
@@ -213,7 +213,7 @@ if __name__ == '__main__':
             concurrency=FLAGS.concurrency,
             verbose=FLAGS.verbose)
     except Exception as e:
-        print("channel creation failed: " + str(e))
+        print("Encountered error: " + str(e))
         sys.exit(1)
 
     prompts = []

@@ -11,7 +11,5 @@ mkdir $BUILD_DIR
 BUILD_DIR=$(cd -- "$BUILD_DIR" && pwd)
 cd $BUILD_DIR
 
-cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install \
-    -DTRT_LIB_DIR=${TRT_ROOT}/targets/x86_64-linux-gnu/lib \
-    -DTRT_INCLUDE_DIR=${TRT_ROOT}/include ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ..
 make install

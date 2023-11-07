@@ -26,7 +26,8 @@ def combine_csv_files(args):
                 data_rows.append(new_data)
 
     appended_header = [
-        "Machine", "Model", "Batching Scheme", "Scheduler Policy", "Dataset"
+        "Machine", "Model", "Batching Scheme", "Scheduler Policy", "Dataset",
+        "REQ_RATE"
     ] + header
     # Write the combined data to the output CSV file
     with open(args.output_filename, 'w', newline='') as csvfile:

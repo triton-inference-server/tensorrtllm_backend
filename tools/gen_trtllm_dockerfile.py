@@ -26,7 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
-import os
 
 FLAGS = None
 
@@ -42,7 +41,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends python-is-pytho
 """
     if clone_repo:
         df += """
-# FIXME: Update the url
 RUN git clone --single-branch --depth=1 -b {} https://github.com/triton-inference-server/tensorrtllm_backend.git
 RUN cd tensorrtllm_backend && git submodule update --init --recursive
 RUN cp tensorrtllm_backend/tensorrt_llm/docker/common/install_tensorrt.sh /tmp/
@@ -61,9 +59,24 @@ ENV TRT_ROOT=/usr/local/tensorrt
     return df
 
 
+def install_pytorch():
+    df = """
+# Install PyTorch using the script from TRT-LLM
+COPY tensorrt_llm/docker/common/install_pytorch.sh /tmp/
+# `pypi` for x86_64 arch and `src_cxx11_abi` for aarch64 arch
+RUN ARCH="$(uname -i)" && \
+    if [ "${ARCH}" = "aarch64" ]; then TORCH_INSTALL_TYPE="src_non_cxx11_abi"; \
+    else TORCH_INSTALL_TYPE="pypi"; fi && \
+    bash /tmp/install_pytorch.sh $TORCH_INSTALL_TYPE && rm /tmp/install_pytorch.sh
+"""
+
+    return df
+
+
 def create_postbuild(repo_tag="main"):
     df = """
 WORKDIR /workspace
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip
 """
     df += install_new_version_of_TRT(clone_repo=True,
                                      trtllm_be_repo_tag=repo_tag)
@@ -73,6 +86,10 @@ RUN ARCH="$(uname -i)" && \
     rm -fr ${TRT_ROOT}/bin ${TRT_ROOT}/targets/${ARCH}-linux-gnu/bin ${TRT_ROOT}/data && \
     rm -fr  ${TRT_ROOT}/doc ${TRT_ROOT}/onnx_graphsurgeon ${TRT_ROOT}/python && \
     rm -fr ${TRT_ROOT}/samples  ${TRT_ROOT}/targets/${ARCH}-linux-gnu/samples
+
+# Install required packages for TRT-LLM models
+RUN python3 -m pip install --upgrade pip && \
+        pip3 install transformers
 
 # Uninstall unused nvidia packages
 RUN if pip freeze | grep -q "nvidia.*"; then \
@@ -95,15 +112,17 @@ WORKDIR /workspace
 RUN apt-get update && apt-get install python3-pip -y
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
-"""
-    df += install_new_version_of_TRT()
-    df += """
+
 FROM base as dev
 
 # CMake
-RUN ARCH="$(uname -i)" && wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmake-3.27.6-linux-${ARCH}.sh
-RUN bash cmake-3.27.6-linux-*.sh --prefix=/usr/local --exclude-subdir && rm cmake-3.27.6-linux-*.sh
-ENV PATH="/usr/local/bin:${PATH}"
+COPY tensorrt_llm/docker/common/install_cmake.sh /tmp/
+RUN bash /tmp/install_cmake.sh && rm /tmp/install_cmake.sh
+ENV PATH="/usr/local/cmake/bin:${PATH}"
+"""
+    df += install_new_version_of_TRT()
+    df += install_pytorch()
+    df += """
 
 COPY tensorrt_llm/requirements-dev.txt /tmp/
 RUN pip install -r /tmp/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
@@ -119,18 +138,24 @@ ARG TRTLLM_BUILD_CONFIG={}
 """.format(FLAGS.trtllm_build_config)
     df += """
 RUN cd tensorrt_llm && python3 scripts/build_wheel.py --build_type=${TRTLLM_BUILD_CONFIG} --trt_root="${TRT_ROOT}" -i --clean
+"""
 
-# Copy all artifacts needed by the backend to /opt/tensorrtllm
+    if FLAGS.trtllm_build_config == "Release":
+        df += """
 ARG TRTLLM_BUILD_LIB=tensorrt_llm/cpp/build/tensorrt_llm
+"""
+    else:
+        df += """
+ARG TRTLLM_BUILD_LIB=tensorrt_llm/cpp/build_{}/tensorrt_llm
+""".format(FLAGS.trtllm_build_config)
+
+    df += """
+# Copy all artifacts needed by the backend to /opt/trtllm_lib
 RUN mkdir -p /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/libtensorrt_llm.so /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/thop/libth_common.so /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so \
-        /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so.9 \
-        /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so.9.1.0 \
-        /opt/trtllm_lib
+    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so /opt/trtllm_lib && \
+    (cd /opt/trtllm_lib && \
+        ln -s libnvinfer_plugin_tensorrt_llm.so libnvinfer_plugin_tensorrt_llm.so.9 && \
+        ln -s libnvinfer_plugin_tensorrt_llm.so libnvinfer_plugin_tensorrt_llm.so.9.1.0)
 """
 
     with open(FLAGS.output, "w") as dfile:

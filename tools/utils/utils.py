@@ -164,6 +164,74 @@ def append_start_and_end_ids(inputs,
         inputs.append(prepare_tensor("end_id", end_ids, flags.protocol))
 
 
+def get_list_of_delays(delay_dist, mean_time_bet_reqs, num_reqs):
+    if delay_dist == "constant":
+        delays = [mean_time_bet_reqs] * num_reqs
+    elif delay_dist == "exponential_dist":
+        delays = get_exponential_dist_delays(mean_time_bet_reqs, num_reqs)
+
+    return delays
+
+
+def get_exponential_dist_delays(mean_time_bet_reqs, num_reqs):
+    # set seed for determinism
+    np.random.seed(42)
+    return np.random.exponential(mean_time_bet_reqs, num_reqs).tolist()
+
+
+def get_norm_dist_tokens(mean, stdev, num_reqs):
+    # set seed for determinism
+    np.random.seed(42)
+    numbers_list = np.random.normal(loc=mean, scale=stdev,
+                                    size=num_reqs).tolist()
+    return [max(1, math.ceil(x)) for x in numbers_list]
+
+
+def gen_random_start_ids(ip_lens):
+    input_start_ids = []
+    for ip_len in ip_lens:
+        start_ids = list(
+            np.random.randint(low=0,
+                              high=np.iinfo(np.int32).max,
+                              size=ip_len,
+                              dtype=np.int32))
+        input_start_ids.append(np.array([start_ids]))
+
+    return input_start_ids
+
+
+def get_list_of_delays(delay_dist, mean_time_bet_reqs, num_reqs):
+    if delay_dist == "constant":
+        delays = [mean_time_bet_reqs] * num_reqs
+    elif delay_dist == "exponential_dist":
+        delays = get_exponential_dist_delays(mean_time_bet_reqs, num_reqs)
+
+    return delays
+
+
+def get_exponential_dist_delays(mean_time_bet_reqs, num_reqs):
+    return np.random.exponential(mean_time_bet_reqs, num_reqs).tolist()
+
+
+def get_norm_dist_tokens(mean, stdev, num_reqs):
+    numbers_list = np.random.normal(loc=mean, scale=stdev,
+                                    size=num_reqs).tolist()
+    return [max(1, math.ceil(x)) for x in numbers_list]
+
+
+def gen_random_start_ids(ip_lens):
+    input_start_ids = []
+    for ip_len in ip_lens:
+        start_ids = list(
+            np.random.randint(low=0,
+                              high=np.iinfo(np.int32).max,
+                              size=ip_len,
+                              dtype=np.int32))
+        input_start_ids.append(np.array([start_ids]))
+
+    return input_start_ids
+
+
 def get_inflight_reqs_profile(start_times, end_times, requests_per_sec):
     """
     Receives start and end times of all requests,
@@ -218,8 +286,9 @@ def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
     ]
 
     assert (len(op_token_len_list) == len(ip_token_len_list))
-    for i in range(len(op_token_len_list)):
-        op_token_len_list[i] = op_token_len_list[i] - ip_token_len_list[i]
+    if not FLAGS.exclude_input_in_output:
+        for i in range(len(op_token_len_list)):
+            op_token_len_list[i] = op_token_len_list[i] - ip_token_len_list[i]
 
     # Get latencies per request
     # Order latencies based on issue order.
@@ -264,9 +333,7 @@ def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
     requests_per_sec = len(responses) / total_latency
     tokens_generated_per_sec = total_op_tokens / total_latency
 
-    in_flight_requests_intervals = get_inflight_reqs_profile(
-        df['start_time'].tolist(), df['stop_time'].tolist(), requests_per_sec)
-    avg_in_flight_requests = np.mean(in_flight_requests_intervals)
+    avg_in_flight_requests = 0
 
     print_data_dict = {}
     print_data_dict["Requests/Sec"] = requests_per_sec
