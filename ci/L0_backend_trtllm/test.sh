@@ -28,6 +28,7 @@ SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
 DATASET="$PWD/simple_data.json"
 TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
+CLIENT_DIR='/opt/tritonserver/tensorrtllm_backend/inflight_batcher_llm/client'
 MODEL_DIR="$PWD/triton_model_repo"
 SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm/tokenizer
@@ -182,6 +183,7 @@ fi
 set -e
 python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
     --max-input-len=500 \
+    dataset \
     --dataset=${DATASET} \
     --tokenizer-dir=${TOKENIZER_DIR}
 
@@ -223,7 +225,7 @@ if [ "$WAIT_RET" != "0" ]; then
 fi
 
 set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
+python3 ${CLIENT_DIR}/end_to_end_grpc_client.py \
     --prompt="My name is"
 
 if [ $? -ne 0 ]; then
@@ -276,7 +278,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
 
     set -e
-    python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
+    python3 ${CLIENT_DIR}/end_to_end_grpc_client.py \
         --prompt="My name is"
 
     if [ $? -ne 0 ]; then
@@ -306,7 +308,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
 
     set -e
-    python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
+    python3 ${CLIENT_DIR}/end_to_end_grpc_client.py \
         --prompt="My name is"
 
     if [ $? -ne 0 ]; then
@@ -335,7 +337,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
 
     set -e
-    python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_streaming_client.py \
+    python3 ${CLIENT_DIR}/end_to_end_grpc_client.py \
         --prompt="My name is"
 
     if [ $? -ne 0 ]; then
