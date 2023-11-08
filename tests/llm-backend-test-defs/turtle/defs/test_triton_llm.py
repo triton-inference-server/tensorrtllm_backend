@@ -35,13 +35,39 @@ def check_server_ready():
     )
 
 
-MAX_NUM_SEQUENCES = (""
-                     "32")
-MAX_TOKENS_IN_KV_CACHES = ("")
-BATCH_SCHEDULER_POLICIES = ("max_utilization"
-                            "guaranteed_no_evict")
-KV_CACHE_FREE_GPU_MEM_FRACTIONS = (""
-                                   "0.2")
+def modify_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY, MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH):
+    fill_template_py = os.path.join(llm_backend_repo_root, "tools",
+                                    "fill_template.py")
+    llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
+                              "tensorrt_llm", "config.pbtxt")
+    preprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
+                                        "preprocessing", "config.pbtxt")
+    postprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
+                                         "postprocessing", "config.pbtxt")
+    ensemble_config = os.path.join(llm_backend_repo_root, "triton_repo",
+                                   "ensemble", "config.pbtxt")
+    check_call(
+        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
+        f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
+        f"batching_strategy:{BATCHING_STRATEGY},max_num_sequences:{MAX_NUM_SEQUENCE}," \
+        f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
+        f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
+        f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_batch_width:{MAX_BEAM_WIDTH}",
+        shell=True)
+    check_call(
+        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
+        shell=True)
+    check_call(
+        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
+        shell=True)
+    check_call(
+        f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
+        shell=True)
 
 
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
@@ -55,9 +81,15 @@ KV_CACHE_FREE_GPU_MEM_FRACTIONS = (""
                          ["inflight_fused_batching", "V1"])
 @pytest.mark.parametrize("DECOUPLED_MODE", ["True", "False"],
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                         BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
                         ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
+                        TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+                        MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT,
                         inflight_batcher_llm_client_root,
                         llama_v2_tokenizer_model_root, llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
@@ -74,26 +106,12 @@ def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         "tensorrt_llm/examples/llama/ib_llama_7b_outputs")
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    fill_template_py = os.path.join(llm_backend_repo_root, "tools",
-                                    "fill_template.py")
-    llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                              "tensorrt_llm", "config.pbtxt")
-    preprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                                        "preprocessing", "config.pbtxt")
-    postprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                                         "postprocessing", "config.pbtxt")
-    check_call(
-        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
-        f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
-        f"batching_strategy:{BATCHING_STRATEGY},max_num_sequences:{MAX_NUM_SEQUENCE}," \
-        f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
-        shell=True)
+    modify_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY, MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -180,15 +198,6 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
         # Validate Accuracy -ToDo
 
 
-MAX_NUM_SEQUENCES = (""
-                     "32")
-MAX_TOKENS_IN_KV_CACHES = ("")
-BATCH_SCHEDULER_POLICIES = ("max_utilization"
-                            "guaranteed_no_evict")
-KV_CACHE_FREE_GPU_MEM_FRACTIONS = (""
-                                   "0.2")
-
-
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
@@ -200,9 +209,15 @@ KV_CACHE_FREE_GPU_MEM_FRACTIONS = (""
                          ["inflight_fused_batching", "V1"])
 @pytest.mark.parametrize("DECOUPLED_MODE", ["True", "False"],
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
                      ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
+                     TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+                     MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT,
                      inflight_batcher_llm_client_root,
                      gpt_tokenizer_model_root, llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
@@ -219,26 +234,12 @@ def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         "tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
-    fill_template_py = os.path.join(llm_backend_repo_root, "tools",
-                                    "fill_template.py")
-    llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                              "tensorrt_llm", "config.pbtxt")
-    preprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                                        "preprocessing", "config.pbtxt")
-    postprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                                         "postprocessing", "config.pbtxt")
-    check_call(
-        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
-        f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
-        f"batching_strategy:{BATCHING_STRATEGY},max_num_sequences:{MAX_NUM_SEQUENCE}," \
-        f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
-        shell=True)
+    modify_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY, MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
