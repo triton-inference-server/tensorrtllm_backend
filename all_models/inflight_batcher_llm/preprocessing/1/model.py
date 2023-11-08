@@ -78,16 +78,25 @@ class TritonPythonModel:
                                             add_special_tokens=False)[0]
 
         # Parse model output configs and convert Triton types to numpy types
-        input_names = [
+        output_names = [
             "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS"
         ]
+        input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
         for input_name in input_names:
             setattr(
                 self,
                 input_name.lower() + "_dtype",
                 pb_utils.triton_string_to_numpy(
-                    pb_utils.get_output_config_by_name(
+                    pb_utils.get_input_config_by_name(
                         model_config, input_name)['data_type']))
+
+        for output_name in output_names:
+            setattr(
+                self,
+                output_name.lower() + "_dtype",
+                pb_utils.triton_string_to_numpy(
+                    pb_utils.get_output_config_by_name(
+                        model_config, output_name)['data_type']))
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -113,22 +122,53 @@ class TritonPythonModel:
 
         # Every Python backend must iterate over everyone of the requests
         # and create a pb_utils.InferenceResponse for each of them.
+        logger = pb_utils.Logger
         for idx, request in enumerate(requests):
             # Get input tensors
             query = pb_utils.get_input_tensor_by_name(request,
                                                       'QUERY').as_numpy()
+            batch_dim = query.shape[0]
+            if batch_dim != 1:
+
+                err_str = "Inflight batching backend expects requests with batch size of 1."
+                logger.log_error(err_str)
+                responses.append(
+                    pb_utils.InferenceResponse(
+                        output_tensors=[],
+                        error=pb_utils.TritonError(err_str)))
+                continue
+
             request_output_len = pb_utils.get_input_tensor_by_name(
                 request, 'REQUEST_OUTPUT_LEN').as_numpy()
 
             bad_words_dict = pb_utils.get_input_tensor_by_name(
-                request, 'BAD_WORDS_DICT').as_numpy()
+                request, 'BAD_WORDS_DICT')
+            if bad_words_dict is not None:
+                bad_words_dict = bad_words_dict.as_numpy()
+
             stop_words_dict = pb_utils.get_input_tensor_by_name(
-                request, 'STOP_WORDS_DICT').as_numpy()
+                request, 'STOP_WORDS_DICT')
+            if stop_words_dict is not None:
+                stop_words_dict = stop_words_dict.as_numpy()
+
+            embedding_bias_words = pb_utils.get_input_tensor_by_name(
+                request, 'EMBEDDING_BIAS_WORDS')
+            if embedding_bias_words is not None:
+                embedding_bias_words = embedding_bias_words.as_numpy()
+
+            embedding_bias_weights = pb_utils.get_input_tensor_by_name(
+                request, 'EMBEDDING_BIAS_WEIGHTS')
+            if embedding_bias_weights is not None:
+                embedding_bias_weights = embedding_bias_weights.as_numpy()
 
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
             bad_words = self._to_word_list_format(bad_words_dict)
             stop_words = self._to_word_list_format(stop_words_dict)
+
+            embedding_bias = self._get_embedding_bias(
+                embedding_bias_words, embedding_bias_weights,
+                self.embedding_bias_weights_dtype)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -142,17 +182,13 @@ class TritonPythonModel:
             bad_words_ids_tensor = pb_utils.Tensor('BAD_WORDS_IDS', bad_words)
             stop_words_ids_tensor = pb_utils.Tensor('STOP_WORDS_IDS',
                                                     stop_words)
+            embedding_bias_tensor = pb_utils.Tensor('EMBEDDING_BIAS',
+                                                    embedding_bias)
 
-            # Create InferenceResponse. You can set an error here in case
-            # there was a problem with handling this inference request.
-            # Below is an example of how you can set errors in inference
-            # response:
-            #
-            # pb_utils.InferenceResponse(
-            #    output_tensors=..., TritonError("An error occurred"))
             inference_response = pb_utils.InferenceResponse(output_tensors=[
                 input_id_tensor, bad_words_ids_tensor, stop_words_ids_tensor,
-                request_input_len_tensor, request_output_len_tensor
+                request_input_len_tensor, request_output_len_tensor,
+                embedding_bias_tensor
             ])
             responses.append(inference_response)
 
@@ -200,6 +236,10 @@ class TritonPythonModel:
         '''
         assert self.tokenizer != None, "need to set tokenizer"
 
+        if word_dict is None:
+            # Return an empty array of shape (1,2,0)
+            return np.empty([1, 2, 0], dtype="int32")
+
         flat_ids = []
         offsets = []
         for word_dict_item in word_dict:
@@ -232,3 +272,37 @@ class TritonPythonModel:
 
         return np.array([flat_ids, offsets], dtype="int32").transpose(
             (1, 0, 2))
+
+    def _get_embedding_bias(self, embedding_bias_words, embedding_bias_weights,
+                            bias_dtype):
+
+        assert self.tokenizer != None, "need to set tokenizer"
+
+        if embedding_bias_words is None or embedding_bias_weights is None:
+            return np.empty([1, 0], dtype=self.embedding_bias_weights_dtype)
+
+        batch_embedding_bias = []
+        for words, weights in zip(embedding_bias_words,
+                                  embedding_bias_weights):
+
+            vocab_size = self.tokenizer.vocab_size
+            embedding_bias = [0.] * vocab_size
+
+            assert len(words) == len(
+                weights
+            ), "Embedding bias words must have same dimension as embedding bias weights"
+
+            for word, weight in zip(words, weights):
+                if isinstance(word, bytes):
+                    word = word.decode()
+                ids = self.tokenizer.encode(word)
+
+                if len(ids) == 0:
+                    continue
+
+                for id in ids:
+                    embedding_bias[id] += weight
+
+            batch_embedding_bias.append(np.array(embedding_bias))
+
+        return np.array(batch_embedding_bias, dtype=bias_dtype)

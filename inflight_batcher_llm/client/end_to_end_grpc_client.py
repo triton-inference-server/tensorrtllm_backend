@@ -40,7 +40,8 @@ def callback(user_data, result, error):
 
 
 def test(triton_client, prompt, request_id, repetition_penalty,
-         presence_penalty, temperatuure, stop_words, bad_words):
+         presence_penalty, temperatuure, stop_words, bad_words,
+         embedding_bias_words, embedding_bias_weights):
     model_name = "ensemble"
 
     input0 = [[prompt]]
@@ -58,12 +59,20 @@ def test(triton_client, prompt, request_id, repetition_penalty,
     inputs = [
         prepare_tensor("text_input", input0_data, FLAGS.protocol),
         prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
-        prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
-        prepare_tensor("stop_words", stop_words_list, FLAGS.protocol),
         prepare_tensor("stream", streaming_data, FLAGS.protocol),
         prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
         prepare_tensor("temperature", temperature_data, FLAGS.protocol),
     ]
+
+    if bad_words:
+        bad_words_list = np.array([bad_words], dtype=object)
+        inputs += [prepare_tensor("bad_words", bad_words_list, FLAGS.protocol)]
+
+    if stop_words:
+        stop_words_list = np.array([stop_words], dtype=object)
+        inputs += [
+            prepare_tensor("stop_words", stop_words_list, FLAGS.protocol)
+        ]
 
     if repetition_penalty is not None:
         repetition_penalty = [[repetition_penalty]]
@@ -81,6 +90,27 @@ def test(triton_client, prompt, request_id, repetition_penalty,
             prepare_tensor("presence_penalty", presence_penalty_data,
                            FLAGS.protocol),
         ]
+
+    if (embedding_bias_words is not None and embedding_bias_weights is None
+        ) or (embedding_bias_words is None
+              and embedding_bias_weights is not None):
+        assert 0, "Both embedding bias words and weights must be specified"
+
+    if (embedding_bias_words is not None
+            and embedding_bias_weights is not None):
+        assert len(embedding_bias_words) == len(
+            embedding_bias_weights
+        ), "Embedding bias weights and words must have same length"
+        embedding_bias_words_data = np.array([embedding_bias_words],
+                                             dtype=object)
+        embedding_bias_weights_data = np.array([embedding_bias_weights],
+                                               dtype=np.float32)
+        inputs.append(
+            prepare_tensor("embedding_bias_words", embedding_bias_words_data,
+                           FLAGS.protocol))
+        inputs.append(
+            prepare_tensor("embedding_bias_weights",
+                           embedding_bias_weights_data, FLAGS.protocol), )
 
     user_data = UserData()
     # Establish stream
@@ -199,17 +229,22 @@ if __name__ == '__main__':
                         default=[],
                         help='The bad words')
 
+    parser.add_argument('--embedding-bias-words',
+                        nargs='+',
+                        default=[],
+                        help='The biased words')
+
+    parser.add_argument('--embedding-bias-weights',
+                        nargs='+',
+                        default=[],
+                        help='The biased words weights')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
-    stop_words = FLAGS.stop_words
-    if not stop_words:
-        stop_words = [""]
-
-    bad_words = FLAGS.bad_words
-    if not bad_words:
-        bad_words = [""]
+    embedding_bias_words = FLAGS.embedding_bias_words if FLAGS.embedding_bias_words else None
+    embedding_bias_weights = FLAGS.embedding_bias_weights if FLAGS.embedding_bias_weights else None
 
     try:
         client = grpcclient.InferenceServerClient(url=FLAGS.url)
@@ -218,4 +253,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     test(client, FLAGS.prompt, FLAGS.request_id, FLAGS.repetition_penalty,
-         FLAGS.presence_penalty, FLAGS.temperature, stop_words, bad_words)
+         FLAGS.presence_penalty, FLAGS.temperature, FLAGS.stop_words,
+         FLAGS.bad_words, embedding_bias_words, embedding_bias_weights)
