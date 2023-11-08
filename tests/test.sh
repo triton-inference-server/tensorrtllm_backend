@@ -187,6 +187,15 @@ run_cpp_backend_tests () {
             2>&1 | tee output_w_stop_words
         grep -v "that the government will" output_w_stop_words
 
+        # test with embedding bias
+        python3 end_to_end_grpc_client.py \
+            -o 10 \
+            -p "The only thing we have to fear is"  \
+            --embedding-bias-words " government" \
+            --embedding-bias-weights -20 \
+            2>&1 | tee output_w_bias
+        grep -v "that the government will" output_w_bias
+
         # test with request cancellation
         python3 inflight_batcher_llm_client.py \
             --request-output-len=128 \

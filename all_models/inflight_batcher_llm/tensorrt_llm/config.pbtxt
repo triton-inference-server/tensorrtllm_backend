@@ -85,7 +85,7 @@ input [
   },
   {
     name: "embedding_bias"
-    data_type: TYPE_FP16
+    data_type: TYPE_FP32
     dims: [ -1 ]
     optional: true
     allow_ragged_batch: true
