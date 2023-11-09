@@ -649,9 +649,15 @@ public:
     /// in progress work items if it hasn't been stopped
     /// @return A tuple of the workItem and a boolean flag indicating if the work
     /// item has been marked in progress
+    /// In case the queue is empty, return nullptr
+
     std::tuple<std::shared_ptr<WorkItem>, bool> pop()
     {
         std::lock_guard<std::mutex> lk(mMutex);
+        if (mPendingWorkItems.empty())
+        {
+            return {nullptr, false};
+        }
 
         auto workItem = mPendingWorkItems.front();
         mPendingWorkItems.pop_front();
@@ -664,18 +670,18 @@ public:
         bool is_cancelled = false;
         TRITONBACKEND_ResponseFactoryIsCancelled(workItem->response_factory(), &is_cancelled);
 
-        bool markedInProgress = false;
+        bool stoppedRequest = false;
         if (!is_stopped && !is_cancelled)
         {
             mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
-            markedInProgress = true;
         }
         else
         {
             mStoppedReqIds.erase(workItem->requestId());
+            stoppedRequest = true;
         }
 
-        return {workItem, markedInProgress};
+        return {workItem, stoppedRequest};
     }
 
     size_t numPendingWorkItems() const
@@ -900,70 +906,72 @@ public:
     std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests)
     {
         std::list<std::shared_ptr<InferenceRequest>> rval;
-        if (max_num_requests > 0)
+        if (max_num_requests <= 0)
         {
-            auto world_size = getCommWorldSize();
-            auto rank = getCommWorldRank();
-            if (rank == 0)
+            return rval;
+        }
+
+        auto world_size = getCommWorldSize();
+        auto rank = getCommWorldRank();
+        if (rank == 0)
+        {
+            auto numPendingWorkItems = mWorkItemsQueue.numPendingWorkItems();
+            // Loop over the pending work items and include at most `max_num_requests`
+            for (size_t i = 0; i < numPendingWorkItems && rval.size() < max_num_requests; ++i)
             {
-                int64_t num_new_work_items = std::min(static_cast<int64_t>(mWorkItemsQueue.numPendingWorkItems()),
-                    static_cast<int64_t>(max_num_requests));
-                if (world_size > 1)
-                {
-                    bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
-                }
+                auto [workItem, stoppedRequest] = mWorkItemsQueue.pop();
 
-                if (num_new_work_items > 0)
+                if (workItem)
                 {
-                    int count = 0;
-                    while (count < num_new_work_items)
+                    if (!stoppedRequest)
                     {
-                        auto [workItem, markedInProgress] = mWorkItemsQueue.pop();
-
-                        if (markedInProgress)
-                        {
-                            rval.emplace_back(workItem->getInferenceRequest());
-                            count++;
-                        }
-                        else
-                        {
-                            std::string warnStr = std::string("request Id ") + std::to_string(workItem->requestId())
-                                + std::string(" has been stopped. Request is ignored.");
-                            TLLM_LOG_WARNING(warnStr);
-                            sendTritonResponse(workItem, {}, true, warnStr);
-                        }
+                        rval.emplace_back(workItem->getInferenceRequest());
                     }
-                    if (world_size > 1)
+                    else
                     {
-                        std::vector<int64_t> packed;
-                        for (auto ir : rval)
-                        {
-                            auto vpacked = ir->serialize();
-                            packed.push_back(static_cast<int64_t>(vpacked.size()));
-                            packed.insert(
-                                packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
-                        }
-                        bcast(packed, 0, COMM_WORLD);
+                        std::string warnStr = std::string("request Id ") + std::to_string(workItem->requestId())
+                            + std::string(" has been stopped. Request is ignored.");
+                        TLLM_LOG_WARNING(warnStr);
+                        sendTritonResponse(workItem, {}, true, warnStr);
                     }
                 }
             }
-            else
+
+            if (world_size > 1)
             {
-                // subordinate ranks hang until master rank sends work
-                int64_t num_new_work_items;
+                int64_t num_new_work_items = rval.size();
                 bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+
                 if (num_new_work_items > 0)
                 {
                     std::vector<int64_t> packed;
-                    bcast(packed, 0, COMM_WORLD);
-                    int64_t* packed_ptr = packed.data();
-                    for (int64_t count = 0; count < num_new_work_items; ++count)
+                    for (auto ir : rval)
                     {
-                        int64_t n = *(packed_ptr++);
-                        auto ir = InferenceRequest::deserialize(packed_ptr);
-                        packed_ptr += n;
-                        rval.emplace_back(ir);
+                        auto vpacked = ir->serialize();
+                        packed.push_back(static_cast<int64_t>(vpacked.size()));
+                        packed.insert(
+                            packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                     }
+                    bcast(packed, 0, COMM_WORLD);
+                }
+            }
+        }
+        else
+        {
+            // subordinate ranks hang until master rank sends work
+            int64_t num_new_work_items;
+            bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+            if (num_new_work_items > 0)
+            {
+                std::vector<int64_t> packed;
+                bcast(packed, 0, COMM_WORLD);
+                int64_t* packed_ptr = packed.data();
+                for (int64_t count = 0; count < num_new_work_items; ++count)
+                {
+                    int64_t n = *(packed_ptr++);
+                    auto ir = InferenceRequest::deserialize(packed_ptr);
+                    packed_ptr += n;
+                    rval.emplace_back(ir);
                 }
             }
         }
