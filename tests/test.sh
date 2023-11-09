@@ -374,6 +374,7 @@ run_cpp_streaming_backend_tests() {
         --tokenizer-type ${TOKENIZER_TYPE}
 
     if [[ "$run_all_tests" == "true" ]]; then
+        # Stop request
         python3 inflight_batcher_llm_client.py \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --streaming \
@@ -383,6 +384,18 @@ run_cpp_streaming_backend_tests() {
             --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
 
         grep "Got cancellation response" output_w_stop
+
+        # Request cancellation
+        python3 inflight_batcher_llm_client.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+            --streaming \
+            --request-output-len=128 \
+            --stop-after-ms 100 \
+            --stop-via-request-cancel \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
+
+        grep "Request is cancelled" output_w_stop
     fi
 
     # End to end test
