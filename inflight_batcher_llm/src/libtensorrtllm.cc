@@ -419,20 +419,13 @@ class WorkItem
 public:
     WorkItem(TRITONBACKEND_Request* request, bool isDecoupled)
     {
-        mRequestId = (rand() % INT64_MAX) + 1;
-        mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
-
-        // Create response factory for this request
-        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+        uint64_t requestId = (rand() % INT64_MAX) + 1;
+        Initialize(request, requestId, isDecoupled);
     }
 
-    WorkItem(TRITONBACKEND_Request* request, uint64_t request_id, bool isDecoupled)
-        : mRequestId(request_id)
+    WorkItem(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
     {
-        mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
-
-        // Create response factory for this request
-        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+        Initialize(request, requestId, isDecoupled);
     }
 
     WorkItem(std::shared_ptr<InferenceRequest> ir, uint64_t RequestId)
@@ -466,7 +459,22 @@ public:
         return mInferenceRequest;
     }
 
+    bool hasOutputName(const std::string& outputName)
+    {
+        return (mRequestOutputNames.find(outputName) != mRequestOutputNames.end());
+    }
+
 private:
+    void Initialize(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
+    {
+        mRequestId = requestId;
+        mInferenceRequest = createInferenceRequest(request, requestId, isDecoupled);
+        mRequestOutputNames = getRequestOutputNames(request);
+
+        // Create response factory for this request
+        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+    }
+
     // Convert info from original backend request to data structures defined in
     // common/common.h
     std::shared_ptr<InferenceRequest> createInferenceRequest(
@@ -536,9 +544,25 @@ private:
         return inferenceRequest;
     }
 
+    std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
+    {
+        std::unordered_set<std::string> outputNames;
+        uint32_t outputCount;
+        LOG_IF_ERROR(TRITONBACKEND_RequestOutputCount(request, &outputCount), "Error getting request output count");
+        for (size_t i = 0; i < outputCount; ++i)
+        {
+            const char* name;
+            LOG_IF_ERROR(TRITONBACKEND_RequestOutputName(request, i, &name), "Error getting request output name");
+            std::string name_s(name);
+            outputNames.insert(std::move(name_s));
+        }
+        return outputNames;
+    }
+
     std::shared_ptr<InferenceRequest> mInferenceRequest;
     TRITONBACKEND_ResponseFactory* factory_ptr_;
     uint64_t mRequestId;
+    std::unordered_set<std::string> mRequestOutputNames;
 };
 
 /// @brief Thread-safe queue of work items
@@ -988,7 +1012,7 @@ public:
                 TLLM_CHECK(min_input_length != input_lengths_data_end);
                 for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
                 {
-                    if (it->name == "output_ids")
+                    if (it->name == "output_ids" && workItem->hasOutputName("output_ids"))
                     {
                         const auto old_shape = it->tensor->getShape();
                         auto new_shape = old_shape;
@@ -1012,7 +1036,7 @@ public:
                         }
                         it->tensor = std::move(t);
                     }
-                    else if (it->name == "sequence_length")
+                    else if (it->name == "sequence_length" && workItem->hasOutputName("sequence_length"))
                     {
                         const auto t_shape = it->tensor->getShape();
                         BufferManager::ITensorPtr t = BufferManager::cpu(t_shape, it->tensor->getDataType());
@@ -1035,6 +1059,10 @@ public:
             for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
             {
                 auto tensor = *it;
+                if (!workItem->hasOutputName(tensor.name))
+                {
+                    continue;
+                }
                 auto shape = tensor.tensor->getShape(); // returns std::vectorint64_t>
                 std::vector<int64_t> vshape(shape.nbDims);
                 for (int i = 0; i < vshape.size(); ++i)
