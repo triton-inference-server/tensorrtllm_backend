@@ -324,6 +324,12 @@ if __name__ == "__main__":
         required=False,
         default=0,
         help='Early stop the generation after a few milliseconds')
+    parser.add_argument(
+        "--stop-via-request-cancel",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Early stop use request cancellation instead of stop request")
     parser.add_argument('--tokenizer-dir',
                         type=str,
                         required=False,
@@ -458,7 +464,7 @@ if __name__ == "__main__":
                             pad_id_data, prompt_embedding_table_data,
                             prompt_vocab_size_data)
 
-    if FLAGS.stop_after_ms > 0:
+    if FLAGS.stop_after_ms > 0 and not FLAGS.stop_via_request_cancel:
         stop_inputs = prepare_stop_signals()
     else:
         stop_inputs = None
@@ -512,18 +518,19 @@ if __name__ == "__main__":
                     request_id=request_id,
                 )
 
-                if stop_inputs is not None:
-
+                if FLAGS.stop_after_ms > 0:
                     time.sleep(FLAGS.stop_after_ms / 1000.0)
 
-                    triton_client.async_stream_infer(
-                        'tensorrt_llm',
-                        stop_inputs,
-                        request_id=request_id,
-                        parameters={'Streaming': FLAGS.streaming})
+                    if not FLAGS.stop_via_request_cancel:
+                        triton_client.async_stream_infer(
+                            'tensorrt_llm',
+                            stop_inputs,
+                            request_id=request_id,
+                            parameters={'Streaming': FLAGS.streaming})
 
-                #Wait for server to close the stream
-                triton_client.stop_stream()
+                # Close the grpc stream
+                cancel_requests = FLAGS.stop_after_ms > 0 and FLAGS.stop_via_request_cancel
+                triton_client.stop_stream(cancel_requests=cancel_requests)
 
                 # Parse the responses
                 while True:
@@ -533,9 +540,12 @@ if __name__ == "__main__":
                         break
 
                     if type(result) == InferenceServerException:
-                        print("Received an error from server:")
-                        print(result)
-                        raise result
+                        if result.status() == "StatusCode.CANCELLED":
+                            print("Request is cancelled")
+                        else:
+                            print("Received an error from server:")
+                            print(result)
+                            raise result
                     else:
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
@@ -548,26 +558,31 @@ if __name__ == "__main__":
                             print("Got cancellation response from server")
             else:
                 # Send request
-                triton_client.async_infer(
+                infer_future = triton_client.async_infer(
                     'tensorrt_llm',
                     inputs,
                     request_id=request_id,
                     callback=partial(callback, user_data),
                     parameters={'Streaming': FLAGS.streaming})
 
-                if stop_inputs is not None:
+                expected_responses = 1
+
+                if FLAGS.stop_after_ms > 0:
 
                     time.sleep(FLAGS.stop_after_ms / 1000.0)
 
-                    triton_client.async_infer(
-                        'tensorrt_llm',
-                        stop_inputs,
-                        request_id=request_id,
-                        callback=partial(callback, user_data),
-                        parameters={'Streaming': FLAGS.streaming})
+                    if FLAGS.stop_via_request_cancel:
+                        infer_future.cancel()
+                    else:
+                        triton_client.async_infer(
+                            'tensorrt_llm',
+                            stop_inputs,
+                            request_id=request_id,
+                            callback=partial(callback, user_data),
+                            parameters={'Streaming': FLAGS.streaming})
+                        expected_responses += 1
 
                 processed_count = 0
-                expected_responses = 1 + (1 if stop_inputs is not None else 0)
                 while processed_count < expected_responses:
                     try:
                         result = user_data._completed_requests.get()
@@ -576,9 +591,12 @@ if __name__ == "__main__":
                         break
 
                     if type(result) == InferenceServerException:
-                        print("Received an error from server:")
-                        print(result)
-                        raise result
+                        if result.status() == "StatusCode.CANCELLED":
+                            print("Request is cancelled")
+                        else:
+                            print("Received an error from server:")
+                            print(result)
+                            raise result
                     else:
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
@@ -609,6 +627,14 @@ if __name__ == "__main__":
                 output_text = tokenizer.decode(output_ids_wo_prompt)
                 print(f'Input: {FLAGS.text}')
                 print(f'Output beam {beam}: {output_text}')
+
+            # If cancelled, the number of output tokens should be less than request output length.
+            if FLAGS.stop_after_ms > 0 and len(
+                    output_ids_wo_prompt) >= FLAGS.request_output_len:
+                raise AssertionError("expect less than " +
+                                     str(FLAGS.request_output_len) +
+                                     " output tokens, got " +
+                                     str(len(output_ids_wo_prompt)))
 
             print("output_ids = ", output_ids_w_prompt)
             if (FLAGS.check_output and beam == 0):

@@ -633,9 +633,15 @@ public:
         mPendingWorkItems.pop_front();
         mPendingWorkItemsReqIds.erase(workItem->requestId());
 
-        bool markedInProgress;
         // Check if work item has been stopped
-        if (mStoppedReqIds.find(workItem->requestId()) == mStoppedReqIds.end())
+        bool is_stopped = mStoppedReqIds.count(workItem->requestId());
+
+        // Check if the Triton request has been cancelled
+        bool is_cancelled = false;
+        TRITONBACKEND_ResponseFactoryIsCancelled(workItem->response_factory(), &is_cancelled);
+
+        bool markedInProgress = false;
+        if (!is_stopped && !is_cancelled)
         {
             mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
             markedInProgress = true;
@@ -643,7 +649,6 @@ public:
         else
         {
             mStoppedReqIds.erase(workItem->requestId());
-            markedInProgress = false;
         }
 
         return {workItem, markedInProgress};
@@ -700,6 +705,24 @@ public:
     {
         std::lock_guard<std::mutex> lk(mMutex);
         return mStoppedReqIds;
+    }
+
+    std::unordered_set<uint64_t> getCancelledInProgressReqIds() const
+    {
+        std::unordered_set<uint64_t> cancelledInProgressReqIds;
+        {
+            std::lock_guard<std::mutex> lk(mMutex);
+            for (const auto& pair : mInProgressWorkItems)
+            {
+                bool is_cancelled = false;
+                TRITONBACKEND_ResponseFactoryIsCancelled(pair.second->response_factory(), &is_cancelled);
+                if (is_cancelled)
+                {
+                    cancelledInProgressReqIds.emplace(pair.first);
+                }
+            }
+        }
+        return cancelledInProgressReqIds;
     }
 
 private:
@@ -945,7 +968,12 @@ public:
             std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
             TLLM_LOG_ERROR(errStr);
 
-            err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            bool is_cancelled = false;
+            TRITONBACKEND_ResponseFactoryIsCancelled(response_factory, &is_cancelled);
+
+            auto err_code = is_cancelled ? TRITONSERVER_ERROR_CANCELLED : TRITONSERVER_ERROR_INTERNAL;
+
+            err = TRITONSERVER_ErrorNew(err_code, errStr.c_str());
             final_response = true;
         }
         else
@@ -1062,6 +1090,11 @@ public:
     std::unordered_set<uint64_t> pollStopSignals()
     {
         auto stoppedReqIds = mWorkItemsQueue.getStoppedReqIds();
+
+        // Merge cancelled requests into stopped requests Ids
+        auto cancelledReqIds = mWorkItemsQueue.getCancelledInProgressReqIds();
+        stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
+
         int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
         if (getCommWorldSize() > 1)
