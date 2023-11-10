@@ -47,8 +47,6 @@ def test(triton_client, prompt, request_id, repetition_penalty,
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
-    bad_words_list = np.array([bad_words], dtype=object)
-    stop_words_list = np.array([stop_words], dtype=object)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
     beam_width = [[FLAGS.beam_width]]

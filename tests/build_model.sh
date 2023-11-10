@@ -141,16 +141,15 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     echo "Build GPT: float16 | src FT"
     python3 build.py --model_dir=./c-model/email_composition/fp16/1-gpu \
-        --dtype float16 \
         --use_inflight_batching \
-        --use_gpt_attention_plugin float16 \
+        --use_gpt_attention_plugin \
         --paged_kv_cache \
-        --use_gemm_plugin float16 \
-        --use_layernorm_plugin float16 \
+        --use_gemm_plugin \
+        --use_layernorm_plugin \
         --remove_input_padding \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 128 --max_beam_width 1 \
+        --max_batch_size 4 --max_input_len 128 --max_output_len 128 --max_beam_width 1 \
         --output_dir trt_engine/email_composition/fp16/1-gpu/ --hidden_act gelu --enable_context_fmha \
-        --max_prompt_embedding_table_size 800
+        --max_prompt_embedding_table_size 300
 
     popd # tensorrt_llm/examples/gpt
 

@@ -24,7 +24,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import csv
 import json
 from typing import List
 
@@ -224,35 +223,29 @@ class TritonPythonModel:
 
         return start_ids, start_lengths
 
-    def _to_word_list_format(self, word_dict: List[List[str]]):
+    def _to_word_list_format(self, word_lists: List[List[str | bytes]]):
         '''
-        format of word_dict
-            len(word_dict) should be same to batch_size
-            word_dict[i] means the words for batch i
-            len(word_dict[i]) must be 1, which means it only contains 1 string
-            This string can contains several sentences and split by ",".
-            For example, if word_dict[2] = " I am happy, I am sad", then this function will return
-            the ids for two short sentences " I am happy" and " I am sad".
+        word_lists format:
+            len(word_lists) == batch_size
+            word_lists[i] means the words associated to batch item i. A "word" may actually be any string. Like "lorem" or "lorem ipsum".
         '''
         assert self.tokenizer != None, "need to set tokenizer"
 
-        if word_dict is None:
+        if word_lists is None:
             # Return an empty array of shape (1,2,0)
             return np.empty([1, 2, 0], dtype="int32")
 
         flat_ids = []
         offsets = []
-        for word_dict_item in word_dict:
+        for word_list in word_lists:
             item_flat_ids = []
             item_offsets = []
 
-            if isinstance(word_dict_item[0], bytes):
-                word_dict_item = [word_dict_item[0].decode()]
+            for word in word_list:
+                if isinstance(word, bytes):
+                    word = word.decode()
 
-            words = list(csv.reader(word_dict_item))[0]
-            for word in words:
-                ids = self.tokenizer.encode(word)
-
+                ids = self.tokenizer.encode(word, add_special_tokens=False)
                 if len(ids) == 0:
                     continue
 
