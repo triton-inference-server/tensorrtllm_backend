@@ -3,6 +3,7 @@
 MODEL=$1
 ENGINE_PATH=$2
 BS=$3
+MAX_TOKENS=$4
 
 GPT2=/trt_llm_data/llm-models/gpt2
 OPT_125M=/trt_llm_data/llm-models/opt-125m
@@ -10,7 +11,6 @@ LLAMA=/trt_llm_data/llm-models/llama-models/llama-7b-hf
 GPTJ=/trt_llm_data/llm-models/gpt-j-6b
 
 set -e
-
 pushd ../../
 
 if [ "$MODEL" = "llama-7b-fp16" ]; then
@@ -24,10 +24,11 @@ if [ "$MODEL" = "llama-7b-fp16" ]; then
       --use_gpt_attention_plugin float16  \
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
-      --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+      --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
       --use_rmsnorm_plugin float16  \
       --enable_context_fmha --remove_input_padding \
-      --use_inflight_batching --paged_kv_cache
+      --use_inflight_batching --paged_kv_cache \
+      --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -43,12 +44,12 @@ if [ "$MODEL" = "llama-7b-fp8" ]; then
       --use_gpt_attention_plugin float16  \
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
-      --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+      --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
       --use_rmsnorm_plugin float16  \
       --enable_context_fmha --remove_input_padding \
       --use_inflight_batching --paged_kv_cache \
       --enable_fp8 --fp8_kv_cache \
-      --max_num_tokens 35000
+      --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -64,13 +65,13 @@ if [ "$MODEL" = "llama-13b-fp8" ]; then
       --use_gpt_attention_plugin float16  \
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
-      --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+      --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
       --use_rmsnorm_plugin float16  \
       --enable_context_fmha --remove_input_padding \
       --use_inflight_batching --paged_kv_cache \
       --enable_fp8 --fp8_kv_cache \
       --strongly_typed --n_layer 40 --n_head 40 --n_embd 5120 --inter_size 13824 --vocab_size 32000 --n_positions 4096 --hidden_act silu \
-      --max_num_tokens 35000
+      --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -92,11 +93,12 @@ if [ "$MODEL" = "llama-70b-fp8-tp2" ]; then
         --enable_fp8 \
         --fp8_kv_cache \
         --paged_kv_cache \
-        --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+        --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
         --output_dir "$ENGINE_PATH" \
         --parallel_build \
         --world_size 2 \
-        --tp_size 2
+        --tp_size 2 \
+        --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -118,12 +120,12 @@ if [ "$MODEL" = "llama-70b-fp8-tp4" ]; then
         --enable_fp8 \
         --fp8_kv_cache \
         --paged_kv_cache \
-        --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+        --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
         --output_dir "$ENGINE_PATH" \
         --parallel_build \
         --world_size 4 \
-        --tp_size 4
-
+        --tp_size 4 \
+        --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -143,11 +145,12 @@ if [ "$MODEL" = "llama-70b-fp16-tp4" ]; then
         --remove_input_padding \
         --enable_context_fmha \
         --paged_kv_cache \
-        --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+        --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
         --output_dir "$ENGINE_PATH" \
         --parallel_build \
         --world_size 4 \
-        --tp_size 4
+        --tp_size 4 \
+        --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -171,7 +174,8 @@ if [ "$MODEL" = "gptj-6b-fp8" ]; then
         --enable_fp8 \
         --paged_kv_cache \
         --use_inflight_batching \
-        --remove_input_padding
+        --remove_input_padding \
+        --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -193,7 +197,8 @@ if [ "$MODEL" = "gptj-6b-fp16" ]; then
         --enable_context_fmha  \
         --paged_kv_cache \
         --use_inflight_batching \
-        --remove_input_padding
+        --remove_input_padding \
+        --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -216,9 +221,10 @@ if [ "$MODEL" = "falcon-180b-fp8-tp8" ]; then
         --use_gpt_attention_plugin bfloat16 \
         --world_size 8 \
         --tp_size 8 \
-        --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
+        --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
         --enable_fp8 --fp8_kv_cache \
-         --n_layer 80 --n_head 232 --n_kv_head 8 --n_embd 14848 --vocab_size 65024 --new_decoder_architecture
+         --n_layer 80 --n_head 232 --n_kv_head 8 --n_embd 14848 --vocab_size 65024 --new_decoder_architecture \
+         --max_num_tokens "$MAX_TOKENS"
 
     popd
 
@@ -242,8 +248,9 @@ if [ "$MODEL" = "falcon-180b-fp16-tp8" ]; then
         --use_gpt_attention_plugin bfloat16 \
         --world_size 8 \
         --tp_size 8 \
-        --max_batch_size "$BS" --max_input_len 2048 --max_output_len 512 \
-         --n_layer 80 --n_head 232 --n_kv_head 8 --n_embd 14848 --vocab_size 65024 --new_decoder_architecture
+        --max_batch_size "$BS" --max_input_len 128000 --max_output_len 10000 \
+         --n_layer 80 --n_head 232 --n_kv_head 8 --n_embd 14848 --vocab_size 65024 --new_decoder_architecture \
+         --max_num_tokens "$MAX_TOKENS"
 
     popd
 

@@ -35,7 +35,6 @@ from functools import partial
 
 import numpy as np
 import tritonclient.grpc as grpcclient
-import tritonclient.http as httpclient
 from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from tritonclient.utils import InferenceServerException, np_to_triton_dtype
 
@@ -76,52 +75,63 @@ def str_dtype_to_np(dtype):
     return ret
 
 
+def check_output_names(expected_outputs, infer_result):
+    if expected_outputs:
+        output_names = set([o.name for o in infer_result._result.outputs])
+        if set(expected_outputs) != output_names:
+            raise Exception(
+                f"expected outputs do not match actual outputs {expected_outputs} != {output_names}"
+            )
+
+
 class UserData:
 
     def __init__(self):
         self._completed_requests = queue.Queue()
 
 
-def prepare_tensor(name, input, protocol):
-    client_util = httpclient if protocol == "http" else grpcclient
-    t = client_util.InferInput(name, input.shape,
-                               np_to_triton_dtype(input.dtype))
+def prepare_tensor(name, input):
+    t = grpcclient.InferInput(name, input.shape,
+                              np_to_triton_dtype(input.dtype))
     t.set_data_from_numpy(input)
     return t
+
+
+def prepare_outputs(output_names):
+
+    outputs = []
+    for output_name in output_names:
+        outputs.append(grpcclient.InferRequestedOutput(output_name))
+    return outputs
 
 
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, streaming_data, end_id, pad_id,
                    prompt_embedding_table_data, prompt_vocab_size_data):
-    protocol = 'grpc'
     inputs = [
-        prepare_tensor("input_ids", input_ids_data, protocol),
-        prepare_tensor("input_lengths", input_lengths_data, protocol),
-        prepare_tensor("request_output_len", request_output_len_data,
-                       protocol),
-        prepare_tensor("beam_width", beam_width_data, protocol),
-        prepare_tensor("temperature", temperature_data, protocol),
-        prepare_tensor("streaming", streaming_data, protocol),
-        prepare_tensor("end_id", end_id, protocol),
-        prepare_tensor("pad_id", pad_id, protocol),
+        prepare_tensor("input_ids", input_ids_data),
+        prepare_tensor("input_lengths", input_lengths_data),
+        prepare_tensor("request_output_len", request_output_len_data),
+        prepare_tensor("beam_width", beam_width_data),
+        prepare_tensor("temperature", temperature_data),
+        prepare_tensor("streaming", streaming_data),
+        prepare_tensor("end_id", end_id),
+        prepare_tensor("pad_id", pad_id),
     ]
     if prompt_embedding_table_data is not None:
         inputs += [
             prepare_tensor("prompt_embedding_table",
-                           prompt_embedding_table_data, protocol),
-            prepare_tensor("prompt_vocab_size", prompt_vocab_size_data,
-                           protocol)
+                           prompt_embedding_table_data),
+            prepare_tensor("prompt_vocab_size", prompt_vocab_size_data)
         ]
     if repetition_penalty_data is not None:
         inputs += [
-            prepare_tensor("repetition_penalty", repetition_penalty_data,
-                           protocol),
+            prepare_tensor("repetition_penalty", repetition_penalty_data),
         ]
     if presence_penalty_data is not None:
         inputs += [
-            prepare_tensor("presence_penalty", presence_penalty_data,
-                           protocol),
+            prepare_tensor("presence_penalty", presence_penalty_data),
         ]
 
     return inputs
@@ -324,6 +334,12 @@ if __name__ == "__main__":
         required=False,
         default=0,
         help='Early stop the generation after a few milliseconds')
+    parser.add_argument(
+        "--stop-via-request-cancel",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Early stop use request cancellation instead of stop request")
     parser.add_argument('--tokenizer-dir',
                         type=str,
                         required=False,
@@ -365,6 +381,11 @@ if __name__ == "__main__":
                         type=str,
                         default='float16',
                         choices=['float16', 'float32', 'bfloat16'])
+
+    parser.add_argument('--requested-outputs',
+                        nargs='+',
+                        default=[],
+                        help='The requested output tensors')
 
     FLAGS = parser.parse_args()
 
@@ -458,10 +479,18 @@ if __name__ == "__main__":
                             pad_id_data, prompt_embedding_table_data,
                             prompt_vocab_size_data)
 
-    if FLAGS.stop_after_ms > 0:
-        stop_inputs = prepare_stop_signals()
+    if FLAGS.requested_outputs:
+        # Must have at least output_ids in requested outputs
+        if "output_ids" not in FLAGS.requested_outputs:
+            raise Exception(
+                "requested outputs must at least have \"output_ids\"")
+        outputs = prepare_outputs(FLAGS.requested_outputs)
     else:
-        stop_inputs = None
+        outputs = None
+
+    stop_inputs = None
+    if FLAGS.stop_after_ms > 0 and not FLAGS.stop_via_request_cancel:
+        stop_inputs = prepare_stop_signals()
 
     request_id = FLAGS.request_id
 
@@ -509,21 +538,23 @@ if __name__ == "__main__":
                 triton_client.async_stream_infer(
                     'tensorrt_llm',
                     inputs,
+                    outputs=outputs,
                     request_id=request_id,
                 )
 
-                if stop_inputs is not None:
-
+                if FLAGS.stop_after_ms > 0:
                     time.sleep(FLAGS.stop_after_ms / 1000.0)
 
-                    triton_client.async_stream_infer(
-                        'tensorrt_llm',
-                        stop_inputs,
-                        request_id=request_id,
-                        parameters={'Streaming': FLAGS.streaming})
+                    if not FLAGS.stop_via_request_cancel:
+                        triton_client.async_stream_infer(
+                            'tensorrt_llm',
+                            stop_inputs,
+                            request_id=request_id,
+                            parameters={'Streaming': FLAGS.streaming})
 
-                #Wait for server to close the stream
-                triton_client.stop_stream()
+                # Close the grpc stream
+                cancel_requests = FLAGS.stop_after_ms > 0 and FLAGS.stop_via_request_cancel
+                triton_client.stop_stream(cancel_requests=cancel_requests)
 
                 # Parse the responses
                 while True:
@@ -533,10 +564,14 @@ if __name__ == "__main__":
                         break
 
                     if type(result) == InferenceServerException:
-                        print("Received an error from server:")
-                        print(result)
-                        raise result
+                        if result.status() == "StatusCode.CANCELLED":
+                            print("Request is cancelled")
+                        else:
+                            print("Received an error from server:")
+                            print(result)
+                            raise result
                     else:
+                        check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
@@ -548,26 +583,32 @@ if __name__ == "__main__":
                             print("Got cancellation response from server")
             else:
                 # Send request
-                triton_client.async_infer(
+                infer_future = triton_client.async_infer(
                     'tensorrt_llm',
                     inputs,
+                    outputs=outputs,
                     request_id=request_id,
                     callback=partial(callback, user_data),
                     parameters={'Streaming': FLAGS.streaming})
 
-                if stop_inputs is not None:
+                expected_responses = 1
+
+                if FLAGS.stop_after_ms > 0:
 
                     time.sleep(FLAGS.stop_after_ms / 1000.0)
 
-                    triton_client.async_infer(
-                        'tensorrt_llm',
-                        stop_inputs,
-                        request_id=request_id,
-                        callback=partial(callback, user_data),
-                        parameters={'Streaming': FLAGS.streaming})
+                    if FLAGS.stop_via_request_cancel:
+                        infer_future.cancel()
+                    else:
+                        triton_client.async_infer(
+                            'tensorrt_llm',
+                            stop_inputs,
+                            request_id=request_id,
+                            callback=partial(callback, user_data),
+                            parameters={'Streaming': FLAGS.streaming})
+                        expected_responses += 1
 
                 processed_count = 0
-                expected_responses = 1 + (1 if stop_inputs is not None else 0)
                 while processed_count < expected_responses:
                     try:
                         result = user_data._completed_requests.get()
@@ -576,10 +617,14 @@ if __name__ == "__main__":
                         break
 
                     if type(result) == InferenceServerException:
-                        print("Received an error from server:")
-                        print(result)
-                        raise result
+                        if result.status() == "StatusCode.CANCELLED":
+                            print("Request is cancelled")
+                        else:
+                            print("Received an error from server:")
+                            print(result)
+                            raise result
                     else:
+                        check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
@@ -598,8 +643,9 @@ if __name__ == "__main__":
         passed = True
 
         for beam in range(FLAGS.beam_width):
-            seq_len = sequence_lengths[0][
-                beam] if not FLAGS.streaming else len(actual_output_ids[beam])
+            seq_len = sequence_lengths[0][beam] if (
+                not FLAGS.streaming and sequence_lengths) else len(
+                    actual_output_ids[beam])
             # These should be equal when input IDs are excluded from output
             output_ids_w_prompt = actual_output_ids[beam][:seq_len]
             output_ids_wo_prompt = (
@@ -609,6 +655,14 @@ if __name__ == "__main__":
                 output_text = tokenizer.decode(output_ids_wo_prompt)
                 print(f'Input: {FLAGS.text}')
                 print(f'Output beam {beam}: {output_text}')
+
+            # If cancelled, the number of output tokens should be less than request output length.
+            if FLAGS.stop_after_ms > 0 and len(
+                    output_ids_wo_prompt) >= FLAGS.request_output_len:
+                raise AssertionError("expect less than " +
+                                     str(FLAGS.request_output_len) +
+                                     " output tokens, got " +
+                                     str(len(output_ids_wo_prompt)))
 
             print("output_ids = ", output_ids_w_prompt)
             if (FLAGS.check_output and beam == 0):
