@@ -172,20 +172,27 @@ run_cpp_backend_tests () {
 
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
 
-        # test without stop words
-        python3 end_to_end_grpc_client.py \
-            -o 10 \
-            -p "The only thing we have to fear is"  \
-             2>&1 | tee output_wo_stop_words
-        grep "that the government will" output_wo_stop_words
+        test_stop_words ()
+        {
+            PROMPT="The only thing we have to fear is"
+            OUTLEN=10
 
-        # test with stop words
-        python3 end_to_end_grpc_client.py \
-            -o 10 \
-            -p "The only thing we have to fear is"  \
-            --stop-words " government" \
-            2>&1 | tee output_w_stop_words
-        grep -v "that the government will" output_w_stop_words
+            ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" 2>&1)
+            # should be something like "[...] that the government will [...]"
+
+            # examples of stop words that won't affect generation
+            # "government" isn't tokenized like " government"
+            # " that the public" doesn't match entirely the generated string
+            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
+            [[ "${ORIGINAL_OUTPUT}" == "${TEST_OUTPUT}" ]]
+
+            # check that output finishes at "government"
+            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
+            [[ "${TEST_OUTPUT}" == *"government']" ]]
+            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
+            [[ "${TEST_OUTPUT}" == *"government']" ]]
+        }
+        test_stop_words
 
         # test with embedding bias
         python3 end_to_end_grpc_client.py \
