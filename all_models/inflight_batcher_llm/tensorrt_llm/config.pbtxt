@@ -229,6 +229,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "max_kv_cache_length"
+  value: {
+    string_value: "${max_kv_cache_length}"
+  }
+}
+parameters: {
   key: "batch_scheduler_policy"
   value: {
     string_value: "${batch_scheduler_policy}"
