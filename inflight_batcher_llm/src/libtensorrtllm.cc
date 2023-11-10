@@ -419,20 +419,13 @@ class WorkItem
 public:
     WorkItem(TRITONBACKEND_Request* request, bool isDecoupled)
     {
-        mRequestId = (rand() % INT64_MAX) + 1;
-        mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
-
-        // Create response factory for this request
-        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+        uint64_t requestId = (rand() % INT64_MAX) + 1;
+        Initialize(request, requestId, isDecoupled);
     }
 
-    WorkItem(TRITONBACKEND_Request* request, uint64_t request_id, bool isDecoupled)
-        : mRequestId(request_id)
+    WorkItem(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
     {
-        mInferenceRequest = createInferenceRequest(request, mRequestId, isDecoupled);
-
-        // Create response factory for this request
-        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+        Initialize(request, requestId, isDecoupled);
     }
 
     WorkItem(std::shared_ptr<InferenceRequest> ir, uint64_t RequestId)
@@ -466,7 +459,22 @@ public:
         return mInferenceRequest;
     }
 
+    bool hasOutputName(const std::string& outputName)
+    {
+        return (mRequestOutputNames.find(outputName) != mRequestOutputNames.end());
+    }
+
 private:
+    void Initialize(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
+    {
+        mRequestId = requestId;
+        mInferenceRequest = createInferenceRequest(request, requestId, isDecoupled);
+        mRequestOutputNames = getRequestOutputNames(request);
+
+        // Create response factory for this request
+        TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+    }
+
     // Convert info from original backend request to data structures defined in
     // common/common.h
     std::shared_ptr<InferenceRequest> createInferenceRequest(
@@ -536,9 +544,25 @@ private:
         return inferenceRequest;
     }
 
+    std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
+    {
+        std::unordered_set<std::string> outputNames;
+        uint32_t outputCount;
+        LOG_IF_ERROR(TRITONBACKEND_RequestOutputCount(request, &outputCount), "Error getting request output count");
+        for (size_t i = 0; i < outputCount; ++i)
+        {
+            const char* name;
+            LOG_IF_ERROR(TRITONBACKEND_RequestOutputName(request, i, &name), "Error getting request output name");
+            std::string name_s(name);
+            outputNames.insert(std::move(name_s));
+        }
+        return outputNames;
+    }
+
     std::shared_ptr<InferenceRequest> mInferenceRequest;
     TRITONBACKEND_ResponseFactory* factory_ptr_;
     uint64_t mRequestId;
+    std::unordered_set<std::string> mRequestOutputNames;
 };
 
 /// @brief Thread-safe queue of work items
@@ -567,9 +591,35 @@ public:
         return (mPendingWorkItemsReqIds.find(reqId) != mPendingWorkItemsReqIds.end());
     }
 
+    /// @brief Add a batch of new work item to the queue
+    /// Throws an error if requestId already exists
+    std::vector<std::shared_ptr<std::exception>> pushBatch(
+        std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>>& requestsToPush, bool isDecoupled)
+    {
+        std::lock_guard<std::mutex> lk(mMutex);
+        std::vector<std::shared_ptr<std::exception>> reqExceptions;
+        for (auto& [requestId, request] : requestsToPush)
+        {
+            if (requestId != 0 && (hasInProgressReqId(requestId) || hasPendingReqId(requestId)))
+            {
+                std::string errStr
+                    = "requestId " + std::to_string(requestId) + " is already in progress, request is ignored.";
+                reqExceptions.emplace_back(std::make_shared<std::runtime_error>(errStr));
+            }
+            else
+            {
+                auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, isDecoupled)
+                                               : std::make_shared<WorkItem>(request, isDecoupled);
+                mPendingWorkItems.push_back(workItem);
+                mPendingWorkItemsReqIds.insert(workItem->requestId());
+                reqExceptions.push_back(nullptr);
+            }
+        }
+        return reqExceptions;
+    }
+
     /// @brief Add a new work item to the queue
     /// Throws an error if requestId already exists
-
     void push(TRITONBACKEND_Request* request, uint64_t requestId, bool isDecoupled)
     {
         std::lock_guard<std::mutex> lk(mMutex);
@@ -599,28 +649,39 @@ public:
     /// in progress work items if it hasn't been stopped
     /// @return A tuple of the workItem and a boolean flag indicating if the work
     /// item has been marked in progress
+    /// In case the queue is empty, return nullptr
+
     std::tuple<std::shared_ptr<WorkItem>, bool> pop()
     {
         std::lock_guard<std::mutex> lk(mMutex);
+        if (mPendingWorkItems.empty())
+        {
+            return {nullptr, false};
+        }
 
         auto workItem = mPendingWorkItems.front();
         mPendingWorkItems.pop_front();
         mPendingWorkItemsReqIds.erase(workItem->requestId());
 
-        bool markedInProgress;
         // Check if work item has been stopped
-        if (mStoppedReqIds.find(workItem->requestId()) == mStoppedReqIds.end())
+        bool is_stopped = mStoppedReqIds.count(workItem->requestId());
+
+        // Check if the Triton request has been cancelled
+        bool is_cancelled = false;
+        TRITONBACKEND_ResponseFactoryIsCancelled(workItem->response_factory(), &is_cancelled);
+
+        bool stoppedRequest = false;
+        if (!is_stopped && !is_cancelled)
         {
             mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
-            markedInProgress = true;
         }
         else
         {
             mStoppedReqIds.erase(workItem->requestId());
-            markedInProgress = false;
+            stoppedRequest = true;
         }
 
-        return {workItem, markedInProgress};
+        return {workItem, stoppedRequest};
     }
 
     size_t numPendingWorkItems() const
@@ -674,6 +735,24 @@ public:
     {
         std::lock_guard<std::mutex> lk(mMutex);
         return mStoppedReqIds;
+    }
+
+    std::unordered_set<uint64_t> getCancelledInProgressReqIds() const
+    {
+        std::unordered_set<uint64_t> cancelledInProgressReqIds;
+        {
+            std::lock_guard<std::mutex> lk(mMutex);
+            for (const auto& pair : mInProgressWorkItems)
+            {
+                bool is_cancelled = false;
+                TRITONBACKEND_ResponseFactoryIsCancelled(pair.second->response_factory(), &is_cancelled);
+                if (is_cancelled)
+                {
+                    cancelledInProgressReqIds.emplace(pair.first);
+                }
+            }
+        }
+        return cancelledInProgressReqIds;
     }
 
 private:
@@ -771,18 +850,19 @@ public:
 
     void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
     {
+        std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>> requestsToPush;
+
         for (uint32_t r = 0; r < request_count; ++r)
         {
-
             TRITONBACKEND_Request* request = requests[r];
             try
             {
                 auto requestId = getRequestId(request);
                 bool stopRequest = getRequestBooleanInputTensor(request, kStopInputTensorName);
 
-                if (requestId != 0)
+                if (stopRequest)
                 {
-                    if (stopRequest)
+                    if (requestId != 0)
                     {
                         // Check if request is in progress or in queue, if not ignore
                         mWorkItemsQueue.stopWorkItem(requestId);
@@ -791,16 +871,12 @@ public:
                     }
                     else
                     {
-                        mWorkItemsQueue.push(request, requestId, isDecoupled);
+                        throw std::runtime_error("Cannot send stop request without specifying a request_id");
                     }
-                }
-                else if (!stopRequest)
-                {
-                    mWorkItemsQueue.push(request, isDecoupled);
                 }
                 else
                 {
-                    throw std::runtime_error("Cannot send stop request without specifying a request_id");
+                    requestsToPush.emplace_back(requestId, request);
                 }
             }
             catch (const std::exception& e)
@@ -810,6 +886,19 @@ public:
                 sendEnqueueResponse(request, e.what());
             }
         }
+
+        auto exceptions = mWorkItemsQueue.pushBatch(requestsToPush, isDecoupled);
+
+        for (uint32_t r = 0; r < requestsToPush.size(); ++r)
+        {
+            auto request = requestsToPush.at(r).second;
+            auto e = exceptions.at(r);
+            if (e)
+            {
+                sendEnqueueResponse(request, e->what());
+            }
+        }
+
         return;
     }
 
@@ -817,70 +906,72 @@ public:
     std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests)
     {
         std::list<std::shared_ptr<InferenceRequest>> rval;
-        if (max_num_requests > 0)
+        if (max_num_requests <= 0)
         {
-            auto world_size = getCommWorldSize();
-            auto rank = getCommWorldRank();
-            if (rank == 0)
+            return rval;
+        }
+
+        auto world_size = getCommWorldSize();
+        auto rank = getCommWorldRank();
+        if (rank == 0)
+        {
+            auto numPendingWorkItems = mWorkItemsQueue.numPendingWorkItems();
+            // Loop over the pending work items and include at most `max_num_requests`
+            for (size_t i = 0; i < numPendingWorkItems && rval.size() < max_num_requests; ++i)
             {
-                int64_t num_new_work_items = std::min(static_cast<int64_t>(mWorkItemsQueue.numPendingWorkItems()),
-                    static_cast<int64_t>(max_num_requests));
-                if (world_size > 1)
-                {
-                    bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
-                }
+                auto [workItem, stoppedRequest] = mWorkItemsQueue.pop();
 
-                if (num_new_work_items > 0)
+                if (workItem)
                 {
-                    int count = 0;
-                    while (count < num_new_work_items)
+                    if (!stoppedRequest)
                     {
-                        auto [workItem, markedInProgress] = mWorkItemsQueue.pop();
-
-                        if (markedInProgress)
-                        {
-                            rval.emplace_back(workItem->getInferenceRequest());
-                            count++;
-                        }
-                        else
-                        {
-                            std::string warnStr = std::string("request Id ") + std::to_string(workItem->requestId())
-                                + std::string(" has been stopped. Request is ignored.");
-                            TLLM_LOG_WARNING(warnStr);
-                            sendTritonResponse(workItem, {}, true, warnStr);
-                        }
+                        rval.emplace_back(workItem->getInferenceRequest());
                     }
-                    if (world_size > 1)
+                    else
                     {
-                        std::vector<int64_t> packed;
-                        for (auto ir : rval)
-                        {
-                            auto vpacked = ir->serialize();
-                            packed.push_back(static_cast<int64_t>(vpacked.size()));
-                            packed.insert(
-                                packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
-                        }
-                        bcast(packed, 0, COMM_WORLD);
+                        std::string warnStr = std::string("request Id ") + std::to_string(workItem->requestId())
+                            + std::string(" has been stopped. Request is ignored.");
+                        TLLM_LOG_WARNING(warnStr);
+                        sendTritonResponse(workItem, {}, true, warnStr);
                     }
                 }
             }
-            else
+
+            if (world_size > 1)
             {
-                // subordinate ranks hang until master rank sends work
-                int64_t num_new_work_items;
+                int64_t num_new_work_items = rval.size();
                 bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+
                 if (num_new_work_items > 0)
                 {
                     std::vector<int64_t> packed;
-                    bcast(packed, 0, COMM_WORLD);
-                    int64_t* packed_ptr = packed.data();
-                    for (int64_t count = 0; count < num_new_work_items; ++count)
+                    for (auto ir : rval)
                     {
-                        int64_t n = *(packed_ptr++);
-                        auto ir = InferenceRequest::deserialize(packed_ptr);
-                        packed_ptr += n;
-                        rval.emplace_back(ir);
+                        auto vpacked = ir->serialize();
+                        packed.push_back(static_cast<int64_t>(vpacked.size()));
+                        packed.insert(
+                            packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                     }
+                    bcast(packed, 0, COMM_WORLD);
+                }
+            }
+        }
+        else
+        {
+            // subordinate ranks hang until master rank sends work
+            int64_t num_new_work_items;
+            bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+            if (num_new_work_items > 0)
+            {
+                std::vector<int64_t> packed;
+                bcast(packed, 0, COMM_WORLD);
+                int64_t* packed_ptr = packed.data();
+                for (int64_t count = 0; count < num_new_work_items; ++count)
+                {
+                    int64_t n = *(packed_ptr++);
+                    auto ir = InferenceRequest::deserialize(packed_ptr);
+                    packed_ptr += n;
+                    rval.emplace_back(ir);
                 }
             }
         }
@@ -909,7 +1000,12 @@ public:
             std::string errStr = "Encountered error for requestId " + std::to_string(requestId) + ": " + errMsg;
             TLLM_LOG_ERROR(errStr);
 
-            err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            bool is_cancelled = false;
+            TRITONBACKEND_ResponseFactoryIsCancelled(response_factory, &is_cancelled);
+
+            auto err_code = is_cancelled ? TRITONSERVER_ERROR_CANCELLED : TRITONSERVER_ERROR_INTERNAL;
+
+            err = TRITONSERVER_ErrorNew(err_code, errStr.c_str());
             final_response = true;
         }
         else
@@ -924,7 +1020,7 @@ public:
                 TLLM_CHECK(min_input_length != input_lengths_data_end);
                 for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
                 {
-                    if (it->name == "output_ids")
+                    if (it->name == "output_ids" && workItem->hasOutputName("output_ids"))
                     {
                         const auto old_shape = it->tensor->getShape();
                         auto new_shape = old_shape;
@@ -948,7 +1044,7 @@ public:
                         }
                         it->tensor = std::move(t);
                     }
-                    else if (it->name == "sequence_length")
+                    else if (it->name == "sequence_length" && workItem->hasOutputName("sequence_length"))
                     {
                         const auto t_shape = it->tensor->getShape();
                         BufferManager::ITensorPtr t = BufferManager::cpu(t_shape, it->tensor->getDataType());
@@ -971,6 +1067,10 @@ public:
             for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
             {
                 auto tensor = *it;
+                if (!workItem->hasOutputName(tensor.name))
+                {
+                    continue;
+                }
                 auto shape = tensor.tensor->getShape(); // returns std::vectorint64_t>
                 std::vector<int64_t> vshape(shape.nbDims);
                 for (int i = 0; i < vshape.size(); ++i)
@@ -1026,6 +1126,11 @@ public:
     std::unordered_set<uint64_t> pollStopSignals()
     {
         auto stoppedReqIds = mWorkItemsQueue.getStoppedReqIds();
+
+        // Merge cancelled requests into stopped requests Ids
+        auto cancelledReqIds = mWorkItemsQueue.getCancelledInProgressReqIds();
+        stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
+
         int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
         if (getCommWorldSize() > 1)
@@ -1205,10 +1310,24 @@ private:
             TLLM_LOG_WARNING("exclude_input_in_output is not specified, will be set to false");
         }
 
+        std::optional<int32_t> maxKvCacheLength = std::nullopt;
+        try
+        {
+            maxKvCacheLength = model_state_->GetParameter<int32_t>("max_kv_cache_length");
+        }
+        catch (const std::exception& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING(
+                "max_kv_cache_length is not specified, will "
+                "use default value");
+        }
+
         TrtGptModelOptionalParams optionalParams;
         optionalParams.maxNumSequences = maxNumSequences;
         optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
         optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
+        optionalParams.kvCacheConfig.maxKvCacheLength = maxKvCacheLength;
         optionalParams.enableTrtOverlap = enableTrtOverlap;
 
         mBatchManager = std::make_shared<GptManager>(
