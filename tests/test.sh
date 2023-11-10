@@ -241,6 +241,7 @@ run_cpp_backend_tests () {
             --concurrency 8 \
             -i grpc \
             --max-input-len 300 \
+            --num-requests 80 \
             dataset \
             --dataset ../dataset/mini_cnn_eval.json \
             --tokenizer-dir ${TOKENIZER_PATH} \
@@ -251,10 +252,11 @@ run_cpp_backend_tests () {
             -i grpc \
             --max-input-len 300 \
             --request-rate -1 \
+            --num-requests 100 \
             token-norm-dist \
             --input-mean 128 --input-stdev 0 \
-            --output-mean 20 --output-stdev 0 \
-            --num-requests 100
+            --output-mean 20 --output-stdev 0
+
     fi
 
     popd # tools/inflight_batcher_llm
