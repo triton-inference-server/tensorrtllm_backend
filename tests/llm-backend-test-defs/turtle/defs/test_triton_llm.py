@@ -1,10 +1,18 @@
 import os
 
 import pytest
-from trt_test.misc import check_call, print_info
+from trt_test.misc import call, check_call, print_info
 
 from .common import *
 from .conftest import venv_check_call, venv_check_output
+
+
+@pytest.fixture(autouse=True)
+def stop_triton_server():
+    # Stop Triton Server after each test
+    yield
+    call(f"pkill tritonserver", shell=True)
+    time.sleep(8)
 
 
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
@@ -55,7 +63,7 @@ def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
@@ -120,7 +128,7 @@ def test_llama_v2_70b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 8 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=8 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
@@ -175,7 +183,7 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
@@ -250,7 +258,7 @@ def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
@@ -314,7 +322,7 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 8 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=8 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
@@ -407,7 +415,7 @@ def test_gpt_next_ptuning_ib(
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
 

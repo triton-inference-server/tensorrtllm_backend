@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import time
 
 import pytest
 # Conftest imports require defs root. This is not the case inside test defines however.
@@ -9,14 +8,6 @@ from trt_test.misc import call, check_call, check_output, print_info
 from trt_test.session_data_writer import SessionDataWriter
 
 pytest_plugins = ["pytester", "trt_test.pytest_plugin"]
-
-
-@pytest.fixture(autouse=True)
-def stop_triton_server():
-    # Stop Triton Server after each test
-    yield
-    call(f"pkill tritonserver", shell=True)
-    time.sleep(8)
 
 
 def llm_models_root() -> str:
