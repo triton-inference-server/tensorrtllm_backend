@@ -3,7 +3,7 @@ import os
 import pytest
 from trt_test.misc import check_call, print_info
 
-from .common_functions import *
+from .common import *
 from .conftest import venv_check_call, venv_check_output
 
 
@@ -329,3 +329,103 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         ]
 
     venv_check_call(llm_backend_venv, run_cmd)
+
+
+@pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
+@pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
+                         ids=["disableTrtOverlap"])
+@pytest.mark.parametrize("BATCHING_STRATEGY", ["inflight_fused_batching"])
+@pytest.mark.parametrize("DECOUPLED_MODE", ["False"],
+                         ids=["disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+@pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
+                         ids=["withVirtualTokens", "withoutVirtualTokens"])
+def test_gpt_next_ptuning_ib(
+        MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
+        inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
+        tensorrt_llm_gpt_example_root, llm_backend_venv):
+    if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
+        print_info("Skipping. V1 doesn't support max_utilization.")
+        return
+
+    llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Prepare model repo
+    new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+
+    # Modify config.pbtxt
+    ENGINE_PATH = os.path.join(
+        llm_backend_repo_root,
+        "tensorrt_llm/examples/gpt/trt_engine/email_composition/fp16/1-gpu/")
+    TOKENIZER_PATH = gpt_tokenizer_model_root
+    TOKENIZER_TYPE = "auto"
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY, MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH)
+
+    # Generate reference output
+    # 1. Input with virtual tokens:
+    run_py_path = os.path.join(tensorrt_llm_gpt_example_root, "run.py")
+    vocab_file = os.path.join(
+        tensorrt_llm_gpt_example_root,
+        "c-model/email_composition/fp16/1-gpu/tokenizer.model")
+    prompt_table = os.path.join(tensorrt_llm_gpt_example_root,
+                                "email_composition.npy")
+    input_tokens = os.path.join(tensorrt_llm_gpt_example_root, "input.csv")
+    run_cmd = [
+        f"{run_py_path}", "--max_output_len=8", f"--vocab_file={vocab_file}",
+        f"--prompt_table={prompt_table}", f"--input_tokens={input_tokens}",
+        f"--engine_dir={ENGINE_PATH}", f"--output_csv=output_w_prompt.csv"
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+    # 2. Input w/o virtual tokens:
+    input_wo_prompt_csv = os.path.join(
+        llm_backend_venv.get_working_directory(), "input_wo_prompt.csv")
+    check_call(
+        f"echo \"25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261\" > {input_wo_prompt_csv}",
+        shell=True)
+    run_cmd = [
+        f"{run_py_path}", "--max_output_len=8", f"--vocab_file={vocab_file}",
+        f"--input_tokens={input_wo_prompt_csv}", f"--engine_dir={ENGINE_PATH}",
+        f"--output_csv=output_wo_prompt.csv"
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+    # Launch Triton Server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        shell=True)
+    check_server_ready()
+
+    # Run Test
+    if VIRTUAL_TOKENS == "True":
+        run_cmd = [
+            f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+            f"--prompt-embedding-table={prompt_table}", "--prompt-task-id=0",
+            f"--input-tokens-csv={input_tokens}",
+            "--output-tokens-csv=output_w_prompt.csv",
+            "--request-output-len=8", "--check-output"
+        ]
+        venv_check_call(llm_backend_venv, run_cmd)
+    else:
+        run_cmd = [
+            f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+            f"--input-tokens-csv={input_wo_prompt_csv}",
+            "--output-tokens-csv=output_wo_prompt.csv",
+            "--request-output-len=8", "--check-output"
+        ]
+        venv_check_call(llm_backend_venv, run_cmd)
