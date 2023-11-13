@@ -144,16 +144,15 @@ def llm_backend_venv(trt_py3_venv_factory):
 
 
 @pytest.fixture(scope="session")
-def llm_backend_gpt_example_root(llm_backend_root, llm_backend_venv):
+def llm_backend_gpt_example_root(llm_backend_root):
     backend_gpt_example_root = os.path.join(llm_backend_root, "tools", "gpt")
-    #! Check if below steps can be removed
-    # workspace = llm_backend_venv.get_working_directory()
-    # check_call(f"git -C {workspace} clone https://huggingface.co/gpt2",
-    #            shell=True)
-    # check_call(
-    #     f"cd {workspace}/gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2/resolve/main/pytorch_model.bin && cd -",
-    #     shell=True)
+    return backend_gpt_example_root
 
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_gpt_example_root(llm_backend_root):
+    backend_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                            "examples", "gpt")
     return backend_gpt_example_root
 
 

@@ -16,6 +16,8 @@ test_triton_llm.py::test_gpt_350m_ib[False-1-0-128-enableDecoupleMode-inflight_f
 test_triton_llm.py::test_gpt_350m_ib[False-1-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization]
 test_triton_llm.py::test_gpt_350m_normal[accuracy]
 test_triton_llm.py::test_gpt_350m_normal[e2e]
+test_triton_llm.py::test_gpt_next_ptuning_ib[withVirtualTokens-False-1-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict]
+test_triton_llm.py::test_gpt_next_ptuning_ib[withoutVirtualTokens-False-1-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict]
 test_triton_llm.py::test_llama_v2_70b_ib[False-1-0-128-disableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict]
 test_triton_llm.py::test_llama_v2_70b_ib[False-1-0-128-disableDecoupleMode-V1-disableTrtOverlap-max_utilization]
 test_triton_llm.py::test_llama_v2_70b_ib[False-1-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict]

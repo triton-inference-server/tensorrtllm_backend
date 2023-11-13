@@ -3,7 +3,7 @@ import os
 import pytest
 from trt_test.misc import check_call, print_info
 
-from .common_functions import *
+from .common import *
 from .conftest import venv_check_call
 
 
