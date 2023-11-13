@@ -1,10 +1,18 @@
 import os
 
 import pytest
-from trt_test.misc import check_call, print_info
+from trt_test.misc import call, check_call, print_info
 
 from .common import *
 from .conftest import venv_check_call
+
+
+@pytest.fixture(autouse=True)
+def stop_triton_server():
+    # Stop Triton Server after each test
+    yield
+    call(f"pkill tritonserver", shell=True)
+    time.sleep(8)
 
 
 def get_rcca_path():
@@ -60,7 +68,7 @@ def test_rcca_bug_4323566(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
-        f"python3 {launch_server_py} --force --world_size 1 --model_repo={new_model_repo}",
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready()
     # Run Test
