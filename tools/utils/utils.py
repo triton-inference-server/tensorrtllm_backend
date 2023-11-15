@@ -2,6 +2,7 @@ import csv
 import json
 import math
 import queue
+import random
 from datetime import timedelta
 from functools import partial
 
@@ -164,6 +165,63 @@ def append_start_and_end_ids(inputs,
         inputs.append(prepare_tensor("end_id", end_ids, flags.protocol))
 
 
+def generate_histogram(range_buckets, frequencies):
+    histogram = []
+
+    for i in range(len(range_buckets)):
+        bucket = range_buckets[i]
+        frequency = frequencies[i]
+
+        # Split the bucket range into min and max values
+        min_range, max_range = bucket
+
+        # Generate 'frequency' random values within the specified range
+        random.seed(420)
+        random_values = [
+            random.randint(min_range, max_range) for _ in range(frequency)
+        ]
+
+        # Extend the histogram with the random values
+        histogram.extend(random_values)
+
+    # Randomize the order of values in the histogram
+    random.shuffle(histogram)
+
+    return histogram
+
+
+def get_token_list_from_histogram(histogram_key):
+
+    histogram_buckets = {
+        "example_ip": [(151, 175), (176, 200), (201, 225), (226, 250),
+                       (251, 275), (276, 300), (301, 325), (326, 350),
+                       (351, 375), (376, 400), (401, 425), (426, 450),
+                       (451, 475), (476, 500), (501, 525), (526, 550),
+                       (551, 575), (576, 600), (601, 625), (626, 650),
+                       (651, 675)],
+        "example_op": [(6, 10), (11, 15), (16, 20), (21, 25), (26, 30),
+                       (31, 35), (36, 40), (41, 45), (46, 50), (51, 55),
+                       (56, 60), (61, 65), (66, 70), (71, 75), (76, 80),
+                       (81, 85), (86, 90), (91, 95), (96, 100)]
+    }
+    histogram_freq = {
+        "example_ip": [
+            220, 225, 150, 150, 140, 140, 110, 70, 50, 25, 20, 10, 5, 1, 2, 0,
+            1, 0, 1, 1, 0
+        ],
+        "example_op": [
+            76, 210, 174, 130, 152, 130, 100, 75, 30, 45, 30, 28, 28, 12, 20,
+            12, 15, 5, 25
+        ]
+    }
+
+    range_buckets = histogram_buckets[histogram_key]
+    freqs = histogram_freq[histogram_key]
+    assert (len(range_buckets) == len(freqs))
+
+    return generate_histogram(range_buckets, freqs)
+
+
 def get_list_of_delays(delay_dist, mean_time_bet_reqs, num_reqs):
     if delay_dist == "constant":
         delays = [mean_time_bet_reqs] * num_reqs
@@ -175,13 +233,13 @@ def get_list_of_delays(delay_dist, mean_time_bet_reqs, num_reqs):
 
 def get_exponential_dist_delays(mean_time_bet_reqs, num_reqs):
     # set seed for determinism
-    np.random.seed(42)
+    np.random.seed(420)
     return np.random.exponential(mean_time_bet_reqs, num_reqs).tolist()
 
 
 def get_norm_dist_tokens(mean, stdev, num_reqs):
     # set seed for determinism
-    np.random.seed(42)
+    np.random.seed(420)
     numbers_list = np.random.normal(loc=mean, scale=stdev,
                                     size=num_reqs).tolist()
     return [max(1, math.ceil(x)) for x in numbers_list]
