@@ -264,6 +264,11 @@ run_cpp_backend_tests () {
             --input-mean 128 --input-stdev 0 \
             --output-mean 20 --output-stdev 0
 
+        python3 identity_test.py \
+            -i grpc --max-input-len 1000 \
+            --request-rate -1 \
+            token-from-histogram --histogram-key example
+
     fi
 
     popd # tools/inflight_batcher_llm
