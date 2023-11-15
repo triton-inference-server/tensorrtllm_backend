@@ -217,19 +217,34 @@ Please follow the option corresponding to the way you build the TensorRT-LLM bac
 #### Option 1. Launch Triton server *within Triton NGC container*
 
 ```bash
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3 bash
+docker run --rm -it \
+  --net host --shm-size=2g \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --gpus all \
+  -v /path/to/tensorrtllm_backend:/tensorrtllm_backend \
+  nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3 bash
 ```
 
 #### Option 2. Launch Triton server *within the Triton container built via build.py script*
 
 ```bash
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend tritonserver bash
+docker run --rm -it \
+  --net host --shm-size=2g \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --gpus all \
+  -v /path/to/tensorrtllm_backend:/tensorrtllm_backend \
+  tritonserver bash
 ```
 
 #### Option 3. Launch Triton server *within the Triton container built via Docker*
 
 ```bash
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/tensorrtllm_backend triton_trt_llm bash
+docker run --rm -it \
+  --net host --shm-size=2g \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --gpus all \
+  -v /path/to/tensorrtllm_backend:/tensorrtllm_backend \
+  triton_trt_llm bash
 ```
 
 Once inside the container, you can launch the Triton server with the following command:
@@ -237,7 +252,9 @@ Once inside the container, you can launch the Triton server with the following c
 ```bash
 cd /tensorrtllm_backend
 # --world_size is the number of GPUs you want to use for serving
-python3 scripts/launch_triton_server.py --world_size=4 --model_repo=/tensorrtllm_backend/triton_model_repo
+python3 scripts/launch_triton_server.py \
+  --world_size=4 \
+  --model_repo=/tensorrtllm_backend/triton_model_repo
 ```
 
 When successfully deployed, the server produces logs similar to the following ones.
@@ -270,7 +287,8 @@ for this model:
 Therefore, we can query the server in the following way:
 
 ```bash
-curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+curl -X POST localhost:8000/v2/models/ensemble/generate \
+  -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
 ```
 
 Which should return a result similar to (formatted for readability):
@@ -292,7 +310,9 @@ You can send requests to the "tensorrt_llm" model with the provided
 as following:
 
 ```bash
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py \
+  --request-output-len 200 \
+  --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 The result should be similar to the following:
@@ -323,7 +343,10 @@ Soyer was a member of the French Academy of Sciences and
 You can also stop the generation process early by using the `--stop-after-ms` option to send a stop request after a few milliseconds:
 
 ```bash
-python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python inflight_batcher_llm/client/inflight_batcher_llm_client.py \
+  --stop-after-ms 200 \
+  --request-output-len 200 \
+  --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
@@ -360,7 +383,10 @@ srun --mpi=pmix \
 TRITONSERVER="/opt/tritonserver/bin/tritonserver"
 MODEL_REPO="/tensorrtllm_backend/triton_model_repo"
 
-${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
+${TRITONSERVER} \
+  --model-repository=${MODEL_REPO} \
+  --disable-auto-complete-config \
+  --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
 ```
 
 #### Submit a Slurm job
