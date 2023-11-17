@@ -136,7 +136,7 @@ if [ "$WAIT_RET" != "0" ]; then
 fi
 
 set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
+python3 ${TOOLS_DIR}/inflight_batcher_llm/benchmark_core_model.py \
     --max-input-len=500 \
     dataset \
     --dataset=${DATASET} \
@@ -144,7 +144,7 @@ python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
 
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
+    echo -e "\n***\n*** Error executing inflight batching benchmark_core_model: line ${LINENO}\n***"
     RET=1
 fi
 set +e
@@ -180,14 +180,14 @@ if [ "$WAIT_RET" != "0" ]; then
 fi
 
 set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/identity_test.py \
+python3 ${TOOLS_DIR}/inflight_batcher_llm/benchmark_core_model.py \
     --max-input-len=500 \
     --dataset=${DATASET} \
     --tokenizer-dir=${TOKENIZER_DIR}
 
 if [ $? -ne 0 ]; then
     cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching identity test: line ${LINENO}\n***"
+    echo -e "\n***\n*** Error executing inflight batching benchmark_core_model: line ${LINENO}\n***"
     RET=1
 fi
 set +e

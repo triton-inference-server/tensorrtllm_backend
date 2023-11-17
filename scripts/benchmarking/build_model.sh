@@ -74,7 +74,7 @@ if [ "$MODEL" = "llama-13b-fp8" ]; then
 
     pip install -r requirements.txt
 
-    python3 build.py --meta_ckpt_dir /llama-models/v2/7B  --dtype float16 \
+    python3 build.py  --dtype float16 \
       --use_gpt_attention_plugin float16  \
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
@@ -100,7 +100,7 @@ if [ "$MODEL" = "llama-13b-fp16" ]; then
 
     pip install -r requirements.txt
 
-    python3 build.py --meta_ckpt_dir /llama-models/v2/7B  --dtype float16 \
+    python3 build.py  --dtype float16 \
       --use_gpt_attention_plugin float16  \
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
