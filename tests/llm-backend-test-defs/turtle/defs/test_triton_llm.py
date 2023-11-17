@@ -9,8 +9,11 @@ from .conftest import venv_check_call, venv_check_output
 
 @pytest.fixture(autouse=True)
 def stop_triton_server():
-    # Stop Triton Server after each test
+    # Make sure Triton server are killed before each test.
+    call(f"pkill -9 tritonserver", shell=True)
+    time.sleep(2)
     yield
+    # Gracefully terminate Triton Server after each test.
     call(f"pkill tritonserver", shell=True)
     time.sleep(8)
 
