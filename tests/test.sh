@@ -62,20 +62,20 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
         --tokenizer_dir ${TOKENIZER_PATH} \
         --tokenizer_type ${TOKENIZER_TYPE}
 
-    # Identity test
-    python3 identity_test.py \
+    # Benchmark Core Model
+    python3 benchmark_core_model.py \
         --batch_size=8 --start_len=128 --output_len=20 \
         --protocol=http --mode=sync
 
-    python3 identity_test.py \
+    python3 benchmark_core_model.py \
         --batch_size=8 --start_len=128 --output_len=20 \
         --protocol=grpc --mode=sync
 
-    python3 identity_test.py \
+    python3 benchmark_core_model.py \
         --batch_size=8 --start_len=128 --output_len=20 \
         --protocol=http --mode=async
 
-    python3 identity_test.py \
+    python3 benchmark_core_model.py \
         --batch_size=8 --start_len=128 --output_len=20 \
         --protocol=grpc --mode=async
 
@@ -232,7 +232,7 @@ run_cpp_backend_tests () {
             --dataset ../dataset/mini_cnn_eval.json
     fi
 
-    python3 identity_test.py \
+    python3 benchmark_core_model.py \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
         --concurrency 8 \
         -i http \
@@ -243,7 +243,7 @@ run_cpp_backend_tests () {
         --tokenizer-type ${TOKENIZER_TYPE}
 
     if [[ "$run_all_tests" == "true" ]]; then
-        python3 identity_test.py \
+        python3 benchmark_core_model.py \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --concurrency 8 \
             -i grpc \
@@ -254,7 +254,7 @@ run_cpp_backend_tests () {
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE}
 
-        python3 identity_test.py \
+        python3 benchmark_core_model.py \
             --concurrency 8 \
             -i grpc \
             --max-input-len 300 \
@@ -264,7 +264,7 @@ run_cpp_backend_tests () {
             --input-mean 128 --input-stdev 0 \
             --output-mean 20 --output-stdev 0
 
-        python3 identity_test.py \
+        python3 benchmark_core_model.py \
             -i grpc --max-input-len 1000 \
             --request-rate -1 \
             token-from-histogram --histogram-key example

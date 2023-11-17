@@ -97,7 +97,7 @@ if true; then
 
             if [ "$RECORD_LOG" == "true" ]; then
                 echo -e " \n ========= Collecting log for the server ======== \n"
-                python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/ --tritonserver "/opt/tritonserver/bin/tritonserver --log-verbose 3 --log-file triton_log.txt"
+                python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/ --log --log-file triton_log.txt
             else
                 python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/
             fi
@@ -123,10 +123,9 @@ if true; then
                         op_stats_csv_name="$op_stats_name.csv"
 
                         echo -e "DATASET: $DATASET \n\n"
-                        echo -e " ======== IDENTITY_TEST --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
+                        echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
                         dataset_path="${dataset_dict[$DATASET]}"
-                        # Identity test
-                        python3 identity_test.py \
+                        python3 benchmark_core_model.py \
                             -i grpc --max-input-len $MAX_INPUT_SEQLEN \
                             --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
                             --num-requests 3000 \
@@ -153,8 +152,8 @@ if true; then
                             op_stats_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__normal-token-dist-${ip_mean}-${ip_stdev}-${op_mean}-${op_stdev}__${REQ_RATE}"
                             op_stats_csv_name="$op_stats_name.csv"
                             echo -e "DATASET: normal-token-dist \n\n"
-                            echo -e " ======== IDENTITY_TEST --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
-                            python3 identity_test.py \
+                            echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
+                            python3 benchmark_core_model.py \
                                 -i grpc --max-input-len $MAX_INPUT_SEQLEN \
                                 --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
                                 --num-requests $num_prompts \
@@ -172,8 +171,8 @@ if true; then
                         op_stats_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__token-hist-example__${REQ_RATE}"
                         op_stats_csv_name="$op_stats_name.csv"
                         echo -e "DATASET: token-hist-example \n\n"
-                        echo -e " ======== IDENTITY_TEST --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
-                        python3 identity_test.py \
+                        echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
+                        python3 benchmark_core_model.py \
                             -i grpc --max-input-len $MAX_INPUT_SEQLEN \
                             --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
                             token-from-histogram --histogram-key example

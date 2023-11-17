@@ -132,7 +132,7 @@ You will find that the generation process is stopped early and therefore the num
 
 You can have a look at the client code to see how early stopping is achieved.
 
-## Run the e2e/identity test to benchmark
+## Run the e2e/benchmark_core_model to benchmark
 
 ### End to end test
 End to end test script sends requests to deployed ensemble model.
@@ -156,11 +156,11 @@ Expected outputs
 [INFO] Total Latency: 11099.243 ms
 ```
 
-### Identity test
+### benchmark core model
 
-Identity test script sends requests directly to deployed tensorrt_llm model, the identity test latency indicates the inference latency of TensorRT-LLM, not including the pre/post-processing latency which is usually handled by a third-party library such as HuggingFace.
+benchmark_core_model script sends requests directly to deployed tensorrt_llm model, the benchmark core model latency indicates the inference latency of TensorRT-LLM, not including the pre/post-processing latency which is usually handled by a third-party library such as HuggingFace.
 
-Identity test can generate traffic from 2 sources.
+benchmark_core_model can generate traffic from 2 sources.
 1 - dataset (json file containning prompts and optional responses)
 2 - token normal distribution (user specified input, output seqlen)
 
@@ -171,11 +171,11 @@ cd tools/inflight_batcher_llm
 ```
 Example: Run dataset with 10 req/sec requested rate with provided tokenizer.
 ```
-python3 identity_test.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --tokenizer_type <>
+python3 benchmark_core_model.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --tokenizer_type <> --num_requests 5000
 ```
 Example: Generate I/O seqlen tokens with input normal distribution with mean_seqlen=128, stdev=10. Output normal distribution with mean_seqlen=20, stdev=2. Set stdev=0 to get constant seqlens.
 ```
-python3 identity_test.py -i grpc --request_rate 10 token_norm_dist --input_mean 128 --input_stdev 5 --output_mean 20 --output_stdev 2 --num_requests 5000
+python3 benchmark_core_model.py -i grpc --request_rate 10 token_norm_dist --input_mean 128 --input_stdev 5 --output_mean 20 --output_stdev 2 --num_requests 5000
 ```
 Expected outputs
 ```

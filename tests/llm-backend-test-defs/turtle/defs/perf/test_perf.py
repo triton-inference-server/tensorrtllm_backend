@@ -158,7 +158,7 @@ def test_perf(turtle_case_name, trt_performance_cache_fpath,
     The actual test definition for TensorRT LLM Backend perf test.
     """
     benchmark_script = os.path.join(llm_backend_root, "tools", "gpt",
-                                    "identity_test.py")
+                                    "benchmark_core_model.py")
     working_dir = llm_backend_venv.get_working_directory()
 
     case.set_runtime_configs(benchmark_script, working_dir,
@@ -303,7 +303,8 @@ def test_perf_inflight_batching(turtle_case_name, trt_performance_cache_fpath,
     The actual test definition for TensorRT LLM Backend perf test.
     """
     benchmark_script = os.path.join(llm_backend_root, "tools",
-                                    "inflight_batcher_llm", "identity_test.py")
+                                    "inflight_batcher_llm",
+                                    "benchmark_core_model.py")
     dataset_path = os.path.join(llm_backend_root, "tools", "dataset",
                                 "mini_cnn_eval.json")
     working_dir = llm_backend_venv.get_working_directory()
