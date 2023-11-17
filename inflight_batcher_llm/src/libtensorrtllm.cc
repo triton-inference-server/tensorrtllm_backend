@@ -53,9 +53,11 @@
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
 #include <nlohmann/json.hpp>
-
 using namespace ::triton::common; // TritonJson
 
+#ifdef TRITON_ENABLE_METRICS
+#include "metrics/triton_metrics.h"
+#endif
 //
 // Mockup of LLM inflight batcher based on triton 'minimal' backend example
 //
@@ -245,9 +247,16 @@ public:
 
     virtual ~ModelState() = default;
 
+#ifdef TRITON_ENABLE_METRICS
+    TRITONSERVER_Error* InitMetrics(const std::string& model_name, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* UpdateMetrics(const std::string& statistics);
+#endif
     common::TritonJson::Value& GetModelConfig();
 
 private:
+#ifdef TRITON_ENABLE_METRICS
+    std::unique_ptr<triton_metrics::TritonMetrics> triton_metrics_;
+#endif
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
@@ -256,6 +265,9 @@ private:
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
+#ifdef TRITON_ENABLE_METRICS
+        triton_metrics_ = std::make_unique<triton_metrics::TritonMetrics>();
+#endif
     }
 };
 
@@ -370,6 +382,21 @@ bool ModelState::GetParameter<bool>(const std::string& name)
     }
 }
 
+#ifdef TRITON_ENABLE_METRICS
+TRITONSERVER_Error* ModelState::InitMetrics(
+    const std::string& model_name, const uint64_t version, const bool is_v1_model)
+{
+    RETURN_IF_ERROR(triton_metrics_->InitMetrics(model_name, version, is_v1_model));
+    return nullptr; // success
+}
+
+TRITONSERVER_Error* ModelState::UpdateMetrics(const std::string& statistics)
+{
+    RETURN_IF_ERROR(triton_metrics_->UpdateMetrics(statistics));
+    return nullptr; // success
+}
+#endif
+
 extern "C"
 {
 
@@ -389,6 +416,18 @@ extern "C"
         RETURN_IF_ERROR(ModelState::Create(model, &model_state));
         RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
 
+#ifdef TRITON_ENABLE_METRICS
+        const char* cname;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
+        std::string name(cname);
+
+        uint64_t version;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelVersion(model, &version));
+
+        bool is_v1_model = ((model_state->GetParameter<std::string>("gpt_model_type") == "V1")
+            || (model_state->GetParameter<std::string>("gpt_model_type") == "v1"));
+        LOG_IF_ERROR(model_state->InitMetrics(name, version, is_v1_model), "Failed initializing metrics");
+#endif                  // TRITON_ENABLE_METRICS
         return nullptr; // success
     }
 
@@ -1164,6 +1203,9 @@ public:
     void logStats(const std::string& s)
     {
         LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
+#ifdef TRITON_ENABLE_METRICS
+        LOG_IF_ERROR(model_state_->UpdateMetrics(s), "Failed updating metrics");
+#endif
     }
 
 private:

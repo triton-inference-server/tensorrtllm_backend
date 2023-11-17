@@ -27,6 +27,7 @@
 
 BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
 GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
+TRTLLM_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/
 
 function build_base_model {
     local NUM_GPUS=$1
@@ -76,6 +77,11 @@ function install_trt_llm {
 
 # Install TRT LLM
 install_trt_llm
+
+# Install dependencies
+pip3 install -r ${TRTLLM_DIR}/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+# Downgrade to legacy version to accommodate Triton CI runners
+pip install pynvml==11.4.0
 
 # Generate the TRT_LLM model engines
 NUM_GPUS_TO_TEST=("1" "2" "4")
