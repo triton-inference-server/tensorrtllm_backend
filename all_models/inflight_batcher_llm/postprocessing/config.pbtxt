@@ -34,6 +34,11 @@ input [
     dims: [ -1, -1 ]
   },
   {
+    name: "REQUEST_INPUT_LEN"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
     name: "SEQUENCE_LENGTH"
     data_type: TYPE_INT32
     dims: [ -1 ]
