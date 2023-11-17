@@ -47,7 +47,7 @@ cd /tensorrtllm_backend/ci/<test directory>
 bash -x ./test.sh
 ```
 
-## Run the e2e/identity test to benchmark
+## Run the e2e/benchmark_core_model to benchmark
 
 These two tests are ran in the [L0_backend_trtllm](./L0_backend_trtllm/)
 test. Below are the instructions to run the tests manually.
@@ -89,17 +89,17 @@ Expected outputs
 [INFO] Total Latency: 11099.243 ms
 ```
 
-### Identity test
+### benchmark_core_model
 
-[Identity test script](../tools/inflight_batcher_llm/identity_test.py)
-sends requests directly to the deployed `tensorrt_llm` model, the identity test
+[benchmark_core_model script](../tools/inflight_batcher_llm/benchmark_core_model.py)
+sends requests directly to the deployed `tensorrt_llm` model, the benchmark_core_model
 latency indicates the inference latency of TensorRT-LLM, not including the
 pre/post-processing latency which is usually handled by a third-party library
 such as HuggingFace.
 
 ```bash
 cd tools/inflight_batcher_llm
-python3 identity_test.py dataset --dataset <dataset path>
+python3 benchmark_core_model.py dataset --dataset <dataset path>
 ```
 
 Expected outputs

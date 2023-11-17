@@ -25,7 +25,7 @@ def parse_arguments():
                         action='store_true',
                         help='log triton server stats into log_file')
     parser.add_argument(
-        '--log_file',
+        '--log-file',
         type=str,
         help='path to triton log gile',
         default='triton_log.txt',
@@ -41,7 +41,7 @@ def get_cmd(world_size, tritonserver, model_repo, log, log_file):
     for i in range(world_size):
         cmd += ['-n', '1', tritonserver]
         if log and (i == 0):
-            cmd += [f' --log --log-file={log_file}']
+            cmd += ['--log-verbose=3', f'--log-file={log_file}']
         cmd += [
             f'--model-repository={model_repo}',
             '--disable-auto-complete-config',

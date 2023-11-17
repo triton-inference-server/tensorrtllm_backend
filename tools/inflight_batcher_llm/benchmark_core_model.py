@@ -156,6 +156,13 @@ if __name__ == '__main__':
         required=True,
         help='normal dist stdev for output tokens')
 
+    parser_token_from_hist = subparsers.add_parser('token-from-histogram')
+    parser_token_from_hist.add_argument(
+        '--histogram-key',
+        type=str,
+        required=True,
+        help='key to retrieve histogram buckets,freqs defined in utils')
+
     parser.add_argument('-v',
                         '--verbose',
                         action="store_true",
@@ -249,6 +256,7 @@ if __name__ == '__main__':
     output_lens = []
     ratio = []
 
+    print(FLAGS.workload)
     if FLAGS.workload == "dataset":
 
         if FLAGS.tokenizer_type == 't5':
@@ -277,7 +285,7 @@ if __name__ == '__main__':
                     continue
 
                 prompt_cnt += 1
-                if prompt_cnt >= FLAGS.num_requests:
+                if prompt_cnt > FLAGS.num_requests:
                     break
 
                 input_start_ids.append(np.array([line], np.int32))
@@ -295,7 +303,7 @@ if __name__ == '__main__':
         test_performance(client, input_start_ids, input_lens, output_lens,
                          delays, FLAGS)
 
-    elif FLAGS.workload == "token_norm_dist":
+    elif FLAGS.workload == "token-norm-dist":
         input_lens = utils.get_norm_dist_tokens(FLAGS.input_mean,
                                                 FLAGS.input_stdev,
                                                 FLAGS.num_requests)
@@ -312,5 +320,31 @@ if __name__ == '__main__':
                                           mean_time_bet_reqs, num_reqs)
 
         input_start_ids = utils.gen_random_start_ids(pruned_ip_list)
+        test_performance(client, input_start_ids, ip_lens_2d_array,
+                         output_lens, delays, FLAGS)
+
+    elif FLAGS.workload == "token-from-histogram":
+        input_lens_orig = utils.get_token_list_from_histogram(
+            FLAGS.histogram_key + "_ip")
+        output_lens_orig = utils.get_token_list_from_histogram(
+            FLAGS.histogram_key + "_op")
+
+        final_lens = min(len(input_lens_orig), len(output_lens_orig))
+        input_lens = input_lens_orig[:final_lens]
+        output_lens = output_lens_orig[:final_lens]
+
+        num_reqs = len(input_lens)
+        ip_lens_2d_array = [
+            np.array([[ip_len]], np.int32) for ip_len in input_lens
+        ]
+        output_lens = utils.get_token_list_from_histogram(FLAGS.histogram_key +
+                                                          "_op")
+        print(len(input_lens), len(output_lens))
+        assert (len(input_lens) == len(output_lens))
+
+        delays = utils.get_list_of_delays(FLAGS.time_delay_dist,
+                                          mean_time_bet_reqs, num_reqs)
+
+        input_start_ids = utils.gen_random_start_ids(input_lens)
         test_performance(client, input_start_ids, ip_lens_2d_array,
                          output_lens, delays, FLAGS)
