@@ -142,9 +142,16 @@ def llm_backend_gpt_example_root(llm_backend_root):
 
 @pytest.fixture(scope="session")
 def tensorrt_llm_gpt_example_root(llm_backend_root):
-    backend_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
-                                            "examples", "gpt")
-    return backend_gpt_example_root
+    llm_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                        "examples", "gpt")
+    return llm_gpt_example_root
+
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_llama_example_root(llm_backend_root):
+    llm_llama_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                          "examples", "llama")
+    return llm_llama_example_root
 
 
 @pytest.fixture(scope="session")

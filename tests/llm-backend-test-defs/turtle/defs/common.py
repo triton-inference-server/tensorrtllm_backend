@@ -1,6 +1,8 @@
 import os
 import time
+from difflib import SequenceMatcher
 
+import pytest
 from trt_test.misc import check_call, check_output, print_info
 
 
@@ -64,3 +66,18 @@ def modify_ib_config_pbtxt(
     check_call(
         f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
         shell=True)
+
+
+def validate_by_sequence_matcher(output_result, golden_result, threshold):
+    output_result = output_result.strip()
+    golden_result = golden_result.strip()
+    matcher = SequenceMatcher(None, output_result, golden_result)
+    # Get the similarity ratio
+    similarity_ratio = matcher.ratio()
+    print_info(f"output_result: {output_result}")
+    print_info(f"golden_result: {golden_result}")
+    print_info(f"similarity_ratio: {similarity_ratio}")
+
+    if similarity_ratio < threshold:
+        pytest.fail(
+            f"similarity_ratio {similarity_ratio} is less than {threshold}")
