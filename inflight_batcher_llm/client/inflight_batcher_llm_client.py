@@ -108,7 +108,8 @@ def prepare_outputs(output_names):
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, streaming_data, end_id, pad_id,
-                   prompt_embedding_table_data, prompt_vocab_size_data):
+                   prompt_embedding_table_data, prompt_vocab_size_data,
+                   return_log_probs_data, top_k_data, top_p_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -118,6 +119,9 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("streaming", streaming_data),
         prepare_tensor("end_id", end_id),
         prepare_tensor("pad_id", pad_id),
+        prepare_tensor("return_log_probs", return_log_probs_data),
+        prepare_tensor("runtime_top_k", top_k_data),
+        prepare_tensor("runtime_top_p", top_p_data),
     ]
     if prompt_embedding_table_data is not None:
         inputs += [
@@ -382,6 +386,30 @@ if __name__ == "__main__":
                         default='float16',
                         choices=['float16', 'float32', 'bfloat16'])
 
+    parser.add_argument(
+        "--return-log-probs",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Enable computation of log probs",
+    )
+
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        required=False,
+        default=1,
+        help="top k value",
+    )
+
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        required=False,
+        default=0.,
+        help="top p value",
+    )
+
     parser.add_argument('--requested-outputs',
                         nargs='+',
                         default=[],
@@ -458,8 +486,15 @@ if __name__ == "__main__":
     request_output_len_data = np.array(request_output_len, dtype=np.uint32)
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.uint32)
+    top_k = [[FLAGS.top_k]]
+    top_k_data = np.array(top_k, dtype=np.uint32)
+    top_p = [[FLAGS.top_p]]
+    top_p_data = np.array(top_p, dtype=np.float32)
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
+    return_log_probs = [[FLAGS.return_log_probs]]
+    return_log_probs_data = np.array(return_log_probs, dtype=bool)
+
     repetition_penalty_data = None
     if FLAGS.repetition_penalty is not None:
         repetition_penalty = [[FLAGS.repetition_penalty]]
@@ -477,7 +512,8 @@ if __name__ == "__main__":
                             temperature_data, repetition_penalty_data,
                             presence_penalty_data, streaming_data, end_id_data,
                             pad_id_data, prompt_embedding_table_data,
-                            prompt_vocab_size_data)
+                            prompt_vocab_size_data, return_log_probs_data,
+                            top_k_data, top_p_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -515,6 +551,8 @@ if __name__ == "__main__":
         actual_output_ids = []
 
     sequence_lengths = []
+    cum_log_probs = None
+    output_log_probs = None
 
     user_data = UserData()
     with grpcclient.InferenceServerClient(
@@ -627,6 +665,10 @@ if __name__ == "__main__":
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
+                        if (FLAGS.return_log_probs):
+                            cum_log_probs = result.as_numpy('cum_log_probs')
+                            output_log_probs = result.as_numpy(
+                                'output_log_probs')
                         if output_ids is not None:
                             for beam_output_ids in output_ids[0]:
                                 tokens = list(beam_output_ids)
@@ -644,7 +686,7 @@ if __name__ == "__main__":
 
         for beam in range(FLAGS.beam_width):
             seq_len = sequence_lengths[0][beam] if (
-                not FLAGS.streaming and sequence_lengths) else len(
+                not FLAGS.streaming and len(sequence_lengths) > 0) else len(
                     actual_output_ids[beam])
             # These should be equal when input IDs are excluded from output
             output_ids_w_prompt = actual_output_ids[beam][:seq_len]
@@ -665,11 +707,16 @@ if __name__ == "__main__":
                                      str(len(output_ids_wo_prompt)))
 
             print("output_ids = ", output_ids_w_prompt)
+
             if (FLAGS.check_output and beam == 0):
                 passed = (output_ids_w_prompt == expected_output_ids)
                 print("expected_output_ids = ", expected_output_ids)
                 print("\n=====")
                 print("PASS!" if passed else "FAIL!")
                 print("=====")
+
+        if FLAGS.return_log_probs:
+            print(cum_log_probs)
+            print(output_log_probs)
 
         sys.exit(not passed)

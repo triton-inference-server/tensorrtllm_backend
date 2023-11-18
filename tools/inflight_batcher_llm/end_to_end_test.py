@@ -59,15 +59,23 @@ def test_functionality(client, prompts, output_lens):
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
+        cum_log_probs = result.as_numpy("cum_log_probs")
+        output_log_probs = result.as_numpy("output_log_probs")
 
         model_name = "postprocessing"
         inputs = [
             utils.prepare_tensor("TOKENS_BATCH", output0, FLAGS.protocol),
             utils.prepare_tensor("SEQUENCE_LENGTH", seq_lengths,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("CUM_LOG_PROBS", cum_log_probs,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs,
                                  FLAGS.protocol)
         ]
         inputs[0].set_data_from_numpy(output0)
         inputs[1].set_data_from_numpy(seq_lengths)
+        inputs[2].set_data_from_numpy(cum_log_probs)
+        inputs[3].set_data_from_numpy(output_log_probs)
 
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
@@ -92,7 +100,11 @@ def test_functionality(client, prompts, output_lens):
 
         # 3. Check the results between manually ensembled models and the ensemble model
         ensemble_output = result.as_numpy('text_output')
+        ensemble_cum_log_probs = result.as_numpy('cum_log_probs')
+        ensemble_output_log_probs = result.as_numpy('output_log_probs')
         assert output0 == ensemble_output
+        assert cum_log_probs == ensemble_cum_log_probs
+        assert (output_log_probs == ensemble_output_log_probs).all()
         if FLAGS.verbose:
             print('Response: {}'.format(result.get_response()))
             print('Output: {}'.format(ensemble_output))

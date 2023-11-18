@@ -121,7 +121,7 @@ print_test_params () {
 
 fill_triton_repo () {
 
-    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_batch_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
     python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i triton_repo/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -211,6 +211,14 @@ run_cpp_backend_tests () {
             --tokenizer-type ${TOKENIZER_TYPE} \
             2>&1 | tee output_w_stop
         grep "Got cancellation response" output_w_stop
+
+	#test with return log probs
+        python3 inflight_batcher_llm_client.py \
+            --request-output-len=10 \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-type ${TOKENIZER_TYPE} \
+	    --return-log-probs --top-k 2 \
+            2>&1 | tee output_log_probs
     fi
 
     popd # inflight_batcher_llm/client
