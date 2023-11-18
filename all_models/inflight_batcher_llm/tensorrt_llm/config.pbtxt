@@ -154,6 +154,13 @@ input [
     optional: true
   },
   {
+    name: "return_log_probs"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "stop"
     data_type: TYPE_BOOL
     dims: [ 1 ]
@@ -190,6 +197,16 @@ output [
     name: "sequence_length"
     data_type: TYPE_INT32
     dims: [ -1 ]
+  },
+  {
+    name: "cum_log_probs"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "output_log_probs"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
   }
 ]
 instance_group [
