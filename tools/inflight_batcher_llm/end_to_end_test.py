@@ -59,8 +59,9 @@ def test_functionality(client, prompts, output_lens):
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
-        cum_log_probs = result.as_numpy("cum_log_probs")
-        output_log_probs = result.as_numpy("output_log_probs")
+        cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
+        output_log_probs = result.as_numpy("output_log_probs").astype(
+            np.float32)
 
         model_name = "postprocessing"
         inputs = [
