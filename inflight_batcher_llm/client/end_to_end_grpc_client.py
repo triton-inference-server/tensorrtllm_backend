@@ -46,11 +46,11 @@ def test(triton_client, prompt, request_id, repetition_penalty,
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
-    output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+    output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
     beam_width = [[FLAGS.beam_width]]
-    beam_width_data = np.array(beam_width, dtype=np.uint32)
+    beam_width_data = np.array(beam_width, dtype=np.int32)
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
 

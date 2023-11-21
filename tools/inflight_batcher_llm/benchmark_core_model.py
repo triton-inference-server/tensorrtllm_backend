@@ -34,7 +34,7 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
 
     print(f"[INFO] Warm up for benchmarking.")
     for i in range(10):
-        output0_len = np.ones_like([[1]]).astype(np.uint32) * 100
+        output0_len = np.ones_like([[1]]).astype(np.int32) * 100
         inputs = [
             utils.prepare_tensor("input_ids", input_start_ids[0],
                                  FLAGS.protocol),
@@ -51,7 +51,7 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
     start_time = datetime.now()
     user_data = utils.UserData()
     for i, ids in enumerate(input_start_ids):
-        output0_len = np.ones_like([[1]]).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like([[1]]).astype(np.int32) * output_lens[i]
         inputs = [
             utils.prepare_tensor("input_ids", ids, FLAGS.protocol),
             utils.prepare_tensor("input_lengths", input_lens[i],

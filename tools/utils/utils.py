@@ -40,9 +40,9 @@ def prepare_tensor(name, input, protocol):
 
 def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
     output_len = np.ones([input_start_ids.shape[0], 1]).astype(
-        np.uint32) * flags.output_len
+        np.int32) * flags.output_len
     runtime_top_k = (flags.topk *
-                     np.ones([input_start_ids.shape[0], 1])).astype(np.uint32)
+                     np.ones([input_start_ids.shape[0], 1])).astype(np.int32)
     runtime_top_p = flags.topp * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
     beam_search_diversity_rate = 0.0 * \
@@ -58,13 +58,13 @@ def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
     output_log_probs = True * \
         np.ones([input_start_ids.shape[0], 1]).astype(bool)
     beam_width = (flags.beam_width *
-                  np.ones([input_start_ids.shape[0], 1])).astype(np.uint32)
+                  np.ones([input_start_ids.shape[0], 1])).astype(np.int32)
     pad_ids = pad_id * \
-        np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
+        np.ones([input_start_ids.shape[0], 1]).astype(np.int32)
     end_ids = end_id * \
-        np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
+        np.ones([input_start_ids.shape[0], 1]).astype(np.int32)
     min_length = 1 * \
-        np.ones([input_start_ids.shape[0], 1]).astype(np.uint32)
+        np.ones([input_start_ids.shape[0], 1]).astype(np.int32)
     presence_penalty = 0.0 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
     bad_words_list = np.concatenate([
@@ -158,10 +158,10 @@ def append_start_and_end_ids(inputs,
                              start_id=None,
                              end_id=None):
     if start_id is not None:
-        start_ids = start_id * np.ones([batch_size, 1]).astype(np.uint32)
+        start_ids = start_id * np.ones([batch_size, 1]).astype(np.int32)
         inputs.append(prepare_tensor("start_id", start_ids, flags.protocol))
     if end_id is not None:
-        end_ids = end_id * np.ones([batch_size, 1]).astype(np.uint32)
+        end_ids = end_id * np.ones([batch_size, 1]).astype(np.int32)
         inputs.append(prepare_tensor("end_id", end_ids, flags.protocol))
 
 

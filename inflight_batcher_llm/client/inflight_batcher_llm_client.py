@@ -146,13 +146,13 @@ def prepare_stop_signals():
     inputs = [
         grpcclient.InferInput('input_ids', [1, 1], "INT32"),
         grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
-        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
+        grpcclient.InferInput('request_output_len', [1, 1], "INT32"),
         grpcclient.InferInput('stop', [1, 1], "BOOL"),
     ]
 
     inputs[0].set_data_from_numpy(np.empty([1, 1], dtype=np.int32))
     inputs[1].set_data_from_numpy(np.zeros([1, 1], dtype=np.int32))
-    inputs[2].set_data_from_numpy(np.array([[0]], dtype=np.uint32))
+    inputs[2].set_data_from_numpy(np.array([[0]], dtype=np.int32))
     inputs[3].set_data_from_numpy(np.array([[True]], dtype='bool'))
 
     return inputs
@@ -460,8 +460,8 @@ if __name__ == "__main__":
         input_ids = [tokenizer.encode(FLAGS.text)]
         print(input_ids)
 
-    end_id_data = np.array([[end_id]], dtype=np.uint32)
-    pad_id_data = np.array([[pad_id]], dtype=np.uint32)
+    end_id_data = np.array([[end_id]], dtype=np.int32)
+    pad_id_data = np.array([[pad_id]], dtype=np.int32)
 
     #Get the prompt embedding table for the task id
     prompt_embedding_table_data = None
@@ -477,17 +477,17 @@ if __name__ == "__main__":
             prompt_table[FLAGS.prompt_task_id], axis=0)
 
         prompt_vocab_size = [[task_vocab_size]]
-        prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.uint32)
+        prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.int32)
 
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
     request_output_len = [[FLAGS.request_output_len]]
-    request_output_len_data = np.array(request_output_len, dtype=np.uint32)
+    request_output_len_data = np.array(request_output_len, dtype=np.int32)
     beam_width = [[FLAGS.beam_width]]
-    beam_width_data = np.array(beam_width, dtype=np.uint32)
+    beam_width_data = np.array(beam_width, dtype=np.int32)
     top_k = [[FLAGS.top_k]]
-    top_k_data = np.array(top_k, dtype=np.uint32)
+    top_k_data = np.array(top_k, dtype=np.int32)
     top_p = [[FLAGS.top_p]]
     top_p_data = np.array(top_p, dtype=np.float32)
     temperature = [[FLAGS.temperature]]

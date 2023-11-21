@@ -15,8 +15,8 @@ def main(args):
                                         size=(args.start_len),
                                         dtype=np.int32)
     input_len = np.array([input_start_ids.shape[0]], np.int32)
-    output_len = np.ones([1]).astype(np.uint32) * args.output_len
-    runtime_top_k = (args.topk * np.ones([1])).astype(np.uint32)
+    output_len = np.ones([1]).astype(np.int32) * args.output_len
+    runtime_top_k = (args.topk * np.ones([1])).astype(np.int32)
     runtime_top_p = args.topp * np.ones([1]).astype(np.float32)
     beam_search_diversity_rate = 0.0 * np.ones([1]).astype(np.float32)
     temperature = 1.0 * np.ones([1]).astype(np.float32)
@@ -24,9 +24,9 @@ def main(args):
     repetition_penalty = 1.0 * np.ones([1]).astype(np.float32)
     random_seed = 0 * np.ones([1]).astype(np.uint64)
     # is_return_log_probs = True * np.ones([1]).astype(bool)
-    beam_width = (args.beam_width * np.ones([1])).astype(np.uint32)
-    # start_ids = 50256 * np.ones([1]).astype(np.uint32)
-    # end_ids = 50256 * np.ones([1]).astype(np.uint32)
+    beam_width = (args.beam_width * np.ones([1])).astype(np.int32)
+    # start_ids = 50256 * np.ones([1]).astype(np.int32)
+    # end_ids = 50256 * np.ones([1]).astype(np.int32)
     # bad_words_list = np.concatenate([
     #     np.zeros([1, 1]).astype(np.int32),
     #     (-1 * np.ones([1, 1])).astype(np.int32)
