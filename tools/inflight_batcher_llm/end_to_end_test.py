@@ -31,7 +31,7 @@ def test_functionality(client, prompts, output_lens):
         model_name = 'preprocessing'
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -84,7 +84,7 @@ def test_functionality(client, prompts, output_lens):
         model_name = "ensemble"
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -118,7 +118,7 @@ def test_performance(client, prompts, output_lens):
     for i in range(10):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -140,7 +140,7 @@ def test_performance(client, prompts, output_lens):
     for i, prompt in enumerate(prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
