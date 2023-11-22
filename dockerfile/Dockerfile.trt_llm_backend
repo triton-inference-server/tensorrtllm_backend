@@ -40,6 +40,10 @@ COPY tensorrt_llm/docker/common/install_cmake.sh /tmp/
 RUN bash /tmp/install_cmake.sh && rm /tmp/install_cmake.sh
 ENV PATH="/usr/local/cmake/bin:${PATH}"
 
+# Install mpi4py
+COPY tensorrt_llm/docker/common/install_mpi4py.sh /tmp/
+RUN bash /tmp/install_mpi4py.sh && rm /tmp/install_mpi4py.sh
+
 # `pypi` for x86_64 arch and `src_cxx11_abi` for aarch64 arch
 ARG TORCH_INSTALL_TYPE="pypi"
 COPY tensorrt_llm/docker/common/install_pytorch.sh install_pytorch.sh
