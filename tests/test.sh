@@ -10,7 +10,15 @@ set -o pipefail
 nvidia-smi
 source tools/utils.sh
 
-if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ]; then
+if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ]; then
+    MAX_KV_CACHE_LENGTH="2048"
+    MAX_SEQUENCE_LEN="8704" # max_input_len + max_output_len
+else
+    MAX_KV_CACHE_LENGTH=""
+    MAX_SEQUENCE_LEN="2048"
+fi
+
+if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ] || [ "$MODEL" = "mistral" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
     python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
@@ -108,6 +116,7 @@ print_test_params () {
     echo "BATCHING_STRATEGY: ${BATCHING_STRATEGY}"
     echo "MAX_NUM_SEQUENCES: ${MAX_NUM_SEQUENCE}"
     echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
+    echo "MAX_KV_CACHE_LENGTH: ${MAX_KV_CACHE_LENGTH}"
     echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
     echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
     echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
@@ -121,7 +130,7 @@ print_test_params () {
 
 fill_triton_repo () {
 
-    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_kv_cache_length:${MAX_KV_CACHE_LENGTH},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
     python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i triton_repo/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -164,44 +173,74 @@ run_cpp_backend_tests () {
     # Test client
     pushd inflight_batcher_llm/client
 
+    if [ $MAX_KV_CACHE_LENGTH ]; then
+        # test using a longer input
+        # TODO: Once we switch to using real weights, add `--check-output` arg
+        python3 inflight_batcher_llm_client.py \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-type ${TOKENIZER_TYPE} \
+            --input-tokens-csv='../../tools/dataset/long_input.csv' \
+            --output-tokens-csv='../../tools/dataset/long_output.csv' \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+            2>&1 | tee output_long_input
+
+        # If no prompt in output, check that output sequence isn't an empty list of tokens
+        if $EXCL_INPUT_IN_OUTPUT_FLAG; then
+            grep -o "Output sequence starts with:  \[1, 3189, 28809, 28707, 7234, 574, 3441, 1236, 28723, 28705" output_long_input
+        else
+            grep -o "Output sequence\( starts with\)\?:\s*\[\([0-9]*\,\?\s\?\)*\]" output_long_input
+        fi
+    fi
+
+    # testing output accuracy for real weights only
+    CHECK_OUTPUT_FLAG=""
+    if [ $MODEL = "gpt-ib" ]; then
+        CHECK_OUTPUT_FLAG="--check-output"
+    fi
+
     python3 inflight_batcher_llm_client.py \
-        --check-output \
+        ${CHECK_OUTPUT_FLAG} \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
         --tokenizer-dir ${TOKENIZER_PATH} \
         --tokenizer-type ${TOKENIZER_TYPE}
 
+
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
 
-        test_stop_words ()
-        {
-            PROMPT="The only thing we have to fear is"
-            OUTLEN=10
+        # testing output accuracy for real weights only
+        if [[ $MODEL = "gpt-ib" ]]; then
 
-            ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" 2>&1)
-            # should be something like "[...] that the government will [...]"
+            test_stop_words ()
+            {
+                PROMPT="The only thing we have to fear is"
+                OUTLEN=10
 
-            # examples of stop words that won't affect generation
-            # "government" isn't tokenized like " government"
-            # " that the public" doesn't match entirely the generated string
-            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
-            [[ "${ORIGINAL_OUTPUT}" == "${TEST_OUTPUT}" ]]
+                ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" 2>&1)
+                # should be something like "[...] that the government will [...]"
 
-            # check that output finishes at "government"
-            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
-            [[ "${TEST_OUTPUT}" == *"government']" ]]
-            TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
-            [[ "${TEST_OUTPUT}" == *"government']" ]]
-        }
-        test_stop_words
+                # examples of stop words that won't affect generation
+                # "government" isn't tokenized like " government"
+                # " that the public" doesn't match entirely the generated string
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
+                [[ "${ORIGINAL_OUTPUT}" == "${TEST_OUTPUT}" ]]
 
-        # test with embedding bias
-        python3 end_to_end_grpc_client.py \
-            -o 10 \
-            -p "The only thing we have to fear is"  \
-            --embedding-bias-words " government" \
-            --embedding-bias-weights -20 \
-            2>&1 | tee output_w_bias
-        grep -v "that the government will" output_w_bias
+                # check that output finishes at "government"
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
+                [[ "${TEST_OUTPUT}" == *"government']" ]]
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
+                [[ "${TEST_OUTPUT}" == *"government']" ]]
+            }
+            test_stop_words
+
+            # test with embedding bias
+            python3 end_to_end_grpc_client.py \
+                -o 10 \
+                -p "The only thing we have to fear is"  \
+                --embedding-bias-words " government" \
+                --embedding-bias-weights -20 \
+                2>&1 | tee output_w_bias
+            grep -v "that the government will" output_w_bias
+        fi
 
         # test with request cancellation
         python3 inflight_batcher_llm_client.py \
@@ -212,12 +251,12 @@ run_cpp_backend_tests () {
             2>&1 | tee output_w_stop
         grep "Got cancellation response" output_w_stop
 
-	#test with return log probs
+	    #test with return log probs
         python3 inflight_batcher_llm_client.py \
             --request-output-len=10 \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE} \
-	    --return-log-probs --top-k 2 \
+	        --return-log-probs --top-k 2 \
             2>&1 | tee output_log_probs
     fi
 
@@ -284,11 +323,11 @@ run_cpp_backend_tests () {
     kill -9 ${SERVER_PID}
 }
 
-BATCHING_STRATEGIES=( "inflight_fused_batching")
+BATCHING_STRATEGIES=( "inflight_fused_batching" )
 
 MAX_NUM_SEQUENCES=( "" "4" "32" )
-MAX_TOKENS_IN_KV_CACHES=( "" "2048" )
-BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization")
+MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
+BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
 ENABLE_TRT_OVERLAPS=( "false" "true" )
 
@@ -296,7 +335,7 @@ TRITON_MAX_BATCH_SIZE="128"
 MAX_QUEUE_DELAY_MICROSECONDS="0"
 MAX_BEAM_WIDTH="1"
 
-if [ "$MODEL" = "gpt-ib" ]; then
+if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
 
     # To make sure that torch is not a dependency for C++ backend
     pip3 uninstall -y torch
@@ -326,6 +365,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     done
     done
     done
+
     done #BATCHING STRATEGY
 
     MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"

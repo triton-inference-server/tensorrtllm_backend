@@ -19,6 +19,7 @@ if [[ $gpu_info == *"A100"* ]] ||  [[ $gpu_info == *"H100"* ]]; then
     bs_dict["llama-7b-fp8,1,1"]=2048
     bs_dict["llama-13b-fp8,1,1"]=2048
     bs_dict["llama-7b-fp16,1,1"]=1024
+    bs_dict["mistral-7b-fp16,1,1"]=1024
     bs_dict["llama-13b-fp16,1,1"]=1024
     bs_dict["gptj-6b-fp8,1,1"]=96
     bs_dict["llama-70b-fp8,2,1"]=512
@@ -38,7 +39,7 @@ if [ -z "$MODEL_SPEC" ]; then
     echo "No model spec specified. Will run default list for the MACHINE"
 
     if [[ $gpu_info == *"A100"* ]]; then
-        MODEL_SPEC_LIST=(  "llama-7b-fp16,1,1" "llama-13b-fp16,1,1"  "gptj-6b-fp16,1,1" "llama-70b-fp16,4,1"  "falcon-180b-fp16,8,1" )
+        MODEL_SPEC_LIST=(  "llama-7b-fp16,1,1" "mistral-7b-fp16,1,1" "llama-13b-fp16,1,1"  "gptj-6b-fp16,1,1" "llama-70b-fp16,4,1"  "falcon-180b-fp16,8,1" )
         MACHINE="a100"
     elif [[ $gpu_info == *"H100"* ]]; then
         MODEL_SPEC_LIST=( "llama-7b-fp8,1,1" "llama-13b-fp8,1,1" "llama-70b-fp8,4,1" "gptj-6b-fp8,1,1" "llama-70b-fp8,2,1" "falcon-180b-fp8,8,1" )
@@ -67,6 +68,9 @@ for MODEL_SPEC in "${MODEL_SPEC_LIST[@]}"; do
     MAX_OUTPUT_SEQLEN=10000
     if [[ $MODEL == *"gptj-6b"* ]]; then
         MAX_INPUT_SEQLEN=1535
+        MAX_OUTPUT_SEQLEN=512
+    elif [[ $MODEL == *"mistral-7b"* ]]; then
+        MAX_INPUT_SEQLEN=32256
         MAX_OUTPUT_SEQLEN=512
     fi
     DIR="bs${BS}_tokens${MAX_TOKENS}_tp${TP}_pp${PP}_isl${MAX_INPUT_SEQLEN}_osl${MAX_OUTPUT_SEQLEN}"

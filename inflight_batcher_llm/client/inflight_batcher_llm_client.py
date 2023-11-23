@@ -69,6 +69,16 @@ _str_to_np_dict = dict(
 )
 
 
+def curate_log_output(token_sequence,
+                      identifier="Input",
+                      log_max_sequence_len=256):
+    if len(token_sequence) > log_max_sequence_len:
+        print(f"{identifier} sequence starts with: ",
+              token_sequence[:log_max_sequence_len])
+    else:
+        print(f"{identifier} sequence: ", token_sequence)
+
+
 def str_dtype_to_np(dtype):
     ret = _str_to_np_dict.get(dtype)
     assert ret is not None, f'Unsupported dtype: {dtype}'
@@ -424,7 +434,8 @@ if __name__ == "__main__":
             for row in csv_reader:
                 input_ids = [[int(val) for val in row]]
                 break
-            print(input_ids)
+
+            curate_log_output(input_ids[0], "Input")
 
         end_id = FLAGS.end_id
         pad_id = FLAGS.pad_id
@@ -458,7 +469,7 @@ if __name__ == "__main__":
                                   add_special_tokens=False)[0]
 
         input_ids = [tokenizer.encode(FLAGS.text)]
-        print(input_ids)
+        curate_log_output(input_ids[0], "Input")
 
     end_id_data = np.array([[end_id]], dtype=np.int32)
     pad_id_data = np.array([[pad_id]], dtype=np.int32)
@@ -706,7 +717,7 @@ if __name__ == "__main__":
                                      " output tokens, got " +
                                      str(len(output_ids_wo_prompt)))
 
-            print("output_ids = ", output_ids_w_prompt)
+            curate_log_output(output_ids_w_prompt, "Output")
 
             if (FLAGS.check_output and beam == 0):
                 passed = (output_ids_w_prompt == expected_output_ids)
