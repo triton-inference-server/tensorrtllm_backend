@@ -62,7 +62,7 @@ WORKDIR /app/
 COPY inflight_batcher_llm inflight_batcher_llm
 RUN cd inflight_batcher_llm && bash scripts/build.sh && cd ..
 
-FROM base as final
+FROM trt_llm_backend_builder as final
 
 # Install TensorRT-LLM
 WORKDIR /app/
