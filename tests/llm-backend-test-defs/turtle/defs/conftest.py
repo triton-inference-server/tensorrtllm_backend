@@ -209,6 +209,19 @@ def llama_v2_tokenizer_model_root():
 
 
 @pytest.fixture(scope="session")
+def mistral_v1_tokenizer_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    mistral_v1_tokenizer_model_root = os.path.join(models_root,
+                                                   "mistral-7b-v0.1")
+
+    assert os.path.exists(
+        mistral_v1_tokenizer_model_root
+    ), f"{mistral_v1_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return mistral_v1_tokenizer_model_root
+
+
+@pytest.fixture(scope="session")
 def gpt_tokenizer_model_root(llm_backend_venv):
     models_root = llm_models_root()
     assert models_root, "Did you set LLM_MODELS_ROOT?"

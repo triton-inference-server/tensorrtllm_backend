@@ -7,6 +7,7 @@ GPT2_NEXT_PTUNING=/home/scratch.trt_llm_data/llm-models/email_composition
 OPT_125M=/home/scratch.trt_llm_data/llm-models/opt-125m
 LLAMA=/home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
 GPTJ=/home/scratch.trt_llm_data/llm-models/gpt-j-6b
+MISTRAL=/home/scratch.trt_llm_data/llm-models/mistral-7b-v0.1
 
 set -e
 
@@ -78,6 +79,38 @@ if [ "$MODEL" = "llama" ]; then
         --enable_context_fmha \
         --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin
     python3 run.py --max_output_len=1 --tokenizer_dir=${LLAMA}
+
+    popd # tensorrt_llm/examples/llama
+
+fi
+
+if [ "$MODEL" = "mistral" ]; then
+
+    pushd tensorrt_llm/examples/llama
+
+    pip install -r requirements.txt
+    # Dummy weights because 7B is the minimal size for Mistral
+    python3 build.py --dtype=float16 --n_layer=2 \
+        --enable_context_fmha \
+        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --output_dir mistral_7b_outputs --max_input_len=8192
+    # Equivalent to LLaMA at this stage except the tokenizer
+    python3 run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_kv_cache_len=4096 --engine_dir mistral_7b_outputs
+
+    popd # tensorrt_llm/examples/llama
+
+fi
+
+if [ "$MODEL" = "mistral-ib" ]; then
+
+    pushd tensorrt_llm/examples/llama
+
+    pip install -r requirements.txt
+    # Dummy weights because 7B is the minimal size for Mistral
+    python3 build.py --dtype=float16 --n_layer=2 \
+        --enable_context_fmha --use_inflight_batching --paged_kv_cache \
+        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --output_dir ib_mistral_7b_outputs --max_input_len=8192
 
     popd # tensorrt_llm/examples/llama
 

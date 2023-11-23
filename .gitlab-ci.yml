@@ -8,6 +8,7 @@ variables:
   OPT_125M: /home/scratch.trt_llm_data/llm-models/opt-125m
   LLAMA: /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
   GPTJ: /home/scratch.trt_llm_data/llm-models/gpt-j-6b
+  MISTRAL: /home/scratch.trt_llm_data/llm-models/mistral-7b-v0.1
 
 default:
   before_script:
@@ -104,6 +105,34 @@ test-llama-model-job:
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash tests/build_model.sh llama
     - bash tests/test.sh llama tensorrt_llm/examples/llama/llama_outputs ${LLAMA} llama
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-job
+
+test-mistral-model-job:
+  stage: test-model
+  image: $IMAGE
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
+    - bash tests/build_model.sh mistral
+    - bash tests/test.sh mistral tensorrt_llm/examples/llama/mistral_7b_outputs ${MISTRAL} llama
+  artifacts:
+    expire_in: 30 mins
+  dependencies:
+    - build-job
+
+test-mistral-ib-model-job:
+  stage: test-model
+  image: $IMAGE
+  script:
+    - cd $CI_PROJECT_DIR
+    - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
+    - mkdir /opt/tritonserver/backends/tensorrtllm
+    - cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
+    - bash tests/build_model.sh mistral-ib
+    - bash tests/test.sh mistral-ib tensorrt_llm/examples/llama/ib_mistral_7b_outputs ${MISTRAL} llama
   artifacts:
     expire_in: 30 mins
   dependencies:
