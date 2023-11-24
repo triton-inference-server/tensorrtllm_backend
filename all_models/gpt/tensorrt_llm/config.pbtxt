@@ -21,24 +21,24 @@ input [
   },
   {
     name: "request_output_len"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ -1 ]
   },
   {
     name: "end_id"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
   },
   {
     name: "pad_id"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
   },
   {
     name: "beam_width"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -52,7 +52,7 @@ input [
   },
   {
     name: "runtime_top_k"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -80,7 +80,7 @@ input [
   },
   {
     name: "min_length"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true

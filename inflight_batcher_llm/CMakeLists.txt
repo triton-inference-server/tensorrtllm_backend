@@ -57,6 +57,12 @@ project(tritontensorrtllmbackend LANGUAGES C CXX)
 # related features since TRT-LLM backend manages the usage on GPUs itself.
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_ENABLE_METRICS "Include metrics support in server" ON)
+
+if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
+  message(
+    FATAL_ERROR "TRITON_ENABLE_METRICS=ON requires TRITON_ENABLE_STATS=ON")
+endif()
 
 # The TRTLLM_BUILD_CONTAINER is used to compile the TRT-LLM libraries that are
 # needed for the TRT-LLM backend. The TRTLLM_BUILD_CONTAINER is launched
@@ -300,6 +306,41 @@ set_property(
     IMPORTED_LOCATION
     "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so"
 )
+
+if(TRITON_ENABLE_METRICS)
+  message("Compiling metrics...")
+  list(APPEND METRICS_SRCS src/metrics/triton_metrics.cc)
+  list(APPEND METRICS_HDRS src/metrics/triton_metrics.h)
+
+  add_library(triton-metrics-library EXCLUDE_FROM_ALL ${METRICS_SRCS}
+                                                      ${METRICS_HDRS})
+  target_compile_features(triton-metrics-library PRIVATE cxx_std_17)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(triton-metrics-library
+                           PRIVATE /W1 /D_WIN32_WINNT=0x0A00 /EHsc)
+  else()
+    target_compile_options(
+      triton-metrics-library PRIVATE -Wall -Wextra -Wno-unused-parameter
+                                     -Wno-deprecated-declarations -Werror)
+  endif()
+
+  set_target_properties(triton-metrics-library
+                        PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  target_link_libraries(
+    triton-metrics-library
+    PUBLIC triton-common-json # from repo-common
+           triton-common-logging # from repo-common
+           triton-core-serverapi # from repo-core
+           triton-core-serverstub # from repo-core
+           triton-backend-utils # from repo-backend
+           tensorrt_llm_batch_manager)
+
+  target_compile_definitions(triton-tensorrt-llm-backend
+                             PRIVATE TRITON_ENABLE_METRICS=1)
+  target_link_libraries(triton-tensorrt-llm-backend
+                        PRIVATE triton-metrics-library)
+endif()
 
 if(TRITON_BUILD)
   add_dependencies(tensorrt_llm trtllm_target)

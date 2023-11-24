@@ -53,9 +53,11 @@
 #include "tensorrt_llm/runtime/tllmLogger.h"
 
 #include <nlohmann/json.hpp>
-
 using namespace ::triton::common; // TritonJson
 
+#ifdef TRITON_ENABLE_METRICS
+#include "metrics/triton_metrics.h"
+#endif
 //
 // Mockup of LLM inflight batcher based on triton 'minimal' backend example
 //
@@ -245,9 +247,16 @@ public:
 
     virtual ~ModelState() = default;
 
+#ifdef TRITON_ENABLE_METRICS
+    TRITONSERVER_Error* InitMetrics(const std::string& model_name, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* UpdateMetrics(const std::string& statistics);
+#endif
     common::TritonJson::Value& GetModelConfig();
 
 private:
+#ifdef TRITON_ENABLE_METRICS
+    std::unique_ptr<triton_metrics::TritonMetrics> triton_metrics_;
+#endif
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
@@ -256,6 +265,9 @@ private:
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
+#ifdef TRITON_ENABLE_METRICS
+        triton_metrics_ = std::make_unique<triton_metrics::TritonMetrics>();
+#endif
     }
 };
 
@@ -370,6 +382,21 @@ bool ModelState::GetParameter<bool>(const std::string& name)
     }
 }
 
+#ifdef TRITON_ENABLE_METRICS
+TRITONSERVER_Error* ModelState::InitMetrics(
+    const std::string& model_name, const uint64_t version, const bool is_v1_model)
+{
+    RETURN_IF_ERROR(triton_metrics_->InitMetrics(model_name, version, is_v1_model));
+    return nullptr; // success
+}
+
+TRITONSERVER_Error* ModelState::UpdateMetrics(const std::string& statistics)
+{
+    RETURN_IF_ERROR(triton_metrics_->UpdateMetrics(statistics));
+    return nullptr; // success
+}
+#endif
+
 extern "C"
 {
 
@@ -389,6 +416,18 @@ extern "C"
         RETURN_IF_ERROR(ModelState::Create(model, &model_state));
         RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
 
+#ifdef TRITON_ENABLE_METRICS
+        const char* cname;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
+        std::string name(cname);
+
+        uint64_t version;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelVersion(model, &version));
+
+        bool is_v1_model = ((model_state->GetParameter<std::string>("gpt_model_type") == "V1")
+            || (model_state->GetParameter<std::string>("gpt_model_type") == "v1"));
+        LOG_IF_ERROR(model_state->InitMetrics(name, version, is_v1_model), "Failed initializing metrics");
+#endif                  // TRITON_ENABLE_METRICS
         return nullptr; // success
     }
 
@@ -1010,61 +1049,7 @@ public:
         }
         else
         {
-            auto mut_response_tensors = response_tensors;
-            if (mExcludeInputInOutput && !workItem->getInferenceRequest()->isStreaming())
-            {
-                const auto input_lengths = workItem->getInferenceRequest()->getInputTensor("input_lengths");
-                const auto input_lengths_data = reinterpret_cast<int32_t*>(input_lengths->data());
-                const auto input_lengths_data_end = input_lengths_data + input_lengths->getSize();
-                const auto min_input_length = std::min_element(input_lengths_data, input_lengths_data_end);
-                TLLM_CHECK(min_input_length != input_lengths_data_end);
-                for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
-                {
-                    if (it->name == "output_ids" && workItem->hasOutputName("output_ids"))
-                    {
-                        const auto old_shape = it->tensor->getShape();
-                        auto new_shape = old_shape;
-                        new_shape.d[2] -= *min_input_length;
-
-                        const auto dtype_size = BufferDataType(it->tensor->getDataType()).getSize();
-                        BufferManager::ITensorPtr t = BufferManager::cpu(new_shape, it->tensor->getDataType());
-                        memset(t->data(), 0, t->getSizeInBytes());
-                        for (int32_t batch_idx = 0; batch_idx < old_shape.d[0]; ++batch_idx)
-                        {
-                            TLLM_CHECK(input_lengths_data[batch_idx] + new_shape.d[2] <= old_shape.d[2]);
-                            const auto old_batch_offset = batch_idx * old_shape.d[1] * old_shape.d[2];
-                            const auto new_batch_offset = batch_idx * new_shape.d[1] * new_shape.d[2];
-                            for (int32_t beam = 0; beam < old_shape.d[1]; ++beam)
-                            {
-                                std::memcpy(t->data(new_batch_offset + beam * new_shape.d[2]),
-                                    it->tensor->data(
-                                        old_batch_offset + beam * old_shape.d[2] + input_lengths_data[batch_idx]),
-                                    new_shape.d[2] * dtype_size);
-                            }
-                        }
-                        it->tensor = std::move(t);
-                    }
-                    else if (it->name == "sequence_length" && workItem->hasOutputName("sequence_length"))
-                    {
-                        const auto t_shape = it->tensor->getShape();
-                        BufferManager::ITensorPtr t = BufferManager::cpu(t_shape, it->tensor->getDataType());
-                        for (int32_t batch_idx = 0; batch_idx < t_shape.d[0]; ++batch_idx)
-                        {
-                            const auto batch_offset = batch_idx * t_shape.d[1];
-                            for (int32_t beam = 0; beam < t_shape.d[1]; ++beam)
-                            {
-                                const auto idx = batch_offset + beam;
-                                *reinterpret_cast<int32_t*>(t->data(idx))
-                                    = *reinterpret_cast<int32_t*>(it->tensor->data(idx))
-                                    - input_lengths_data[batch_idx];
-                            }
-                        }
-                        it->tensor = std::move(t);
-                    }
-                }
-            }
-
-            for (auto it = mut_response_tensors.begin(); it != mut_response_tensors.end(); ++it)
+            for (auto it = response_tensors.begin(); it != response_tensors.end(); ++it)
             {
                 auto tensor = *it;
                 if (!workItem->hasOutputName(tensor.name))
@@ -1164,13 +1149,15 @@ public:
     void logStats(const std::string& s)
     {
         LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
+#ifdef TRITON_ENABLE_METRICS
+        LOG_IF_ERROR(model_state_->UpdateMetrics(s), "Failed updating metrics");
+#endif
     }
 
 private:
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
         : model_state_(model_state)
         , mIsDecoupled(false)
-        , mExcludeInputInOutput(false)
     {
         // Note: std::string::compare fails this test (always return non-zero
         // value). Using old school strcmp instead.
@@ -1300,9 +1287,10 @@ private:
             TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
         }
 
+        bool excludeInputInOutput = false;
         try
         {
-            mExcludeInputInOutput = model_state_->GetParameter<bool>("exclude_input_in_output");
+            excludeInputInOutput = model_state_->GetParameter<bool>("exclude_input_in_output");
         }
         catch (const std::exception& e)
         {
@@ -1337,7 +1325,7 @@ private:
                 const std::string& errMsg)
             { return sendResponse(requestId, response_tensors, final_response, errMsg); },
             [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); },
-            optionalParams);
+            optionalParams, std::nullopt, std::nullopt, excludeInputInOutput);
 
         if (getCommWorldRank() != 0)
         {
@@ -1362,7 +1350,6 @@ private:
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
     bool mIsDecoupled;
-    bool mExcludeInputInOutput;
 
     std::shared_ptr<GptManager> mBatchManager;
 
