@@ -38,6 +38,11 @@ apt-get remove --purge -y tensorrt* libnvinfer*
 pip uninstall -y tensorrt
 
 # Download & install internal TRT release
+export TRT_VER=9.1.0.4
+export CUDA_VER=12.2
+export CUDNN_VER=8.9.4.25-1+cuda12.2
+export NCCL_VER=2.18.3-1+cuda12.2
+export CUBLAS_VER=12.2.5.6-1
 bash tensorrt_llm/docker/common/install_tensorrt.sh
 
 # Install PyTorch

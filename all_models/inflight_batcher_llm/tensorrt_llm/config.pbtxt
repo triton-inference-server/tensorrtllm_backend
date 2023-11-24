@@ -52,19 +52,19 @@ input [
   },
   {
     name: "request_output_len"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
   },
   {
     name: "end_id"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
   },
   {
     name: "pad_id"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -92,7 +92,7 @@ input [
   },
   {
     name: "beam_width"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -106,7 +106,7 @@ input [
   },
   {
     name: "runtime_top_k"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -134,7 +134,7 @@ input [
   },
   {
     name: "min_length"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -149,6 +149,13 @@ input [
   {
     name: "random_seed"
     data_type: TYPE_UINT64
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "return_log_probs"
+    data_type: TYPE_BOOL
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -174,7 +181,7 @@ input [
   },
   {
     name: "prompt_vocab_size"
-    data_type: TYPE_UINT32
+    data_type: TYPE_INT32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -190,6 +197,16 @@ output [
     name: "sequence_length"
     data_type: TYPE_INT32
     dims: [ -1 ]
+  },
+  {
+    name: "cum_log_probs"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "output_log_probs"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
   }
 ]
 instance_group [

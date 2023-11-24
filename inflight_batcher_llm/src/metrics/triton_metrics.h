@@ -1,0 +1,175 @@
+// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  * Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//  * Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//  * Neither the name of NVIDIA CORPORATION nor the names of its
+//    contributors may be used to endorse or promote products derived
+//    from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#pragma once
+
+#define _GLIBCXX_USE_CXX11_ABI 0
+#include "triton/core/tritonbackend.h"
+#include "triton/core/tritonserver.h"
+#include <map>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <vector>
+
+namespace triton
+{
+namespace backend
+{
+namespace inflight_batcher_llm
+{
+namespace triton_metrics
+{
+
+/// TritonMetricGroups are handled by the TritonMetrics class
+/// and encapsulate the creation/update functionality for a
+/// group of custom metrics.
+class TritonMetricGroup
+{
+public:
+    TritonMetricGroup(const std::string& metric_family_label, const std::string& metric_family_description,
+        const std::string& category_label, const std::vector<std::string>& json_keys,
+        const std::vector<std::string>& labels);
+    ~TritonMetricGroup(){};
+
+    /// Create a new Triton metric family with corresponding metric
+    /// pointers and parameters.
+    ///
+    /// \param model_name The name of the model to provide a metrics
+    /// group for.
+    /// \param version The version of the model to provide a metrics
+    /// group for.
+    /// \return a TRITONSERVER_Error indicating success or failure.
+    TRITONSERVER_Error* CreateGroup(const std::string& model_name, const uint64_t version);
+
+    /// Update the Triton metrics associated with this group using
+    /// the parsed TRT LLM backend statistics values.
+    ///
+    /// \param values Values parsed from the TRT LLM backend
+    /// statistics output, filtered by this group's JSON keys.
+    /// \return a TRITONSERVER_Error indicating success or failure.
+    TRITONSERVER_Error* UpdateGroup(std::vector<uint64_t>& values);
+
+    /// Return a list of JSON keys that correspond to the TRT LLM
+    /// statistics handled by this metric group.
+    ///
+    /// \return A const reference to vector of strings corresponding
+    /// to the JSON keys associated with this group.
+    const std::vector<std::string>& JsonKeys() const;
+
+    /// Custom deleter for a unique TRITONSERVER_MetricFamily pointer
+    struct MetricFamilyDeleter
+    {
+        void operator()(TRITONSERVER_MetricFamily* family)
+        {
+            if (family != nullptr)
+            {
+                TRITONSERVER_MetricFamilyDelete(family);
+            }
+        }
+    };
+
+    /// Custom deleter for a unique TRITONSERVER_Metric pointer
+    struct MetricDeleter
+    {
+        void operator()(TRITONSERVER_Metric* metric)
+        {
+            if (metric != nullptr)
+            {
+                TRITONSERVER_MetricDelete(metric);
+            }
+        }
+    };
+
+private:
+    std::unique_ptr<TRITONSERVER_MetricFamily, MetricFamilyDeleter> metric_family_;
+    std::vector<std::unique_ptr<TRITONSERVER_Metric, MetricDeleter>> metrics_;
+    std::string metric_family_label_;
+    std::string metric_family_description_;
+    std::string category_label_;
+    std::vector<std::string> json_keys_;
+    std::vector<std::string> sub_labels_;
+};
+
+/// TritonMetrics is an interface class meant to facilitate the
+/// connection between TRT LLM backend statistics and Triton metrics.
+/// It functions by passing BatchManager statistics data from
+/// the TRT LLM backend to the multiple TritonMetricsGroup objects
+/// it handles.
+class TritonMetrics
+{
+public:
+    TritonMetrics(){};
+    ~TritonMetrics(){};
+
+    /// Initialize the various TritonMetricGroups handled by
+    /// by this class using the static key/label members below.
+    ///
+    /// \param model The name of the model to provide metrics for.
+    /// \param version The version of the model to provide metrics for.
+    /// \param is_v1_model Whether the model type is v1 or an inflight
+    /// batching model.
+    /// \return a TRITONSERVER_Error indicating success or failure.
+    TRITONSERVER_Error* InitMetrics(const std::string& model, const uint64_t version, const bool is_v1_model);
+
+    /// Updates the vector of TritonMetricGroup objects with a
+    /// JSON-formatted statistics string.
+    ///
+    /// \param statistics A JSON-formatted string of TRT LLM backend
+    /// statistics.
+    /// \return a TRITONSERVER_Error indicating success or failure.
+    TRITONSERVER_Error* UpdateMetrics(const std::string& statistics);
+
+    static const std::vector<std::string> request_keys_;
+    static const std::vector<std::string> request_labels_;
+
+    static const std::vector<std::string> runtime_memory_keys_;
+    static const std::vector<std::string> runtime_memory_labels_;
+
+    static const std::vector<std::string> kv_cache_keys_;
+    static const std::vector<std::string> kv_cache_labels_;
+
+    static const std::vector<std::string> v1_specific_keys_;
+    static const std::vector<std::string> v1_specific_labels_;
+
+    static const std::vector<std::string> IFB_specific_keys_;
+    static const std::vector<std::string> IFB_specific_labels_;
+
+    static const std::vector<std::string> general_metric_keys_;
+    static const std::vector<std::string> general_metric_labels_;
+
+private:
+    std::vector<std::unique_ptr<TritonMetricGroup>> metric_groups_;
+    std::unique_ptr<TritonMetricGroup> request_metric_family_;
+    std::unique_ptr<TritonMetricGroup> runtime_memory_metric_family_;
+    std::unique_ptr<TritonMetricGroup> kv_cache_metric_family_;
+    std::unique_ptr<TritonMetricGroup> model_type_metric_family_;
+    std::unique_ptr<TritonMetricGroup> general_metric_family_;
+};
+
+} // namespace triton_metrics
+} // namespace inflight_batcher_llm
+} // namespace backend
+} // namespace triton

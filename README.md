@@ -377,6 +377,83 @@ You might have to contact your cluster's administrator to help you customize the
 pkill tritonserver
 ```
 
+## Triton Metrics
+Starting with the 23.11 release of Triton, users can now obtain TRT LLM Batch Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/ffd5af342a817a2689d38e4af2cc59ded877e339/docs/source/batch_manager.md#statistics) by querying the Triton metrics endpoint. This can be accomplished by launching a Triton server in any of the ways described above (ensuring the build code / container is 23.11 or later) and querying the sever with the generate endpoint. Upon receiving a successful response, you can query the metrics endpoint by entering the following:
+```bash
+curl localhost:8002/metrics
+```
+Batch manager statistics are reported by the metrics endpoint in fields that are prefixed with `nv_trt_llm_`. Your output for these fields should look similar to the following (assuming your model is an inflight batcher model):
+```bash
+# HELP nv_trt_llm_request_statistics TRT LLM request metrics
+# TYPE nv_trt_llm_request_statistics gauge
+nv_trt_llm_request_statistics{model="tensorrt_llm",request_type="context",version="1"} 1
+nv_trt_llm_request_statistics{model="tensorrt_llm",request_type="scheduled",version="1"} 1
+nv_trt_llm_request_statistics{model="tensorrt_llm",request_type="max",version="1"} 512
+nv_trt_llm_request_statistics{model="tensorrt_llm",request_type="active",version="1"} 0
+# HELP nv_trt_llm_runtime_memory_statistics TRT LLM runtime memory metrics
+# TYPE nv_trt_llm_runtime_memory_statistics gauge
+nv_trt_llm_runtime_memory_statistics{memory_type="pinned",model="tensorrt_llm",version="1"} 0
+nv_trt_llm_runtime_memory_statistics{memory_type="gpu",model="tensorrt_llm",version="1"} 1610236
+nv_trt_llm_runtime_memory_statistics{memory_type="cpu",model="tensorrt_llm",version="1"} 0
+# HELP nv_trt_llm_kv_cache_block_statistics TRT LLM KV cache block metrics
+# TYPE nv_trt_llm_kv_cache_block_statistics gauge
+nv_trt_llm_kv_cache_block_statistics{kv_cache_block_type="tokens_per",model="tensorrt_llm",version="1"} 64
+nv_trt_llm_kv_cache_block_statistics{kv_cache_block_type="used",model="tensorrt_llm",version="1"} 1
+nv_trt_llm_kv_cache_block_statistics{kv_cache_block_type="free",model="tensorrt_llm",version="1"} 6239
+nv_trt_llm_kv_cache_block_statistics{kv_cache_block_type="max",model="tensorrt_llm",version="1"} 6239
+# HELP nv_trt_llm_inflight_batcher_statistics TRT LLM inflight_batcher-specific metrics
+# TYPE nv_trt_llm_inflight_batcher_statistics gauge
+nv_trt_llm_inflight_batcher_statistics{inflight_batcher_specific_metric="micro_batch_id",model="tensorrt_llm",version="1"} 0
+nv_trt_llm_inflight_batcher_statistics{inflight_batcher_specific_metric="generation_requests",model="tensorrt_llm",version="1"} 0
+nv_trt_llm_inflight_batcher_statistics{inflight_batcher_specific_metric="total_context_tokens",model="tensorrt_llm",version="1"} 0
+# HELP nv_trt_llm_general_statistics General TRT LLM statistics
+# TYPE nv_trt_llm_general_statistics gauge
+nv_trt_llm_general_statistics{general_type="iteration_counter",model="tensorrt_llm",version="1"} 0
+nv_trt_llm_general_statistics{general_type="timestamp",model="tensorrt_llm",version="1"} 1700074049
+```
+If, instead, you launched a V1 model, your output will look similar to the output above except the inflight batcher related fields will be replaced with something similar to the following:
+```bash
+# HELP nv_trt_llm_v1_statistics TRT LLM v1-specific metrics
+# TYPE nv_trt_llm_v1_statistics gauge
+nv_trt_llm_v1_statistics{model="tensorrt_llm",v1_specific_metric="total_generation_tokens",version="1"} 20
+nv_trt_llm_v1_statistics{model="tensorrt_llm",v1_specific_metric="empty_generation_slots",version="1"} 0
+nv_trt_llm_v1_statistics{model="tensorrt_llm",v1_specific_metric="total_context_tokens",version="1"} 5
+```
+Please note that as of the 23.11 Triton release, a link between base Triton metrics (such as inference request count and latency) is being actively developed, but is not yet supported.
+As such, the following fields will report 0:
+```bash
+# HELP nv_inference_request_success Number of successful inference requests, all batch sizes
+# TYPE nv_inference_request_success counter
+nv_inference_request_success{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_request_failure Number of failed inference requests, all batch sizes
+# TYPE nv_inference_request_failure counter
+nv_inference_request_failure{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_count Number of inferences performed (does not include cached requests)
+# TYPE nv_inference_count counter
+nv_inference_count{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_exec_count Number of model executions performed (does not include cached requests)
+# TYPE nv_inference_exec_count counter
+nv_inference_exec_count{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_request_duration_us Cumulative inference request duration in microseconds (includes cached requests)
+# TYPE nv_inference_request_duration_us counter
+nv_inference_request_duration_us{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_queue_duration_us Cumulative inference queuing duration in microseconds (includes cached requests)
+# TYPE nv_inference_queue_duration_us counter
+nv_inference_queue_duration_us{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_compute_input_duration_us Cumulative compute input duration in microseconds (does not include cached requests)
+# TYPE nv_inference_compute_input_duration_us counter
+nv_inference_compute_input_duration_us{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_compute_infer_duration_us Cumulative compute inference duration in microseconds (does not include cached requests)
+# TYPE nv_inference_compute_infer_duration_us counter
+nv_inference_compute_infer_duration_us{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_compute_output_duration_us Cumulative inference compute output duration in microseconds (does not include cached requests)
+# TYPE nv_inference_compute_output_duration_us counter
+nv_inference_compute_output_duration_us{model="tensorrt_llm",version="1"} 0
+# HELP nv_inference_pending_request_count Instantaneous number of pending requests awaiting execution per-model.
+# TYPE nv_inference_pending_request_count gauge
+nv_inference_pending_request_count{model="tensorrt_llm",version="1"} 0
+```
+
 ## Testing the TensorRT-LLM Backend
 Please follow the guide in [`ci/README.md`](ci/README.md) to see how to run
 the testing for TensorRT-LLM backend.

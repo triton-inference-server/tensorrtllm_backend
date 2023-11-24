@@ -8,6 +8,7 @@ BS=$5
 MAX_INPUT_SEQLEN=$6
 WORLD_SIZE=$7
 RECORD_LOG=$8
+MAX_KV_CACHE_LEN=$9
 
 set -e
 nvidia-smi
@@ -19,18 +20,19 @@ source tools/utils.sh
 
 # token normal distribution.
 # (ip_mean, ip_stdev, op_mean, op_stdev, num_prompts)
-TOKEN_DIST_LIST=( "128,10,20,2,5000" "20,2,128,10,5000" )
+TOKEN_DIST_LIST=( "128,0,1,0,8192" "32,0,1024,0,1024" )
 DATASETS=( "<dataset>" ) # names of datasets
 
 # key: dataset name, value: path to dataset json file
 declare -A dataset_dict=( ["<dataset>"]="<dataset_path>" )
 
 # dictionary[workload] =  list of request rates to shmoo over. Should contain keys from TOKEN_DIST_LIST and DATASETS
-declare -A REQ_RATES=(  ["128,10,20,2,5000"]="-1"
-                        ["20,2,128,10,5000"]="-1"
+declare -A REQ_RATES=(  ["128,0,1,0,8192"]="-1"
+                        ["32,0,1024,0,1024"]="-1"
                         ["cnn"]="-1"
+                        ["openweb"]="-1"
                     )
-REQ_RATES_HIST="-1" #
+REQ_RATES_HIST="" #
 #-----------------------------------------------------------------#
 
 EXCLUDE_INPUT_IN_OUTPUT="false"
@@ -49,7 +51,7 @@ fi
 
 fill_triton_repo () {
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:"False",batching_strategy:${BATCHING_STRATEGY},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${BS},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:"False",batching_strategy:${BATCHING_STRATEGY},max_kv_cache_length:${MAX_KV_CACHE_LEN},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${BS},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/ensemble/config.pbtxt triton_max_batch_size:${BS}
@@ -68,6 +70,7 @@ print_test_params () {
     echo "TRITON_MAX_BATCH_SIZE: ${BS}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
     echo "MAX_BEAM_WIDTH: ${MAX_BEAM_WIDTH}"
+    echo "MAX_KV_CACHE_LEN: ${MAX_KV_CACHE_LEN}"
     echo "----------------------------------"
 }
 
@@ -78,11 +81,7 @@ if true; then
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-        if [ "$BATCHING_STRATEGY" = "inflight_fused_batching" ]; then
-            BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" )
-        else
-            BATCH_SCHEDULER_POLICIES=( "max_utilization" )
-        fi
+        BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" )
 
         for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
 
@@ -131,7 +130,7 @@ if true; then
                             --num-requests 3000 \
                             dataset \
                             --dataset $dataset_path \
-                            --tokenizer_dir "$TOKENIZER_PATH" --tokenizer_type "$TOKENIZER_TYPE"
+                            --tokenizer-dir "$TOKENIZER_PATH" --tokenizer-type "$TOKENIZER_TYPE"
 
                         sleep 5
                     done

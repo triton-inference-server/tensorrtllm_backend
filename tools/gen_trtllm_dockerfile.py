@@ -51,6 +51,11 @@ RUN rm -fr tensorrtllm_backend
     COPY tensorrt_llm/docker/common/install_tensorrt.sh /tmp/
     """
     df += """
+ENV TRT_VER=9.1.0.4
+ENV CUDA_VER=12.2
+ENV CUDNN_VER=8.9.4.25-1+cuda12.2
+ENV NCCL_VER=2.18.3-1+cuda12.2
+ENV CUBLAS_VER=12.2.5.6-1
 RUN bash /tmp/install_tensorrt.sh && rm /tmp/install_tensorrt.sh
 
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
