@@ -34,7 +34,10 @@ def stop_triton_server():
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+@pytest.mark.parametrize(
+    "FEATURE_NAME",
+    ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
+def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                         MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
                         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
                         BATCHING_STRATEGY, DECOUPLED_MODE,
@@ -44,6 +47,10 @@ def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                         llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         print_info("Skipping. V1 doesn't support max_utilization.")
+        return
+
+    if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
+        print_info("Skipping. V1 doesn't support embedding_bias tensor yet.")
         return
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
@@ -74,17 +81,18 @@ def test_llama_v2_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         shell=True)
     check_server_ready()
     # Run Test
-    run_cmd = [
-        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
-        "--tokenizer-type=llama",
-    ]
-    if DECOUPLED_MODE == "True":
-        run_cmd += [
-            "--streaming",
-        ]
+    feature_name = f"{FEATURE_NAME}"
+    tokenizer_dir = f"{llama_v2_tokenizer_model_root}"
+    tokenizer_type = "llama"
 
-    venv_check_call(llm_backend_venv, run_cmd)
+    if DECOUPLED_MODE == "False":
+        run_cpp_backend_tests(feature_name, llm_backend_venv,
+                              inflight_batcher_llm_client_root, tokenizer_dir,
+                              tokenizer_type)
+    else:
+        run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
+                                        inflight_batcher_llm_client_root,
+                                        tokenizer_dir, tokenizer_type)
 
 
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
@@ -373,7 +381,10 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+@pytest.mark.parametrize(
+    "FEATURE_NAME",
+    ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
+def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
                      KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
                      BATCHING_STRATEGY, DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE,
@@ -382,6 +393,10 @@ def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         print_info("Skipping. V1 doesn't support max_utilization.")
+        return
+
+    if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
+        print_info("Skipping. V1 doesn't support embedding_bias tensor yet.")
         return
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
@@ -412,17 +427,18 @@ def test_gpt_350m_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         shell=True)
     check_server_ready()
     # Run Test
-    run_cmd = [
-        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        f"--tokenizer-dir={gpt_tokenizer_model_root}",
-        "--tokenizer-type=auto",
-    ]
-    if DECOUPLED_MODE == "True":
-        run_cmd += [
-            "--streaming",
-        ]
+    feature_name = f"{FEATURE_NAME}"
+    tokenizer_dir = f"{gpt_tokenizer_model_root}"
+    tokenizer_type = "auto"
 
-    venv_check_call(llm_backend_venv, run_cmd)
+    if DECOUPLED_MODE == "False":
+        run_cpp_backend_tests(feature_name, llm_backend_venv,
+                              inflight_batcher_llm_client_root, tokenizer_dir,
+                              tokenizer_type)
+    else:
+        run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
+                                        inflight_batcher_llm_client_root,
+                                        tokenizer_dir, tokenizer_type)
 
 
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
