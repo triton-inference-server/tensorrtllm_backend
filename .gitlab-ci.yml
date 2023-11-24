@@ -1,7 +1,7 @@
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   GIT_SUBMODULE_STRATEGY: recursive
-  IMAGE: urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.10-trt9.1.0.4-3
+  IMAGE: urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.10-trt9.1.0.4-4
   TRT_ROOT: /usr/local/tensorrt
   GPT2: /home/scratch.trt_llm_data/llm-models/gpt2
   GPT2_NEXT_PTUNING: /home/scratch.trt_llm_data/llm-models/email_composition
