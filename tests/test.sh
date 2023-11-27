@@ -248,10 +248,11 @@ run_cpp_backend_tests () {
             --stop-after-ms 100 \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE} \
+            --request-id 1 \
             2>&1 | tee output_w_stop
         grep "Got cancellation response" output_w_stop
 
-	    #test with return log probs
+        #test with return log probs
         python3 inflight_batcher_llm_client.py \
             --request-output-len=10 \
             --tokenizer-dir ${TOKENIZER_PATH} \
@@ -442,6 +443,7 @@ run_cpp_streaming_backend_tests() {
             --streaming \
             --request-output-len=128 \
             --stop-after-ms 100 \
+            --request-id 1 \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
 
@@ -453,6 +455,7 @@ run_cpp_streaming_backend_tests() {
             --streaming \
             --request-output-len=128 \
             --stop-after-ms 100 \
+            --request-id 1 \
             --stop-via-request-cancel \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
