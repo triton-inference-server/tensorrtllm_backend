@@ -91,6 +91,7 @@ def test_rcca_bug_4323566(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
+@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
@@ -104,7 +105,7 @@ def test_rcca_bug_4323566(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1", "4"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4342666(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                          BATCH_SCHEDULER_POLICY,
+                          MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
                           KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
                           BATCHING_STRATEGY, DECOUPLED_MODE,
                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
@@ -126,12 +127,14 @@ def test_rcca_bug_4342666(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         "tensorrt_llm/examples/llama/ib_llama_7b_chat_outputs")
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    modify_ib_config_pbtxt(
-        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
-        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, BATCH_SCHEDULER_POLICY,
-        BATCHING_STRATEGY, MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
-        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH)
+    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
+                           llm_backend_repo_root, DECOUPLED_MODE,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
+                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
+                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+                           MAX_BEAM_WIDTH)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -166,7 +169,7 @@ UberEats Support: You're welcome. Enjoy your meal!!
     output_log = venv_check_output(llm_backend_venv, run_cmd)
     print_info(f"{output_log}")
     # Get output sentence from log
-    m = re.search(r"Output beam 0:\s*(.*)\s*output_ids", output_log)
+    m = re.search(r"Output beam 0:\s*(.*)\s*?\n", output_log)
     output_result = ""
     if m is not None:
         output_result = m.group(1).strip()
