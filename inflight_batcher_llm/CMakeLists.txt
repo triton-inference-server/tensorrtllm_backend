@@ -147,7 +147,11 @@ endif()
 #
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
-add_library(triton-tensorrt-llm-backend SHARED src/libtensorrtllm.cc)
+
+set(SRCS src/libtensorrtllm.cc src/work_item.cc src/work_items_queue.cc
+         src/model_instance_state.cc src/model_state.cc src/utils.cc)
+
+add_library(triton-tensorrt-llm-backend SHARED ${SRCS})
 
 if(TRITON_BUILD)
   add_custom_target(trtllm_target DEPENDS tensorrt_llm_build)
@@ -251,6 +255,7 @@ target_compile_options(
     -Wall
     -Wextra
     -Wno-unused-parameter
+    -Wno-deprecated-declarations
     -Wno-type-limits>
     $<$<CXX_COMPILER_ID:MSVC>:/Wall
     /D_WIN32_WINNT=0x0A00
