@@ -213,7 +213,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--request-id',
                         type=str,
-                        default='1',
+                        default='',
                         required=False,
                         help='The request_id for the stop request')
 
