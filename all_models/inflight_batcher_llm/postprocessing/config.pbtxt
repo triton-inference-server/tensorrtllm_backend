@@ -83,7 +83,7 @@ parameters {
 
 instance_group [
     {
-        count: 1
+        count: ${postprocessing_instance_count}
         kind: KIND_CPU
     }
 ]

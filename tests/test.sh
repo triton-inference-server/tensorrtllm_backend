@@ -124,6 +124,11 @@ print_test_params () {
     echo "TRITON_MAX_BATCH_SIZE: ${TRITON_MAX_BATCH_SIZE}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
     echo "MAX_BEAM_WIDTH: ${MAX_BEAM_WIDTH}"
+    echo "E2E_MODEL_NAME: ${E2E_MODEL_NAME}"
+    echo "ACCUMULATE_TOKEN: ${ACCUMULATE_TOKEN}"
+    echo "BLS_INSTANCE_COUNT: ${BLS_INSTANCE_COUNT}"
+    echo "PREPROCESSING_INSTANCE_COUNT: ${PREPROCESSING_INSTANCE_COUNT}"
+    echo "POSTPROCESSING_INSTANCE_COUNT: ${POSTPROCESSING_INSTANCE_COUNT}"
     echo "run_all_tests: ${run_all_tests}"
     echo "----------------------------------"
 }
@@ -131,33 +136,24 @@ print_test_params () {
 fill_triton_repo () {
 
     python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_kv_cache_length:${MAX_KV_CACHE_LENGTH},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
-    python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
-    python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
+    python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i triton_repo/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
-
+    python3 tools/fill_template.py -i triton_repo/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
 }
 
-run_cpp_backend_tests () {
+kill_triton_server () {
+    kill -9 ${SERVER_PID}
+}
+
+launch_triton_server () {
 
     print_test_params
-
-    # Because the runners are shared, the default value of 0.85 doesn't work, so skip
-    # if max_tokens_in_kv_cache is also empty
-    if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
-        echo "Skipping..."
-        continue
-    fi
-
-    if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
-        echo "Skipping. V1 doesn't support max_utilization"
-        continue
-    fi
 
     rm -rf ./triton_repo
     cp -R all_models/inflight_batcher_llm triton_repo
 
     # Modify config.pbtxt
-    DECOUPLED_MODE="False"
     fill_triton_repo
 
     # Launch Triton Server
@@ -165,6 +161,9 @@ run_cpp_backend_tests () {
         --model-repository=triton_repo &
     export SERVER_PID=$!
     wait_for_server_ready ${SERVER_PID} 1200
+}
+
+run_cpp_trtllm_backend_tests () {
 
     # test to run for all combinations of flags
     EXCL_INPUT_IN_OUTPUT_FLAG=""
@@ -204,7 +203,6 @@ run_cpp_backend_tests () {
         --tokenizer-dir ${TOKENIZER_PATH} \
         --tokenizer-type ${TOKENIZER_TYPE}
 
-
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
 
         # testing output accuracy for real weights only
@@ -231,15 +229,6 @@ run_cpp_backend_tests () {
                 [[ "${TEST_OUTPUT}" == *"government']" ]]
             }
             test_stop_words
-
-            # test with embedding bias
-            python3 end_to_end_grpc_client.py \
-                -o 10 \
-                -p "The only thing we have to fear is"  \
-                --embedding-bias-words " government" \
-                --embedding-bias-weights -20 \
-                2>&1 | tee output_w_bias
-            grep -v "that the government will" output_w_bias
         fi
 
         # test with request cancellation
@@ -257,7 +246,7 @@ run_cpp_backend_tests () {
             --request-output-len=10 \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE} \
-	        --return-log-probs --top-k 2 \
+            --return-log-probs --top-k 2 \
             2>&1 | tee output_log_probs
     fi
 
@@ -265,20 +254,6 @@ run_cpp_backend_tests () {
 
     # End to end test
     pushd tools/inflight_batcher_llm
-
-    python3 end_to_end_test.py \
-        --concurrency 8 \
-        -i http \
-        --max-input-len 300 \
-        --dataset ../dataset/mini_cnn_eval.json
-
-    if [[ "$run_all_tests" == "true" ]]; then
-        python3 end_to_end_test.py \
-            --concurrency 8 \
-            -i grpc \
-            --max-input-len 300 \
-            --dataset ../dataset/mini_cnn_eval.json
-    fi
 
     python3 benchmark_core_model.py \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
@@ -320,109 +295,54 @@ run_cpp_backend_tests () {
     fi
 
     popd # tools/inflight_batcher_llm
-
-    kill -9 ${SERVER_PID}
 }
 
-BATCHING_STRATEGIES=( "inflight_fused_batching" )
+run_cpp_e2e_backend_tests () {
 
-MAX_NUM_SEQUENCES=( "" "4" "32" )
-MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
-BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
-KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
-ENABLE_TRT_OVERLAPS=( "false" "true" )
+    pushd inflight_batcher_llm/client
 
-TRITON_MAX_BATCH_SIZE="128"
-MAX_QUEUE_DELAY_MICROSECONDS="0"
-MAX_BEAM_WIDTH="1"
+    # testing output accuracy for real weights only
+    if [[ $MODEL = "gpt-ib" ]]; then
 
-if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
+        python3 end_to_end_grpc_client.py \
+            --output-len 10 --prompt "The only thing we have to fear is" | tee output_e2e
+        grep "that the government will" output_e2e
 
-    # To make sure that torch is not a dependency for C++ backend
-    pip3 uninstall -y torch
-
-    # -------------------------------
-    # KV cache parameters
-    # -------------------------------
-
-    EXCLUDE_INPUT_IN_OUTPUT="false"
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
-
-    # We don't want to run all tests for all combination of parameters
-    # Only run all tests for one combination of all parameters
-    run_all_tests="true"
-
-    for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
-    for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
-    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
-    for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
-    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
-
-        run_cpp_backend_tests
-
-        run_all_tests="false"
-    done
-    done
-    done
-    done
-    done
-
-    done #BATCHING STRATEGY
-
-    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
-    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
-    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
-    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
-
-    # -------------------------------
-    # Exclude input in output test
-    # -------------------------------
-    EXCLUDE_INPUT_IN_OUTPUT="true"
-    run_all_tests="false"
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
-
-        run_cpp_backend_tests
-
-    done
-    EXCLUDE_INPUT_IN_OUTPUT="false"
-
-    # -------------------------------
-    #  Max queue delay microseconds
-    # -------------------------------
-    run_all_tests="false"
-    MAX_QUEUE_DELAY_MICROSECONDS="1000000"
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
-
-        run_cpp_backend_tests
-
-    done
-    MAX_QUEUE_DELAY_MICROSECONDS="0"
-
-fi
-
-run_cpp_streaming_backend_tests() {
-
-    print_test_params
-
-    # Because the runners are shared, the default value of 0.85 doesn't work, so skip
-    # if max_tokens_in_kv_cache is also empty
-    if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
-        echo "Skipping..."
-        continue
+        if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
+            # test with embedding bias
+            python3 end_to_end_grpc_client.py \
+                -o 10 \
+                -p "The only thing we have to fear is"  \
+                --embedding-bias-words " government" \
+                --embedding-bias-weights -20 \
+                2>&1 | tee output_w_bias
+            grep -v "that the government will" output_w_bias
+        fi
     fi
 
-    rm -rf ./triton_repo
-    cp -R all_models/inflight_batcher_llm triton_repo
+    popd # inflight_batcher_llm/client
 
-    DECOUPLED_MODE="True"
-    fill_triton_repo
+    # End to end test
+    pushd tools/inflight_batcher_llm
 
-    # Launch Triton Server
-    /opt/tritonserver/bin/tritonserver \
-        --model-repository=triton_repo &
-    export SERVER_PID=$!
-    wait_for_server_ready ${SERVER_PID} 1200
+    python3 end_to_end_test.py \
+        --concurrency 8 \
+        -i http \
+        --max-input-len 300 \
+        --dataset ../dataset/mini_cnn_eval.json
+
+    if [[ "$run_all_tests" == "true" ]]; then
+        python3 end_to_end_test.py \
+            --concurrency 8 \
+            -i grpc \
+            --max-input-len 300 \
+            --dataset ../dataset/mini_cnn_eval.json
+    fi
+
+    popd # tools/inflight_batcher_llm
+}
+
+run_cpp_trtllm_streaming_backend_tests() {
 
     EXCL_INPUT_IN_OUTPUT_FLAG=""
     [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
@@ -431,8 +351,8 @@ run_cpp_streaming_backend_tests() {
     pushd inflight_batcher_llm/client
     python3 inflight_batcher_llm_client.py \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-        --streaming \
         --check-output \
+        --streaming \
         --tokenizer-dir ${TOKENIZER_PATH} \
         --tokenizer-type ${TOKENIZER_TYPE}
 
@@ -463,29 +383,162 @@ run_cpp_streaming_backend_tests() {
         grep "Request is cancelled" output_w_stop
     fi
 
+    popd
+}
+
+run_cpp_e2e_streaming_backend_tests() {
+
+    OVERWRITE_OUTPUT_TEXT_FLAG=""
+    [ "${ACCUMULATE_TOKEN}" = "true" ] && OVERWRITE_OUTPUT_TEXT_FLAG="--overwrite-output-text"
+
+    pushd inflight_batcher_llm/client
     # End to end test
     python3 end_to_end_grpc_client.py \
-        --output-len 10 --prompt "This is a test "
+        --streaming --output-len 10 --prompt "The only thing we have to fear is" | tee output_e2e
+    grep "that the government will" output_e2e
+
     popd
 
     kill -9 ${SERVER_PID}
 }
 
-if [ "$MODEL" = "gpt-ib-streaming" ]; then
+BATCHING_STRATEGIES=( "inflight_fused_batching" )
+MAX_NUM_SEQUENCES=( "" "4" "32" )
+MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
+BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
+KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
+ENABLE_TRT_OVERLAPS=( "false" "true" )
+
+TRITON_MAX_BATCH_SIZE="128"
+MAX_QUEUE_DELAY_MICROSECONDS="0"
+MAX_BEAM_WIDTH="1"
+E2E_MODEL_NAME="ensemble"
+ACCUMULATE_TOKEN="false"
+EXCLUDE_INPUT_IN_OUTPUT="false"
+BLS_INSTANCE_COUNT="1"
+PREPROCESSING_INSTANCE_COUNT="1"
+POSTPROCESSING_INSTANCE_COUNT="1"
+
+if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
+
     # To make sure that torch is not a dependency for C++ backend
     pip3 uninstall -y torch
 
-    BATCHING_STRATEGY="inflight_fused_batching"
-    EXCLUDE_INPUT_IN_OUTPUT="false"
-    run_all_tests="true"
+    # Non-streaming tests, decoupled is false
+    DECOUPLED_MODE="False"
 
+    # -------------------------------
+    # Param sweep test
+    # -------------------------------
+    run_all_tests="true"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
 
-        run_cpp_streaming_backend_tests
+        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # if max_tokens_in_kv_cache is also empty
+        if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
+            continue
+        fi
+        if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
+            continue
+        fi
+
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        run_cpp_e2e_backend_tests
+        kill_triton_server
+        run_all_tests="false"
+    done
+    done
+    done
+    done
+    done
+    done
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+    # -------------------------------
+    # Exclude input in output test
+    # -------------------------------
+    EXCLUDE_INPUT_IN_OUTPUT="true"
+    run_all_tests="false"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        run_cpp_e2e_backend_tests
+        kill_triton_server
+    done
+    EXCLUDE_INPUT_IN_OUTPUT="false"
+
+    # -------------------------------
+    #  Max queue delay microseconds
+    # -------------------------------
+    run_all_tests="false"
+    MAX_QUEUE_DELAY_MICROSECONDS="1000000"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        run_cpp_e2e_backend_tests
+        kill_triton_server
+    done
+    MAX_QUEUE_DELAY_MICROSECONDS="0"
+
+    # -------------------------------
+    #  Python BLS
+    # -------------------------------
+    ACCUMULATE_TOKENS=( "false" "true" )
+    E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
+    for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
+
+        if [[ "${E2E_MODEL_NAME}" == "ensemble" && "${ACCUMULATE_TOKEN}" == "true" ]]; then
+            continue
+        fi
+        launch_triton_server
+        run_cpp_e2e_backend_tests
+        kill_triton_server
+    done
+    done
+    done
+    E2E_MODEL_NAME="ensemble"
+    ACCUMULATE_TOKEN="false"
+fi
+
+if [ "$MODEL" = "gpt-ib-streaming" ]; then
+    # To make sure that torch is not a dependency for C++ backend
+    pip3 uninstall -y torch
+
+    DECOUPLED_MODE="True"
+    run_all_tests="true"
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for MAX_NUM_SEQUENCE in "${MAX_NUM_SEQUENCES[@]}"; do
+    for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
+    for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
+    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
+
+        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # if max_tokens_in_kv_cache is also empty
+        if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
+            continue
+        fi
+        if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
+            continue
+        fi
+
+        launch_triton_server
+        run_cpp_trtllm_streaming_backend_tests
+        run_cpp_e2e_streaming_backend_tests
+        kill_triton_server
 
         run_all_tests="false"
     done
@@ -493,6 +546,33 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     done
     done
+    done
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+    # --------------------
+    # Python BLS test
+    # --------------------
+    ACCUMULATE_TOKENS=( "false" "true" )
+    E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
+    for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
+
+        if [[ "${E2E_MODEL_NAME}" == "ensemble" && "${ACCUMULATE_TOKEN}" == "true" ]]; then
+            continue
+        fi
+        launch_triton_server
+        run_cpp_e2e_streaming_backend_tests
+        kill_triton_server
+    done
+    done
+    done
+    E2E_MODEL_NAME="ensemble"
+    ACCUMULATE_TOKEN="false"
 fi
 
 if [ "$MODEL" = "gpt-ib-ptuning" ]; then
@@ -509,30 +589,16 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     popd
 
-    # Ptuning not enabled with V1 yet
-    BATCHING_STRATEGIES=( "inflight_fused_batching" )
+    DECOUPLED_MODE="False"
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-        MAX_NUM_SEQUENCE=""
-        MAX_TOKENS_IN_KV_CACHE=""
-        BATCH_SCHEDULER_POLICIE="guaranteed_no_evict"
-        KV_CACHE_FREE_GPU_MEM_FRACTION="0.2"
-        ENABLE_TRT_OVERLAP="false"
-
-        echo "----------------------------------"
-        rm -rf ./triton_repo
-        cp -R all_models/inflight_batcher_llm triton_repo
-
-        # Modify config.pbtxt
-        DECOUPLED_MODE="False"
-        fill_triton_repo
-
-        # Launch Triton Server
-        /opt/tritonserver/bin/tritonserver \
-            --model-repository=triton_repo &
-        export SERVER_PID=$!
-        wait_for_server_ready ${SERVER_PID} 1200
+        launch_triton_server
 
         # Test client
         pushd inflight_batcher_llm/client
@@ -543,6 +609,6 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
         popd # inflight_batcher_llm/client
 
-        kill -9 ${SERVER_PID}
+        kill_triton_server
     done
 fi
