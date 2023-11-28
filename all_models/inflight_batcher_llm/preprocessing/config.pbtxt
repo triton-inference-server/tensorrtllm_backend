@@ -112,7 +112,7 @@ parameters {
 
 instance_group [
     {
-        count: 1
+        count: ${preprocessing_instance_count}
         kind: KIND_CPU
     }
 ]
