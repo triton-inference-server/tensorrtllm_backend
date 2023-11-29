@@ -297,7 +297,7 @@ You can send requests to the "tensorrt_llm" model with the provided
 as following:
 
 ```bash
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 The result should be similar to the following:
@@ -328,7 +328,7 @@ Soyer was a member of the French Academy of Sciences and
 You can also stop the generation process early by using the `--stop-after-ms` option to send a stop request after a few milliseconds:
 
 ```bash
-python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200 --tokenizer-dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
