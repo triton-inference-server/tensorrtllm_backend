@@ -381,6 +381,18 @@ run_cpp_trtllm_streaming_backend_tests() {
             --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
 
         grep "Request is cancelled" output_w_stop
+
+        python3 inflight_batcher_llm_client.py \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+            --streaming \
+            --request-output-len=128 \
+            --end-id 268 \
+            --request-id 1 \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-type ${TOKENIZER_TYPE} \
+            --input-tokens-csv='../../tools/dataset/short_input_end_id.csv' \
+            --output-tokens-csv='../../tools/dataset/short_output_end_id.csv' \
+            --check-output
     fi
 
     popd
@@ -578,14 +590,14 @@ fi
 if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     #Generate reference output
-    pushd tensorrt_llm/examples/gpt
+    pushd tensorrt_llm/examples
 
     # Input with virtual tokens:
-    python3 run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table=email_composition.npy --input_tokens=input.csv --engine_dir ${ENGINE_PATH} --output_csv output_w_prompt.csv
+    python3 run.py --max_output_len=8 --vocab_file=gpt/c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table=gpt/email_composition.npy --input_file=gpt/input.csv --engine_dir ${ENGINE_PATH} --output_csv gpt/output_w_prompt.csv
 
     #Input w/o virtual tokens:
-    echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
-    python3 run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --input_tokens=input_wo_prompt.csv --engine_dir ${ENGINE_PATH} --output_csv output_wo_prompt.csv
+    echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > gpt/input_wo_prompt.csv
+    python3 run.py --max_output_len=8 --vocab_file=gpt/c-model/email_composition/fp16/1-gpu/tokenizer.model --input_file=gpt/input_wo_prompt.csv --engine_dir ${ENGINE_PATH} --output_csv gpt/output_wo_prompt.csv
 
     popd
 

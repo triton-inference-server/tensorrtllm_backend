@@ -180,9 +180,11 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(result)
         if (FLAGS.streaming):
             output_ids = result.as_numpy('output_ids')
+            seq_lens = result.as_numpy('sequence_length')
             if output_ids != None:
-                tokens = list(output_ids[0][0])
-                print(tokens, flush=True)
+                if seq_lens == None or seq_lens[0][0] > 0:
+                    tokens = list(output_ids[0][0])
+                    print(tokens, flush=True)
 
 
 if __name__ == "__main__":
@@ -625,9 +627,11 @@ if __name__ == "__main__":
                         sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
                             # Only one beam is supported
-                            tokens = list(output_ids[0][0])
-                            actual_output_ids[
-                                0] = actual_output_ids[0] + tokens
+                            if sequence_lengths == None or sequence_lengths[0][
+                                    0] > 0:
+                                tokens = list(output_ids[0][0])
+                                actual_output_ids[
+                                    0] = actual_output_ids[0] + tokens
                         else:
                             print("Got cancellation response from server")
             else:
