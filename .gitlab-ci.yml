@@ -145,7 +145,7 @@ test-gptj-model-job:
     - cd $CI_PROJECT_DIR
     - pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl
     - bash tests/build_model.sh gptj
-    - bash tests/test.sh gptj tensorrt_llm/examples/gptj/gpt_outputs ${GPTJ} auto
+    - bash tests/test.sh gptj tensorrt_llm/examples/gptj/engine_outputs ${GPTJ} auto
   artifacts:
     expire_in: 30 mins
   dependencies:
