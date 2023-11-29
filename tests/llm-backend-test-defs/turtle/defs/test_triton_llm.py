@@ -46,12 +46,10 @@ def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                         inflight_batcher_llm_client_root,
                         llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
-        print_info("Skipping. V1 doesn't support embedding_bias tensor yet.")
-        return
+        pytest.skip("Skipping. V1 doesn't support embedding_bias tensor yet.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -120,8 +118,7 @@ def test_mistral_v1_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                           inflight_batcher_llm_client_root,
                           mistral_v1_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -257,8 +254,8 @@ def test_llama_v2_70b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                          inflight_batcher_llm_client_root,
                          llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
@@ -392,12 +389,10 @@ def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
                      gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
-        print_info("Skipping. V1 doesn't support embedding_bias tensor yet.")
-        return
+        pytest.skip("Skipping. V1 doesn't support embedding_bias tensor yet.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -465,8 +460,7 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
                      gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -531,10 +525,10 @@ def test_gpt_next_ptuning_ib(
         TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH,
         EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
         inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
-        tensorrt_llm_gpt_example_root, llm_backend_venv):
+        tensorrt_llm_example_root, tensorrt_llm_gpt_example_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -557,32 +551,43 @@ def test_gpt_next_ptuning_ib(
                            MAX_BEAM_WIDTH)
 
     # Generate reference output
-    # 1. Input with virtual tokens:
-    run_py_path = os.path.join(tensorrt_llm_gpt_example_root, "run.py")
+    run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
     vocab_file = os.path.join(
         tensorrt_llm_gpt_example_root,
         "c-model/email_composition/fp16/1-gpu/tokenizer.model")
-    prompt_table = os.path.join(tensorrt_llm_gpt_example_root,
-                                "email_composition.npy")
-    input_tokens = os.path.join(tensorrt_llm_gpt_example_root, "input.csv")
-    run_cmd = [
-        f"{run_py_path}", "--max_output_len=8", f"--vocab_file={vocab_file}",
-        f"--prompt_table={prompt_table}", f"--input_tokens={input_tokens}",
-        f"--engine_dir={ENGINE_PATH}", f"--output_csv=output_w_prompt.csv"
-    ]
-    venv_check_call(llm_backend_venv, run_cmd)
+    # 1. Input with virtual tokens:
+    if VIRTUAL_TOKENS == "True":
+        prompt_table = os.path.join(tensorrt_llm_gpt_example_root,
+                                    "email_composition.npy")
+        input_tokens = os.path.join(tensorrt_llm_gpt_example_root, "input.csv")
+        run_cmd = [
+            f"{run_py_path}",
+            "--max_output_len=8",
+            f"--vocab_file={vocab_file}",
+            f"--prompt_table={prompt_table}",
+            f"--input_file={input_tokens}",
+            f"--engine_dir={ENGINE_PATH}",
+            f"--output_csv=output_w_prompt.csv",
+            "--no_add_special_tokens",
+        ]
+        venv_check_call(llm_backend_venv, run_cmd)
     # 2. Input w/o virtual tokens:
-    input_wo_prompt_csv = os.path.join(
-        llm_backend_venv.get_working_directory(), "input_wo_prompt.csv")
-    check_call(
-        f"echo \"25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261\" > {input_wo_prompt_csv}",
-        shell=True)
-    run_cmd = [
-        f"{run_py_path}", "--max_output_len=8", f"--vocab_file={vocab_file}",
-        f"--input_tokens={input_wo_prompt_csv}", f"--engine_dir={ENGINE_PATH}",
-        f"--output_csv=output_wo_prompt.csv"
-    ]
-    venv_check_call(llm_backend_venv, run_cmd)
+    elif VIRTUAL_TOKENS == "False":
+        input_wo_prompt_csv = os.path.join(
+            llm_backend_venv.get_working_directory(), "input_wo_prompt.csv")
+        check_call(
+            f"echo \"25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261\" > {input_wo_prompt_csv}",
+            shell=True)
+        run_cmd = [
+            f"{run_py_path}",
+            "--max_output_len=8",
+            f"--vocab_file={vocab_file}",
+            f"--input_file={input_wo_prompt_csv}",
+            f"--engine_dir={ENGINE_PATH}",
+            f"--output_csv=output_wo_prompt.csv",
+            "--no_add_special_tokens",
+        ]
+        venv_check_call(llm_backend_venv, run_cmd)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -602,7 +607,7 @@ def test_gpt_next_ptuning_ib(
             "--request-output-len=8", "--check-output"
         ]
         venv_check_call(llm_backend_venv, run_cmd)
-    else:
+    elif VIRTUAL_TOKENS == "False":
         run_cmd = [
             f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
             f"--input-tokens-csv={input_wo_prompt_csv}",
