@@ -48,8 +48,7 @@ def test_rcca_bug_4323566(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                           inflight_batcher_llm_client_root,
                           gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -113,8 +112,7 @@ def test_rcca_bug_4342666(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                           inflight_batcher_llm_client_root,
                           llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
-        print_info("Skipping. V1 doesn't support max_utilization.")
-        return
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -164,6 +162,7 @@ UberEats Support: You're welcome. Enjoy your meal!!
         f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
         "--tokenizer-type=llama",
         "--request-output-len=500",
+        f"--beam-width={MAX_BEAM_WIDTH}",
         f"--text={TEXT}",
     ]
     output_log = venv_check_output(llm_backend_venv, run_cmd)
@@ -175,9 +174,17 @@ UberEats Support: You're welcome. Enjoy your meal!!
         output_result = m.group(1).strip()
 
     # Golden output sentence
-    golden_result = """
+    golden_result_max_beam_1 = """
 In this conversation, the customer support representative was able to resolve the customer's issue by providing them with a discount on their order and keeping them updated on the status of their delivery. The representative was professional and courteous throughout the conversation, and the customer was satisfied with the resolution provided.
+"""
+    golden_result_max_beam_4 = """
+In this conversation, the UberEats customer support representative was able to resolve the customer's issue by providing a 10% discount on their order and offering live updates on the status of their delivery. The customer was satisfied with the resolution and thanked the representative for their help.
 """
     # Validate Accuracy
     threshold = 0.8
-    validate_by_sequence_matcher(output_result, golden_result, threshold)
+    if MAX_BEAM_WIDTH == '1':
+        validate_by_sequence_matcher(output_result, golden_result_max_beam_1,
+                                     threshold)
+    elif MAX_BEAM_WIDTH == '4':
+        validate_by_sequence_matcher(output_result, golden_result_max_beam_4,
+                                     threshold)
