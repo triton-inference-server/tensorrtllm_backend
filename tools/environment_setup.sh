@@ -27,18 +27,27 @@
 
 apt-get update && apt-get install git-lfs rapidjson-dev python3-pip python-is-python3 -y --no-install-recommends
 # Update submodule
-git submodule update --init --recursive
 git lfs install
+git submodule update --init --recursive
 (cd tensorrt_llm/cpp/tensorrt_llm/batch_manager && git lfs pull)
 
 pip3 install -r requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
 
-# Remove prevous TRT installation
+# Remove previous TRT installation
 apt-get remove --purge -y tensorrt* libnvinfer*
 pip uninstall -y tensorrt
 
 # Download & install internal TRT release
-bash tensorrt_llm/docker/common/install_tensorrt.sh
+export CUDA_VER=12.3
+export CUDNN_VER=8.9.6.50-1+cuda12.2
+export NCCL_VER=2.19.3-1+cuda12.3
+export CUBLAS_VER=12.3.2.9-1
+bash tensorrt_llm/docker/common/install_tensorrt.sh --CUDA_VER=$CUDA_VER --CUDNN_VER=$CUDNN_VER --NCCL_VER=$NCCL_VER --CUBLAS_VER=$CUBLAS_VER
+
+# Install PyTorch
+ARCH="$(uname -i)"
+if [ "$ARCH" = "aarch64" ];then TORCH_INSTALL_TYPE="src_non_cxx11_abi"; else TORCH_INSTALL_TYPE="pypi";fi
+bash tensorrt_llm/docker/common/install_pytorch.sh $TORCH_INSTALL_TYPE
 
 export LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
 export TRT_ROOT=/usr/local/tensorrt

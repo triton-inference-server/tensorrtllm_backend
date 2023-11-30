@@ -26,10 +26,15 @@
 
 name: "tensorrt_llm"
 backend: "tensorrtllm"
-max_batch_size: 128
+max_batch_size: ${triton_max_batch_size}
 
 model_transaction_policy {
   decoupled: ${decoupled_mode}
+}
+
+dynamic_batching {
+    preferred_batch_size: [ ${triton_max_batch_size} ]
+    max_queue_delay_microseconds: ${max_queue_delay_microseconds}
 }
 
 input [
@@ -37,6 +42,7 @@ input [
     name: "input_ids"
     data_type: TYPE_INT32
     dims: [ -1 ]
+    allow_ragged_batch: true
   },
   {
     name: "input_lengths"
@@ -62,6 +68,27 @@ input [
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
+  },
+  {
+    name: "stop_words_list"
+    data_type: TYPE_INT32
+    dims: [ 2, -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "bad_words_list"
+    data_type: TYPE_INT32
+    dims: [ 2, -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "embedding_bias"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
   },
   {
     name: "beam_width"
@@ -127,6 +154,13 @@ input [
     optional: true
   },
   {
+    name: "return_log_probs"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "stop"
     data_type: TYPE_BOOL
     dims: [ 1 ]
@@ -137,12 +171,41 @@ input [
     data_type: TYPE_BOOL
     dims: [ 1 ]
     optional: true
+  },
+  {
+    name: "prompt_embedding_table"
+    data_type: TYPE_FP16
+    dims: [ -1, -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "prompt_vocab_size"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
   }
 ]
 output [
   {
     name: "output_ids"
     data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "sequence_length"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "cum_log_probs"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "output_log_probs"
+    data_type: TYPE_FP32
     dims: [ -1, -1 ]
   }
 ]
@@ -155,7 +218,7 @@ instance_group [
 parameters: {
   key: "max_beam_width"
   value: {
-    string_value: "1"
+    string_value: "${max_beam_width}"
   }
 }
 parameters: {
@@ -167,7 +230,7 @@ parameters: {
 parameters: {
   key: "gpt_model_type"
   value: {
-    string_value: "inflight_fused_batching"
+    string_value: "${batching_strategy}"
   }
 }
 parameters: {
@@ -180,6 +243,12 @@ parameters: {
   key: "max_tokens_in_paged_kv_cache"
   value: {
     string_value: "${max_tokens_in_paged_kv_cache}"
+  }
+}
+parameters: {
+  key: "max_kv_cache_length"
+  value: {
+    string_value: "${max_kv_cache_length}"
   }
 }
 parameters: {
@@ -204,5 +273,11 @@ parameters: {
   key: "enable_trt_overlap"
   value: {
     string_value: "${enable_trt_overlap}"
+  }
+}
+parameters: {
+  key: "exclude_input_in_output"
+  value: {
+    string_value: "${exclude_input_in_output}"
   }
 }
