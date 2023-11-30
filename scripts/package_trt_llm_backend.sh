@@ -26,12 +26,14 @@ rm -rf tests
 
 rm -rf tools/dataset
 
+rm -rf jenkins
+
 #
 # Closed-source Batch Manager changes
 #
 
 # patch the cmake to use lib with pre_cxx11.a suffix and remove the patch from release package
-patch inflight_batcher_llm/CMakeLists.txt  < inflight_batcher_llm/CMakeLists.txt.patch
+patch -N inflight_batcher_llm/CMakeLists.txt -i inflight_batcher_llm/CMakeLists.txt.patch
 rm inflight_batcher_llm/CMakeLists.txt.patch
 [[ -e inflight_batcher_llm/CMakeLists.txt.orig ]] && rm inflight_batcher_llm/CMakeLists.txt.orig
 
