@@ -40,3 +40,10 @@ repos:
     rev: v0.6.10
     hooks:
     -   id: cmake-format
+-   repo: https://github.com/codespell-project/codespell
+    rev: v2.2.4
+    hooks:
+    -   id: codespell
+        args:
+        - --skip=".git,tensorrt_llm"
+        - --exclude-file=tools/dataset/mini_cnn_eval.json

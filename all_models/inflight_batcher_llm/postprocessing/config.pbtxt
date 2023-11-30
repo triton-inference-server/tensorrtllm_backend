@@ -26,11 +26,26 @@
 
 name: "postprocessing"
 backend: "python"
-max_batch_size: 128
+max_batch_size: ${triton_max_batch_size}
 input [
   {
     name: "TOKENS_BATCH"
     data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "SEQUENCE_LENGTH"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "CUM_LOG_PROBS"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "OUTPUT_LOG_PROBS"
+    data_type: TYPE_FP32
     dims: [ -1, -1 ]
   }
 ]
@@ -38,6 +53,16 @@ output [
   {
     name: "OUTPUT"
     data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "OUT_CUM_LOG_PROBS"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "OUT_OUTPUT_LOG_PROBS"
+    data_type: TYPE_FP32
     dims: [ -1, -1 ]
   }
 ]
