@@ -5,7 +5,7 @@ import groovy.transform.Field
 BACKEND_REPO = "https://gitlab-master.nvidia.com/ftp/tekit_backend.git"
 BACKEND_DEFAULT_BRANCH = "main"
 BACKEND_ROOT = "backend"
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.10-trt9.1.0.4-3"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.10-trt9.2.0.5-2"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -117,11 +117,11 @@ def createKubernetesPodConfig(image, type)
                     resources:
                       requests:
                         cpu: '16'
-                        memory: 32Gi
+                        memory: 64Gi
                         ephemeral-storage: 100Gi
                       limits:
-                        cpu: '32'
-                        memory: 40Gi
+                        cpu: '16'
+                        memory: 64Gi
                         ephemeral-storage: 100Gi
                     imagePullPolicy: Always"""
         break
