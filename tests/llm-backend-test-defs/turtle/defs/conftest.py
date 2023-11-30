@@ -28,7 +28,7 @@ def venv_check_call(venv, cmd):
         kwargs["cwd"] = venv.get_working_directory()
         return check_call(*args, **kwargs)
 
-    venv.run_cmd(cmd, caller=_war_check_call)
+    venv.run_cmd(cmd, caller=_war_check_call, print_script=False)
 
 
 def venv_check_output(venv, cmd):
@@ -38,7 +38,7 @@ def venv_check_output(venv, cmd):
         output = check_output(*args, **kwargs)
         return output
 
-    return venv.run_cmd(cmd, caller=_war_check_output)
+    return venv.run_cmd(cmd, caller=_war_check_output, print_script=False)
 
 
 @pytest.fixture(scope="session")

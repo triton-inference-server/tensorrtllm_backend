@@ -18,6 +18,11 @@ def stop_triton_server():
     time.sleep(8)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
@@ -37,12 +42,14 @@ def stop_triton_server():
 @pytest.mark.parametrize(
     "FEATURE_NAME",
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
-def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
-                        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
-                        BATCHING_STRATEGY, DECOUPLED_MODE,
+def test_llama_v2_7b_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
+                        MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                        BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
+                        ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
                         TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                        MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT,
+                        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                        BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
                         inflight_batcher_llm_client_root,
                         llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
@@ -50,6 +57,9 @@ def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 
     if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
         pytest.skip("Skipping. V1 doesn't support embedding_bias tensor yet.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -69,7 +79,9 @@ def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -93,6 +105,11 @@ def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                                         tokenizer_dir, tokenizer_type)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", ["4096"])
@@ -109,16 +126,20 @@ def test_llama_v2_7b_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_mistral_v1_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                          MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
-                          KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
-                          BATCHING_STRATEGY, DECOUPLED_MODE,
-                          TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                          MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT,
-                          inflight_batcher_llm_client_root,
-                          mistral_v1_tokenizer_model_root, llm_backend_venv):
+def test_mistral_v1_7b_ib(
+        E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
+        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        mistral_v1_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -138,7 +159,9 @@ def test_mistral_v1_7b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -229,6 +252,11 @@ def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
         print_info(output)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
@@ -245,16 +273,20 @@ def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_llama_v2_70b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                         MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
-                         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
-                         BATCHING_STRATEGY, DECOUPLED_MODE,
-                         TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                         MAX_BEAM_WIDTH, EXCLUDE_INPUT_IN_OUTPUT,
-                         inflight_batcher_llm_client_root,
-                         llama_v2_tokenizer_model_root, llm_backend_venv):
+def test_llama_v2_70b_ib(
+        E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
+        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -274,7 +306,9 @@ def test_llama_v2_70b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -362,6 +396,11 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
         # Validate Accuracy -ToDo
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
@@ -381,18 +420,24 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
 @pytest.mark.parametrize(
     "FEATURE_NAME",
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
-def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                     MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
-                     KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
-                     BATCHING_STRATEGY, DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE,
-                     MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH,
-                     EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+def test_gpt_350m_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
+                     MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                     BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
+                     ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
+                     TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+                     MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                     POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                     BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+                     inflight_batcher_llm_client_root,
                      gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
         pytest.skip("Skipping. V1 doesn't support embedding_bias tensor yet.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -412,7 +457,9 @@ def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -436,6 +483,11 @@ def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                                         tokenizer_dir, tokenizer_type)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
@@ -452,15 +504,21 @@ def test_gpt_350m_ib(FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+def test_gpt_175b_ib(E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                      MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
                      KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
                      BATCHING_STRATEGY, DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE,
                      MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH,
-                     EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+                     PREPROCESSING_INSTANCE_COUNT,
+                     POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                     BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+                     inflight_batcher_llm_client_root,
                      gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -479,7 +537,9 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -502,6 +562,11 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
     venv_check_call(llm_backend_venv, run_cmd)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
@@ -519,16 +584,21 @@ def test_gpt_175b_ib(MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
                          ids=["withVirtualTokens", "withoutVirtualTokens"])
 def test_gpt_next_ptuning_ib(
-        MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
-        BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
-        ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
-        TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH,
+        E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
         inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
         tensorrt_llm_example_root, tensorrt_llm_gpt_example_root,
         llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Prepare model repo
@@ -548,7 +618,9 @@ def test_gpt_next_ptuning_ib(
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
                            TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH)
+                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT)
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
