@@ -564,7 +564,7 @@ def test_gpt_next_ptuning_ib(
             f"{run_py_path}",
             "--max_output_len=8",
             f"--vocab_file={vocab_file}",
-            f"--prompt_table={prompt_table}",
+            f"--prompt_table_path={prompt_table}",
             f"--input_file={input_tokens}",
             f"--engine_dir={ENGINE_PATH}",
             f"--output_csv=output_w_prompt.csv",

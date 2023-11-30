@@ -17,8 +17,7 @@ pip3 install -r tensorrt_llm/requirements-dev.txt --extra-index-url https://pypi
 if [ "$MODEL" = "gpt" ]; then
 
     # GPT2
-    pushd tensorrt_llm/examples
-    pushd gpt
+    pushd tensorrt_llm/examples/gpt
 
     pip3 install -r requirements.txt
 
@@ -36,11 +35,9 @@ if [ "$MODEL" = "gpt" ]; then
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/ --hidden_act gelu
 
-    popd # gpt
+    python3 ../run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/ --tokenizer_dir ${GPT2}
 
-    python3 run.py --max_output_len 10 --engine_dir=gpt/trt_engine/gpt2/fp16/1-gpu/
-
-    popd # tensorrt_llm/examples
+    popd # tensorrt_llm/examples/gpt
 
 fi
 
@@ -74,25 +71,23 @@ fi
 
 if [ "$MODEL" = "llama" ]; then
 
-    pushd tensorrt_llm/examples
-    pushd llama
+    pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
     # Dummy weights because 7B is the minimal size for LLaMA
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin --output_dir llama_outputs
-    popd # llama
-    python3 run.py --max_output_len=1 --tokenizer_dir=${LLAMA} --engine_dir=llama/llama_outputs
+        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --output_dir llama_outputs
+    python3 ../run.py --max_output_len=1 --engine_dir llama_outputs --tokenizer_dir=${LLAMA}
 
-    popd # tensorrt_llm/examples
+    popd # tensorrt_llm/examples/llama
 
 fi
 
 if [ "$MODEL" = "mistral" ]; then
 
-    pushd tensorrt_llm/examples
-    pushd llama
+    pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
     # Dummy weights because 7B is the minimal size for Mistral
@@ -100,11 +95,10 @@ if [ "$MODEL" = "mistral" ]; then
         --enable_context_fmha \
         --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
         --output_dir mistral_7b_outputs --max_input_len=8192
-    popd # llama
     # Equivalent to LLaMA at this stage except the tokenizer
-    python3 run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_kv_cache_len=4096 --engine_dir llama/mistral_7b_outputs
+    python3 ../run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_kv_cache_length=4096 --engine_dir mistral_7b_outputs
 
-    popd # tensorrt_llm/examples
+    popd # tensorrt_llm/examples/llama
 
 fi
 
@@ -125,18 +119,16 @@ fi
 
 if [ "$MODEL" = "gptj" ]; then
 
-    pushd tensorrt_llm/examples
-    pushd gptj
+    pushd tensorrt_llm/examples/gptj
 
     pip install -r requirements.txt
     # Dummy weights because 7B is the minimal size for GPT-J
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha \
         --use_gpt_attention_plugin --use_gemm_plugin --use_layernorm_plugin
-    popd  # gptj
-    python3 run.py --max_output_len=1 --engine_dir=gptj/engine_outputs
+    python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ}
 
-    popd # tensorrt_llm/examples
+    popd # tensorrt_llm/examples/gptj
 
 fi
 
