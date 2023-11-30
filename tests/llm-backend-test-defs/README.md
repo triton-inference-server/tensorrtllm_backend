@@ -11,6 +11,7 @@ which are used to validate TensorRT LLM Backend.
 └── turtle              # TURTLE-related definitions
     ├── defs            #     Test definitions (pytest functions)
     └── test_lists      #     TURTLE-related test lists
+        └── bloom       #         Test lists used by bloom automation
         └── qa          #         Test lists used by QA
 ~~~
 

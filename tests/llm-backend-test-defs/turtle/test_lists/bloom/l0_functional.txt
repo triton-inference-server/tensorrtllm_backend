@@ -1,0 +1,1 @@
+test_dummy.py::test_always_success
