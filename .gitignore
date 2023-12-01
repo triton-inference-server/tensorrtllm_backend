@@ -7,6 +7,5 @@ build/
 *.so
 *.egg-info/
 .coverage
-*.csv
 *.onnx
 tmp/

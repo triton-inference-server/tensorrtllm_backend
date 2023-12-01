@@ -162,16 +162,16 @@ python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
 
 ### Create the model repository
 
-There are four models in the [`all_models/inflight_batcher_llm`](./all_models/inflight_batcher_llm/)
+There are five models in the [`all_models/inflight_batcher_llm`](./all_models/inflight_batcher_llm/)
 directory that will be used in this example:
 - "preprocessing": This model is used for tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints).
 - "tensorrt_llm": This model is a wrapper of your TensorRT-LLM model and is used for inferencing
 - "postprocessing": This model is used for de-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string).
-- "ensemble": This model is used to chain the three models above together:
-preprocessing -> tensorrt_llm -> postprocessing
+- "ensemble": This model can be used to chain the preprocessing, tensorrt_llm and postprocessing models together.
+- "tensorrt_llm_bls": This model can also be used to chain the preprocessing, tensorrt_llm and postprocessing models together. The BLS model has an optional parameter `accumulate_tokens` which can be used in streaming mode to call the preprocessing model with all accumulated tokens, instead of only one token. This might be necessary for certain tokenizers.
 
-To learn more about ensemble model, please see
-[here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models).
+To learn more about ensemble and BLS models, please see the
+[Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models) and [Business Logic Scripting](https://github.com/triton-inference-server/python_backend#business-logic-scripting) sections of the Triton Inference Server documentation.
 
 ```bash
 # Create the model repository that will be used by the Triton server
@@ -258,8 +258,8 @@ environment/container:
 curl -X POST localhost:8000/v2/models/${MODEL_NAME}/generate -d '{"{PARAM1_KEY}": "{PARAM1_VALUE}", ... }'
 ```
 
-In the case of the models used in this example, you can replace MODEL_NAME with `ensemble`. Examining the
-ensemble model's config.pbtxt file, you can see that 4 parameters are required to generate a response
+In the case of the models used in this example, you can replace MODEL_NAME with `ensemble` or `tensorrt_llm_bls`. Examining the
+`ensemble` and `tensorrt_llm_bls` model's config.pbtxt file, you can see that 4 parameters are required to generate a response
 for this model:
 
 - "text_input": Input text to generate a response from
@@ -272,6 +272,11 @@ Therefore, we can query the server in the following way:
 ```bash
 curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
 ```
+if using the `ensemble` model or
+```
+curl -X POST localhost:8000/v2/models/tensorrt_llm_bls/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+```
+if using the `tensorrt_llm_bls` model.
 
 Which should return a result similar to (formatted for readability):
 ```json
@@ -292,7 +297,7 @@ You can send requests to the "tensorrt_llm" model with the provided
 as following:
 
 ```bash
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 The result should be similar to the following:
@@ -323,7 +328,7 @@ Soyer was a member of the French Academy of Sciences and
 You can also stop the generation process early by using the `--stop-after-ms` option to send a stop request after a few milliseconds:
 
 ```bash
-python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200 --tokenizer_dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 200 --tokenizer-dir /workspace/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
 ```
 
 You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
