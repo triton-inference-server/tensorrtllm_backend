@@ -32,6 +32,7 @@
 #include "triton/core/tritonbackend.h"
 #include "utils.h"
 #include "work_item.h"
+#include <list>
 
 namespace triton::backend::inflight_batcher_llm
 {
