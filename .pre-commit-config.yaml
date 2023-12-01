@@ -44,5 +44,6 @@ repos:
     rev: v2.2.4
     hooks:
     -   id: codespell
+        exclude: tools/dataset/
         args:
         - --skip=".git,tensorrt_llm"

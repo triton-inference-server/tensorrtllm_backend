@@ -35,14 +35,12 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(error)
     else:
         user_data._completed_requests.put(result)
-        output = result.as_numpy('text_output')
-        print(output, flush=True)
 
 
 def test(triton_client, prompt, request_id, repetition_penalty,
          presence_penalty, temperatuure, stop_words, bad_words,
          embedding_bias_words, embedding_bias_weights):
-    model_name = "ensemble"
+    model_name = FLAGS.model_name
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -120,6 +118,7 @@ def test(triton_client, prompt, request_id, repetition_penalty,
     triton_client.stop_stream()
 
     # Parse the responses
+    output_text = ""
     while True:
         try:
             result = user_data._completed_requests.get(block=False)
@@ -130,7 +129,18 @@ def test(triton_client, prompt, request_id, repetition_penalty,
             print("Received an error from server:")
             print(result)
         else:
-            result.as_numpy('text_output')
+            output = result.as_numpy('text_output')
+            if FLAGS.streaming and FLAGS.beam_width == 1:
+                new_output = output[0].decode("utf8")
+                if FLAGS.overwrite_output_text:
+                    output_text = new_output
+                else:
+                    output_text += new_output
+            else:
+                print(output, flush=True)
+
+    if FLAGS.streaming and FLAGS.beam_width == 1:
+        print(output_text)
 
 
 if __name__ == '__main__':
@@ -152,6 +162,13 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='Input prompt.')
+
+    parser.add_argument('--model-name',
+                        type=str,
+                        required=False,
+                        default="ensemble",
+                        help='Name of the Triton model to send request to')
+
     parser.add_argument(
         "-S",
         "--streaming",
@@ -213,7 +230,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--request-id',
                         type=str,
-                        default='1',
+                        default='',
                         required=False,
                         help='The request_id for the stop request')
 
@@ -236,6 +253,15 @@ if __name__ == '__main__':
                         nargs='+',
                         default=[],
                         help='The biased words weights')
+
+    parser.add_argument(
+        '--overwrite-output-text',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'In streaming mode, overwrite previously received output text instead of appending to it'
+    )
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:

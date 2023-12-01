@@ -110,9 +110,16 @@ parameters {
   }
 }
 
+parameters {
+  key: "add_special_tokens"
+  value: {
+    string_value: "False"
+  }
+}
+
 instance_group [
     {
-        count: 1
+        count: ${preprocessing_instance_count}
         kind: KIND_CPU
     }
 ]

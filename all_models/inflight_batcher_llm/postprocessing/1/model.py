@@ -57,6 +57,11 @@ class TritonPythonModel:
             'string_value']
         tokenizer_type = model_config['parameters']['tokenizer_type'][
             'string_value']
+        self.skip_special_tokens = model_config['parameters'].get(
+            'skip_special_tokens',
+            {'string_value': "true"})['string_value'].lower() in [
+                'true', '1', 't', 'y', 'yes'
+            ]
 
         if tokenizer_type == 't5':
             self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
@@ -168,6 +173,8 @@ class TritonPythonModel:
         for batch_idx, beam_tokens in enumerate(tokens_batch):
             for beam_idx, tokens in enumerate(beam_tokens):
                 seq_len = sequence_lengths[batch_idx][beam_idx]
-                output = self.tokenizer.decode(tokens[:seq_len])
+                output = self.tokenizer.decode(
+                    tokens[:seq_len],
+                    skip_special_tokens=self.skip_special_tokens)
                 outputs.append(output.encode('utf8'))
         return outputs
