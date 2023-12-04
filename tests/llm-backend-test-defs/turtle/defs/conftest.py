@@ -238,3 +238,16 @@ def gpt_tokenizer_model_root(llm_backend_venv):
         gpt_tokenizer_model_root
     ), f"{gpt_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_tokenizer_model_root
+
+
+@pytest.fixture(scope="session")
+def gpt_next_ptuning_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    gpt_next_ptuning_model_root = os.path.join(models_root,
+                                               "email_composition")
+
+    assert os.path.exists(
+        gpt_next_ptuning_model_root
+    ), f"{gpt_next_ptuning_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return gpt_next_ptuning_model_root

@@ -4,6 +4,7 @@ import re
 import pytest
 from trt_test.misc import call, check_call, print_info
 
+from .build_engines import *
 from .common import *
 from .conftest import venv_check_call, venv_check_output
 
@@ -51,7 +52,7 @@ def test_rcca_bug_4323566(
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        EXCLUDE_INPUT_IN_OUTPUT, tensorrt_llm_gpt_example_root,
         gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
@@ -60,14 +61,14 @@ def test_rcca_bug_4323566(
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_rcca_nvbug_4323566_engine(
+        "ifb", tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/gpt/trt_engine/rcca-nvbug-4323566/")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -127,7 +128,8 @@ def test_rcca_bug_4342666(
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        llama_v2_tokenizer_model_root, llm_backend_venv):
+        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -135,14 +137,14 @@ def test_rcca_bug_4342666(
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_rcca_nvbug_4342666_engine(
+        "ifb", tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/llama/ib_llama_7b_chat_outputs")
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,

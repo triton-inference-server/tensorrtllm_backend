@@ -1,1 +1,2 @@
-test_dummy.py::test_always_success
+test_triton_llm.py::test_gpt_350m_normal[accuracy]
+test_triton_llm.py::test_gpt_350m_normal[e2e]

@@ -3,6 +3,7 @@ import os
 import pytest
 from trt_test.misc import call, check_call, print_info
 
+from .build_engines import *
 from .common import *
 from .conftest import venv_check_call, venv_check_output
 
@@ -42,16 +43,16 @@ def stop_triton_server():
 @pytest.mark.parametrize(
     "FEATURE_NAME",
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
-def test_llama_v2_7b_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
-                        MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
-                        BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                        ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
-                        TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                        BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
-                        inflight_batcher_llm_client_root,
-                        llama_v2_tokenizer_model_root, llm_backend_venv):
+def test_llama_v2_7b_ifb(
+        E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
+        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -62,14 +63,16 @@ def test_llama_v2_7b_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_llama_v2_7b_engine("ifb",
+                                             tensorrt_llm_llama_example_root,
+                                             llama_v2_tokenizer_model_root)
+
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/llama/ib_llama_7b_outputs")
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -126,7 +129,7 @@ def test_llama_v2_7b_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_mistral_v1_7b_ib(
+def test_mistral_v1_7b_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
@@ -134,7 +137,8 @@ def test_mistral_v1_7b_ib(
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        mistral_v1_tokenizer_model_root, llm_backend_venv):
+        tensorrt_llm_llama_example_root, mistral_v1_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -142,14 +146,15 @@ def test_mistral_v1_7b_ib(
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_mistral_v1_7b_engine(
+        "ifb", tensorrt_llm_llama_example_root)
+
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/llama/ib_mistral_7b_outputs")
     TOKENIZER_PATH = mistral_v1_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -189,8 +194,12 @@ def test_mistral_v1_7b_ib(
 def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
                               llm_backend_gpt_example_root,
                               mistral_v1_tokenizer_model_root,
+                              tensorrt_llm_llama_example_root,
                               llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_mistral_v1_7b_engine(
+        "normal", tensorrt_llm_llama_example_root)
     # Prepare model repo
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "gpt")
@@ -199,9 +208,6 @@ def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
     check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/llama/mistral_7b_outputs")
     TOKENIZER_PATH = mistral_v1_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
@@ -252,6 +258,7 @@ def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
         print_info(output)
 
 
+@pytest.mark.skip_less_device(8)
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
@@ -273,7 +280,7 @@ def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_llama_v2_70b_ib(
+def test_llama_v2_70b_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
@@ -281,7 +288,8 @@ def test_llama_v2_70b_ib(
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        llama_v2_tokenizer_model_root, llm_backend_venv):
+        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -289,14 +297,15 @@ def test_llama_v2_70b_ib(
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_llama_v2_70b_engine("ifb",
+                                              tensorrt_llm_llama_example_root,
+                                              llama_v2_tokenizer_model_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/llama/ib_llama_70b_outputs/")
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -333,8 +342,16 @@ def test_llama_v2_70b_ib(
 
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "accuracy"])
 def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
+                         tensorrt_llm_gpt_example_root,
                          gpt_tokenizer_model_root, llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_gpt_350m_engine(
+        "normal",
+        tensorrt_llm_gpt_example_root,
+        gpt_tokenizer_model_root,
+    )
+
     # Prepare model repo
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "gpt")
@@ -343,9 +360,6 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
     check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/gpt/trt_engine/gpt2/fp16/1-gpu")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
@@ -420,16 +434,16 @@ def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
 @pytest.mark.parametrize(
     "FEATURE_NAME",
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
-def test_gpt_350m_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
-                     MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
-                     BATCH_SCHEDULER_POLICY, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                     ENABLE_TRT_OVERLAP, BATCHING_STRATEGY, DECOUPLED_MODE,
-                     TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                     MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                     POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                     BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
-                     inflight_batcher_llm_client_root,
-                     gpt_tokenizer_model_root, llm_backend_venv):
+def test_gpt_350m_ifb(
+        E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
+        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -440,14 +454,17 @@ def test_gpt_350m_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_gpt_350m_engine(
+        "ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt_tokenizer_model_root,
+    )
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -483,6 +500,7 @@ def test_gpt_350m_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
                                         tokenizer_dir, tokenizer_type)
 
 
+@pytest.mark.skip_less_device(8)
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
@@ -504,16 +522,16 @@ def test_gpt_350m_ib(E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE,
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_gpt_175b_ib(E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-                     MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
-                     KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP,
-                     BATCHING_STRATEGY, DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE,
-                     MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH,
-                     PREPROCESSING_INSTANCE_COUNT,
-                     POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                     BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
-                     inflight_batcher_llm_client_root,
-                     gpt_tokenizer_model_root, llm_backend_venv):
+def test_gpt_175b_ifb(
+        E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
+        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
+        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -521,13 +539,13 @@ def test_gpt_175b_ib(E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_gpt_175b_engine("ifb", tensorrt_llm_gpt_example_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(llm_backend_repo_root,
-                               "tensorrt_llm/examples/gpt/gpt_175b_ib/")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
@@ -583,7 +601,7 @@ def test_gpt_175b_ib(E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
                          ids=["withVirtualTokens", "withoutVirtualTokens"])
-def test_gpt_next_ptuning_ib(
+def test_gpt_next_ptuning_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
@@ -593,7 +611,7 @@ def test_gpt_next_ptuning_ib(
         EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
         inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
         tensorrt_llm_example_root, tensorrt_llm_gpt_example_root,
-        llm_backend_venv):
+        gpt_next_ptuning_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -601,14 +619,14 @@ def test_gpt_next_ptuning_ib(
         pytest.skip("Skipping.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_gpt_next_ptuning_engine(
+        "ifb", tensorrt_llm_gpt_example_root, gpt_next_ptuning_model_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
 
     # Modify config.pbtxt
-    ENGINE_PATH = os.path.join(
-        llm_backend_repo_root,
-        "tensorrt_llm/examples/gpt/trt_engine/email_composition/fp16/1-gpu/")
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,

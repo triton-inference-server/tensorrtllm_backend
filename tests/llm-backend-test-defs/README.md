@@ -20,18 +20,33 @@ which are used to validate TensorRT LLM Backend.
 1. Clone turtle lib，recommend to put it outside the TRT-LLM-Backend repo, to avoid nested git repo.
 
 ```bash
-# inside TRT_LLM_Backend repo root dir, clone turtle into ../turtle dir
-git clone ssh://git@gitlab-master.nvidia.com:12051/TensorRT/Infrastructure/turtle.git ../turtle
+# Clone turtle to the same parent directory of TRT-LLM-Backend repo
+git clone ssh://git@gitlab-master.nvidia.com:12051/TensorRT/Infrastructure/turtle.git
 ```
 
-2. Example commands to run turtle test
+2. Example commands to run turtle test inside docker container
 ```bash
+# Launch docker container
+sudo docker run --gpus all --shm-size=2g --ulimit memlock=-1 --rm -it \
+                    -v ${PWD}/llm_data/llm-models:/code/llm-models -v ${PWD}/tekit_backend:/code/tekit_backend \
+                    -v ${PWD}/turtle:/code/turtle urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.10-trt9.2.0.5-2 bash
+
+# In docker container
+export LLM_MODELS_ROOT=/code/llm-models # turtle needs model weights to build engine
 export LLM_BACKEND_ROOT=/code/tekit_backend/ # turtle test definition needs to read LLM_BACKEND_ROOT env to find where the example and unit tests code are
+
+# Make sure tensorrt-llm python lib is installed properly
+
+# Make sure libtriton_tensorrtllm.so is deployed properly
 
 # Run through test list file
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
                     -f tekit_backend/tests/llm-backend-test-defs/turtle/test_lists/qa/llm_backend_functional_tests.txt \
                     --test-python3-exe /usr/bin/python3 --output-dir output --save-workspace
+# Run through test keyword
+./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
+                    -k test_gpt_350m \
+                    --test-python3-exe /usr/bin/python3 --save-workspace
 
 # List all available tests, by using "-l" option
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ -l
