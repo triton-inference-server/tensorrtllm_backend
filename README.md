@@ -462,3 +462,7 @@ nv_inference_pending_request_count{model="tensorrt_llm",version="1"} 0
 ## Testing the TensorRT-LLM Backend
 Please follow the guide in [`ci/README.md`](ci/README.md) to see how to run
 the testing for TensorRT-LLM backend.
+
+## Known Issues
+
+  * Recent API changes may currently lead to excessive warnings in the logs of the Triton TRT-LLM backend. On each inference request, TRT-LLM will issue the warning "Invalid tensor name in InferenceRequest: input_lengths". As a temporary fix, these warnings can be disabled by setting "TLLM_LOG_LEVEL=ERROR" in the environment.
