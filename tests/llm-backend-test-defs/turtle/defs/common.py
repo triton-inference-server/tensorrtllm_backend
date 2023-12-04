@@ -103,6 +103,7 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
                           inflight_batcher_llm_client_root, tokenizer_dir,
                           tokenizer_type):
     # Chooses script
+    script_name = ""
     if feature_name in ["test_basic", "test_log_probs"]:
         script_name = f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py"
     elif feature_name in ["test_stop_words", "test_embedding_bias"]:
@@ -167,8 +168,14 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
 
 
 def run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
-                                    script_name, tokenizer_dir,
-                                    tokenizer_type):
+                                    inflight_batcher_llm_client_root,
+                                    tokenizer_dir, tokenizer_type):
+    # Chooses script
+    script_name = ""
+    if feature_name in ["test_basic"]:
+        script_name = f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py"
+
+    # Run command
     if "inflight_batcher_llm_client.py" in script_name:
         run_cmd = [
             f"{script_name}",
