@@ -6,8 +6,11 @@ TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
 BS=$5
 MAX_INPUT_SEQLEN=$6
-WORLD_SIZE=$7
-RECORD_LOG=$8
+TP=$7
+PP=$8
+WORLD_SIZE=$9
+RECORD_LOG=$10
+GET_NSYS_REP="${11:-"false"}"
 
 set -e
 nvidia-smi
@@ -53,7 +56,6 @@ fill_triton_repo () {
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/ensemble/config.pbtxt triton_max_batch_size:${BS}
-
 }
 
 print_test_params () {
@@ -94,28 +96,37 @@ if true; then
             if [ "$RECORD_LOG" == "true" ]; then
                 echo -e " \n ========= Collecting log for the server ======== \n"
                 python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/ --log --log-file triton_log.txt
+            elif [ "$GET_NSYS_REP" == "true" ]; then
+                # Change nsys profile delay and duration according to the server launch and dataset preprocessing time.
+                PROFILE_DELAY=30
+                PROFILE_DURATION=120
+                NSYS_OUT_NAME="trtllm"
+                echo -e " \n ========= Collecting Nsys report for the server (profile delay: ${PROFILE_DELAY} s, profile duration: ${PROFILE_DURATION} s) ======== \n"
+                nsys profile --trace cuda,nvtx --sample cpu -o $NSYS_OUT_NAME -f true --gpu-metrics-device=all --gpu-metrics-frequency=20000 --export sqlite -y ${PROFILE_DELAY} -d ${PROFILE_DURATION} \
+                    python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/ &
             else
                 python3 scripts/launch_triton_server.py --world_size $WORLD_SIZE --model_repo my_models/inflight_batcher_llm/
             fi
-            # Use pgrep to find the PID of the "mpirun" process
-            pid=$(pgrep mpirun)
-
-            if [ -n "$pid" ]; then
-                echo "PID of mpirun process: $pid"
+            # Use pgrep to find the PID of the "mpirun"/"nsys" process
+            mpirun_pid=$(pgrep mpirun)
+            nsys_pid=$(pgrep nsys | head -1)
+            if [ -n "$mpirun_pid" ]; then
+                echo "PID of mpirun process: $mpirun_pid"
+                export SERVER_PID=($mpirun_pid)
+            elif [ -n "$nsys_pid" ]; then
+                echo "PID of nsys process: $nsys_pid"
+                export SERVER_PID=($nsys_pid)
             else
-                echo "No mpirun process found."
+                echo "No mpirun or nsys process found."
             fi
-
-            export SERVER_PID=($pid)
             wait_for_server_ready ${SERVER_PID} 1200
 
             pushd tools/inflight_batcher_llm/
             if [ $? -eq 0 ]; then
-
                 for DATASET in "${DATASETS[@]}"; do
                     IFS=',' read -ra REQUEST_RATES <<< "${REQ_RATES[${DATASET}]}"
                     for REQ_RATE in "${REQUEST_RATES[@]}"; do
-                        op_stats_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__${DATASET}__${REQ_RATE}"
+                        op_stats_name="${MACHINE}__${MODEL}-tp${TP}-pp${PP}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__${DATASET}__${REQ_RATE}"
                         op_stats_csv_name="$op_stats_name.csv"
 
                         echo -e "DATASET: $DATASET \n\n"
@@ -124,12 +135,16 @@ if true; then
                         python3 benchmark_core_model.py \
                             -i grpc --max-input-len $MAX_INPUT_SEQLEN \
                             --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
-                            --num-requests 3000 \
+                            --num-requests 15000 \
                             dataset \
                             --dataset $dataset_path \
-                            --tokenizer_dir "$TOKENIZER_PATH" --tokenizer_type "$TOKENIZER_TYPE"
+                            --tokenizer-dir "$TOKENIZER_PATH" --tokenizer-type "$TOKENIZER_TYPE"
 
                         sleep 5
+
+                        if [ -n "$PROFILE_DURATION" ]; then
+                            sleep $PROFILE_DURATION
+                        fi
                     done
                 done
 
@@ -137,34 +152,34 @@ if true; then
                     IFS=',' read -ra REQUEST_RATES <<< "${REQ_RATES[${TOKEN_DIST}]}"
                     for REQ_RATE in "${REQUEST_RATES[@]}"; do
 
-                            # Use IFS and read to split the string into an array
-                            IFS=',' read -ra token_params <<< "$TOKEN_DIST"
-                            ip_mean=${token_params[0]}
-                            ip_stdev=${token_params[1]}
-                            op_mean=${token_params[2]}
-                            op_stdev=${token_params[3]}
-                            num_prompts=${token_params[4]}
+                        # Use IFS and read to split the string into an array
+                        IFS=',' read -ra token_params <<< "$TOKEN_DIST"
+                        ip_mean=${token_params[0]}
+                        ip_stdev=${token_params[1]}
+                        op_mean=${token_params[2]}
+                        op_stdev=${token_params[3]}
+                        num_prompts=${token_params[4]}
 
-                            op_stats_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__normal-token-dist-${ip_mean}-${ip_stdev}-${op_mean}-${op_stdev}__${REQ_RATE}"
-                            op_stats_csv_name="$op_stats_name.csv"
-                            echo -e "DATASET: normal-token-dist \n\n"
-                            echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
-                            python3 benchmark_core_model.py \
-                                -i grpc --max-input-len $MAX_INPUT_SEQLEN \
-                                --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
-                                --num-requests $num_prompts \
-                                token-norm-dist \
-                                --input-mean $ip_mean --input-stdev $ip_stdev --output-mean $op_mean --output-stdev $op_stdev \
+                        op_stats_name="${MACHINE}__${MODEL}-tp${TP}-pp${PP}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__normal-token-dist-${ip_mean}-${ip_stdev}-${op_mean}-${op_stdev}__${REQ_RATE}"
+                        op_stats_csv_name="$op_stats_name.csv"
+                        echo -e "DATASET: normal-token-dist \n\n"
+                        echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
+                        python3 benchmark_core_model.py \
+                            -i grpc --max-input-len $MAX_INPUT_SEQLEN \
+                            --request-rate $REQ_RATE --op-stats-csv "$op_stats_csv_name" \
+                            --num-requests $num_prompts \
+                            token-norm-dist \
+                            --input-mean $ip_mean --input-stdev $ip_stdev --output-mean $op_mean --output-stdev $op_stdev \
 
 
-                            sleep 5
+                        sleep 5
                     done
                 done
 
                 IFS=',' read -ra REQUEST_RATES <<< $REQ_RATES_HIST
                 for REQ_RATE in "${REQUEST_RATES[@]}"; do
 
-                        op_stats_name="${MACHINE}__${MODEL}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__token-hist-example__${REQ_RATE}"
+                        op_stats_name="${MACHINE}__${MODEL}-tp${TP}-pp${PP}__${BATCHING_STRATEGY}__${BATCH_SCHEDULER_POLICY}__token-hist-example__${REQ_RATE}"
                         op_stats_csv_name="$op_stats_name.csv"
                         echo -e "DATASET: token-hist-example \n\n"
                         echo -e " ======== BENCHMARK_CORE_MODEL --> OP STATS FILE = ${op_stats_csv_name} ============== \n"
@@ -177,12 +192,20 @@ if true; then
                 done
 
                 echo -e " \n ========= KILLING TRITON SERVER WITH PID:  #$SERVER_PID  ============== \n"
-                kill  -9 ${SERVER_PID}
+                triton_pid=$(pgrep triton | head -1)
+                if [ -n "$triton_pid" ]; then
+                    kill -9 $triton_pid
+                fi
+                nsys_pid=$(pgrep nsys | head -1)
+                if [ -n "$nsys_pid" ]; then
+                    kill -9 $nsys_pid
+                fi
+                kill -9 ${SERVER_PID}
             else
                 echo -e "\n !!!!!!!!!!!!  Triton Server initialization failed !!!!!!!!!!!!!!! \n"
             fi
 
             popd # tools/inflight_batcher_llm
-    done
+        done
     done
 fi
