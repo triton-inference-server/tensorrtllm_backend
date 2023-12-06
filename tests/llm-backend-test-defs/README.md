@@ -26,6 +26,10 @@ git clone ssh://git@gitlab-master.nvidia.com:12051/TensorRT/Infrastructure/turtl
 
 2. Example commands to run turtle test inside docker container
 ```bash
+# Mount model weights data before launching docker container
+mkdir ${PWD}/llm_data/
+sudo mount 10.117.145.14:/vol/scratch1/scratch.michaeln_blossom ${PWD}/llm_data/
+
 # Launch docker container
 sudo docker run --gpus all --shm-size=2g --ulimit memlock=-1 --rm -it \
                     -v ${PWD}/llm_data/llm-models:/code/llm-models -v ${PWD}/tekit_backend:/code/tekit_backend \
@@ -41,7 +45,7 @@ export LLM_BACKEND_ROOT=/code/tekit_backend/ # turtle test definition needs to r
 
 # Run through test list file
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
-                    -f tekit_backend/tests/llm-backend-test-defs/turtle/test_lists/qa/llm_backend_functional_tests.txt \
+                    -f tekit_backend/tests/llm-backend-test-defs/turtle/test_lists/qa/llm_backend_functional_overall.txt \
                     --test-python3-exe /usr/bin/python3 --output-dir output --save-workspace
 # Run through test keyword
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
@@ -53,6 +57,7 @@ export LLM_BACKEND_ROOT=/code/tekit_backend/ # turtle test definition needs to r
 
 # Run perf test
 ./turtle/bin/trt_test -D tekit_backend/tests/llm-backend-test-defs/turtle/defs/ \
+                    -f llm_backend_perf_overall.txt \
                     --test-python3-exe /usr/bin/python3 --perf-log-formats csv \
                     --perf-clock-gpu-configs-file /code/tekit_backend/tests/llm-backend-test-defs/turtle/perf_configs/gpu_configs.yml \
                     --perf

@@ -1,2 +1,2 @@
-test_triton_llm.py::test_gpt_350m_normal[accuracy]
-test_triton_llm.py::test_gpt_350m_normal[e2e]
+test_triton_llm.py::test_gpt_350m_python_backend[accuracy]
+test_triton_llm.py::test_gpt_350m_python_backend[e2e]
