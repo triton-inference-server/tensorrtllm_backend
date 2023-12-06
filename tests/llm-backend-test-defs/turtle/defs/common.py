@@ -38,7 +38,7 @@ def prepare_ib_model_repo(llm_backend_repo_root, new_model_repo):
 
 def modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -61,7 +61,7 @@ def modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                                            "config.pbtxt")
     check_call(
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
-        f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_kv_cache_length:{MAX_KV_CACHE_LEN},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
+        f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
         f"batching_strategy:{BATCHING_STRATEGY},max_num_sequences:{MAX_NUM_SEQUENCE}," \
         f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
         f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \

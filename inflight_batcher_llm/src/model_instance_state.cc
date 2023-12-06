@@ -189,24 +189,24 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("exclude_input_in_output is not specified, will be set to false");
     }
 
-    std::optional<int32_t> maxKvCacheLength = std::nullopt;
+    std::optional<int32_t> maxAttentionWindow = std::nullopt;
     try
     {
-        maxKvCacheLength = model_state_->GetParameter<int32_t>("max_kv_cache_length");
+        maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
     }
     catch (const std::exception& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
-            "max_kv_cache_length is not specified, will "
-            "use default value");
+            "max_attention_window_size is not specified, will "
+            "use default value (i.e. max_sequence_length)");
     }
 
     TrtGptModelOptionalParams optionalParams;
     optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
-    optionalParams.kvCacheConfig.maxKvCacheLength = maxKvCacheLength;
+    optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
 
     mBatchManager = std::make_shared<GptManager>(
