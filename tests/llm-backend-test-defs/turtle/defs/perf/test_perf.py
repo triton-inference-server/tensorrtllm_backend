@@ -18,7 +18,7 @@ class Metric:
         self.regexp = re.compile(regexp)
 
 
-class PerfTestConfig:
+class PythonBackendPerfTestConfig:
     """
     Configurations defining the LLM Backend perf test.
     """
@@ -52,13 +52,13 @@ class PerfTestConfig:
         return "-".join(entries)
 
 
-class MultiMetricPerfTest(AbstractPerfScriptTestClass):
+class PythonBackendPerfTest(AbstractPerfScriptTestClass):
     """
     Base class for perf tests with multiple metrics.
     """
 
-    def __init__(self, config: PerfTestConfig):
-        assert isinstance(config, PerfTestConfig)
+    def __init__(self, config: PythonBackendPerfTestConfig):
+        assert isinstance(config, PythonBackendPerfTestConfig)
         self._config = config
         self._current_metric = None
 
@@ -128,43 +128,49 @@ IN_OUT_SEQ = [(128, 8), (512, 32)]
 
 def generate_llm_perf_config():
     configs = []
+    model = "gpt_350m"
     for bs in BATCH_SIZE:
         for input_len, output_len in IN_OUT_SEQ:
-            for model in ['gpt']:
-                configs.append(
-                    PerfTestConfig(
-                        model,
-                        {
-                            LATENCY: 0.1,
-                        },
-                        batch_size=bs,
-                        input_len=input_len,
-                        output_len=output_len,
-                    ))
+            configs.append(
+                PythonBackendPerfTestConfig(
+                    model,
+                    {
+                        LATENCY: 0.1,
+                    },
+                    batch_size=bs,
+                    input_len=input_len,
+                    output_len=output_len,
+                ))
     return configs
 
 
 # Generate test list and test name list.
 LLM_TESTS = [
-    MultiMetricPerfTest(config) for config in generate_llm_perf_config()
+    PythonBackendPerfTest(config) for config in generate_llm_perf_config()
 ]
 
 
-@pytest.mark.parametrize("case", LLM_TESTS, ids=lambda c: c.get_test_name())
-def test_perf(turtle_case_name, trt_performance_cache_fpath,
-              trt_gpu_clock_lock, llm_session_data_writer, output_dir,
-              llm_backend_venv, llm_backend_root, case):
-    """
-    The actual test definition for TensorRT LLM Backend perf test.
-    """
-    benchmark_script = os.path.join(llm_backend_root, "tools", "gpt",
-                                    "benchmark_core_model.py")
-    working_dir = llm_backend_venv.get_working_directory()
+class TestPythonBackendPerf:
 
-    case.set_runtime_configs(benchmark_script, working_dir,
-                             trt_performance_cache_fpath)
-    case.run_metrics(turtle_case_name, llm_backend_venv, trt_gpu_clock_lock,
-                     llm_session_data_writer, output_dir)
+    @pytest.mark.parametrize("case",
+                             LLM_TESTS,
+                             ids=lambda c: c.get_test_name())
+    def test_perf(self, setup_gpt_python_backend_perf_test_env,
+                  turtle_case_name, trt_performance_cache_fpath,
+                  trt_gpu_clock_lock, llm_session_data_writer, output_dir,
+                  llm_backend_venv, llm_backend_root, case):
+        """
+        The actual test definition for TensorRT LLM Backend perf test.
+        """
+        benchmark_script = os.path.join(llm_backend_root, "tools", "gpt",
+                                        "benchmark_core_model.py")
+        working_dir = llm_backend_venv.get_working_directory()
+
+        case.set_runtime_configs(benchmark_script, working_dir,
+                                 trt_performance_cache_fpath)
+        case.run_metrics(turtle_case_name, llm_backend_venv,
+                         trt_gpu_clock_lock, llm_session_data_writer,
+                         output_dir)
 
 
 class InflightBatchingPerfTestConfig:
@@ -272,18 +278,18 @@ MAX_INPUT_LEN = [300, 400, 500]
 
 def generate_llm_ib_perf_config():
     configs = []
+    model = "llama_v2_7b"
     for concurrency in CONCURRENCY:
         for max_input_len in MAX_INPUT_LEN:
-            for model in ['llama']:
-                configs.append(
-                    InflightBatchingPerfTestConfig(
-                        model,
-                        {
-                            LATENCY: 0.1,
-                        },
-                        concurrency=concurrency,
-                        max_input_len=max_input_len,
-                    ))
+            configs.append(
+                InflightBatchingPerfTestConfig(
+                    model,
+                    {
+                        LATENCY: 0.1,
+                    },
+                    concurrency=concurrency,
+                    max_input_len=max_input_len,
+                ))
     return configs
 
 
@@ -294,23 +300,28 @@ LLM_IB_TESTS = [
 ]
 
 
-@pytest.mark.parametrize("case", LLM_IB_TESTS, ids=lambda c: c.get_test_name())
-def test_perf_inflight_batching(turtle_case_name, trt_performance_cache_fpath,
-                                trt_gpu_clock_lock, llm_session_data_writer,
-                                output_dir, llm_backend_venv, llm_backend_root,
-                                case, llama_v2_tokenizer_model_root):
-    """
-    The actual test definition for TensorRT LLM Backend perf test.
-    """
-    benchmark_script = os.path.join(llm_backend_root, "tools",
-                                    "inflight_batcher_llm",
-                                    "benchmark_core_model.py")
-    dataset_path = os.path.join(llm_backend_root, "tools", "dataset",
-                                "mini_cnn_eval.json")
-    working_dir = llm_backend_venv.get_working_directory()
-    tokenizer_type = "llama"
-    case.set_runtime_configs(benchmark_script, working_dir,
-                             trt_performance_cache_fpath, dataset_path,
-                             llama_v2_tokenizer_model_root, tokenizer_type)
-    case.run_metrics(turtle_case_name, llm_backend_venv, trt_gpu_clock_lock,
-                     llm_session_data_writer, output_dir)
+class TestInflightBatchingPerf:
+
+    @pytest.mark.parametrize("case",
+                             LLM_IB_TESTS,
+                             ids=lambda c: c.get_test_name())
+    def test_perf(self, setup_llama_ifb_perf_test_env, turtle_case_name,
+                  trt_performance_cache_fpath, trt_gpu_clock_lock,
+                  llm_session_data_writer, output_dir, llm_backend_venv,
+                  llm_backend_root, case, llama_v2_tokenizer_model_root):
+        """
+        The actual test definition for TensorRT LLM Backend perf test.
+        """
+        benchmark_script = os.path.join(llm_backend_root, "tools",
+                                        "inflight_batcher_llm",
+                                        "benchmark_core_model.py")
+        dataset_path = os.path.join(llm_backend_root, "tools", "dataset",
+                                    "mini_cnn_eval.json")
+        working_dir = llm_backend_venv.get_working_directory()
+        tokenizer_type = "llama"
+        case.set_runtime_configs(benchmark_script, working_dir,
+                                 trt_performance_cache_fpath, dataset_path,
+                                 llama_v2_tokenizer_model_root, tokenizer_type)
+        case.run_metrics(turtle_case_name, llm_backend_venv,
+                         trt_gpu_clock_lock, llm_session_data_writer,
+                         output_dir)

@@ -17,9 +17,9 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     ]
 
     # Build GPT
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
-                                  "gpt350m_normal")
+                                  "gpt350m_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt350m_ifb")
@@ -65,9 +65,9 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
 
 def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
     # Build GPT
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
-                                  "gpt_175b_normal")
+                                  "gpt_175b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt_175b_ifb")
@@ -112,9 +112,9 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
 
 def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
                                llama_v2_tokenizer_model_root):
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
-                                  "engine_dir", "llama_v2_7b_normal")
+                                  "engine_dir", "llama_v2_7b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_7b_ifb")
@@ -154,9 +154,9 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
 
 def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
                                 llama_v2_tokenizer_model_root):
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
-                                  "engine_dir", "llama_v2_70b_normal")
+                                  "engine_dir", "llama_v2_70b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_70b_ifb")
@@ -277,13 +277,15 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
-    return engine_dir
+    assert os.path.exists(
+        output_model_dir), f"{output_model_dir} does not exists."
+    return engine_dir, output_model_dir
 
 
 def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root):
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
-                                  "engine_dir", "mistral_v1_7b_normal")
+                                  "engine_dir", "mistral_v1_7b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "mistral_v1_7b_ifb")
@@ -334,9 +336,9 @@ def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
     ]
 
     # Build GPT
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
-                                  "rcca_nvbug_4323566_normal")
+                                  "rcca_nvbug_4323566_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "rcca_nvbug_4323566_ifb")
@@ -382,9 +384,10 @@ def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
 
 def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
                                       llama_v2_tokenizer_model_root):
-    if type == "normal":
+    if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
-                                  "engine_dir", "rcca_nvbug_4342666_normal")
+                                  "engine_dir",
+                                  "rcca_nvbug_4342666_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "rcca_nvbug_4342666_ifb")

@@ -191,15 +191,15 @@ def test_mistral_v1_7b_ifb(
 
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "accuracy"])
 @pytest.mark.parametrize("MAX_KV_CACHE_LEN", ["4096"])
-def test_mistral_v1_7b_normal(TEST_TYPE, MAX_KV_CACHE_LEN,
-                              llm_backend_gpt_example_root,
-                              mistral_v1_tokenizer_model_root,
-                              tensorrt_llm_llama_example_root,
-                              llm_backend_venv):
+def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_KV_CACHE_LEN,
+                                      llm_backend_gpt_example_root,
+                                      mistral_v1_tokenizer_model_root,
+                                      tensorrt_llm_llama_example_root,
+                                      llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build Engine
     ENGINE_PATH = prepare_mistral_v1_7b_engine(
-        "normal", tensorrt_llm_llama_example_root)
+        "python_backend", tensorrt_llm_llama_example_root)
     # Prepare model repo
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "gpt")
@@ -341,13 +341,13 @@ def test_llama_v2_70b_ifb(
 
 
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "accuracy"])
-def test_gpt_350m_normal(TEST_TYPE, llm_backend_gpt_example_root,
-                         tensorrt_llm_gpt_example_root,
-                         gpt_tokenizer_model_root, llm_backend_venv):
+def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
+                                 tensorrt_llm_gpt_example_root,
+                                 gpt_tokenizer_model_root, llm_backend_venv):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
     ENGINE_PATH = prepare_gpt_350m_engine(
-        "normal",
+        "python_backend",
         tensorrt_llm_gpt_example_root,
         gpt_tokenizer_model_root,
     )
@@ -620,7 +620,7 @@ def test_gpt_next_ptuning_ifb(
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
-    ENGINE_PATH = prepare_gpt_next_ptuning_engine(
+    ENGINE_PATH, output_model_dir = prepare_gpt_next_ptuning_engine(
         "ifb", tensorrt_llm_gpt_example_root, gpt_next_ptuning_model_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
@@ -642,9 +642,7 @@ def test_gpt_next_ptuning_ifb(
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
-    vocab_file = os.path.join(
-        tensorrt_llm_gpt_example_root,
-        "c-model/email_composition/fp16/1-gpu/tokenizer.model")
+    vocab_file = os.path.join(output_model_dir, "1-gpu", "tokenizer.model")
     # 1. Input with virtual tokens:
     if VIRTUAL_TOKENS == "True":
         prompt_table = os.path.join(tensorrt_llm_gpt_example_root,
