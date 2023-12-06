@@ -33,7 +33,7 @@ def get_rcca_path():
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
@@ -47,7 +47,7 @@ def get_rcca_path():
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4323566(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -73,7 +73,7 @@ def test_rcca_bug_4323566(
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -107,7 +107,7 @@ def test_rcca_bug_4323566(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
@@ -122,7 +122,7 @@ def test_rcca_bug_4323566(
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4342666(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -149,7 +149,7 @@ def test_rcca_bug_4342666(
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,

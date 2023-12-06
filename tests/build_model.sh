@@ -48,22 +48,18 @@ if [ "$MODEL" = "opt" ]; then
     pip install -r requirements.txt
 
     echo "Convert OPT from HF"
-    python3 hf_opt_convert.py -i ${OPT_125M} -o ./c-model/opt-125m/fp16 -i_g 1 -weight_data_type fp16
+    python3 convert_checkpoint.py --model_dir ${OPT_125M} --dtype float16 --output_dir ./c-model/opt-125m/fp16
 
     echo "OPT builder"
-    python3 build.py --model_dir=./c-model/opt-125m/fp16/1-gpu/ \
-                     --max_batch_size 8 \
-                     --use_gpt_attention_plugin float16 \
-                     --use_gemm_plugin float16 \
-                     --use_layernorm_plugin float16 \
-                     --enable_context_fmha \
-                     --max_input_len 924 \
-                     --max_output_len 100 \
-                     --world_size 1 \
-                     --output_dir trt_engine/opt-125m/fp16/1-gpu/ \
-                     --do_layer_norm_before \
-                     --pre_norm \
-                     --hidden_act relu
+    trtllm-build --checkpoint_dir ./c-model/opt-125m/fp16  \
+                --use_gemm_plugin float16 \
+                --use_gpt_attention_plugin float16 \
+                --enable_context_fmha \
+                --max_batch_size 8 \
+                --max_input_len 924 \
+                --max_output_len 100 \
+                --output_dir trt_engine/opt-125m/fp16/1-gpu/
+
 
     popd # tensorrt_llm/examples/opt
 
@@ -96,7 +92,7 @@ if [ "$MODEL" = "mistral" ]; then
         --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
         --output_dir mistral_7b_outputs --max_input_len=8192
     # Equivalent to LLaMA at this stage except the tokenizer
-    python3 ../run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_kv_cache_length=4096 --engine_dir mistral_7b_outputs
+    python3 ../run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_attention_window_size=4096 --engine_dir mistral_7b_outputs
 
     popd # tensorrt_llm/examples/llama
 

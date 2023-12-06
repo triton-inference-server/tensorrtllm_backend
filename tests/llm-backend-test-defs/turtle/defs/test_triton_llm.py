@@ -26,7 +26,7 @@ def stop_triton_server():
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
@@ -45,7 +45,7 @@ def stop_triton_server():
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
 def test_llama_v2_7b_ifb(
         E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -77,7 +77,7 @@ def test_llama_v2_7b_ifb(
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -115,7 +115,7 @@ def test_llama_v2_7b_ifb(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", ["4096"])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", ["4096"])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
@@ -131,7 +131,7 @@ def test_llama_v2_7b_ifb(
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_mistral_v1_7b_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -159,7 +159,7 @@ def test_mistral_v1_7b_ifb(
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -190,8 +190,8 @@ def test_mistral_v1_7b_ifb(
 
 
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "accuracy"])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", ["4096"])
-def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_KV_CACHE_LEN,
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", ["4096"])
+def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_ATTENTION_WINDOW_SIZE,
                                       llm_backend_gpt_example_root,
                                       mistral_v1_tokenizer_model_root,
                                       tensorrt_llm_llama_example_root,
@@ -219,7 +219,7 @@ def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_KV_CACHE_LEN,
     postprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
                                          "postprocessing", "config.pbtxt")
     check_call(
-        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},max_kv_cache_length:{MAX_KV_CACHE_LEN}",
+        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE}",
         shell=True)
     check_call(
         f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
@@ -266,7 +266,7 @@ def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_KV_CACHE_LEN,
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
@@ -282,7 +282,7 @@ def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_KV_CACHE_LEN,
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_llama_v2_70b_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -310,7 +310,7 @@ def test_llama_v2_70b_ifb(
     TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -417,7 +417,7 @@ def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
@@ -436,7 +436,7 @@ def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
     ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
 def test_gpt_350m_ifb(
         E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -469,7 +469,7 @@ def test_gpt_350m_ifb(
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -508,7 +508,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
@@ -524,7 +524,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_175b_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -550,7 +550,7 @@ def test_gpt_175b_ifb(
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
@@ -587,7 +587,7 @@ def test_gpt_175b_ifb(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
-@pytest.mark.parametrize("MAX_KV_CACHE_LEN", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
@@ -603,7 +603,7 @@ def test_gpt_175b_ifb(
                          ids=["withVirtualTokens", "withoutVirtualTokens"])
 def test_gpt_next_ptuning_ifb(
         E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
-        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
         MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
@@ -631,7 +631,7 @@ def test_gpt_next_ptuning_ifb(
     TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
                            llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
+                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
                            BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
                            MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
                            EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,

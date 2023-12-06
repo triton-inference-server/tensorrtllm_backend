@@ -11,10 +11,10 @@ nvidia-smi
 source tools/utils.sh
 
 if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ]; then
-    MAX_KV_CACHE_LENGTH="2048"
+    MAX_ATTENTION_WINDOW_SIZE="2048"
     MAX_SEQUENCE_LEN="8704" # max_input_len + max_output_len
 else
-    MAX_KV_CACHE_LENGTH=""
+    MAX_ATTENTION_WINDOW_SIZE=""
     MAX_SEQUENCE_LEN="2048"
 fi
 
@@ -116,7 +116,7 @@ print_test_params () {
     echo "BATCHING_STRATEGY: ${BATCHING_STRATEGY}"
     echo "MAX_NUM_SEQUENCES: ${MAX_NUM_SEQUENCE}"
     echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
-    echo "MAX_KV_CACHE_LENGTH: ${MAX_KV_CACHE_LENGTH}"
+    echo "MAX_ATTENTION_WINDOW_SIZE: ${MAX_ATTENTION_WINDOW_SIZE}"
     echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
     echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
     echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
@@ -135,7 +135,7 @@ print_test_params () {
 
 fill_triton_repo () {
 
-    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_kv_cache_length:${MAX_KV_CACHE_LENGTH},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
     python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i triton_repo/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -172,7 +172,7 @@ run_cpp_trtllm_backend_tests () {
     # Test client
     pushd inflight_batcher_llm/client
 
-    if [ $MAX_KV_CACHE_LENGTH ]; then
+    if [ $MAX_ATTENTION_WINDOW_SIZE ]; then
         # test using a longer input
         # TODO: Once we switch to using real weights, add `--check-output` arg
         python3 inflight_batcher_llm_client.py \
