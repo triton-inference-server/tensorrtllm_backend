@@ -1,9 +1,10 @@
 #!/usr/bin/bash
 
 MODEL=$1
-ENGINE_PATH=$2
+TARGET_ENGINE_PATH=$2
 TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
+DRAFT_ENGINE_PATH=$5
 
 set -ex
 set -o pipefail
@@ -20,7 +21,7 @@ fi
 
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ] || [ "$MODEL" = "mistral" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH}
+    python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${TARGET_ENGINE_PATH}
     python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
     python3 tools/fill_template.py -i all_models/gpt/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
 
@@ -31,7 +32,7 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
         --disable-auto-complete-config \
         --backend-config=python,shm-region-prefix-name=prefix0_ : &
     export SERVER_PID=$!
-    wait_for_server_ready ${SERVER_PID} 1200
+    wait_for_server_ready ${SERVER_PID} 1200 ${TRITON_HTTP_PORT}
 
     pushd tools/gpt/
 
@@ -135,32 +136,34 @@ print_test_params () {
 
 fill_triton_repo () {
 
-    python3 tools/fill_template.py -i triton_repo/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
-    python3 tools/fill_template.py -i triton_repo/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
-    python3 tools/fill_template.py -i triton_repo/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
-    python3 tools/fill_template.py -i triton_repo/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
-    python3 tools/fill_template.py -i triton_repo/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
+    echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
+
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
 }
 
 kill_triton_server () {
-    kill -9 ${SERVER_PID}
+    pkill -9 -f tritonserver
 }
 
 launch_triton_server () {
 
     print_test_params
 
-    rm -rf ./triton_repo
-    cp -R all_models/inflight_batcher_llm triton_repo
+    rm -rf ${TRITON_REPO}
+    cp -R all_models/inflight_batcher_llm ${TRITON_REPO}
 
     # Modify config.pbtxt
     fill_triton_repo
 
     # Launch Triton Server
     /opt/tritonserver/bin/tritonserver \
-        --model-repository=triton_repo &
+        --model-repository=${TRITON_REPO} --http-port ${TRITON_HTTP_PORT} --grpc-port ${TRITON_GRPC_PORT} --metrics-port ${TRITON_METRICS_PORT} &
     export SERVER_PID=$!
-    wait_for_server_ready ${SERVER_PID} 1200
+    wait_for_server_ready ${SERVER_PID} 1200 ${TRITON_HTTP_PORT}
 }
 
 run_cpp_trtllm_backend_tests () {
@@ -430,6 +433,11 @@ EXCLUDE_INPUT_IN_OUTPUT="false"
 BLS_INSTANCE_COUNT="1"
 PREPROCESSING_INSTANCE_COUNT="1"
 POSTPROCESSING_INSTANCE_COUNT="1"
+TRITON_REPO="triton_repo"
+ENGINE_PATH=${TARGET_ENGINE_PATH}
+TRITON_HTTP_PORT="8000"
+TRITON_GRPC_PORT="8001"
+TRITON_METRICS_PORT="8002"
 
 if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
 
@@ -593,11 +601,11 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     pushd tensorrt_llm/examples/gpt
 
     # Input with virtual tokens:
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table_path=email_composition.npy --input_file=input.csv --engine_dir ${ENGINE_PATH} --output_csv output_w_prompt.csv
+    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table_path=email_composition.npy --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_w_prompt.csv
 
     #Input w/o virtual tokens:
     echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --input_file=input_wo_prompt.csv --engine_dir ${ENGINE_PATH} --output_csv output_wo_prompt.csv
+    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --input_file=input_wo_prompt.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_wo_prompt.csv
 
     popd
 
@@ -618,6 +626,42 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         python3 inflight_batcher_llm_client.py --prompt-embedding-table ../../tensorrt_llm/examples/gpt/email_composition.npy --prompt-task-id 0 --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv --output-tokens-csv ../../tensorrt_llm/examples/gpt/output_w_prompt.csv --check-output --request-output-len 8
 
         python3 inflight_batcher_llm_client.py --input-tokens-csv ../../tensorrt_llm/examples/gpt/input_wo_prompt.csv --output-tokens-csv ../../tensorrt_llm/examples/gpt/output_wo_prompt.csv --check-output --request-output-len 8
+
+        popd # inflight_batcher_llm/client
+
+        kill_triton_server
+    done
+fi
+
+if [ "$MODEL" = "gpt-speculative-decoding" ]; then
+
+    DECOUPLED_MODE="False"
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+        TRITON_REPO="triton_repo"
+        ENGINE_PATH=${TARGET_ENGINE_PATH}
+        TRITON_HTTP_PORT="8000"
+        TRITON_GRPC_PORT="8001"
+        TRITON_METRICS_PORT="8002"
+        launch_triton_server
+
+        TRITON_REPO="triton_repo_draft"
+        ENGINE_PATH=${DRAFT_ENGINE_PATH}
+        TRITON_HTTP_PORT="8003"
+        TRITON_GRPC_PORT="8004"
+        TRITON_METRICS_PORT="8005"
+        launch_triton_server
+
+        # Test client
+        pushd tools/inflight_batcher_llm
+
+        python3 speculative_decoding_test.py --max-input-len 200 --dataset ../dataset/mini_cnn_eval.json --url-draft localhost:8004 --url-target localhost:8001
 
         popd # inflight_batcher_llm/client
 

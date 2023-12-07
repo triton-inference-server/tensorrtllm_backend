@@ -17,6 +17,24 @@ def parse_arguments():
         default='/opt/tritonserver/bin/tritonserver',
     )
     parser.add_argument(
+        '--grpc_port',
+        type=str,
+        help='tritonserver grpc port',
+        default='8001',
+    )
+    parser.add_argument(
+        '--http_port',
+        type=str,
+        help='tritonserver http port',
+        default='8000',
+    )
+    parser.add_argument(
+        '--metrics_port',
+        type=str,
+        help='tritonserver metrics port',
+        default='8002',
+    )
+    parser.add_argument(
         '--force',
         '-f',
         action='store_true',
@@ -36,13 +54,16 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_cmd(world_size, tritonserver, model_repo, log, log_file):
+def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
+            model_repo, log, log_file):
     cmd = ['mpirun', '--allow-run-as-root']
     for i in range(world_size):
         cmd += ['-n', '1', tritonserver]
         if log and (i == 0):
             cmd += ['--log-verbose=3', f'--log-file={log_file}']
         cmd += [
+            f'--grpc-port={grpc_port}', f'--http-port={http_port}',
+            f'--metrics-port={metrics_port}',
             f'--model-repository={model_repo}',
             '--disable-auto-complete-config',
             f'--backend-config=python,shm-region-prefix-name=prefix{i}_', ':'
@@ -62,6 +83,7 @@ if __name__ == '__main__':
             print(msg, file=sys.stderr)
         else:
             raise RuntimeError(msg + ' Or use --force.')
-    cmd = get_cmd(int(args.world_size), args.tritonserver, args.model_repo,
-                  args.log, args.log_file)
+    cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
+                  args.http_port, args.metrics_port, args.model_repo, args.log,
+                  args.log_file)
     subprocess.Popen(cmd)

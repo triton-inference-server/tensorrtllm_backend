@@ -202,12 +202,26 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "use default value (i.e. max_sequence_length)");
     }
 
+    bool useContextFMHAForGeneration = false;
+    try
+    {
+        useContextFMHAForGeneration = model_state_->GetParameter<bool>("use_context_fmha_for_generation");
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING(
+            "max_attention_window_size is not specified, will "
+            "use default value (i.e. max_sequence_length)");
+    }
+
     TrtGptModelOptionalParams optionalParams;
     optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
+    optionalParams.useContextFMHAForGeneration = useContextFMHAForGeneration;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
