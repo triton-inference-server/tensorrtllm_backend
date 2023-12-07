@@ -56,6 +56,13 @@ input [
     dims: [ 1 ]
   },
   {
+    name: "draft_input_ids"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
     name: "end_id"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -279,5 +286,11 @@ parameters: {
   key: "exclude_input_in_output"
   value: {
     string_value: "${exclude_input_in_output}"
+  }
+}
+parameters: {
+  key: "use_context_fmha_for_generation"
+  value: {
+    string_value: "${use_context_fmha_for_generation}"
   }
 }

@@ -33,7 +33,8 @@ CASE_TO_MODEL = [
   "gptj": "gpt-j-6b",
   "gpt-ib": "gpt2",
   "gpt-ib-streaming": "gpt2",
-  "gpt-ib-ptuning": "gpt2"
+  "gpt-ib-ptuning": "gpt2",
+  "gpt-speculative-decoding": "gpt2"
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -297,39 +298,50 @@ def installDependency()
 def runTRTLLMBackendTest(caseName)
 {
   container("trt-llm-backend") {
-    def buildExample = CASE_TO_EXAMPLE[caseName]
-    def testExample = CASE_TO_EXAMPLE[caseName]
+
     def modelPath = "/home/scratch.trt_llm_data/llm-models/" + CASE_TO_MODEL[caseName]
     def tokenizerType = "auto"
     def backendPath = sh (script: "realpath ${BACKEND_ROOT}",returnStdout: true).trim()
-    def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
 
     sh "ps -aux"
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
-    }
-
-    if (caseName.contains("-ptuning")) {
-      buildExample += "-ptuning"
-      testExample += "-ptuning"
-    }
-
-    if (caseName.contains("-streaming")) {
-      testExample += "-streaming"
     }
 
     if (caseName.contains("llama")) {
       tokenizerType = "llama"
     }
 
-    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
-    {
-      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${buildExample}"
-      sh "cd ${BACKEND_ROOT} && bash tests/test.sh ${testExample} ${enginePath} ${modelPath} ${tokenizerType}"
+    if (caseName.contains("speculative-decoding")) {
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
+      {
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib"
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib"
+        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
+      }
+    } else {
+      def buildExample = CASE_TO_EXAMPLE[caseName]
+      def testExample = CASE_TO_EXAMPLE[caseName]
+      def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
+
+      if (caseName.contains("-ptuning")) {
+        buildExample += "-ptuning"
+        testExample += "-ptuning"
+      }
+
+      if (caseName.contains("-streaming")) {
+        testExample += "-streaming"
+      }
+
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
+      {
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${buildExample}"
+        sh "cd ${BACKEND_ROOT} && bash tests/test.sh ${testExample} ${enginePath} ${modelPath} ${tokenizerType}"
+      }
     }
   }
 }
@@ -517,6 +529,11 @@ pipeline {
               stage("Test gpt-ib-ptuning") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-ptuning")
+                }
+              }
+              stage("Test gpt-speculative-decoding") {
+                steps {
+                  runTRTLLMBackendTest("gpt-speculative-decoding")
                 }
               }
             }

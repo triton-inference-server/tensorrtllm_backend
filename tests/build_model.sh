@@ -3,6 +3,7 @@
 MODEL=$1
 
 GPT2=/home/scratch.trt_llm_data/llm-models/gpt2
+GPT2_MEDIUM=/home/scratch.trt_llm_data/llm-models/gpt2-medium
 GPT2_NEXT_PTUNING=/home/scratch.trt_llm_data/llm-models/email_composition
 OPT_125M=/home/scratch.trt_llm_data/llm-models/opt-125m
 LLAMA=/home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
@@ -153,6 +154,34 @@ if [ "$MODEL" = "gpt-ib" ]; then
     popd # tensorrt_llm/examples/gpt
 
 fi
+
+if [ "$MODEL" = "gpt-medium-ib" ]; then
+
+    # GPT2
+    pushd tensorrt_llm/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    echo "Convert GPT from HF"
+    python3 hf_gpt_convert.py -i ${GPT2_MEDIUM} -o ./c-model/gpt2-medium/fp16 --storage-type float16
+
+    echo "Build GPT: float16 | src FT"
+    python3 build.py --model_dir=./c-model/gpt2-medium/fp16/1-gpu \
+        --dtype float16 \
+        --use_inflight_batching \
+        --use_gpt_attention_plugin float16 \
+        --paged_kv_cache \
+        --use_gemm_plugin float16 \
+        --use_layernorm_plugin float16 \
+        --remove_input_padding --max_draft_len 5 \
+        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/ --hidden_act gelu
+
+    popd # tensorrt_llm/examples/gpt
+
+fi
+
+
 
 if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
