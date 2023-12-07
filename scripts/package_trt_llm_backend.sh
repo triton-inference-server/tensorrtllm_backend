@@ -16,7 +16,6 @@ rm .gitmodules
 rm -rf tekit
 rm -rf tensorrt_llm
 rm .pre-commit-config.yaml
-rm .gitlab-ci.yml
 
 rm dockerfile/Dockerfile.dev
 
