@@ -260,6 +260,11 @@ def runBuild()
       sh "cp -r ${BACKEND_ROOT} tensorrt_llm_backend"
       sh "cp ${BACKEND_ROOT}/scripts/package_trt_llm_backend.sh package_trt_llm_backend.sh"
       sh "bash package_trt_llm_backend.sh tensorrt_llm_backend.tar.gz tensorrt_llm_backend"
+    }
+
+    uploadArtifacts("tensorrt_llm_backend.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/")
+
+    container("trt-llm-backend") {
       // Step 4: build tensorrt-llm backend
       sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --trt_root /usr/local/tensorrt"
       sh "cd ${BACKEND_ROOT} && mkdir tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu/"
@@ -269,7 +274,7 @@ def runBuild()
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
     // Step 5: upload package to artifactory
-    uploadArtifacts("tensorrt_llm_backend*.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/")
+    uploadArtifacts("tensorrt_llm_backend_internal.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/")
 }
 
 def installDependency()
