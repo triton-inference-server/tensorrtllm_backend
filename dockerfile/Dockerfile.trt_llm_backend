@@ -58,7 +58,6 @@ FROM trt_llm_backend_builder as final
 WORKDIR /app/
 COPY --from=trt_llm_builder /app/tensorrt_llm/build /app/tensorrt_llm/build
 RUN cd /app/tensorrt_llm/build && pip3 install *.whl
-RUN rm -rf /app/tensorrt_llm
 
 # Install TensorRT-LLM backend
 RUN mkdir /opt/tritonserver/backends/tensorrtllm

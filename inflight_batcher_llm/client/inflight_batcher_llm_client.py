@@ -119,7 +119,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, streaming_data, end_id, pad_id,
                    prompt_embedding_table_data, prompt_vocab_size_data,
-                   return_log_probs_data, top_k_data, top_p_data):
+                   return_log_probs_data, top_k_data, top_p_data,
+                   draft_ids_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -147,7 +148,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("presence_penalty", presence_penalty_data),
         ]
-
+    if draft_ids_data is not None:
+        inputs += [
+            prepare_tensor("draft_input_ids", draft_ids_data),
+        ]
     return inputs
 
 
@@ -217,6 +221,12 @@ if __name__ == "__main__":
                         required=False,
                         default='',
                         help='Path to csv file containing the input tokens')
+
+    parser.add_argument('--draft-tokens-csv',
+                        type=str,
+                        required=False,
+                        default='',
+                        help='Path to csv file containing the draft tokens')
 
     parser.add_argument(
         '--output-tokens-csv',
@@ -430,6 +440,7 @@ if __name__ == "__main__":
     FLAGS = parser.parse_args()
 
     tokenizer = None
+    draft_ids = None
     if FLAGS.input_tokens_csv != "":
         with open(FLAGS.input_tokens_csv) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=",")
@@ -438,6 +449,13 @@ if __name__ == "__main__":
                 break
 
             curate_log_output(input_ids[0], "Input")
+
+        if FLAGS.draft_tokens_csv != "":
+            with open(FLAGS.draft_tokens_csv) as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=",")
+                for row in csv_reader:
+                    draft_ids = [[int(val) for val in row]]
+                    break
 
         end_id = FLAGS.end_id
         pad_id = FLAGS.pad_id
@@ -520,13 +538,17 @@ if __name__ == "__main__":
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
 
+    draft_ids_data = None
+    if draft_ids is not None:
+        draft_ids_data = np.array(draft_ids, dtype=np.int32)
+
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
                             temperature_data, repetition_penalty_data,
                             presence_penalty_data, streaming_data, end_id_data,
                             pad_id_data, prompt_embedding_table_data,
                             prompt_vocab_size_data, return_log_probs_data,
-                            top_k_data, top_p_data)
+                            top_k_data, top_p_data, draft_ids_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs

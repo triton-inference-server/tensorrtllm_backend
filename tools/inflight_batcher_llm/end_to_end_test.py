@@ -116,7 +116,7 @@ def test_performance(client, prompts, output_lens):
     model_name = "ensemble"
 
     print(f"[INFO] Warm up for benchmarking.")
-    for i in range(10):
+    for i in range(min(10, len(prompts))):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
         output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
