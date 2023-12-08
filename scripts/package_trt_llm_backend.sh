@@ -11,11 +11,9 @@ pushd ${BACKEND_DIR}
 
 # clean files
 rm -rf .git
-rm .gitignore
 rm .gitmodules
 rm -rf tekit
 rm -rf tensorrt_llm
-rm .pre-commit-config.yaml
 
 rm dockerfile/Dockerfile.dev
 
