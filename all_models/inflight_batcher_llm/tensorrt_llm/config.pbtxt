@@ -288,9 +288,3 @@ parameters: {
     string_value: "${exclude_input_in_output}"
   }
 }
-parameters: {
-  key: "use_context_fmha_for_generation"
-  value: {
-    string_value: "${use_context_fmha_for_generation}"
-  }
-}
