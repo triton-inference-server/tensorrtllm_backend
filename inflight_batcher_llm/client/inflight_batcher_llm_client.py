@@ -183,9 +183,9 @@ def callback(user_data, result, error):
     else:
         user_data._completed_requests.put(result)
         if (FLAGS.streaming):
-            output_ids = result.as_numpy('output_ids')
-            seq_lens = result.as_numpy('sequence_length')
-            if output_ids != None:
+            if result.get_output('output_ids') is not None:
+                output_ids = result.as_numpy('output_ids')
+                seq_lens = result.as_numpy('sequence_length')
                 if seq_lens == None or seq_lens[0][0] > 0:
                     tokens = list(output_ids[0][0])
                     print(tokens, flush=True)
