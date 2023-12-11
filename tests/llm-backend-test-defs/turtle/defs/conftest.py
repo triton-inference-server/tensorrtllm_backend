@@ -251,3 +251,16 @@ def gpt_next_ptuning_model_root():
         gpt_next_ptuning_model_root
     ), f"{gpt_next_ptuning_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_next_ptuning_model_root
+
+
+# Returns an array of total memory for each available device
+@pytest.fixture(scope="session")
+def total_gpu_memory_mib():
+    output = check_output("nvidia-smi --query-gpu memory.total --format=csv",
+                          shell=True,
+                          cwd="/tmp")
+    lines = [l.strip() for l in output.strip().split("\n")]
+    lines = lines[1:]  # skip header
+    lines = [l[:-4] for l in lines]  # remove MiB suffix
+    lines = [int(l) for l in lines]
+    return lines

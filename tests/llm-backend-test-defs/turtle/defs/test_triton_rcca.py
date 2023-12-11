@@ -129,12 +129,16 @@ def test_rcca_bug_4342666(
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
-        llm_backend_venv):
+        total_gpu_memory_mib, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
     if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
         pytest.skip("Skipping.")
+
+    if (BATCHING_STRATEGY == "inflight_fused_batching"
+            and int(MAX_BEAM_WIDTH) > 1 and min(total_gpu_memory_mib) < 60000):
+        pytest.skip("Skipping due to insufficient GPU memory.")
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build Engine
