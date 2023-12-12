@@ -150,6 +150,36 @@ void WorkItem::Initialize(TRITONBACKEND_Request* request, uint64_t requestId, bo
 
     // Create response factory for this request
     TRITONBACKEND_ResponseFactoryNew(&factory_ptr_, request);
+
+    // Store an unconverted version of the TRITONBACKEND_Request to be used
+    // to release the request when the base metrics have been reported
+    mTritonInferenceRequest = request;
+    mTimestamps.Reset();
+}
+
+WorkItem::Timestamps& WorkItem::getTimestamps()
+{
+    return mTimestamps;
+}
+
+TRITONBACKEND_Request* WorkItem::getTritonInferenceRequest() const
+{
+    return mTritonInferenceRequest;
+}
+
+TRITONSERVER_Error* WorkItem::reportBaseMetrics(TRITONBACKEND_ModelInstance* model_instance, TRITONSERVER_Error* err)
+{
+    SET_TIMESTAMP(mTimestamps.exec_end_ns);
+    RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceReportStatistics(model_instance, mTritonInferenceRequest,
+        (err == nullptr), mTimestamps.exec_start_ns, mTimestamps.compute_start_ns, mTimestamps.compute_end_ns,
+        mTimestamps.exec_end_ns));
+
+    // For now we will assume a batch size of 1 for each request. This may change in the future but for
+    // now it seems that even when requests are dynamically batched together each workItem is associated
+    // with its own request object and is handled independently due to the nature of IFB.
+    RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceReportBatchStatistics(model_instance, 1 /* batch size */,
+        mTimestamps.exec_start_ns, mTimestamps.compute_start_ns, mTimestamps.compute_end_ns, mTimestamps.exec_end_ns));
+    return nullptr; // success
 }
 
 } // namespace triton::backend::inflight_batcher_llm

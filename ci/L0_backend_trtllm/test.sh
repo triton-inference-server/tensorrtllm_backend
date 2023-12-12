@@ -33,8 +33,10 @@ MODEL_DIR="$PWD/triton_model_repo"
 SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm/tokenizer
 BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
-CLIENT_TEST=metric_verification_tests.py
-CLIENT_LOG="client.log"
+BASE_METRICS_VERIFICATION_TEST=base_metrics_verification_tests.py
+BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
+CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
+CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
 SERVER_PID=0
 
 # Helpers ===============================
@@ -147,18 +149,21 @@ SERVER_ARGS="--model_repo=${MODEL_DIR}"
 # streaming OFF
 SERVER_LOG="./1gpu_v1_no_streaming_server.log"
 cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
+rm -rf ${MODEL_DIR}/tensorrt_llm_bls
 replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
 replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
+replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
 replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_1_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${max_queue_delay_microseconds}' "0" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+replace_config_tags '${max_queue_delay_microseconds}' "1000000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
 replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
+replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
 # Copy the engine and place it into the model folder
 cp -r ${BASE_DIR}/engines/inflight_1_gpu/ triton_model_repo/tensorrt_llm/1
 
@@ -255,6 +260,30 @@ curl localhost:8002/metrics -o 1gpu_IFB_no_stream_metrics.out
 kill_server
 wait_for_server_terminated ${SERVER_PID[@]}
 
+# Start a clean server to verify base metrics are being
+# reported correctly
+SERVER_LOG="./1gpu_IFB_no_streaming_base_metrics.log"
+run_server "${SERVER_ARGS}"
+wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+if [ "$WAIT_RET" != "0" ]; then
+    # Cleanup
+    kill $SERVER_PID > /dev/null 2>&1 || true
+    echo -e "\n***\n*** Failed to start $SERVER\n***"
+    cat $SERVER_LOG
+    exit 1
+fi
+set -e
+
+python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+if [ $? -ne 0 ]; then
+    cat ${BASE_METRICS_VERIFICATION_LOG}
+    RET=1
+fi
+set +e
+
+kill_server
+wait_for_server_terminated ${SERVER_PID[@]}
+
 # inflight batching ON
 # streaming ON
 SERVER_LOG="./1gpu_IFB_streaming_server.log"
@@ -305,10 +334,12 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     reset_model_repo
 
     cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
+    rm -rf ${MODEL_DIR}/tensorrt_llm_bls
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
+    replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
@@ -317,6 +348,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
+    replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
 
     # Copy the engine and place it into the model folder
     cp -r ${BASE_DIR}/engines/inflight_${NUM_GPU}_gpu/ triton_model_repo/tensorrt_llm/1
@@ -412,6 +444,30 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
+    # Start a clean server to verify base metrics are being
+    # reported correctly
+    SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_base_metrics.log"
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    if [ $? -ne 0 ]; then
+        cat ${BASE_METRICS_VERIFICATION_LOG}
+        RET=1
+    fi
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
+
     # inflight batching ON
     # streaming ON
     SERVER_LOG="./${NUM_GPU}gpu_IFB_streaming_server.log"
@@ -447,10 +503,10 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
 done
 
-# Run python unit tests
-python3 $CLIENT_TEST >>$CLIENT_LOG 2>&1
+# Verify TRT LLM statistics are being properly reported as custom metrics
+python3 ${CUSTOM_METRICS_VERIFICATION_TEST} >> ${CUSTOM_METRICS_VERIFICATION_LOG} 2>&1
 if [ $? -ne 0 ]; then
-    cat $CLIENT_LOG
+    cat ${CUSTOM_METRICS_VERIFICATION_LOG}
     RET=1
 fi
 

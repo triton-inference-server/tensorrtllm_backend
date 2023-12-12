@@ -41,6 +41,22 @@ namespace triton::backend::inflight_batcher_llm
 class WorkItemsQueue
 {
 public:
+    WorkItemsQueue(bool isDecoupled);
+
+    /// @brief A wrapper for a request
+    struct RequestWrapper
+    {
+        uint64_t request_id;
+        TRITONBACKEND_Request* triton_request;
+
+        // Enable implicit construction when using emplace_back()
+        RequestWrapper(uint64_t id, TRITONBACKEND_Request* request)
+            : request_id(id)
+            , triton_request(request)
+        {
+        }
+    };
+
     /// @brief Clear the queue
     void clear();
 
@@ -59,7 +75,7 @@ public:
     /// @brief Add a batch of new work item to the queue
     /// Throws an error if requestId already exists
     std::vector<std::shared_ptr<std::exception>> pushBatch(
-        std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>>& requestsToPush, bool isDecoupled);
+        std::vector<RequestWrapper>& requestsToPush, uint64_t exec_start_ns);
 
     /// @brief Get a new work item from the queue, and move it to the list of
     /// in progress work items if it hasn't been stopped
@@ -108,6 +124,9 @@ private:
 
     /// ids of the work items that have been stopped
     std::unordered_set<uint64_t> mStoppedReqIds;
+
+    /// Whether model using this queue is decoupled
+    bool mIsDecoupled;
 
     mutable std::mutex mMutex;
 };

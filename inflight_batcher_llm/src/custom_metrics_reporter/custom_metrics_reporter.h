@@ -34,18 +34,14 @@
 #include <tuple>
 #include <vector>
 
-namespace triton
-{
-namespace backend
-{
-namespace inflight_batcher_llm
-{
-namespace triton_metrics
+namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter
 {
 
-/// TritonMetricGroups are handled by the TritonMetrics class
+/// TritonMetricGroups are handled by the CustomMetricsReporter class
 /// and encapsulate the creation/update functionality for a
-/// group of custom metrics.
+/// group of TRT LLM statistics to be reported as custom Triton metrics.
+/// The statistics (or custom metrics) handled by this class should
+/// not be confused with Triton base metrics.
 class TritonMetricGroup
 {
 public:
@@ -103,6 +99,18 @@ public:
         }
     };
 
+    /// Custom deleter for a unique TRITONSERVER_Parameter pointer
+    struct ParameterDeleter
+    {
+        void operator()(TRITONSERVER_Parameter* parameter)
+        {
+            if (parameter != nullptr)
+            {
+                TRITONSERVER_ParameterDelete(parameter);
+            }
+        }
+    };
+
 private:
     std::unique_ptr<TRITONSERVER_MetricFamily, MetricFamilyDeleter> metric_family_;
     std::vector<std::unique_ptr<TRITONSERVER_Metric, MetricDeleter>> metrics_;
@@ -113,16 +121,16 @@ private:
     std::vector<std::string> sub_labels_;
 };
 
-/// TritonMetrics is an interface class meant to facilitate the
-/// connection between TRT LLM backend statistics and Triton metrics.
+/// CustomMetricsReporter is an interface class meant to facilitate the
+/// connection between TRT LLM backend statistics and Triton custom metrics.
 /// It functions by passing BatchManager statistics data from
 /// the TRT LLM backend to the multiple TritonMetricsGroup objects
 /// it handles.
-class TritonMetrics
+class CustomMetricsReporter
 {
 public:
-    TritonMetrics(){};
-    ~TritonMetrics(){};
+    CustomMetricsReporter(){};
+    ~CustomMetricsReporter(){};
 
     /// Initialize the various TritonMetricGroups handled by
     /// by this class using the static key/label members below.
@@ -132,7 +140,7 @@ public:
     /// \param is_v1_model Whether the model type is v1 or an inflight
     /// batching model.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* InitMetrics(const std::string& model, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* InitReporter(const std::string& model, const uint64_t version, const bool is_v1_model);
 
     /// Updates the vector of TritonMetricGroup objects with a
     /// JSON-formatted statistics string.
@@ -140,7 +148,7 @@ public:
     /// \param statistics A JSON-formatted string of TRT LLM backend
     /// statistics.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* UpdateMetrics(const std::string& statistics);
+    TRITONSERVER_Error* UpdateCustomMetrics(const std::string& custom_metrics);
 
     static const std::vector<std::string> request_keys_;
     static const std::vector<std::string> request_labels_;
@@ -169,7 +177,4 @@ private:
     std::unique_ptr<TritonMetricGroup> general_metric_family_;
 };
 
-} // namespace triton_metrics
-} // namespace inflight_batcher_llm
-} // namespace backend
-} // namespace triton
+} // namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter

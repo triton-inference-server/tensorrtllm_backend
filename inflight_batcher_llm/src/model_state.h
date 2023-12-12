@@ -36,7 +36,7 @@
 #include "triton/core/tritonserver.h"
 
 #ifdef TRITON_ENABLE_METRICS
-#include "metrics/triton_metrics.h"
+#include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
 
 using namespace ::triton::common; // TritonJson
@@ -66,14 +66,15 @@ public:
     virtual ~ModelState() = default;
 
 #ifdef TRITON_ENABLE_METRICS
-    TRITONSERVER_Error* InitMetrics(const std::string& model_name, const uint64_t version, const bool is_v1_model);
-    TRITONSERVER_Error* UpdateMetrics(const std::string& statistics);
+    TRITONSERVER_Error* InitCustomMetricsReporter(
+        const std::string& model_name, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* UpdateCustomMetrics(const std::string& statistics);
 #endif
     common::TritonJson::Value& GetModelConfig();
 
 private:
 #ifdef TRITON_ENABLE_METRICS
-    std::unique_ptr<triton_metrics::TritonMetrics> triton_metrics_;
+    std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
 #endif
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
@@ -84,7 +85,7 @@ private:
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
 #ifdef TRITON_ENABLE_METRICS
-        triton_metrics_ = std::make_unique<triton_metrics::TritonMetrics>();
+        custom_metrics_reporter_ = std::make_unique<custom_metrics_reporter::CustomMetricsReporter>();
 #endif
     }
 };

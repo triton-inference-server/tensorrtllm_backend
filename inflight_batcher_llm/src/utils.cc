@@ -193,6 +193,7 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
               "did not not provide "
             + inputTensorName + " input for the request";
         LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, msg.c_str());
+        TRITONSERVER_ErrorDelete(error);
         return false;
     }
 
