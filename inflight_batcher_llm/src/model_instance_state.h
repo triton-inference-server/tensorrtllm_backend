@@ -74,7 +74,7 @@ public:
     {
         // terminate decoupled execution loop
         {
-            mWorkItemsQueue.clear();
+            mWorkItemsQueue->clear();
         }
     }
 
@@ -94,7 +94,7 @@ public:
     void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
 
     /// @brief Add the request to the WorkItemsQueue
-    void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled);
+    void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
 
     /// @brief  Callback passed to GptManager to get new inference requests
     /// @return Up to max_num_requests inference requests.
@@ -118,13 +118,14 @@ private:
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance);
 
     ModelState* model_state_;
+    TRITONBACKEND_ModelInstance* modelInstance_;
 
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
     bool mIsDecoupled;
 
     std::shared_ptr<GptManager> mBatchManager;
-    WorkItemsQueue mWorkItemsQueue;
+    std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

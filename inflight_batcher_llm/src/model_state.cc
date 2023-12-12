@@ -141,16 +141,16 @@ bool ModelState::GetParameter<bool>(const std::string& name)
 }
 
 #ifdef TRITON_ENABLE_METRICS
-TRITONSERVER_Error* ModelState::InitMetrics(
+TRITONSERVER_Error* ModelState::InitCustomMetricsReporter(
     const std::string& model_name, const uint64_t version, const bool is_v1_model)
 {
-    RETURN_IF_ERROR(triton_metrics_->InitMetrics(model_name, version, is_v1_model));
+    RETURN_IF_ERROR(custom_metrics_reporter_->InitReporter(model_name, version, is_v1_model));
     return nullptr; // success
 }
 
-TRITONSERVER_Error* ModelState::UpdateMetrics(const std::string& statistics)
+TRITONSERVER_Error* ModelState::UpdateCustomMetrics(const std::string& custom_metrics)
 {
-    RETURN_IF_ERROR(triton_metrics_->UpdateMetrics(statistics));
+    RETURN_IF_ERROR(custom_metrics_reporter_->UpdateCustomMetrics(custom_metrics));
     return nullptr; // success
 }
 #endif

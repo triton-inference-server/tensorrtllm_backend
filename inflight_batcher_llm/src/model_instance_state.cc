@@ -48,6 +48,7 @@ TRITONSERVER_Error* ModelInstanceState::Create(
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : model_state_(model_state)
+    , modelInstance_(triton_model_instance)
     , mIsDecoupled(false)
 {
     // Note: std::string::compare fails this test (always return non-zero
@@ -76,6 +77,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     triton::common::TritonJson::Value transaction_policy;
     model_state_->GetModelConfig().MemberAsObject("model_transaction_policy", &transaction_policy);
     transaction_policy.MemberAsBool("decoupled", &mIsDecoupled);
+    mWorkItemsQueue = std::make_unique<WorkItemsQueue>(mIsDecoupled);
 
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -246,9 +248,11 @@ void ModelInstanceState::sendEnqueueResponse(TRITONBACKEND_Request* request, con
     LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
 }
 
-void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count, bool isDecoupled)
+void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
-    std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>> requestsToPush;
+    std::vector<WorkItemsQueue::RequestWrapper> requestsToPush;
+    uint64_t exec_start_ns = 0;
+    SET_TIMESTAMP(exec_start_ns);
 
     for (uint32_t r = 0; r < request_count; ++r)
     {
@@ -263,7 +267,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
                 if (requestId != 0)
                 {
                     // Check if request is in progress or in queue, if not ignore
-                    mWorkItemsQueue.stopWorkItem(requestId);
+                    mWorkItemsQueue->stopWorkItem(requestId);
                     // Send a response back to client for stop request
                     sendEnqueueResponse(request);
                 }
@@ -285,11 +289,11 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         }
     }
 
-    auto exceptions = mWorkItemsQueue.pushBatch(requestsToPush, isDecoupled);
+    auto exceptions = mWorkItemsQueue->pushBatch(requestsToPush, exec_start_ns);
 
     for (uint32_t r = 0; r < requestsToPush.size(); ++r)
     {
-        auto request = requestsToPush.at(r).second;
+        auto request = requestsToPush.at(r).triton_request;
         auto e = exceptions.at(r);
         if (e)
         {
@@ -313,11 +317,11 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
     auto rank = getCommWorldRank();
     if (rank == 0)
     {
-        auto numPendingWorkItems = mWorkItemsQueue.numPendingWorkItems();
+        auto numPendingWorkItems = mWorkItemsQueue->numPendingWorkItems();
         // Loop over the pending work items and include at most `max_num_requests`
         for (size_t i = 0; i < numPendingWorkItems && static_cast<int>(rval.size()) < max_num_requests; ++i)
         {
-            auto [workItem, stoppedRequest] = mWorkItemsQueue.pop();
+            auto [workItem, stoppedRequest] = mWorkItemsQueue->pop();
 
             if (workItem)
             {
@@ -383,7 +387,7 @@ void ModelInstanceState::sendResponse(
         std::string errStr = std::string("Failed to send Triton response for requestId: ") + std::to_string(requestId);
         try
         {
-            auto workItem = mWorkItemsQueue.getInProgressWorkItem(requestId);
+            auto workItem = mWorkItemsQueue->getInProgressWorkItem(requestId);
             auto tritonErr = sendTritonResponse(workItem, response_tensors, final_response, errMsg);
             LOG_IF_ERROR(tritonErr, errStr);
         }
@@ -396,10 +400,10 @@ void ModelInstanceState::sendResponse(
 
 std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
 {
-    auto stoppedReqIds = mWorkItemsQueue.getStoppedReqIds();
+    auto stoppedReqIds = mWorkItemsQueue->getStoppedReqIds();
 
     // Merge cancelled requests into stopped requests Ids
-    auto cancelledReqIds = mWorkItemsQueue.getCancelledInProgressReqIds();
+    auto cancelledReqIds = mWorkItemsQueue->getCancelledInProgressReqIds();
     stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
 
     int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
@@ -436,7 +440,7 @@ void ModelInstanceState::logStats(const std::string& s)
 {
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
 #ifdef TRITON_ENABLE_METRICS
-    LOG_IF_ERROR(model_state_->UpdateMetrics(s), "Failed updating metrics");
+    LOG_IF_ERROR(model_state_->UpdateCustomMetrics(s), "Failed updating TRT LLM statistics");
 #endif
 }
 
@@ -452,7 +456,8 @@ TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkI
     auto requestId = workItem->requestId();
     if (final_response)
     {
-        mWorkItemsQueue.markFinished(requestId);
+        SET_TIMESTAMP(workItem->getTimestamps().compute_end_ns);
+        mWorkItemsQueue->markFinished(requestId);
     }
 
     // Check if error
@@ -503,6 +508,14 @@ TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkI
             }
             std::memcpy(buffer, tensor.tensor->data(), buffersize);
         }
+    }
+
+    if (final_response)
+    {
+        LOG_IF_ERROR(workItem->reportBaseMetrics(modelInstance_, err), "Error reporting base metrics");
+        // Reporting Triton core metrics requires the use of the original TRITONBACKEND_Request.
+        // Therefore we hold off releasing the request until this point.
+        TRITONBACKEND_RequestRelease(workItem->getTritonInferenceRequest(), TRITONSERVER_REQUEST_RELEASE_ALL);
     }
 
     RETURN_IF_ERROR(
