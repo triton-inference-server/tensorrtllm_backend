@@ -473,7 +473,8 @@ if __name__ == "__main__":
                                     padding_side='left')
         elif FLAGS.tokenizer_type == 'auto':
             tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                      padding_side='left')
+                                                      padding_side='left',
+                                                      trust_remote_code=True)
         elif FLAGS.tokenizer_type == 'llama':
             tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
                                                        legacy=False,
