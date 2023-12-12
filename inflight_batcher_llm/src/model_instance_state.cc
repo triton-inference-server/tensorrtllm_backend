@@ -84,6 +84,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     mModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
     auto configPath = mModelPath + "/config.json";
     std::ifstream jsonStream(configPath);
+    TLLM_CHECK_WITH_INFO(jsonStream.is_open(), "Cannot find engine config file %s", configPath.c_str());
 
     auto constexpr allowExceptions = true;
     auto constexpr ingoreComments = true;
