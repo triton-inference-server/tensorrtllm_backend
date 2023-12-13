@@ -86,12 +86,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3-pip
     df += install_new_version_of_TRT(clone_repo=True,
                                      trtllm_be_repo_tag=repo_tag)
     df += """
-# Remove TRT contents that are not needed in runtime
-RUN ARCH="$(uname -i)" && \
-    rm -fr ${TRT_ROOT}/bin ${TRT_ROOT}/targets/${ARCH}-linux-gnu/bin ${TRT_ROOT}/data && \
-    rm -fr  ${TRT_ROOT}/doc ${TRT_ROOT}/onnx_graphsurgeon ${TRT_ROOT}/python && \
-    rm -fr ${TRT_ROOT}/samples  ${TRT_ROOT}/targets/${ARCH}-linux-gnu/samples
-
 # Install required packages for TRT-LLM models
 RUN python3 -m pip install --upgrade pip && \
         pip3 install transformers
