@@ -288,3 +288,9 @@ parameters: {
     string_value: "${exclude_input_in_output}"
   }
 }
+parameters: {
+  key: "enable_kv_cache_reuse"
+  value: {
+    string_value: "${enable_kv_cache_reuse}"
+  }
+}

@@ -173,6 +173,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --paged_kv_cache \
         --use_gemm_plugin float16 \
         --use_layernorm_plugin float16 \
+        --enable_context_fmha --use_paged_context_fmha \
         --remove_input_padding --max_draft_len 5 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/ --hidden_act gelu

@@ -205,11 +205,23 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "use default value (i.e. max_sequence_length)");
     }
 
+    bool enableKVCacheReuse = false;
+    try
+    {
+        enableKVCacheReuse = model_state_->GetParameter<bool>("enable_kv_cache_reuse");
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
+    }
+
     TrtGptModelOptionalParams optionalParams;
     optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
+    optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
 
     mBatchManager = std::make_shared<GptManager>(
