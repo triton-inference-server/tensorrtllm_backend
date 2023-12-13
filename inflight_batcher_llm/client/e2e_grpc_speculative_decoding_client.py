@@ -329,7 +329,7 @@ if __name__ == '__main__':
         type=str,
         required=False,
         default="tensorrt_llm",
-        help='Name of the tensorrt_llm draft model (hosted at url-draft)')
+        help='Name of the tensorrt_llm draft model (hosted at url-target)')
 
     parser.add_argument('-p',
                         '--prompt',

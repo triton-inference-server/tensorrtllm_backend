@@ -125,6 +125,7 @@ print_test_params () {
     echo "TRITON_MAX_BATCH_SIZE: ${TRITON_MAX_BATCH_SIZE}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
     echo "MAX_BEAM_WIDTH: ${MAX_BEAM_WIDTH}"
+    echo "ENABLE_KV_CACHE_REUSE: ${ENABLE_KV_CACHE_REUSE}"
     echo "E2E_MODEL_NAME: ${E2E_MODEL_NAME}"
     echo "ACCUMULATE_TOKEN: ${ACCUMULATE_TOKEN}"
     echo "BLS_INSTANCE_COUNT: ${BLS_INSTANCE_COUNT}"
@@ -138,7 +139,7 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},max_num_sequences:${MAX_NUM_SEQUENCE},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -427,6 +428,7 @@ ENABLE_TRT_OVERLAPS=( "false" "true" )
 TRITON_MAX_BATCH_SIZE="128"
 MAX_QUEUE_DELAY_MICROSECONDS="0"
 MAX_BEAM_WIDTH="1"
+ENABLE_KV_CACHE_REUSE="false"
 E2E_MODEL_NAME="ensemble"
 ACCUMULATE_TOKEN="false"
 EXCLUDE_INPUT_IN_OUTPUT="false"
@@ -662,6 +664,7 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
         TRITON_HTTP_PORT="8000"
         TRITON_GRPC_PORT="8001"
         TRITON_METRICS_PORT="8002"
+        ENABLE_KV_CACHE_REUSE="true"
         launch_triton_server
 
         TRITON_REPO="triton_repo_draft"
@@ -669,6 +672,9 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
         TRITON_HTTP_PORT="8003"
         TRITON_GRPC_PORT="8004"
         TRITON_METRICS_PORT="8005"
+        # TODO(nkorobov): Draft model can benefit from enable KV cache.
+        # Add --enable_context_fmha --use_paged_context_fmha to its build command
+        ENABLE_KV_CACHE_REUSE="false"
         launch_triton_server
 
         # Test client
