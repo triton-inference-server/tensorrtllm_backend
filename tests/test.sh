@@ -197,9 +197,9 @@ run_cpp_trtllm_backend_tests () {
 
     # testing output accuracy for real weights only
     CHECK_OUTPUT_FLAG=""
-#    if [ $MODEL = "gpt-ib" ]; then
-#        CHECK_OUTPUT_FLAG="--check-output"
-#    fi
+    if [ $MODEL = "gpt-ib" ]; then
+        CHECK_OUTPUT_FLAG="--check-output"
+    fi
 
     python3 inflight_batcher_llm_client.py \
         ${CHECK_OUTPUT_FLAG} \
