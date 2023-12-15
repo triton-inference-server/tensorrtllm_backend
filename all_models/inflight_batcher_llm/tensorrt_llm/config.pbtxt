@@ -289,8 +289,8 @@ parameters: {
   }
 }
 parameters: {
-  key: "use_context_fmha_for_generation"
+  key: "enable_kv_cache_reuse"
   value: {
-    string_value: "${use_context_fmha_for_generation}"
+    string_value: "${enable_kv_cache_reuse}"
   }
 }

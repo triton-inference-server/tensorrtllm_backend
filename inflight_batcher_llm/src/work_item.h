@@ -59,6 +59,29 @@ public:
 
     bool hasOutputName(const std::string& outputName);
 
+    /// timestamp storage for Triton base metrics
+    struct Timestamps
+    {
+        uint64_t exec_start_ns = 0;
+        uint64_t compute_start_ns = 0;
+        uint64_t compute_end_ns = 0;
+        uint64_t exec_end_ns = 0;
+
+        void Reset()
+        {
+            exec_start_ns = 0;
+            compute_start_ns = 0;
+            compute_end_ns = 0;
+            exec_end_ns = 0;
+        }
+    };
+
+    Timestamps& getTimestamps();
+
+    TRITONBACKEND_Request* getTritonInferenceRequest() const;
+
+    TRITONSERVER_Error* reportBaseMetrics(TRITONBACKEND_ModelInstance* model_instance, TRITONSERVER_Error* err);
+
 private:
     // Convert Trition request to trtllm InferenceRequest
     static std::shared_ptr<InferenceRequest> createInferenceRequest(
@@ -70,6 +93,9 @@ private:
     TRITONBACKEND_ResponseFactory* factory_ptr_;
     uint64_t mRequestId;
     std::unordered_set<std::string> mRequestOutputNames;
+
+    Timestamps mTimestamps;
+    TRITONBACKEND_Request* mTritonInferenceRequest;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

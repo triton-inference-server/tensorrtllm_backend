@@ -1,7 +1,7 @@
 
 ## End to end workflow to run baichuan
 
-* build engine
+* Build engine
 
 ```bash
 export HF_BAICHUAN_MODEL=Baichuan-13B-Chat/
@@ -44,13 +44,13 @@ python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokeni
 python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False
 python3 tools/fill_template.py -i baichuan_ifb/ensemble/config.pbtxt triton_max_batch_size:64
-python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,batching_strategy:inflight_batching,max_queue_delay_microseconds:600
+python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:600
 ```
 
 * Launch server
 
 ```bash
-pip pinstall SentencePiece
+pip install SentencePiece
 python3 scripts/launch_triton_server.py --world_size 1 --model_repo=baichuan_ifb/
 ```
 
@@ -137,7 +137,7 @@ curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What
 * Send request with bad_words and stop_words
 
 ```bash
-curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "intelligence", "stop_words": "focuses", "pad_id": 2, "end_id": 2}'
+curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": ["intelligence","model"], "stop_words": ["focuses","learn"], "pad_id": 2, "end_id": 2}'
 
 {"cum_log_probs":0.0,"model_name":"ensemble","model_version":"1","output_log_probs":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"sequence_end":false,"sequence_id":0,"sequence_start":false,"text_output":"\nMachine learning is a subset of artificial intelligent (AI) that focuses"}
 ```
@@ -169,7 +169,7 @@ python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_tr
 [INFO] Total Latency: 1598.328 ms
 ```
 
-* run with decouple mode (streaming)
+* Run with decoupled mode (streaming)
 
 ```bash
 cp all_models/inflight_batcher_llm/ baichuan_ifb -r
@@ -178,9 +178,9 @@ python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokeni
 python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,bls_instance_count:1,accumulate_tokens:True
 python3 tools/fill_template.py -i baichuan_ifb/ensemble/config.pbtxt triton_max_batch_size:64
-python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,batching_strategy:inflight_batching,max_queue_delay_microseconds:600
+python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:600
 
-pip pinstall SentencePiece
+pip install SentencePiece
 # please add `trust_remote_code=True` in tokenizer of preprocessing and postprocessing. Considering the security, we don't add it by default.
 python3 scripts/launch_triton_server.py --world_size 1 --model_repo=baichuan_ifb/
 

@@ -68,8 +68,8 @@ class TritonPythonModel:
             self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
                                          padding_side='left')
         elif tokenizer_type == 'auto':
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
-                                                           padding_side='left')
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_dir, padding_side='left', trust_remote_code=True)
         elif tokenizer_type == 'llama':
             self.tokenizer = LlamaTokenizer.from_pretrained(
                 tokenizer_dir, legacy=False, padding_side='left')

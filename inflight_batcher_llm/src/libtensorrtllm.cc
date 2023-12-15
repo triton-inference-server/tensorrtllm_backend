@@ -45,7 +45,7 @@
 #include "work_items_queue.h"
 
 #ifdef TRITON_ENABLE_METRICS
-#include "metrics/triton_metrics.h"
+#include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
 
 namespace triton::backend::inflight_batcher_llm
@@ -79,7 +79,7 @@ extern "C"
 
         bool is_v1_model = ((model_state->GetParameter<std::string>("gpt_model_type") == "V1")
             || (model_state->GetParameter<std::string>("gpt_model_type") == "v1"));
-        LOG_IF_ERROR(model_state->InitMetrics(name, version, is_v1_model), "Failed initializing metrics");
+        LOG_IF_ERROR(model_state->InitCustomMetricsReporter(name, version, is_v1_model), "Failed initializing metrics");
 #endif                  // TRITON_ENABLE_METRICS
         return nullptr; // success
     }
@@ -147,16 +147,7 @@ extern "C"
         ModelInstanceState* instance_state;
         RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(instance, reinterpret_cast<void**>(&instance_state)));
 
-        auto isDecoupled = instance_state->isDecoupled();
-
-        instance_state->enqueue(requests, request_count, isDecoupled);
-
-        for (uint32_t r = 0; r < request_count; ++r)
-        {
-            TRITONBACKEND_Request* request = requests[r];
-            TRITONBACKEND_RequestRelease(request, TRITONSERVER_REQUEST_RELEASE_ALL);
-        }
-
+        instance_state->enqueue(requests, request_count);
         return nullptr; // success
     }
 

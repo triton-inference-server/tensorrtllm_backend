@@ -23,7 +23,7 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "triton_metrics.h"
+#include "custom_metrics_reporter.h"
 #include "triton/backend/backend_common.h"
 #include <iomanip>
 #include <sstream>
@@ -31,39 +31,33 @@
 
 using namespace ::triton::common; // TritonJson
 
-namespace triton
-{
-namespace backend
-{
-namespace inflight_batcher_llm
-{
-namespace triton_metrics
+namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter
 {
 
-const std::vector<std::string> TritonMetrics::request_keys_{
+const std::vector<std::string> CustomMetricsReporter::request_keys_{
     "Active Request Count", "Max Request Count", "Scheduled Requests", "Context Requests"};
-const std::vector<std::string> TritonMetrics::request_labels_{"active", "max", "scheduled", "context"};
+const std::vector<std::string> CustomMetricsReporter::request_labels_{"active", "max", "scheduled", "context"};
 
-const std::vector<std::string> TritonMetrics::runtime_memory_keys_{
+const std::vector<std::string> CustomMetricsReporter::runtime_memory_keys_{
     "Runtime CPU Memory Usage", "Runtime GPU Memory Usage", "Runtime Pinned Memory Usage"};
-const std::vector<std::string> TritonMetrics::runtime_memory_labels_{"cpu", "gpu", "pinned"};
+const std::vector<std::string> CustomMetricsReporter::runtime_memory_labels_{"cpu", "gpu", "pinned"};
 
-const std::vector<std::string> TritonMetrics::kv_cache_keys_{
+const std::vector<std::string> CustomMetricsReporter::kv_cache_keys_{
     "Max KV cache blocks", "Free KV cache blocks", "Used KV cache blocks", "Tokens per KV cache block"};
-const std::vector<std::string> TritonMetrics::kv_cache_labels_{"max", "free", "used", "tokens_per"};
+const std::vector<std::string> CustomMetricsReporter::kv_cache_labels_{"max", "free", "used", "tokens_per"};
 
-const std::vector<std::string> TritonMetrics::v1_specific_keys_{
+const std::vector<std::string> CustomMetricsReporter::v1_specific_keys_{
     "Total Context Tokens", "Total Generation Tokens", "Empty Generation Slots"};
-const std::vector<std::string> TritonMetrics::v1_specific_labels_{
+const std::vector<std::string> CustomMetricsReporter::v1_specific_labels_{
     "total_context_tokens", "total_generation_tokens", "empty_generation_slots"};
 
-const std::vector<std::string> TritonMetrics::IFB_specific_keys_{
+const std::vector<std::string> CustomMetricsReporter::IFB_specific_keys_{
     "Total Context Tokens", "Generation Requests", "MicroBatch ID"};
-const std::vector<std::string> TritonMetrics::IFB_specific_labels_{
+const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
     "total_context_tokens", "generation_requests", "micro_batch_id"};
 
-const std::vector<std::string> TritonMetrics::general_metric_keys_{"Timestamp", "Iteration Counter"};
-const std::vector<std::string> TritonMetrics::general_metric_labels_{"timestamp", "iteration_counter"};
+const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
+const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
 
 uint64_t convertTimestampToSeconds(const std::string& ts)
 {
@@ -93,26 +87,25 @@ TRITONSERVER_Error* TritonMetricGroup::CreateGroup(const std::string& model_name
     RETURN_IF_ERROR(TRITONSERVER_MetricFamilyNew(&metric_family, TRITONSERVER_METRIC_KIND_GAUGE,
         metric_family_label_.c_str(), metric_family_description_.c_str()));
     metric_family_.reset(metric_family);
-    std::vector<const TRITONSERVER_Parameter*> labels;
-    labels.emplace_back(TRITONSERVER_ParameterNew("model", TRITONSERVER_PARAMETER_STRING, model_name.c_str()));
-    labels.emplace_back(
-        TRITONSERVER_ParameterNew("version", TRITONSERVER_PARAMETER_STRING, std::to_string(version).c_str()));
 
-    for (size_t i = 0; i < sub_labels_.size(); i++)
+    std::vector<const TRITONSERVER_Parameter*> labels;
+    std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_label(
+        TRITONSERVER_ParameterNew("model", TRITONSERVER_PARAMETER_STRING, model_name.c_str()));
+    std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_version(
+        TRITONSERVER_ParameterNew("version", TRITONSERVER_PARAMETER_STRING, std::to_string(version).c_str()));
+    labels.emplace_back(model_label.get());
+    labels.emplace_back(model_version.get());
+
+    for (size_t i = 0; i < sub_labels_.size(); ++i)
     {
         TRITONSERVER_Metric* metric;
-        labels.emplace_back(
+        std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> sub_label(
             TRITONSERVER_ParameterNew(category_label_.c_str(), TRITONSERVER_PARAMETER_STRING, sub_labels_[i].c_str()));
+        labels.emplace_back(sub_label.get());
         RETURN_IF_ERROR(TRITONSERVER_MetricNew(&metric, metric_family_.get(), labels.data(), labels.size()));
         std::unique_ptr<TRITONSERVER_Metric, MetricDeleter> unique_metric(metric);
         metrics_.push_back(std::move(unique_metric));
-        TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(labels.back()));
         labels.pop_back();
-    }
-
-    for (const auto label : labels)
-    {
-        TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
     }
 
     return nullptr; // success
@@ -120,7 +113,7 @@ TRITONSERVER_Error* TritonMetricGroup::CreateGroup(const std::string& model_name
 
 TRITONSERVER_Error* TritonMetricGroup::UpdateGroup(std::vector<uint64_t>& values)
 {
-    for (size_t i = 0; i < values.size(); i++)
+    for (size_t i = 0; i < values.size(); ++i)
     {
         RETURN_IF_ERROR(TRITONSERVER_MetricSet(metrics_[i].get(), values[i]));
     }
@@ -132,25 +125,25 @@ const std::vector<std::string>& TritonMetricGroup::JsonKeys() const
     return json_keys_;
 }
 
-TRITONSERVER_Error* TritonMetrics::InitMetrics(
+TRITONSERVER_Error* CustomMetricsReporter::InitReporter(
     const std::string& model_name, const uint64_t version, const bool is_v1_model)
 {
     /* REQUEST METRIC GROUP */
     request_metric_family_ = std::make_unique<TritonMetricGroup>(
-        "nv_trt_llm_request_statistics", "TRT LLM request metrics", "request_type", request_keys_, request_labels_);
+        "nv_trt_llm_request_metrics", "TRT LLM request metrics", "request_type", request_keys_, request_labels_);
 
     RETURN_IF_ERROR(request_metric_family_->CreateGroup(model_name, version));
     metric_groups_.push_back(std::move(request_metric_family_));
 
     /* RUNTIME MEMORY METRIC GROUP */
-    runtime_memory_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_runtime_memory_statistics",
+    runtime_memory_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_runtime_memory_metrics",
         "TRT LLM runtime memory metrics", "memory_type", runtime_memory_keys_, runtime_memory_labels_);
 
     RETURN_IF_ERROR(runtime_memory_metric_family_->CreateGroup(model_name, version));
     metric_groups_.push_back(std::move(runtime_memory_metric_family_));
 
     /* KV CACHE METRIC GROUP */
-    kv_cache_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_kv_cache_block_statistics",
+    kv_cache_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_kv_cache_block_metrics",
         "TRT LLM KV cache block metrics", "kv_cache_block_type", kv_cache_keys_, kv_cache_labels_);
 
     RETURN_IF_ERROR(kv_cache_metric_family_->CreateGroup(model_name, version));
@@ -158,7 +151,7 @@ TRITONSERVER_Error* TritonMetrics::InitMetrics(
 
     /* MODEL-TYPE METRIC GROUP (V1 / IFB) */
     std::string model = (is_v1_model) ? "v1" : "inflight_batcher";
-    std::string model_metric_family_label = "nv_trt_llm_" + model + "_statistics";
+    std::string model_metric_family_label = "nv_trt_llm_" + model + "_metrics";
     std::string model_metric_family_description = "TRT LLM " + model + "-specific metrics";
     std::string model_metric_family_category = model + "_specific_metric";
 
@@ -177,8 +170,8 @@ TRITONSERVER_Error* TritonMetrics::InitMetrics(
     metric_groups_.push_back(std::move(model_type_metric_family_));
 
     /* GENERAL METRIC GROUP */
-    general_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_general_statistics",
-        "General TRT LLM statistics", "general_type", general_metric_keys_, general_metric_labels_);
+    general_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_general_metrics",
+        "General TRT LLM metrics", "general_type", general_metric_keys_, general_metric_labels_);
 
     RETURN_IF_ERROR(general_metric_family_->CreateGroup(model_name, version));
     metric_groups_.push_back(std::move(general_metric_family_));
@@ -186,12 +179,12 @@ TRITONSERVER_Error* TritonMetrics::InitMetrics(
     return nullptr; // success
 }
 
-TRITONSERVER_Error* TritonMetrics::UpdateMetrics(const std::string& statistics)
+TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(const std::string& custom_metrics)
 {
-    triton::common::TritonJson::Value stats;
+    triton::common::TritonJson::Value metrics;
     std::vector<std::string> members;
-    stats.Parse(statistics);
-    stats.Members(&members);
+    metrics.Parse(custom_metrics);
+    metrics.Members(&members);
 
     for (const auto& metric_group : metric_groups_)
     {
@@ -201,7 +194,7 @@ TRITONSERVER_Error* TritonMetrics::UpdateMetrics(const std::string& statistics)
         {
             triton::common::TritonJson::Value value_json;
             uint64_t value;
-            stats.Find(key.c_str(), &value_json);
+            metrics.Find(key.c_str(), &value_json);
             if (key == "Timestamp")
             {
                 std::string timestamp;
@@ -222,7 +215,4 @@ TRITONSERVER_Error* TritonMetrics::UpdateMetrics(const std::string& statistics)
     return nullptr;
 }
 
-} // namespace triton_metrics
-} // namespace inflight_batcher_llm
-} // namespace backend
-} // namespace triton
+} // namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter
