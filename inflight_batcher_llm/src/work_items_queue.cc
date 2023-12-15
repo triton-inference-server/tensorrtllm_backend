@@ -30,6 +30,11 @@
 namespace triton::backend::inflight_batcher_llm
 {
 
+WorkItemsQueue::WorkItemsQueue(bool isDecoupled)
+    : mIsDecoupled(isDecoupled)
+{
+}
+
 void WorkItemsQueue::clear()
 {
     std::lock_guard<std::mutex> lk(mMutex);
@@ -42,7 +47,7 @@ void WorkItemsQueue::clear()
 /// @brief Add a batch of new work item to the queue
 /// Throws an error if requestId already exists
 std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
-    std::vector<std::pair<uint64_t, TRITONBACKEND_Request*>>& requestsToPush, bool isDecoupled)
+    std::vector<RequestWrapper>& requestsToPush, uint64_t exec_start_ns)
 {
     std::lock_guard<std::mutex> lk(mMutex);
     std::vector<std::shared_ptr<std::exception>> reqExceptions;
@@ -56,10 +61,11 @@ std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
         }
         else
         {
-            auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, isDecoupled)
-                                           : std::make_shared<WorkItem>(request, isDecoupled);
+            auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, mIsDecoupled)
+                                           : std::make_shared<WorkItem>(request, mIsDecoupled);
             mPendingWorkItems.push_back(workItem);
             mPendingWorkItemsReqIds.insert(workItem->requestId());
+            workItem->getTimestamps().exec_start_ns = exec_start_ns;
             reqExceptions.push_back(nullptr);
         }
     }
@@ -69,6 +75,7 @@ std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
 std::tuple<std::shared_ptr<WorkItem>, bool> WorkItemsQueue::pop()
 {
     std::lock_guard<std::mutex> lk(mMutex);
+
     if (mPendingWorkItems.empty())
     {
         return {nullptr, false};
@@ -77,6 +84,7 @@ std::tuple<std::shared_ptr<WorkItem>, bool> WorkItemsQueue::pop()
     auto workItem = mPendingWorkItems.front();
     mPendingWorkItems.pop_front();
     mPendingWorkItemsReqIds.erase(workItem->requestId());
+    SET_TIMESTAMP(workItem->getTimestamps().compute_start_ns);
 
     // Check if work item has been stopped
     bool is_stopped = mStoppedReqIds.count(workItem->requestId());

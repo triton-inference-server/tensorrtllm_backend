@@ -51,7 +51,6 @@ RUN rm -fr tensorrtllm_backend
     COPY tensorrt_llm/docker/common/install_tensorrt.sh /tmp/
     """
     df += """
-
 ENV CUDA_VER=12.3
 ENV CUDNN_VER=8.9.6.50-1+cuda12.2
 ENV NCCL_VER=2.19.3-1+cuda12.3
@@ -101,6 +100,11 @@ RUN if pip freeze | grep -q "nvidia.*"; then \
         pip freeze | grep "nvidia.*" | xargs pip uninstall -y; \
     fi
 RUN pip cache purge
+
+# Drop the static libs
+RUN ARCH="$(uname -i)" && \
+    rm -f ${TRT_ROOT}/targets/${ARCH}-linux-gnu/lib/libnvinfer*.a \
+          ${TRT_ROOT}/targets/${ARCH}-linux-gnu/lib/libnvonnxparser_*.a
 
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:/opt/tritonserver/backends/tensorrtllm:$LD_LIBRARY_PATH
 """
@@ -157,10 +161,10 @@ ARG TRTLLM_BUILD_LIB=tensorrt_llm/cpp/build_{}/tensorrt_llm
     df += """
 # Copy all artifacts needed by the backend to /opt/trtllm_lib
 RUN mkdir -p /opt/trtllm_lib && \
-    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so /opt/trtllm_lib && \
+    cp ${TRTLLM_BUILD_LIB}/plugins/libnvinfer_plugin_tensorrt_llm.so.9.2.0 /opt/trtllm_lib && \
     (cd /opt/trtllm_lib && \
-        ln -s libnvinfer_plugin_tensorrt_llm.so libnvinfer_plugin_tensorrt_llm.so.9 && \
-        ln -s libnvinfer_plugin_tensorrt_llm.so libnvinfer_plugin_tensorrt_llm.so.9.1.0)
+        ln -s libnvinfer_plugin_tensorrt_llm.so.9.2.0 libnvinfer_plugin_tensorrt_llm.so && \
+        ln -s libnvinfer_plugin_tensorrt_llm.so.9.2.0 libnvinfer_plugin_tensorrt_llm.so.9)
 """
 
     with open(FLAGS.output, "w") as dfile:

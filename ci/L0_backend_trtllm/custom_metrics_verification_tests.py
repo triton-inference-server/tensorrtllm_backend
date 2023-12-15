@@ -54,7 +54,7 @@ metric_to_stat_dict = {
 }
 
 
-class TRTLLMStatsTest(unittest.TestCase):
+class CustomMetricsTest(unittest.TestCase):
 
     def _parse_log_file(self, filename):
         with open(filename) as log_file:
