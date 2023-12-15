@@ -38,6 +38,7 @@ def stop_triton_server():
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize(
@@ -48,7 +49,7 @@ def test_llama_v2_7b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
@@ -75,16 +76,15 @@ def test_llama_v2_7b_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -127,6 +127,7 @@ def test_llama_v2_7b_ifb(
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_mistral_v1_7b_ifb(
@@ -134,7 +135,7 @@ def test_mistral_v1_7b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_llama_example_root, mistral_v1_tokenizer_model_root,
@@ -157,16 +158,15 @@ def test_mistral_v1_7b_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = mistral_v1_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -278,6 +278,7 @@ def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_ATTENTION_WINDOW_SIZE,
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_llama_v2_70b_ifb(
@@ -285,7 +286,7 @@ def test_llama_v2_70b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
@@ -308,16 +309,15 @@ def test_llama_v2_70b_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -429,6 +429,7 @@ def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize(
@@ -439,7 +440,7 @@ def test_gpt_350m_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
@@ -467,16 +468,15 @@ def test_gpt_350m_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -521,6 +521,7 @@ def test_gpt_350m_ifb(
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_175b_ifb(
@@ -528,7 +529,7 @@ def test_gpt_175b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
         tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
@@ -549,16 +550,15 @@ def test_gpt_175b_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -598,6 +598,7 @@ def test_gpt_175b_ifb(
                          ids=["disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
@@ -607,7 +608,7 @@ def test_gpt_next_ptuning_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
         EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
         inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
@@ -630,16 +631,15 @@ def test_gpt_next_ptuning_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
+        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
