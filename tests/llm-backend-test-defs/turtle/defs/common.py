@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import time
@@ -84,19 +85,28 @@ def modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
         shell=True)
 
 
-def validate_by_sequence_matcher(output_result, golden_result, threshold):
-    output_result = output_result.strip()
-    golden_result = golden_result.strip()
-    matcher = SequenceMatcher(None, output_result, golden_result)
-    # Get the similarity ratio
-    similarity_ratio = matcher.ratio()
-    print_info(f"output_result: {output_result}")
-    print_info(f"golden_result: {golden_result}")
-    print_info(f"similarity_ratio: {similarity_ratio}")
+def validate_by_sequence_matcher(output_result, golden_results, threshold):
+    rankings = {}
+    for golden_result in golden_results:
+        output_result = output_result.strip()
+        golden_result = golden_result.strip()
+        matcher = SequenceMatcher(None, output_result, golden_result)
+        # Get the similarity ratio and populate rankings dict
+        similarity_ratio = matcher.ratio()
+        rankings[str(similarity_ratio)] = golden_result
 
-    if similarity_ratio < threshold:
+    # Find out the highest_similarity_ratio
+    highest_similarity_ratio, golden_result = max(rankings.items(),
+                                                  key=lambda x: float(x[0]))
+    print_info(f"output_result: {output_result}")
+    print_info(
+        f"rankings(similarity_ratio:golden_result):\n{json.dumps(rankings, indent=4)}"
+    )
+
+    if float(highest_similarity_ratio) < threshold:
         pytest.fail(
-            f"similarity_ratio {similarity_ratio} is less than {threshold}")
+            f"highest_similarity_ratio {highest_similarity_ratio} is less than {threshold}"
+        )
 
 
 def run_cpp_backend_tests(feature_name, llm_backend_venv,

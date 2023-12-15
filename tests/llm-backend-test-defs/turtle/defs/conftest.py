@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import tempfile
 
 import pytest
 # Conftest imports require defs root. This is not the case inside test defines however.
@@ -200,6 +201,32 @@ def get_device_count():
     device_count = len(output.strip().split('\n'))
 
     return device_count
+
+
+@pytest.fixture(autouse=True)
+def skip_by_device_memory(request):
+    "fixture for skip less device memory"
+    if request.node.get_closest_marker('skip_less_device_memory'):
+        device_memory = get_device_memory()
+        expected_memory = request.node.get_closest_marker(
+            'skip_less_device_memory').args[0]
+        if expected_memory > int(device_memory):
+            pytest.skip(
+                f'Device memory {device_memory} is less than {expected_memory}'
+            )
+
+
+def get_device_memory():
+    "get gpu memory"
+    memory = 0
+    with tempfile.TemporaryDirectory() as temp_dirname:
+        cmd = " ".join([
+            "nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader"
+        ])
+        output = check_output(cmd, shell=True, cwd=temp_dirname)
+        memory = int(output.strip().split()[0])
+
+    return memory
 
 
 @pytest.fixture(scope="session")

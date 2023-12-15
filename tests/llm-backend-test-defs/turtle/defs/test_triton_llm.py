@@ -19,8 +19,8 @@ def stop_triton_server():
     time.sleep(8)
 
 
-@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
-@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble", "tensorrt_llm_bls"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["True", "False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
@@ -410,8 +410,8 @@ def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
         # Validate Accuracy -ToDo
 
 
-@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
-@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble", "tensorrt_llm_bls"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["True", "False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
@@ -501,6 +501,7 @@ def test_gpt_350m_ifb(
 
 
 @pytest.mark.skip_less_device(8)
+@pytest.mark.skip_less_device_memory(80000)
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
