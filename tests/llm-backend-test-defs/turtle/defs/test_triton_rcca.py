@@ -201,18 +201,17 @@ UberEats Support: You're welcome. Enjoy your meal!!
     if m is not None:
         output_result = m.group(1).strip()
 
-    # Golden output sentence
-    golden_result_max_beam_1 = """
+    # Golden output sentences
+    golden_result_0 = """
 In this conversation, the customer support representative was able to resolve the customer's issue by providing them with a discount on their order and keeping them updated on the status of their delivery. The representative was professional and courteous throughout the conversation, and the customer was satisfied with the resolution provided.
 """
-    golden_result_max_beam_4 = """
+    golden_result_1 = """
 In this conversation, the UberEats customer support representative was able to resolve the customer's issue by providing a 10% discount on their order and offering live updates on the status of their delivery. The customer was satisfied with the resolution and thanked the representative for their help.
 """
+    golden_result_2 = """
+In this conversation, the customer support representative was able to resolve the customer's issue by providing them with a discount on their order and keeping them updated on the status of their delivery.
+"""
+    golden_results = [golden_result_0, golden_result_1, golden_result_2]
     # Validate Accuracy
     threshold = 0.8
-    if MAX_BEAM_WIDTH == '1':
-        validate_by_sequence_matcher(output_result, golden_result_max_beam_1,
-                                     threshold)
-    elif MAX_BEAM_WIDTH == '4':
-        validate_by_sequence_matcher(output_result, golden_result_max_beam_4,
-                                     threshold)
+    validate_by_sequence_matcher(output_result, golden_results, threshold)
