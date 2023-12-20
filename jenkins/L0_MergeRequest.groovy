@@ -290,7 +290,7 @@ def installDependency()
 
     sh "curl -L ${backendTarfile} | tar -xz ${BACKEND_ROOT}"
     sh "ls -lah"
-    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl"
+    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl"
 
     sh "env"
     sh "which python3"

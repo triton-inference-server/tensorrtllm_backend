@@ -181,6 +181,17 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
     }
 
+    bool normalizeLogProbs = true;
+    try
+    {
+        normalizeLogProbs = model_state_->GetParameter<bool>("normalize_log_probs");
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("normalize_log_probs is not specified, will be set to true");
+    }
+
     bool excludeInputInOutput = false;
     try
     {
@@ -223,6 +234,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
     optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
+    optionalParams.normalizeLogProbs = normalizeLogProbs;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
@@ -232,7 +244,8 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); }, optionalParams,
         std::nullopt, std::nullopt, excludeInputInOutput);
 
-    if (getCommWorldRank() != 0)
+    auto& comm = COMM_WORLD;
+    if (comm.getRank() != 0)
     {
         while (true)
         {
@@ -326,8 +339,10 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         return rval;
     }
 
-    auto world_size = getCommWorldSize();
-    auto rank = getCommWorldRank();
+    auto& comm = COMM_WORLD;
+
+    auto world_size = comm.getSize();
+    auto rank = comm.getRank();
     if (rank == 0)
     {
         auto numPendingWorkItems = mWorkItemsQueue->numPendingWorkItems();
@@ -355,7 +370,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         if (world_size > 1)
         {
             int64_t num_new_work_items = rval.size();
-            bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+            comm.bcast(&num_new_work_items, 1, MpiType::kINT64, 0);
 
             if (num_new_work_items > 0)
             {
@@ -366,7 +381,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
                     packed.push_back(static_cast<int64_t>(vpacked.size()));
                     packed.insert(packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                 }
-                bcast(packed, 0, COMM_WORLD);
+                comm.bcast(packed, 0);
             }
         }
     }
@@ -374,11 +389,11 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
     {
         // subordinate ranks hang until master rank sends work
         int64_t num_new_work_items;
-        bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+        comm.bcast(&num_new_work_items, 1, MpiType::kINT64, 0);
         if (num_new_work_items > 0)
         {
             std::vector<int64_t> packed;
-            bcast(packed, 0, COMM_WORLD);
+            comm.bcast(packed, 0);
             int64_t* packed_ptr = packed.data();
             for (int64_t count = 0; count < num_new_work_items; ++count)
             {
@@ -395,7 +410,8 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
 void ModelInstanceState::sendResponse(
     uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
 {
-    if (getCommWorldRank() == 0)
+    auto& comm = COMM_WORLD;
+    if (comm.getRank() == 0)
     {
         std::string errStr = std::string("Failed to send Triton response for requestId: ")
             + utils::getRequestIdStr(requestId, mRequestIdStrMap);
@@ -426,24 +442,25 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
 
     int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
-    if (getCommWorldSize() > 1)
+    auto& comm = COMM_WORLD;
+    if (comm.getSize() > 1)
     {
         // Broadcast number of stopped requests
-        bcast(&nStoppedReqIds, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+        comm.bcast(&nStoppedReqIds, 1, MpiType::kINT64, 0);
 
         if (nStoppedReqIds > 0)
         {
             // Broadcast stopped requests Ids
-            if (getCommWorldRank() == 0)
+            if (comm.getRank() == 0)
             {
                 // Store the requestIds in a contiguous vector
                 std::vector<uint64_t> stoppedReqIdsVec(stoppedReqIds.begin(), stoppedReqIds.end());
-                bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
+                comm.bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MpiType::kUINT64, 0);
             }
             else
             {
                 std::vector<uint64_t> stoppedReqIdsVec(nStoppedReqIds);
-                bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
+                comm.bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MpiType::kUINT64, 0);
                 // Store the requestIds in the set
                 stoppedReqIds.clear();
                 std::copy(stoppedReqIdsVec.begin(), stoppedReqIdsVec.end(),

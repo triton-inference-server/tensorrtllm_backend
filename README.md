@@ -220,6 +220,7 @@ The following table shows the fields that may to be modified before deployment:
 | `max_num_sequences` | Optional (default=`max_batch_size` if `enable_trt_overlap` is `false` and to `2 * max_batch_size` if `enable_trt_overlap` is `true`, where `max_batch_size` is the TRT engine maximum batch size). Maximum number of sequences that the in-flight batching scheme can maintain state for.
 | `enable_trt_overlap` | Optional (default=`true`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
+| `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 
