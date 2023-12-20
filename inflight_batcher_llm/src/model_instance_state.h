@@ -28,6 +28,7 @@
 #define _GLIBCXX_USE_CXX11_ABI 0
 
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
@@ -126,6 +127,8 @@ private:
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
+
+    std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

@@ -50,9 +50,13 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type);
 /// @brief  Convert TRT datatype to Triton datatype
 TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type);
 
-/// @brief get the requestId of the request
+/// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t
-uint64_t getRequestId(TRITONBACKEND_Request* request);
+uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap);
+
+/// @brief get the original requestId string from the uint64_t requestId
+/// @return If uint64_t id is not present in requestIdStrMap, returns std::to_string(requestId)
+std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std::string> const& requestIdStrMap);
 
 /// @brief Get the requested output names
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request);

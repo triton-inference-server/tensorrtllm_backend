@@ -252,6 +252,14 @@ run_cpp_trtllm_backend_tests () {
             --tokenizer-type ${TOKENIZER_TYPE} \
             --return-log-probs --top-k 2 \
             2>&1 | tee output_log_probs
+
+        #test with string request id
+        python3 inflight_batcher_llm_client.py \
+            ${CHECK_OUTPUT_FLAG} \
+            --request-output-len=10 \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-type ${TOKENIZER_TYPE} \
+            --request-id my_request 2>&1 | tee output_str_request
     fi
 
     popd # inflight_batcher_llm/client
