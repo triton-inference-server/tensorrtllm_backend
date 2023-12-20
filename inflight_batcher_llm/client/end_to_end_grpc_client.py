@@ -12,14 +12,12 @@ import sys
 
 import numpy as np
 import tritonclient.grpc as grpcclient
-import tritonclient.http as httpclient
 from tritonclient.utils import InferenceServerException, np_to_triton_dtype
 
 
-def prepare_tensor(name, input, protocol):
-    client_util = httpclient if protocol == "http" else grpcclient
-    t = client_util.InferInput(name, input.shape,
-                               np_to_triton_dtype(input.dtype))
+def prepare_tensor(name, input):
+    t = grpcclient.InferInput(name, input.shape,
+                              np_to_triton_dtype(input.dtype))
     t.set_data_from_numpy(input)
     return t
 
@@ -35,59 +33,49 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(error)
     else:
         user_data._completed_requests.put(result)
-        output = result.as_numpy('text_output')
-        print(output, flush=True)
 
 
-def test(triton_client, prompt, request_id, repetition_penalty,
-         presence_penalty, temperatuure, stop_words, bad_words,
-         embedding_bias_words, embedding_bias_weights):
-    model_name = "ensemble"
+def run_inference(triton_client, prompt, output_len, request_id,
+                  repetition_penalty, presence_penalty, temperature,
+                  stop_words, bad_words, embedding_bias_words,
+                  embedding_bias_weights, model_name, streaming, beam_width,
+                  overwrite_output_text, verbose):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
-    output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
-    streaming = [[FLAGS.streaming]]
-    streaming_data = np.array(streaming, dtype=bool)
-    beam_width = [[FLAGS.beam_width]]
-    beam_width_data = np.array(beam_width, dtype=np.uint32)
-    temperature = [[FLAGS.temperature]]
-    temperature_data = np.array(temperature, dtype=np.float32)
+    output0_len = np.ones_like(input0).astype(np.int32) * output_len
+    streaming_data = np.array([[streaming]], dtype=bool)
+    beam_width_data = np.array([[beam_width]], dtype=np.int32)
+    temperature_data = np.array([[temperature]], dtype=np.float32)
 
     inputs = [
-        prepare_tensor("text_input", input0_data, FLAGS.protocol),
-        prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
-        prepare_tensor("stream", streaming_data, FLAGS.protocol),
-        prepare_tensor("beam_width", beam_width_data, FLAGS.protocol),
-        prepare_tensor("temperature", temperature_data, FLAGS.protocol),
+        prepare_tensor("text_input", input0_data),
+        prepare_tensor("max_tokens", output0_len),
+        prepare_tensor("stream", streaming_data),
+        prepare_tensor("beam_width", beam_width_data),
+        prepare_tensor("temperature", temperature_data),
     ]
 
     if bad_words:
         bad_words_list = np.array([bad_words], dtype=object)
-        inputs += [prepare_tensor("bad_words", bad_words_list, FLAGS.protocol)]
+        inputs += [prepare_tensor("bad_words", bad_words_list)]
 
     if stop_words:
         stop_words_list = np.array([stop_words], dtype=object)
-        inputs += [
-            prepare_tensor("stop_words", stop_words_list, FLAGS.protocol)
-        ]
+        inputs += [prepare_tensor("stop_words", stop_words_list)]
 
     if repetition_penalty is not None:
         repetition_penalty = [[repetition_penalty]]
         repetition_penalty_data = np.array(repetition_penalty,
                                            dtype=np.float32)
         inputs += [
-            prepare_tensor("repetition_penalty", repetition_penalty_data,
-                           FLAGS.protocol),
+            prepare_tensor("repetition_penalty", repetition_penalty_data)
         ]
 
     if presence_penalty is not None:
         presence_penalty = [[presence_penalty]]
         presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
-        inputs += [
-            prepare_tensor("presence_penalty", presence_penalty_data,
-                           FLAGS.protocol),
-        ]
+        inputs += [prepare_tensor("presence_penalty", presence_penalty_data)]
 
     if (embedding_bias_words is not None and embedding_bias_weights is None
         ) or (embedding_bias_words is None
@@ -104,11 +92,10 @@ def test(triton_client, prompt, request_id, repetition_penalty,
         embedding_bias_weights_data = np.array([embedding_bias_weights],
                                                dtype=np.float32)
         inputs.append(
-            prepare_tensor("embedding_bias_words", embedding_bias_words_data,
-                           FLAGS.protocol))
+            prepare_tensor("embedding_bias_words", embedding_bias_words_data))
         inputs.append(
             prepare_tensor("embedding_bias_weights",
-                           embedding_bias_weights_data, FLAGS.protocol), )
+                           embedding_bias_weights_data))
 
     user_data = UserData()
     # Establish stream
@@ -120,6 +107,7 @@ def test(triton_client, prompt, request_id, repetition_penalty,
     triton_client.stop_stream()
 
     # Parse the responses
+    output_text = ""
     while True:
         try:
             result = user_data._completed_requests.get(block=False)
@@ -130,7 +118,23 @@ def test(triton_client, prompt, request_id, repetition_penalty,
             print("Received an error from server:")
             print(result)
         else:
-            result.as_numpy('text_output')
+            output = result.as_numpy('text_output')
+            if streaming and beam_width == 1:
+                new_output = output[0].decode("utf8")
+                if overwrite_output_text:
+                    output_text = new_output
+                else:
+                    output_text += new_output
+            else:
+                output_text = output[0].decode("utf8")
+                if verbose:
+                    print(output, flush=True)
+
+    if streaming and beam_width == 1:
+        if verbose:
+            print(output_text)
+
+    return output_text
 
 
 if __name__ == '__main__':
@@ -152,6 +156,13 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='Input prompt.')
+
+    parser.add_argument('--model-name',
+                        type=str,
+                        required=False,
+                        default="ensemble",
+                        help='Name of the Triton model to send request to')
+
     parser.add_argument(
         "-S",
         "--streaming",
@@ -194,16 +205,6 @@ if __name__ == '__main__':
         help="The presence penalty value",
     )
 
-    parser.add_argument(
-        '-i',
-        '--protocol',
-        type=str,
-        required=False,
-        default='grpc',
-        choices=['grpc'],
-        help='Protocol ("http"/"grpc") used to ' +
-        'communicate with inference service. Default is "http".')
-
     parser.add_argument('-o',
                         '--output-len',
                         type=int,
@@ -213,7 +214,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--request-id',
                         type=str,
-                        default='1',
+                        default='',
                         required=False,
                         help='The request_id for the stop request')
 
@@ -237,9 +238,18 @@ if __name__ == '__main__':
                         default=[],
                         help='The biased words weights')
 
+    parser.add_argument(
+        '--overwrite-output-text',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'In streaming mode, overwrite previously received output text instead of appending to it'
+    )
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
-        FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
+        FLAGS.url = "localhost:8001"
 
     embedding_bias_words = FLAGS.embedding_bias_words if FLAGS.embedding_bias_words else None
     embedding_bias_weights = FLAGS.embedding_bias_weights if FLAGS.embedding_bias_weights else None
@@ -250,6 +260,9 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
-    test(client, FLAGS.prompt, FLAGS.request_id, FLAGS.repetition_penalty,
-         FLAGS.presence_penalty, FLAGS.temperature, FLAGS.stop_words,
-         FLAGS.bad_words, embedding_bias_words, embedding_bias_weights)
+    output_text = run_inference(
+        client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
+        FLAGS.repetition_penalty, FLAGS.presence_penalty, FLAGS.temperature,
+        FLAGS.stop_words, FLAGS.bad_words, embedding_bias_words,
+        embedding_bias_weights, FLAGS.model_name, FLAGS.streaming,
+        FLAGS.beam_width, FLAGS.overwrite_output_text, True)

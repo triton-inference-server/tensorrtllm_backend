@@ -69,6 +69,16 @@ _str_to_np_dict = dict(
 )
 
 
+def curate_log_output(token_sequence,
+                      identifier="Input",
+                      log_max_sequence_len=256):
+    if len(token_sequence) > log_max_sequence_len:
+        print(f"{identifier} sequence starts with: ",
+              token_sequence[:log_max_sequence_len])
+    else:
+        print(f"{identifier} sequence: ", token_sequence)
+
+
 def str_dtype_to_np(dtype):
     ret = _str_to_np_dict.get(dtype)
     assert ret is not None, f'Unsupported dtype: {dtype}'
@@ -109,7 +119,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, streaming_data, end_id, pad_id,
                    prompt_embedding_table_data, prompt_vocab_size_data,
-                   return_log_probs_data, top_k_data, top_p_data):
+                   return_log_probs_data, top_k_data, top_p_data,
+                   draft_ids_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -137,7 +148,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("presence_penalty", presence_penalty_data),
         ]
-
+    if draft_ids_data is not None:
+        inputs += [
+            prepare_tensor("draft_input_ids", draft_ids_data),
+        ]
     return inputs
 
 
@@ -146,13 +160,13 @@ def prepare_stop_signals():
     inputs = [
         grpcclient.InferInput('input_ids', [1, 1], "INT32"),
         grpcclient.InferInput('input_lengths', [1, 1], "INT32"),
-        grpcclient.InferInput('request_output_len', [1, 1], "UINT32"),
+        grpcclient.InferInput('request_output_len', [1, 1], "INT32"),
         grpcclient.InferInput('stop', [1, 1], "BOOL"),
     ]
 
     inputs[0].set_data_from_numpy(np.empty([1, 1], dtype=np.int32))
     inputs[1].set_data_from_numpy(np.zeros([1, 1], dtype=np.int32))
-    inputs[2].set_data_from_numpy(np.array([[0]], dtype=np.uint32))
+    inputs[2].set_data_from_numpy(np.array([[0]], dtype=np.int32))
     inputs[3].set_data_from_numpy(np.array([[True]], dtype='bool'))
 
     return inputs
@@ -169,10 +183,12 @@ def callback(user_data, result, error):
     else:
         user_data._completed_requests.put(result)
         if (FLAGS.streaming):
-            output_ids = result.as_numpy('output_ids')
-            if output_ids != None:
-                tokens = list(output_ids[0][0])
-                print(tokens, flush=True)
+            if result.get_output('output_ids') is not None:
+                output_ids = result.as_numpy('output_ids')
+                seq_lens = result.as_numpy('sequence_length')
+                if seq_lens == None or seq_lens[0][0] > 0:
+                    tokens = list(output_ids[0][0])
+                    print(tokens, flush=True)
 
 
 if __name__ == "__main__":
@@ -205,6 +221,12 @@ if __name__ == "__main__":
                         required=False,
                         default='',
                         help='Path to csv file containing the input tokens')
+
+    parser.add_argument('--draft-tokens-csv',
+                        type=str,
+                        required=False,
+                        default='',
+                        help='Path to csv file containing the draft tokens')
 
     parser.add_argument(
         '--output-tokens-csv',
@@ -357,7 +379,7 @@ if __name__ == "__main__":
                         help='Specify tokenizer type')
     parser.add_argument('--request-id',
                         type=str,
-                        default='1',
+                        default='',
                         required=False,
                         help='The request_id for the stop request')
 
@@ -418,13 +440,22 @@ if __name__ == "__main__":
     FLAGS = parser.parse_args()
 
     tokenizer = None
+    draft_ids = None
     if FLAGS.input_tokens_csv != "":
         with open(FLAGS.input_tokens_csv) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=",")
             for row in csv_reader:
                 input_ids = [[int(val) for val in row]]
                 break
-            print(input_ids)
+
+            curate_log_output(input_ids[0], "Input")
+
+        if FLAGS.draft_tokens_csv != "":
+            with open(FLAGS.draft_tokens_csv) as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=",")
+                for row in csv_reader:
+                    draft_ids = [[int(val) for val in row]]
+                    break
 
         end_id = FLAGS.end_id
         pad_id = FLAGS.pad_id
@@ -442,7 +473,8 @@ if __name__ == "__main__":
                                     padding_side='left')
         elif FLAGS.tokenizer_type == 'auto':
             tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                      padding_side='left')
+                                                      padding_side='left',
+                                                      trust_remote_code=True)
         elif FLAGS.tokenizer_type == 'llama':
             tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
                                                        legacy=False,
@@ -458,10 +490,10 @@ if __name__ == "__main__":
                                   add_special_tokens=False)[0]
 
         input_ids = [tokenizer.encode(FLAGS.text)]
-        print(input_ids)
+        curate_log_output(input_ids[0], "Input")
 
-    end_id_data = np.array([[end_id]], dtype=np.uint32)
-    pad_id_data = np.array([[pad_id]], dtype=np.uint32)
+    end_id_data = np.array([[end_id]], dtype=np.int32)
+    pad_id_data = np.array([[pad_id]], dtype=np.int32)
 
     #Get the prompt embedding table for the task id
     prompt_embedding_table_data = None
@@ -477,17 +509,17 @@ if __name__ == "__main__":
             prompt_table[FLAGS.prompt_task_id], axis=0)
 
         prompt_vocab_size = [[task_vocab_size]]
-        prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.uint32)
+        prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.int32)
 
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
     request_output_len = [[FLAGS.request_output_len]]
-    request_output_len_data = np.array(request_output_len, dtype=np.uint32)
+    request_output_len_data = np.array(request_output_len, dtype=np.int32)
     beam_width = [[FLAGS.beam_width]]
-    beam_width_data = np.array(beam_width, dtype=np.uint32)
+    beam_width_data = np.array(beam_width, dtype=np.int32)
     top_k = [[FLAGS.top_k]]
-    top_k_data = np.array(top_k, dtype=np.uint32)
+    top_k_data = np.array(top_k, dtype=np.int32)
     top_p = [[FLAGS.top_p]]
     top_p_data = np.array(top_p, dtype=np.float32)
     temperature = [[FLAGS.temperature]]
@@ -507,13 +539,17 @@ if __name__ == "__main__":
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
 
+    draft_ids_data = None
+    if draft_ids is not None:
+        draft_ids_data = np.array(draft_ids, dtype=np.int32)
+
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
                             temperature_data, repetition_penalty_data,
                             presence_penalty_data, streaming_data, end_id_data,
                             pad_id_data, prompt_embedding_table_data,
                             prompt_vocab_size_data, return_log_probs_data,
-                            top_k_data, top_p_data)
+                            top_k_data, top_p_data, draft_ids_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -614,9 +650,11 @@ if __name__ == "__main__":
                         sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
                             # Only one beam is supported
-                            tokens = list(output_ids[0][0])
-                            actual_output_ids[
-                                0] = actual_output_ids[0] + tokens
+                            if sequence_lengths == None or sequence_lengths[0][
+                                    0] > 0:
+                                tokens = list(output_ids[0][0])
+                                actual_output_ids[
+                                    0] = actual_output_ids[0] + tokens
                         else:
                             print("Got cancellation response from server")
             else:
@@ -706,7 +744,7 @@ if __name__ == "__main__":
                                      " output tokens, got " +
                                      str(len(output_ids_wo_prompt)))
 
-            print("output_ids = ", output_ids_w_prompt)
+            curate_log_output(output_ids_w_prompt, "Output")
 
             if (FLAGS.check_output and beam == 0):
                 passed = (output_ids_w_prompt == expected_output_ids)

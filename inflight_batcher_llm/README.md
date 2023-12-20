@@ -109,6 +109,25 @@ Or, equivalently, add `enable_trt_overlap:False` to the invocation of the
 python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:False"
 ```
 
+To reuse previously computed KV cache values (e.g. for system prompt), set `enable_kv_cache_reuse`
+parameter to `True` in the `config.pbtxt` file:
+
+```
+parameters: {
+  key: "enable_kv_cache_reuse"
+  value: {
+    string_value: "True"
+  }
+}
+```
+
+Or, equivalently, add `enable_kv_cache_reuse:True` to the invocation of the
+`fill_template.py` tool:
+
+```bash
+python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_kv_cache_reuse:True"
+```
+
 ## Launch the Triton server container using the model_repository you just created
 
 ```

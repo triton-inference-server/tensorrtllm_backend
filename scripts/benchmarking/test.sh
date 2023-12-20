@@ -9,8 +9,9 @@ MAX_INPUT_SEQLEN=$6
 TP=$7
 PP=$8
 WORLD_SIZE=$9
-RECORD_LOG=$10
-GET_NSYS_REP="${11:-"false"}"
+RECORD_LOG=${10}
+MAX_ATTENTION_WINDOW_SIZE=${11}
+GET_NSYS_REP="${12:-"false"}"
 
 set -e
 nvidia-smi
@@ -32,6 +33,7 @@ declare -A dataset_dict=( ["<dataset>"]="<dataset_path>" )
 declare -A REQ_RATES=(  ["128,0,1,0,8192"]="-1"
                         ["32,0,1024,0,1024"]="-1"
                         ["cnn"]="-1"
+                        ["openweb"]="-1"
                     )
 REQ_RATES_HIST="" #
 #-----------------------------------------------------------------#
@@ -52,10 +54,11 @@ fi
 
 fill_triton_repo () {
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:"False",batching_strategy:${BATCHING_STRATEGY},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${BS},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:"False",batching_strategy:${BATCHING_STRATEGY},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${BS},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},preprocessing_instance_count:1
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},postprocessing_instance_count:1
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/ensemble/config.pbtxt triton_max_batch_size:${BS}
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${BS},decoupled_mode:"False",accumulate_tokens:"False",bls_instance_count:1
 }
 
 print_test_params () {
@@ -70,6 +73,7 @@ print_test_params () {
     echo "TRITON_MAX_BATCH_SIZE: ${BS}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
     echo "MAX_BEAM_WIDTH: ${MAX_BEAM_WIDTH}"
+    echo "MAX_ATTENTION_WINDOW_SIZE: ${MAX_ATTENTION_WINDOW_SIZE}"
     echo "----------------------------------"
 }
 

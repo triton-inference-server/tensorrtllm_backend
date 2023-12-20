@@ -58,13 +58,18 @@ class TritonPythonModel:
             'string_value']
         tokenizer_type = model_config['parameters']['tokenizer_type'][
             'string_value']
+        self.add_special_tokens = model_config['parameters'].get(
+            'add_special_tokens',
+            {'string_value': "false"})['string_value'].lower() in [
+                'true', '1', 't', 'y', 'yes'
+            ]
 
         if tokenizer_type == 't5':
             self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
                                          padding_side='left')
         elif tokenizer_type == 'auto':
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
-                                                           padding_side='left')
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_dir, padding_side='left', trust_remote_code=True)
         elif tokenizer_type == 'llama':
             self.tokenizer = LlamaTokenizer.from_pretrained(
                 tokenizer_dir, legacy=False, padding_side='left')
@@ -207,7 +212,10 @@ class TritonPythonModel:
             query : batch string (2D numpy array)
         """
         start_ids = [
-            np.array(self.tokenizer.encode(s[0].decode())).astype(int)
+            np.array(
+                self.tokenizer.encode(
+                    s[0].decode(),
+                    add_special_tokens=self.add_special_tokens)).astype(int)
             for s in query
         ]
         start_lengths = np.array([[len(ids)] for ids in start_ids]).astype(int)

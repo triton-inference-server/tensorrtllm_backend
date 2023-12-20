@@ -14,6 +14,7 @@ GPT2=/trt_llm_data/llm-models/gpt2
 OPT_125M=/trt_llm_data/llm-models/opt-125m
 LLAMA=/trt_llm_data/llm-models/llama-models/llama-7b-hf
 GPTJ=/trt_llm_data/llm-models/gpt-j-6b
+MISTRAL=/trt_llm_data/llm-models/Mistral-7B-v0.1
 
 set -e
 pushd ../../
@@ -42,6 +43,26 @@ if [ "$MODEL" = "llama-7b-fp16" ]; then
         --n_layer 32 --n_head 32 --n_embd 4096 --inter_size 11008 \
         --vocab_size 32000 --n_positions 4096 --hidden_act "silu" \
         --use_gemm_plugin float16 \
+
+    popd
+
+fi
+
+if [ "$MODEL" = "mistral-7b-fp16" ]; then
+
+    pushd tensorrt_llm/examples/llama
+
+    pip install -r requirements.txt
+
+    python3 build.py --model_dir /tensorrtllm_backens/models/Mistral-7B-v0.1  --dtype float16 \
+      --use_gpt_attention_plugin float16  \
+      --use_gemm_plugin float16  \
+      --output_dir "$ENGINE_PATH"  \
+      --max_batch_size "$BS" --max_input_len 32256 --max_output_len 512 \
+      --use_rmsnorm_plugin float16  \
+      --enable_context_fmha --remove_input_padding \
+      --use_inflight_batching --paged_kv_cache \
+      --max_num_tokens "$MAX_TOKENS"
 
     popd
 
