@@ -31,7 +31,7 @@ def test_functionality(client, prompts, output_lens):
         model_name = 'preprocessing'
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -59,8 +59,9 @@ def test_functionality(client, prompts, output_lens):
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
-        cum_log_probs = result.as_numpy("cum_log_probs")
-        output_log_probs = result.as_numpy("output_log_probs")
+        cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
+        output_log_probs = result.as_numpy("output_log_probs").astype(
+            np.float32)
 
         model_name = "postprocessing"
         inputs = [
@@ -84,7 +85,7 @@ def test_functionality(client, prompts, output_lens):
         model_name = "ensemble"
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -115,10 +116,10 @@ def test_performance(client, prompts, output_lens):
     model_name = "ensemble"
 
     print(f"[INFO] Warm up for benchmarking.")
-    for i in range(10):
+    for i in range(min(10, len(prompts))):
         input0 = [[prompts[0]]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -140,7 +141,7 @@ def test_performance(client, prompts, output_lens):
     for i, prompt in enumerate(prompts):
         input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 

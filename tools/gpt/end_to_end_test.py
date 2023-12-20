@@ -113,7 +113,7 @@ if __name__ == '__main__':
                   ["Born in north-east France, Soyer trained as a"],
                   ["Data sources you can use to make a comparison:"]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
         bad_words_list = np.array(
             [["Hawks, Hawks"], [""], [""], [""], [""], [""], [""], [""]],
             dtype=object)
@@ -198,9 +198,9 @@ if __name__ == '__main__':
             [[""], [""], [""], [""], [""], [""], [""], ["month, month"]],
             dtype=object)
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.uint32) * FLAGS.output_len
+        output0_len = np.ones_like(input0).astype(np.int32) * FLAGS.output_len
         runtime_top_k = (FLAGS.topk *
-                         np.ones([input0_data.shape[0], 1])).astype(np.uint32)
+                         np.ones([input0_data.shape[0], 1])).astype(np.int32)
         runtime_top_p = FLAGS.topp * np.ones([input0_data.shape[0], 1]).astype(
             np.float32)
         temperature = 1.0 * np.ones([input0_data.shape[0], 1]).astype(
@@ -213,13 +213,13 @@ if __name__ == '__main__':
         output_log_probs = True * np.ones([input0_data.shape[0], 1
                                            ]).astype(bool)
         beam_width = (FLAGS.beam_width *
-                      np.ones([input0_data.shape[0], 1])).astype(np.uint32)
+                      np.ones([input0_data.shape[0], 1])).astype(np.int32)
         pad_ids = pad_id * \
-            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+            np.ones([input0_data.shape[0], 1]).astype(np.int32)
         end_ids = end_id * \
-            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+            np.ones([input0_data.shape[0], 1]).astype(np.int32)
         min_length = 1 * \
-            np.ones([input0_data.shape[0], 1]).astype(np.uint32)
+            np.ones([input0_data.shape[0], 1]).astype(np.int32)
         presence_penalty = 0.0 * \
             np.ones([input0_data.shape[0], 1]).astype(np.float32)
         inputs = [
