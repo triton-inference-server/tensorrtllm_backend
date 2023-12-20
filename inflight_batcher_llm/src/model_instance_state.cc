@@ -272,7 +272,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         TRITONBACKEND_Request* request = requests[r];
         try
         {
-            auto requestId = utils::getRequestId(request);
+            auto requestId = utils::getRequestId(request, mRequestIdStrMap);
             bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
 
             if (stopRequest)
@@ -397,7 +397,12 @@ void ModelInstanceState::sendResponse(
 {
     if (getCommWorldRank() == 0)
     {
-        std::string errStr = std::string("Failed to send Triton response for requestId: ") + std::to_string(requestId);
+        std::string errStr = std::string("Failed to send Triton response for requestId: ")
+            + utils::getRequestIdStr(requestId, mRequestIdStrMap);
+        if (final_response)
+        {
+            mRequestIdStrMap.erase(requestId);
+        }
         try
         {
             auto workItem = mWorkItemsQueue->getInProgressWorkItem(requestId);
@@ -446,6 +451,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
             }
         }
     }
+
     return stoppedReqIds;
 }
 
