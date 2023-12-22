@@ -41,7 +41,6 @@
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
-#include "tensorrt_llm/common/mpiUtils.h"
 
 #include "model_state.h"
 #include "work_item.h"
@@ -49,7 +48,6 @@
 
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
-using namespace tensorrt_llm::mpi;
 
 namespace triton::backend::inflight_batcher_llm
 {
