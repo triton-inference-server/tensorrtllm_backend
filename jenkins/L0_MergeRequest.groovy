@@ -418,6 +418,7 @@ pipeline {
       skipDefaultCheckout()
       // to better analyze the time for each step/test
       timestamps()
+      timeout(time: 8, unit: 'HOURS')
     }
     environment {
       //Workspace normally is: /home/jenkins/agent/workspace/LLM/L0_MergeRequest@tmp/
