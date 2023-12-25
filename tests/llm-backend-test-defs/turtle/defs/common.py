@@ -10,13 +10,18 @@ from trt_test.misc import check_call, check_output, print_info
 from .conftest import venv_check_call, venv_check_output
 
 
-def check_server_ready():
+def check_server_ready(http_port="8000"):
     timeout = 600
     timer = 0
     while True:
-        status = check_output(
-            r"curl -s -w %{http_code} 0.0.0.0:8000/v2/health/ready || true",
-            shell=True).strip()
+        if http_port == "8000":
+            status = check_output(
+                r"curl -s -w %{http_code} 0.0.0.0:8000/v2/health/ready || true",
+                shell=True).strip()
+        elif http_port == "8003":
+            status = check_output(
+                r"curl -s -w %{http_code} 0.0.0.0:8003/v2/health/ready || true",
+                shell=True).strip()
         if status == "200":
             break
         elif timer <= timeout:
@@ -38,27 +43,26 @@ def prepare_ib_model_repo(llm_backend_repo_root, new_model_repo):
 
 
 def modify_ib_config_pbtxt(
-        ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE, llm_backend_repo_root,
-        DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE, MAX_ATTENTION_WINDOW_SIZE,
-        BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY, MAX_NUM_SEQUENCE,
-        KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
-        ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        REPO_PATH, ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
+        llm_backend_repo_root, DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
+        MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
         PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
-    llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
-                              "tensorrt_llm", "config.pbtxt")
-    preprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
+    llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
+                              "config.pbtxt")
+    preprocessing_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                         "preprocessing", "config.pbtxt")
-    postprocessing_config = os.path.join(llm_backend_repo_root, "triton_repo",
+    postprocessing_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                          "postprocessing", "config.pbtxt")
-    ensemble_config = os.path.join(llm_backend_repo_root, "triton_repo",
+    ensemble_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                    "ensemble", "config.pbtxt")
-    tensorrt_llm_bls_config = os.path.join(llm_backend_repo_root,
-                                           "triton_repo", "tensorrt_llm_bls",
-                                           "config.pbtxt")
+    tensorrt_llm_bls_config = os.path.join(llm_backend_repo_root, REPO_PATH,
+                                           "tensorrt_llm_bls", "config.pbtxt")
     check_call(
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
         f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
@@ -66,7 +70,7 @@ def modify_ib_config_pbtxt(
         f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
         f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
         f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
-        f"enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE}",
+        f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE}",
         shell=True)
     check_call(
         f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}," \

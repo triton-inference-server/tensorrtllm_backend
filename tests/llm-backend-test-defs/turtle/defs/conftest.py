@@ -142,6 +142,20 @@ def llm_backend_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def llm_backend_inflight_batcher_llm_root(llm_backend_root):
+    backend_gpt_example_root = os.path.join(llm_backend_root, "tools",
+                                            "inflight_batcher_llm")
+    return backend_gpt_example_root
+
+
+@pytest.fixture(scope="session")
+def llm_backend_dataset_root(llm_backend_root):
+    backend_gpt_example_root = os.path.join(llm_backend_root, "tools",
+                                            "dataset")
+    return backend_gpt_example_root
+
+
+@pytest.fixture(scope="session")
 def tensorrt_llm_example_root(llm_backend_root):
     llm_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                         "examples")
@@ -260,6 +274,18 @@ def gpt_tokenizer_model_root(llm_backend_venv):
     models_root = llm_models_root()
     assert models_root, "Did you set LLM_MODELS_ROOT?"
     gpt_tokenizer_model_root = os.path.join(models_root, "gpt2")
+
+    assert os.path.exists(
+        gpt_tokenizer_model_root
+    ), f"{gpt_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return gpt_tokenizer_model_root
+
+
+@pytest.fixture(scope="session")
+def gpt2_medium_tokenizer_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    gpt_tokenizer_model_root = os.path.join(models_root, "gpt2-medium")
 
     assert os.path.exists(
         gpt_tokenizer_model_root

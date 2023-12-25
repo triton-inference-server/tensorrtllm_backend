@@ -23,6 +23,9 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt350m_ifb")
+    elif type == "medium_ifb":
+        engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                                  "gpt350m_medium_ifb")
     build_cmd = [
         "python3",
         f"{tensorrt_llm_gpt_example_root}/build.py",
@@ -32,6 +35,7 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         "--use_gemm_plugin=float16",
         "--use_layernorm_plugin=float16",
         "--enable_context_fmha",
+        "--use_paged_context_fmha",
         "--remove_input_padding",
         "--max_batch_size=64",
         "--max_input_len=924",
@@ -40,7 +44,12 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         f"--output_dir={engine_dir}",
     ]
 
-    if type == "ifb":
+    if type == "medium_ifb":
+        build_cmd += [
+            "--max_draft_len=5",
+        ]
+
+    if type == "ifb" or type == "medium_ifb":
         build_cmd += [
             "--use_inflight_batching",
             "--paged_kv_cache",
