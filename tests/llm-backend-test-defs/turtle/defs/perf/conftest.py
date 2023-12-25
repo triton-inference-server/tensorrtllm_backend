@@ -80,6 +80,7 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
     TRITON_MAX_BATCH_SIZE = "128"
     MAX_QUEUE_DELAY_MICROSECONDS = "0"
     MAX_BEAM_WIDTH = "1"
+    ENABLE_KV_CACHE_REUSE = "False"
     PREPROCESSING_INSTANCE_COUNT = "1"
     POSTPROCESSING_INSTANCE_COUNT = "1"
     ACCUMULATE_TOKEN = "False"
@@ -101,16 +102,15 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
     TOKENIZER_TYPE = "llama"
-    modify_ib_config_pbtxt(ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
-                           llm_backend_repo_root, DECOUPLED_MODE,
-                           MAX_TOKENS_IN_KV_CACHE, MAX_KV_CACHE_LEN,
-                           BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
-                           MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
-                           EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP,
-                           TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-                           MAX_BEAM_WIDTH, PREPROCESSING_INSTANCE_COUNT,
-                           POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN,
-                           BLS_INSTANCE_COUNT)
+    modify_ib_config_pbtxt(
+        new_model_repo, ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
+        llm_backend_repo_root, DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_KV_CACHE_LEN, BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
+        MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
