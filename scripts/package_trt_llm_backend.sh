@@ -9,6 +9,9 @@ BACKEND_DIR=${2}
 
 pushd ${BACKEND_DIR}
 
+# export the commit id of internal repository
+git rev-parse HEAD > tools/version.txt
+
 # clean files
 rm -rf .git
 rm .gitmodules
