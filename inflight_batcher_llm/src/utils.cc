@@ -139,7 +139,7 @@ TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
     }
 }
 
-uint64_t getRequestId(TRITONBACKEND_Request* request)
+uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap)
 {
     const char* charRequestId;
     TRITONBACKEND_RequestId(request, &charRequestId);
@@ -155,13 +155,32 @@ uint64_t getRequestId(TRITONBACKEND_Request* request)
             }
             catch (const std::exception& e)
             {
-                std::string err = std::string("Invalid requestId, must be uint64_t. Got ") + strRequestId;
-                throw std::runtime_error(err);
+                std::hash<std::string> hasher;
+                requestId = hasher(strRequestId);
+
+                // Check for hash collisions
+                // If requestID already exists in the map with the same string, increment the ID and check again
+                for (auto it = requestIdStrMap.find(requestId);
+                     it != requestIdStrMap.end() && it->second != strRequestId;)
+                {
+                    requestId++;
+                }
             }
+            requestIdStrMap.insert({requestId, strRequestId});
         }
     }
 
     return requestId;
+}
+
+std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std::string> const& requestIdStrMap)
+{
+    auto it = requestIdStrMap.find(requestId);
+    if (it != requestIdStrMap.end())
+    {
+        return it->second;
+    }
+    return std::to_string(requestId);
 }
 
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
