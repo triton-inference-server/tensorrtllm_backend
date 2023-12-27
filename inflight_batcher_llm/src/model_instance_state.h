@@ -28,6 +28,7 @@
 #define _GLIBCXX_USE_CXX11_ABI 0
 
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
@@ -40,7 +41,6 @@
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
-#include "tensorrt_llm/common/mpiUtils.h"
 
 #include "model_state.h"
 #include "work_item.h"
@@ -48,7 +48,6 @@
 
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
-using namespace tensorrt_llm::mpi;
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -126,6 +125,8 @@ private:
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
+
+    std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

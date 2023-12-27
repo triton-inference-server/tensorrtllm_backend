@@ -294,3 +294,9 @@ parameters: {
     string_value: "${enable_kv_cache_reuse}"
   }
 }
+parameters: {
+  key: "normalize_log_probs"
+  value: {
+    string_value: "${normalize_log_probs}"
+  }
+}
