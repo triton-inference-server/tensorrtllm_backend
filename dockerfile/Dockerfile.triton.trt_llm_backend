@@ -1,0 +1,47 @@
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:23.11-py3-min
+
+FROM ${BASE_IMAGE} as base
+
+RUN apt-get update -q=2 && apt-get install -y --no-install-recommends python3-pip
+# Remove previous TRT installation
+# We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
+RUN apt-get remove -y tensorrt*
+RUN pip3 uninstall -y tensorrt
+
+ARG TRT_VER
+
+ENV TRT_VERSION=$TRT_VER \
+    TRT_VER=$TRT_VER \
+    CUDA_VER=$CUDA_VERSION \
+    CUDNN_VER=$CUDNN_VERSION \
+    NCCL_VER=$NCCL_VERSION \
+    CUBLAS_VER=$CUBLAS_VERSION
+
+LABEL TRT_VERSION $TRT_VER
+
+RUN echo TRT_VERSION=$TRT_VER \
+    TRT_VER=$TRT_VER \
+    CUDA_VER=$CUDA_VERSION \
+    CUDNN_VER=$CUDNN_VERSION \
+    NCCL_VER=$NCCL_VERSION \
+    CUBLAS_VER=$CUBLAS_VERSION
+# Download & install internal TRT release
+RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
+    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb \
+    && apt install /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -q=2
+
+ARG RELEASE_URL_TRT_x86
+ARG RELEASE_URL_TRT_ARM
+
+RUN [ "$(uname -m)" != "x86_64" ] && RELEASE_URL_TRT=${RELEASE_URL_TRT_ARM} || RELEASE_URL_TRT=${RELEASE_URL_TRT_x86} \
+    && curl -fSL -o /tmp/tensorrt.tar.gz ${RELEASE_URL_TRT} \
+    && tar xzvf /tmp/tensorrt.tar.gz -C /usr/local \
+    && rm /tmp/tensorrt.tar.gz \
+    && find /usr/local -maxdepth 1 -name Tens* -type d -exec ln -s {} /usr/local/tensorrt \;
+
+RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import sys; print(str(sys.version_info.major) + str(sys.version_info.minor))" )*
+
+ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
+ENV TRT_ROOT=/usr/local/tensorrt
