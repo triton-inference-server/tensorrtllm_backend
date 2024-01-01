@@ -41,20 +41,22 @@ available in the main [server](https://github.com/triton-inference-server/server
 repo. If you don't find your answer there you can ask questions on the
 [issues page](https://github.com/triton-inference-server/tensorrtllm_backend/issues).
 
-## Building the TensorRT-LLM Backend
+## Accessing the TensorRT-LLM Backend
 
 There are several ways to access the TensorRT-LLM Backend.
 
-**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker)**
+**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker).**
 
-### Option 1. Run the Docker Container
+### Run the Pre-built Docker Container
 
 Starting with Triton 23.10 release, Triton includes a container with the TensorRT-LLM
 Backend and Python Backend. This container should have everything to run a
 TensorRT-LLM model. You can find this container on the
 [Triton NGC page](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver).
 
-### Option 2. Build via the build.py Script in Server Repo
+### Build the Docker Container
+
+#### Option 1. Build via the `build.py` Script in Server Repo
 
 Starting with Triton 23.10 release, you can follow steps described in the
 [Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
@@ -90,7 +92,7 @@ the TensorRT-LLM backend and Python backend repositories that will be used
 to build the container. You can also remove the features or endpoints that you
 don't need by removing the corresponding flags.
 
-### Option 3. Build via Docker
+#### Option 2. Build via Docker
 
 The version of Triton Server used in this build option can be found in the
 [Dockerfile](./dockerfile/Dockerfile.trt_llm_backend).
