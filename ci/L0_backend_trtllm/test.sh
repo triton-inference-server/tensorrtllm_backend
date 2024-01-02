@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -38,6 +38,10 @@ BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
 CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
 CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
 SERVER_PID=0
+
+# Force environment to use python version 3
+apt update -q=2 \
+    && apt install -y python-is-python3
 
 # Helpers ===============================
 function replace_config_tags {
