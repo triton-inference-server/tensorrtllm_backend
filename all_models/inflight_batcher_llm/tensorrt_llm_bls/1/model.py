@@ -57,9 +57,10 @@ class TritonPythonModel:
             "text_input", "max_tokens", "bad_words", "stop_words", "end_id",
             "pad_id", "top_k", "top_p", "temperature", "length_penalty",
             "repetition_penalty", "min_length", "presence_penalty",
-            "random_seed", "return_log_probs", "beam_width", "stream",
-            "prompt_embedding_table", "prompt_vocab_size",
-            "embedding_bias_words", "embedding_bias_weights"
+            "frequency_penalty", "random_seed", "return_log_probs",
+            "beam_width", "stream", "prompt_embedding_table",
+            "prompt_vocab_size", "embedding_bias_words",
+            "embedding_bias_weights"
         ]
 
         self.preproc_input_to_bls_input_map = {
@@ -90,6 +91,7 @@ class TritonPythonModel:
             "repetition_penalty": "repetition_penalty",
             "min_length": "min_length",
             "presence_penalty": "presence_penalty",
+            "frequency_penalty": "frequency_penalty",
             "random_seed": "random_seed",
             "return_log_probs": "return_log_probs",
             "streaming": "stream",

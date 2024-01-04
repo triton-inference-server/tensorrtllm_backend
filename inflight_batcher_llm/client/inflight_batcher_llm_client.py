@@ -117,10 +117,10 @@ def prepare_outputs(output_names):
 
 def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
-                   presence_penalty_data, streaming_data, end_id, pad_id,
-                   prompt_embedding_table_data, prompt_vocab_size_data,
-                   return_log_probs_data, top_k_data, top_p_data,
-                   draft_ids_data):
+                   presence_penalty_data, frequency_penalty_data,
+                   streaming_data, end_id, pad_id, prompt_embedding_table_data,
+                   prompt_vocab_size_data, return_log_probs_data, top_k_data,
+                   top_p_data, draft_ids_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -147,6 +147,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
     if presence_penalty_data is not None:
         inputs += [
             prepare_tensor("presence_penalty", presence_penalty_data),
+        ]
+    if frequency_penalty_data is not None:
+        inputs += [
+            prepare_tensor("frequency_penalty", frequency_penalty_data),
         ]
     if draft_ids_data is not None:
         inputs += [
@@ -346,6 +350,13 @@ if __name__ == "__main__":
         default=None,
         help="The presence penalty value",
     )
+    parser.add_argument(
+        "--frequency-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The frequency penalty value",
+    )
 
     parser.add_argument(
         "--request-output-len",
@@ -536,6 +547,10 @@ if __name__ == "__main__":
     if FLAGS.presence_penalty is not None:
         presence_penalty = [[FLAGS.presence_penalty]]
         presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
+    frequency_penalty_data = None
+    if FLAGS.frequency_penalty is not None:
+        frequency_penalty = [[FLAGS.frequency_penalty]]
+        frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
     streaming = [[FLAGS.streaming]]
     streaming_data = np.array(streaming, dtype=bool)
 
@@ -546,8 +561,9 @@ if __name__ == "__main__":
     inputs = prepare_inputs(input_ids_data, input_lengths_data,
                             request_output_len_data, beam_width_data,
                             temperature_data, repetition_penalty_data,
-                            presence_penalty_data, streaming_data, end_id_data,
-                            pad_id_data, prompt_embedding_table_data,
+                            presence_penalty_data, frequency_penalty_data,
+                            streaming_data, end_id_data, pad_id_data,
+                            prompt_embedding_table_data,
                             prompt_vocab_size_data, return_log_probs_data,
                             top_k_data, top_p_data, draft_ids_data)
 

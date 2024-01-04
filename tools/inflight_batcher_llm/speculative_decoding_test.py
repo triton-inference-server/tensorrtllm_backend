@@ -101,6 +101,14 @@ if __name__ == '__main__':
         help="The presence penalty value",
     )
 
+    parser.add_argument(
+        "--frequency-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The frequency penalty value",
+    )
+
     parser.add_argument('-o',
                         '--output-len',
                         type=int,
@@ -187,8 +195,9 @@ if __name__ == '__main__':
             output_target = end_to_end_grpc_client.run_inference(
                 client_target, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
-                FLAGS.temperature, FLAGS.stop_words, FLAGS.bad_words, [], [],
-                "ensemble", False, 1, False, FLAGS.verbose)
+                FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
+                FLAGS.bad_words, [], [], "ensemble", False, 1, False,
+                FLAGS.verbose)
             if FLAGS.verbose:
                 print(f"output_target: {output_target}", flush=True)
 
@@ -198,8 +207,9 @@ if __name__ == '__main__':
                 client_draft,
                 client_target, prompt, output_len, FLAGS.num_draft_tokens,
                 str(request_id), FLAGS.repetition_penalty,
-                FLAGS.presence_penalty, FLAGS.temperature, FLAGS.stop_words,
-                FLAGS.bad_words, FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
+                FLAGS.presence_penalty, FLAGS.frequency_penalty,
+                FLAGS.temperature, FLAGS.stop_words, FLAGS.bad_words,
+                FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
                 FLAGS.preprocessor_model_name,
                 FLAGS.draft_tensorrt_llm_model_name,
                 FLAGS.target_tensorrt_llm_model_name,

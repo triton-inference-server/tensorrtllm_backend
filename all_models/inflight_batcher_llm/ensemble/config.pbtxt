@@ -105,6 +105,12 @@ input [
     optional: true
   },
   {
+    name: "frequency_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "random_seed"
     data_type: TYPE_UINT64
     dims: [ 1 ]
@@ -278,6 +284,10 @@ ensemble_scheduling {
       input_map {
           key: "presence_penalty"
           value: "presence_penalty"
+      }
+      input_map {
+          key: "frequency_penalty"
+          value: "frequency_penalty"
       }
       input_map {
           key: "random_seed"
