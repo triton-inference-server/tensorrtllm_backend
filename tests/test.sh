@@ -652,6 +652,51 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     done
 fi
 
+if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
+
+    #Generate reference output
+    pushd tensorrt_llm/examples/gpt
+
+    # Input with virtual tokens:
+    python3 ../run.py --max_output_len=8 \
+        --lora_dir=gpt-2b-lora-train-900-tllm \
+        --lora_ckpt_source nemo \
+        --lora_task_uids lora \
+        --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output.csv --use_py_session
+
+    popd
+
+    DECOUPLED_MODE="False"
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+    	# LoRA is not supported in V1
+        if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
+            continue
+        fi
+
+        launch_triton_server
+
+        # Test client
+        pushd inflight_batcher_llm/client
+
+        python3 inflight_batcher_llm_client.py \
+            --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv \
+            --output-tokens-csv ../../tensorrt_llm/examples/gpt/output.csv \
+            --check-output --request-output-len 8 \
+            --lora-path ../../tensorrt_llm/examples/gpt/gpt-2b-lora-train-900
+
+        popd # inflight_batcher_llm/client
+
+        kill_triton_server
+    done
+fi
+
 if [ "$MODEL" = "gpt-speculative-decoding" ]; then
 
     DECOUPLED_MODE="False"
