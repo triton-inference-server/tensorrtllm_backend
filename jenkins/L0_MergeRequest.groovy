@@ -21,7 +21,8 @@ CASE_TO_EXAMPLE = [
   "gptj": "gptj",
   "gpt-ib": "gpt-ib",
   "gpt-ib-streaming": "gpt-ib",
-  "gpt-ib-ptuning": "gpt-ib"
+  "gpt-ib-ptuning": "gpt-ib",
+  "gpt-2b-ib-lora": "gpt-2b-ib-lora"
 ]
 
 CASE_TO_MODEL = [
@@ -34,7 +35,8 @@ CASE_TO_MODEL = [
   "gpt-ib": "gpt2",
   "gpt-ib-streaming": "gpt2",
   "gpt-ib-ptuning": "gpt2",
-  "gpt-speculative-decoding": "gpt2"
+  "gpt-speculative-decoding": "gpt2",
+  "gpt-2b-ib-lora": "gpt-2b-ib-lora"
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -46,7 +48,8 @@ CASE_TO_ENGINE_DIR = [
   "gptj": "gptj/gpt_outputs",
   "gpt-ib": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
   "gpt-ib-streaming": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
-  "gpt-ib-ptuning": "gpt/trt_engine/email_composition/fp16/1-gpu/"
+  "gpt-ib-ptuning": "gpt/trt_engine/email_composition/fp16/1-gpu/",
+  "gpt-2b-ib-lora": "gpt/trt_engine/gpt-2b-lora-ib/fp16/1-gpu/"
 ]
 
 // Utilities
@@ -336,10 +339,18 @@ def runTRTLLMBackendTest(caseName)
       if (caseName.contains("-ptuning")) {
         buildExample += "-ptuning"
         testExample += "-ptuning"
+      } else if (caseName.contains("-lora")) {
+        buildExample += "-lora"
+        testExample += "-lora"
       }
 
       if (caseName.contains("-streaming")) {
         testExample += "-streaming"
+      }
+
+      if (caseName.contains("gpt-2b")) {
+        modelPath = "/home/scratch.trt_llm_data/llm-models/gpt-next/gpt-next-tokenizer-hf-v2"
+        tokenizerType = "auto"
       }
 
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
@@ -535,6 +546,11 @@ pipeline {
               stage("Test gpt-ib-ptuning") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-ptuning")
+                }
+              }
+              stage("Test gpt-2b-ib-lora") {
+                steps {
+                  runTRTLLMBackendTest("gpt-2b-ib-lora")
                 }
               }
               stage("Test gpt-speculative-decoding") {

@@ -9,6 +9,8 @@ OPT_125M=/home/scratch.trt_llm_data/llm-models/opt-125m
 LLAMA=/home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf
 GPTJ=/home/scratch.trt_llm_data/llm-models/gpt-j-6b
 MISTRAL=/home/scratch.trt_llm_data/llm-models/mistral-7b-v0.1
+GPT_2B=/home/scratch.trt_llm_data/llm-models/GPT-2B-001_bf16_tp1.nemo
+GPT_2B_LORA=/home/scratch.trt_llm_data/llm-models/lora/gpt-next-2b
 
 set -e
 
@@ -213,4 +215,39 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     popd # tensorrt_llm/examples/gpt
 
+fi
+
+if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
+
+    # GPT-2B
+    pushd tensorrt_llm/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    echo "Convert GPT from NeMo"
+    python3 nemo_ckpt_convert.py -i ${GPT_2B} -o ./c-model/gpt-2b-lora/fp16 --storage-type float16
+
+    echo "Build GPT: float16 | src FT"
+    python3 build.py --model_dir=./c-model/gpt-2b-lora/fp16/1-gpu \
+        --dtype float16 \
+        --use_inflight_batching \
+        --use_gpt_attention_plugin float16 \
+        --paged_kv_cache \
+        --use_gemm_plugin float16 \
+        --use_layernorm_plugin float16 \
+        --use_lora_plugin float16 \
+        --lora_target_modules attn_qkv \
+        --remove_input_padding \
+        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --output_dir trt_engine/gpt-2b-lora-ib/fp16/1-gpu/
+
+    python3 nemo_lora_convert.py -i ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
+        -o gpt-2b-lora-train-900 --write-cpp-runtime-tensors --storage-type float16
+    python3 nemo_lora_convert.py -i ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
+        -o gpt-2b-lora-train-900-tllm --storage-type float16
+    cp ${GPT_2B_LORA}/gpt2b_lora-900.nemo .
+
+    cp ${GPT_2B_LORA}/input.csv .
+
+    popd # tensorrt_llm/examples/gpt
 fi

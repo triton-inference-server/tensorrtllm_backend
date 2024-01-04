@@ -119,8 +119,9 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, frequency_penalty_data,
                    streaming_data, end_id, pad_id, prompt_embedding_table_data,
-                   prompt_vocab_size_data, return_log_probs_data, top_k_data,
-                   top_p_data, draft_ids_data):
+                   prompt_vocab_size_data, lora_weights_data, lora_config_data,
+                   return_log_probs_data, top_k_data, top_p_data,
+                   draft_ids_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -139,6 +140,11 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
             prepare_tensor("prompt_embedding_table",
                            prompt_embedding_table_data),
             prepare_tensor("prompt_vocab_size", prompt_vocab_size_data)
+        ]
+    if lora_weights_data is not None:
+        inputs += [
+            prepare_tensor("lora_weights", lora_weights_data),
+            prepare_tensor("lora_config", lora_config_data),
         ]
     if repetition_penalty_data is not None:
         inputs += [
@@ -399,6 +405,11 @@ if __name__ == "__main__":
                         default='',
                         required=False,
                         help='The prompt embedding table to use for ptuning')
+    parser.add_argument("--lora-path",
+                        type=str,
+                        default='',
+                        required=False,
+                        help="LoRA weights")
     parser.add_argument(
         "--exclude-input-in-output",
         action="store_true",
@@ -522,6 +533,18 @@ if __name__ == "__main__":
         prompt_vocab_size = [[task_vocab_size]]
         prompt_vocab_size_data = np.array(prompt_vocab_size, dtype=np.int32)
 
+    lora_weights_data = None
+    lora_config_data = None
+    if (FLAGS.lora_path != ""):
+        lora_weights_data = np.load(
+            os.path.join(FLAGS.lora_path, "model.lora_weights.npy"))
+        try:
+            lora_config_data = np.load(
+                os.path.join(FLAGS.lora_path, "model.lora_config.npy"))
+        except Exception:
+            lora_config_data = np.load(
+                os.path.join(FLAGS.lora_path, "model.lora_keys.npy"))
+
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
@@ -558,14 +581,13 @@ if __name__ == "__main__":
     if draft_ids is not None:
         draft_ids_data = np.array(draft_ids, dtype=np.int32)
 
-    inputs = prepare_inputs(input_ids_data, input_lengths_data,
-                            request_output_len_data, beam_width_data,
-                            temperature_data, repetition_penalty_data,
-                            presence_penalty_data, frequency_penalty_data,
-                            streaming_data, end_id_data, pad_id_data,
-                            prompt_embedding_table_data,
-                            prompt_vocab_size_data, return_log_probs_data,
-                            top_k_data, top_p_data, draft_ids_data)
+    inputs = prepare_inputs(
+        input_ids_data, input_lengths_data, request_output_len_data,
+        beam_width_data, temperature_data, repetition_penalty_data,
+        presence_penalty_data, frequency_penalty_data, streaming_data,
+        end_id_data, pad_id_data, prompt_embedding_table_data,
+        prompt_vocab_size_data, lora_weights_data, lora_config_data,
+        return_log_probs_data, top_k_data, top_p_data, draft_ids_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
