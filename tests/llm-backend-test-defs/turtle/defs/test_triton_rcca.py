@@ -44,6 +44,7 @@ def get_rcca_path():
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4323566(
@@ -51,10 +52,11 @@ def test_rcca_bug_4323566(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, tensorrt_llm_gpt_example_root,
-        gpt_tokenizer_model_root, llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -79,8 +81,8 @@ def test_rcca_bug_4323566(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -119,6 +121,7 @@ def test_rcca_bug_4323566(
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1", "4"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4342666(
@@ -126,11 +129,11 @@ def test_rcca_bug_4342666(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
-        total_gpu_memory_mib, llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_llama_example_root,
+        llama_v2_tokenizer_model_root, total_gpu_memory_mib, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -159,8 +162,8 @@ def test_rcca_bug_4342666(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",

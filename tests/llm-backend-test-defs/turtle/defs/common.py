@@ -49,8 +49,8 @@ def modify_ib_config_pbtxt(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT):
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
@@ -70,7 +70,7 @@ def modify_ib_config_pbtxt(
         f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
         f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
         f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
-        f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE}",
+        f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}",
         shell=True)
     check_call(
         f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}," \
@@ -118,7 +118,7 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
                           tokenizer_type):
     # Chooses script
     script_name = ""
-    if feature_name in ["test_basic", "test_log_probs"]:
+    if feature_name in ["test_basic", "test_log_probs", "test_request_id"]:
         script_name = f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py"
     elif feature_name in ["test_stop_words", "test_embedding_bias"]:
         script_name = f"{inflight_batcher_llm_client_root}/end_to_end_grpc_client.py"
@@ -131,16 +131,18 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
             f"--tokenizer-type={tokenizer_type}",
         ]
 
-        if feature_name == "test_basic":
-            venv_check_call(llm_backend_venv, run_cmd)
-
         if feature_name == "test_log_probs":
             run_cmd += [
                 "--request-output-len=10",
                 "--return-log-probs",
                 "--top-k=2",
             ]
-            venv_check_call(llm_backend_venv, run_cmd)
+        elif feature_name == "test_request_id":
+            run_cmd += [
+                "--request-id=my_request",
+            ]
+
+        venv_check_call(llm_backend_venv, run_cmd)
     elif "end_to_end_grpc_client.py" in script_name:
         if feature_name == "test_stop_words":
             run_cmd = [
