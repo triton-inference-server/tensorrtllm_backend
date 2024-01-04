@@ -36,8 +36,8 @@ def callback(user_data, result, error):
 
 
 def run_inference(triton_client, prompt, output_len, request_id,
-                  repetition_penalty, presence_penalty, temperature,
-                  stop_words, bad_words, embedding_bias_words,
+                  repetition_penalty, presence_penalty, frequency_penalty,
+                  temperature, stop_words, bad_words, embedding_bias_words,
                   embedding_bias_weights, model_name, streaming, beam_width,
                   overwrite_output_text, verbose):
 
@@ -76,6 +76,11 @@ def run_inference(triton_client, prompt, output_len, request_id,
         presence_penalty = [[presence_penalty]]
         presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
         inputs += [prepare_tensor("presence_penalty", presence_penalty_data)]
+
+    if frequency_penalty is not None:
+        frequency_penalty = [[frequency_penalty]]
+        frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
+        inputs += [prepare_tensor("frequency_penalty", frequency_penalty_data)]
 
     if (embedding_bias_words is not None and embedding_bias_weights is None
         ) or (embedding_bias_words is None
@@ -205,6 +210,14 @@ if __name__ == '__main__':
         help="The presence penalty value",
     )
 
+    parser.add_argument(
+        "--frequency-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The frequency penalty value",
+    )
+
     parser.add_argument('-o',
                         '--output-len',
                         type=int,
@@ -262,7 +275,8 @@ if __name__ == '__main__':
 
     output_text = run_inference(
         client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
-        FLAGS.repetition_penalty, FLAGS.presence_penalty, FLAGS.temperature,
-        FLAGS.stop_words, FLAGS.bad_words, embedding_bias_words,
-        embedding_bias_weights, FLAGS.model_name, FLAGS.streaming,
-        FLAGS.beam_width, FLAGS.overwrite_output_text, True)
+        FLAGS.repetition_penalty, FLAGS.presence_penalty,
+        FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
+        FLAGS.bad_words, embedding_bias_words, embedding_bias_weights,
+        FLAGS.model_name, FLAGS.streaming, FLAGS.beam_width,
+        FLAGS.overwrite_output_text, True)

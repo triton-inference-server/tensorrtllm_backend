@@ -173,6 +173,8 @@ class TritonPythonModel:
                     request, 'min_length')
                 inputs['presence_penalty'] = get_input_scalar_by_name(
                     request, 'presence_penalty')
+                inputs['frequency_penalty'] = get_input_scalar_by_name(
+                    request, 'frequency_penalty')
                 inputs['random_seed'] = get_input_scalar_by_name(
                     request, 'random_seed')
                 inputs['output_log_probs'] = get_input_scalar_by_name(
@@ -203,6 +205,8 @@ class TritonPythonModel:
                 sampling_config.min_length = inputs['min_length']
             if inputs['presence_penalty'] is not None:
                 sampling_config.presence_penalty = inputs['presence_penalty']
+            if inputs['frequency_penalty'] is not None:
+                sampling_config.frequency_penalty = inputs['frequency_penalty']
             sampling_config.random_seed = inputs['random_seed']
             sampling_config.output_log_probs = inputs['output_log_probs']
             if self.remove_input_padding:

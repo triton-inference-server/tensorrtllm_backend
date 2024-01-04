@@ -73,8 +73,8 @@ def extract_preprocessor_outputs(result):
 
 def get_trtllm_inputs(input_ids, input_length, request_output_len,
                       draft_tokens, beam_width, temperature,
-                      repetition_penalty, presence_penalty, bad_words_ids,
-                      stop_words_ids, end_id, pad_id):
+                      repetition_penalty, presence_penalty, frequency_penalty,
+                      bad_words_ids, stop_words_ids, end_id, pad_id):
 
     # input_ids is expected to have shape [input_length]
     # Add batch dimension of 1
@@ -107,6 +107,12 @@ def get_trtllm_inputs(input_ids, input_length, request_output_len,
                                          dtype=np.float32)
         inputs.append(prepare_tensor("presence_penalty",
                                      presence_penalty_data))
+
+    if frequency_penalty is not None:
+        frequency_penalty_data = np.array([[frequency_penalty]],
+                                          dtype=np.float32)
+        inputs.append(
+            prepare_tensor("frequency_penalty", frequency_penalty_data))
 
     if end_id is not None:
         end_id_data = np.array([[end_id]], dtype=np.int32)
@@ -161,8 +167,8 @@ def encountered_stop_words(input_ids, stop_words_ids):
 
 def run_speculative_inference(
         client_draft, client_target, prompt, output_len, in_num_draft_tokens,
-        request_id, repetition_penalty, presence_penalty, temperature,
-        stop_words, bad_words, end_id, pad_id, beam_width,
+        request_id, repetition_penalty, presence_penalty, frequency_penalty,
+        temperature, stop_words, bad_words, end_id, pad_id, beam_width,
         preprocessor_model_name, draft_tensorrt_llm_model_name,
         target_tensorrt_llm_model_name, postprocessor_model_name, verbose):
 
@@ -193,12 +199,11 @@ def run_speculative_inference(
                 print(input_ids.tolist())
 
             #Generate up to num_draft_tokens with draft model
-            draft_inputs = get_trtllm_inputs(input_ids, len(input_ids),
-                                             num_draft_tokens, None,
-                                             beam_width, temperature,
-                                             repetition_penalty,
-                                             presence_penalty, bad_words_ids,
-                                             stop_words_ids, end_id, pad_id)
+            draft_inputs = get_trtllm_inputs(
+                input_ids, len(input_ids), num_draft_tokens, None, beam_width,
+                temperature, repetition_penalty, presence_penalty,
+                frequency_penalty, bad_words_ids, stop_words_ids, end_id,
+                pad_id)
 
             draft_result = client_draft.infer(draft_tensorrt_llm_model_name,
                                               draft_inputs,
@@ -229,8 +234,8 @@ def run_speculative_inference(
             input_ids, len(input_ids),
             len(draft_tokens) + 1 if num_draft_tokens > 0 else 1,
             draft_tokens if num_draft_tokens > 0 else None, beam_width,
-            temperature, repetition_penalty, presence_penalty, bad_words_ids,
-            stop_words_ids, end_id, pad_id)
+            temperature, repetition_penalty, presence_penalty,
+            frequency_penalty, bad_words_ids, stop_words_ids, end_id, pad_id)
 
         target_result = client_target.infer(target_tensorrt_llm_model_name,
                                             target_inputs,
@@ -370,6 +375,14 @@ if __name__ == '__main__':
         help="The presence penalty value",
     )
 
+    parser.add_argument(
+        "--frequency-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The frequency penalty value",
+    )
+
     parser.add_argument('-o',
                         '--output-len',
                         type=int,
@@ -437,9 +450,10 @@ if __name__ == '__main__':
     output_text = run_speculative_inference(
         client_draft, client_target, FLAGS.prompt, FLAGS.output_len,
         FLAGS.num_draft_tokens, FLAGS.request_id, FLAGS.repetition_penalty,
-        FLAGS.presence_penalty, FLAGS.temperature, FLAGS.stop_words,
-        FLAGS.bad_words, FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
-        FLAGS.preprocessor_model_name, FLAGS.draft_tensorrt_llm_model_name,
+        FLAGS.presence_penalty, FLAGS.frequency_penalty, FLAGS.temperature,
+        FLAGS.stop_words, FLAGS.bad_words, FLAGS.end_id, FLAGS.pad_id,
+        FLAGS.beam_width, FLAGS.preprocessor_model_name,
+        FLAGS.draft_tensorrt_llm_model_name,
         FLAGS.target_tensorrt_llm_model_name, FLAGS.postprocessor_model_name,
         FLAGS.verbose)
 
