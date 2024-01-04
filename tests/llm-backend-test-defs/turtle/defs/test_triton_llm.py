@@ -39,21 +39,23 @@ def stop_triton_server():
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-@pytest.mark.parametrize(
-    "FEATURE_NAME",
-    ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
+@pytest.mark.parametrize("FEATURE_NAME", [
+    "test_basic", "test_log_probs", "test_request_id", "test_stop_words",
+    "test_embedding_bias"
+])
 def test_llama_v2_7b_ifb(
         E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
-        llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_llama_example_root,
+        llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -83,8 +85,8 @@ def test_llama_v2_7b_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -128,6 +130,7 @@ def test_llama_v2_7b_ifb(
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_mistral_v1_7b_ifb(
@@ -135,11 +138,11 @@ def test_mistral_v1_7b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_llama_example_root, mistral_v1_tokenizer_model_root,
-        llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_llama_example_root,
+        mistral_v1_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -165,8 +168,8 @@ def test_mistral_v1_7b_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -279,6 +282,7 @@ def test_mistral_v1_7b_python_backend(TEST_TYPE, MAX_ATTENTION_WINDOW_SIZE,
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_llama_v2_70b_ifb(
@@ -286,11 +290,11 @@ def test_llama_v2_70b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_llama_example_root, llama_v2_tokenizer_model_root,
-        llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_llama_example_root,
+        llama_v2_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -316,8 +320,8 @@ def test_llama_v2_70b_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -430,21 +434,23 @@ def test_gpt_350m_python_backend(TEST_TYPE, llm_backend_gpt_example_root,
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-@pytest.mark.parametrize(
-    "FEATURE_NAME",
-    ["test_basic", "test_log_probs", "test_stop_words", "test_embedding_bias"])
+@pytest.mark.parametrize("FEATURE_NAME", [
+    "test_basic", "test_log_probs", "test_request_id", "test_stop_words",
+    "test_embedding_bias"
+])
 def test_gpt_350m_ifb(
         E2E_MODEL_NAME, FEATURE_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
-        llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_gpt_example_root,
+        gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -475,8 +481,8 @@ def test_gpt_350m_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -520,6 +526,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["True"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_350m_speculative_decoding(
@@ -527,10 +534,11 @@ def test_gpt_350m_speculative_decoding(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, tensorrt_llm_gpt_example_root,
-        gpt_tokenizer_model_root, gpt2_medium_tokenizer_model_root,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
+        gpt2_medium_tokenizer_model_root,
         llm_backend_inflight_batcher_llm_root, llm_backend_dataset_root,
         llm_backend_venv):
     if BATCHING_STRATEGY == "V1":
@@ -571,8 +579,8 @@ def test_gpt_350m_speculative_decoding(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
     ## second suit
     TOKENIZER_PATH = gpt_tokenizer_model_root
     TOKENIZER_TYPE = "auto"
@@ -585,8 +593,8 @@ def test_gpt_350m_speculative_decoding(
         KV_CACHE_FREE_GPU_MEM_FRACTION, EXCLUDE_INPUT_IN_OUTPUT,
         ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
     # Launch two Triton Servers
     ## first server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -637,6 +645,7 @@ def test_gpt_350m_speculative_decoding(
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_175b_ifb(
@@ -644,11 +653,11 @@ def test_gpt_175b_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, inflight_batcher_llm_client_root,
-        tensorrt_llm_gpt_example_root, gpt_tokenizer_model_root,
-        llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_gpt_example_root,
+        gpt_tokenizer_model_root, llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -672,8 +681,8 @@ def test_gpt_175b_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -714,6 +723,7 @@ def test_gpt_175b_ifb(
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
@@ -723,12 +733,13 @@ def test_gpt_next_ptuning_ifb(
         MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
         KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
         DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT,
-        EXCLUDE_INPUT_IN_OUTPUT, VIRTUAL_TOKENS,
-        inflight_batcher_llm_client_root, gpt_tokenizer_model_root,
-        tensorrt_llm_example_root, tensorrt_llm_gpt_example_root,
-        gpt_next_ptuning_model_root, llm_backend_venv):
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        VIRTUAL_TOKENS, inflight_batcher_llm_client_root,
+        gpt_tokenizer_model_root, tensorrt_llm_example_root,
+        tensorrt_llm_gpt_example_root, gpt_next_ptuning_model_root,
+        llm_backend_venv):
     if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
         pytest.skip("Skipping. V1 doesn't support max_utilization.")
 
@@ -753,8 +764,8 @@ def test_gpt_next_ptuning_ifb(
         MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
         EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
         MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
-        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
