@@ -317,7 +317,8 @@ run_cpp_e2e_backend_tests () {
     if [[ $MODEL = "gpt-ib" ]]; then
 
         python3 end_to_end_grpc_client.py \
-            --output-len 10 --prompt "The only thing we have to fear is" | tee output_e2e
+            --output-len 10 --prompt "The only thing we have to fear is" \
+            --model-name "$E2E_MODEL_NAME" | tee output_e2e
         grep "that the government will" output_e2e
 
         if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
@@ -418,7 +419,9 @@ run_cpp_e2e_streaming_backend_tests() {
     pushd inflight_batcher_llm/client
     # End to end test
     python3 end_to_end_grpc_client.py \
-        --streaming --output-len 10 --prompt "The only thing we have to fear is" | tee output_e2e
+        --streaming --output-len 10 \
+        --prompt "The only thing we have to fear is" \
+        --model-name "$E2E_MODEL_NAME" | tee output_e2e
     grep "that the government will" output_e2e
 
     popd

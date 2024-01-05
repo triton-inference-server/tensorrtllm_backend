@@ -166,6 +166,7 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         default="ensemble",
+                        choices=["ensemble", "tensorrt_llm_bls"],
                         help='Name of the Triton model to send request to')
 
     parser.add_argument(
