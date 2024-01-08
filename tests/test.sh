@@ -472,7 +472,7 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
 
-        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
         if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
             continue
@@ -564,7 +564,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
 
-        # Because the runners are shared, the default value of 0.85 doesn't work, so skip
+        # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
         if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
             continue
