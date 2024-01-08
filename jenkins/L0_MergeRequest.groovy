@@ -257,6 +257,7 @@ def runBuild()
       // Step 2: checking code style
       sh "pip3 install pre-commit"
       sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
+      sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt"
       sh "cd ${BACKEND_ROOT} && pre-commit run -a"
       // Step 3: packaging tensorrt-llm backend
       sh "rm -rf tensorrt_llm_backend"
@@ -293,6 +294,7 @@ def installDependency()
 
     sh "curl -L ${backendTarfile} | tar -xz ${BACKEND_ROOT}"
     sh "ls -lah"
+    sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt || true"
     sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl"
 
     sh "env"
