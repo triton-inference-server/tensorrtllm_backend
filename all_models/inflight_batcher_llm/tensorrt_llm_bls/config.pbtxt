@@ -128,6 +128,20 @@ input [
     optional: true
   },
   {
+    name: "return_context_logits"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "return_generation_logits"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "beam_width"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -179,6 +193,16 @@ output [
     name: "output_log_probs"
     data_type: TYPE_FP32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "context_logits"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "generation_logits"
+    data_type: TYPE_FP32
+    dims: [ -1, -1, -1 ]
   }
 ]
 

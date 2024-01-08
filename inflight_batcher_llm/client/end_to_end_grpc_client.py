@@ -39,7 +39,8 @@ def run_inference(triton_client, prompt, output_len, request_id,
                   repetition_penalty, presence_penalty, frequency_penalty,
                   temperature, stop_words, bad_words, embedding_bias_words,
                   embedding_bias_weights, model_name, streaming, beam_width,
-                  overwrite_output_text, verbose):
+                  overwrite_output_text, return_context_logits_data,
+                  return_generation_logits_data, verbose):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -81,6 +82,18 @@ def run_inference(triton_client, prompt, output_len, request_id,
         frequency_penalty = [[frequency_penalty]]
         frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
         inputs += [prepare_tensor("frequency_penalty", frequency_penalty_data)]
+
+    if return_context_logits_data is not None:
+        inputs += [
+            prepare_tensor("return_context_logits",
+                           return_context_logits_data),
+        ]
+
+    if return_generation_logits_data is not None:
+        inputs += [
+            prepare_tensor("return_generation_logits",
+                           return_generation_logits_data),
+        ]
 
     if (embedding_bias_words is not None and embedding_bias_weights is None
         ) or (embedding_bias_words is None
@@ -134,6 +147,15 @@ def run_inference(triton_client, prompt, output_len, request_id,
                 output_text = output[0].decode("utf8")
                 if verbose:
                     print(output, flush=True)
+
+            if return_context_logits_data is not None:
+                context_logits = result.as_numpy('context_logits')
+                print(f"context_logits.shape: {context_logits.shape}")
+                print(f"context_logits: {context_logits}")
+            if return_generation_logits_data is not None:
+                generation_logits = result.as_numpy('generation_logits')
+                print(f"generation_logits.shape: {generation_logits.shape}")
+                print(f"generation_logits: {generation_logits}")
 
     if streaming and beam_width == 1:
         if verbose:
@@ -261,6 +283,24 @@ if __name__ == '__main__':
         'In streaming mode, overwrite previously received output text instead of appending to it'
     )
 
+    parser.add_argument(
+        "--return-context-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return context logits, the engine must be built with gather_context_logits or gather_all_token_logits",
+    )
+
+    parser.add_argument(
+        "--return-generation-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return generation logits, the engine must be built with gather_ generation_logits or gather_all_token_logits",
+    )
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8001"
@@ -274,10 +314,21 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
+    return_context_logits_data = None
+    if FLAGS.return_context_logits:
+        return_context_logits_data = np.array([[FLAGS.return_context_logits]],
+                                              dtype=bool)
+
+    return_generation_logits_data = None
+    if FLAGS.return_generation_logits:
+        return_generation_logits_data = np.array(
+            [[FLAGS.return_generation_logits]], dtype=bool)
+
     output_text = run_inference(
         client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
         FLAGS.repetition_penalty, FLAGS.presence_penalty,
         FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
         FLAGS.bad_words, embedding_bias_words, embedding_bias_weights,
         FLAGS.model_name, FLAGS.streaming, FLAGS.beam_width,
-        FLAGS.overwrite_output_text, True)
+        FLAGS.overwrite_output_text, return_context_logits_data,
+        return_generation_logits_data, True)
