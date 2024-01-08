@@ -196,8 +196,8 @@ if __name__ == '__main__':
                 client_target, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
-                FLAGS.bad_words, [], [], "ensemble", False, 1, False,
-                FLAGS.verbose)
+                FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
+                None, FLAGS.verbose)
             if FLAGS.verbose:
                 print(f"output_target: {output_target}", flush=True)
 

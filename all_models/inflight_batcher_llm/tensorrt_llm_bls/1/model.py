@@ -58,9 +58,9 @@ class TritonPythonModel:
             "pad_id", "top_k", "top_p", "temperature", "length_penalty",
             "repetition_penalty", "min_length", "presence_penalty",
             "frequency_penalty", "random_seed", "return_log_probs",
-            "beam_width", "stream", "prompt_embedding_table",
-            "prompt_vocab_size", "embedding_bias_words",
-            "embedding_bias_weights"
+            "return_context_logits", "return_generation_logits", "beam_width",
+            "stream", "prompt_embedding_table", "prompt_vocab_size",
+            "embedding_bias_words", "embedding_bias_weights"
         ]
 
         self.preproc_input_to_bls_input_map = {
@@ -94,6 +94,8 @@ class TritonPythonModel:
             "frequency_penalty": "frequency_penalty",
             "random_seed": "random_seed",
             "return_log_probs": "return_log_probs",
+            "return_context_logits": "return_context_logits",
+            "return_generation_logits": "return_generation_logits",
             "streaming": "stream",
             "prompt_embedding_table": "prompt_embedding_table",
             "prompt_vocab_size": "prompt_vocab_size",
@@ -104,12 +106,16 @@ class TritonPythonModel:
             "sequence_length": "SEQUENCE_LENGTH",
             "cum_log_probs": "CUM_LOG_PROBS",
             "output_log_probs": "OUTPUT_LOG_PROBS",
+            "context_logits": "CONTEXT_LOGITS",
+            "generation_logits": "GENERATION_LOGITS"
         }
 
         self.postproc_output_to_bls_output_map = {
             "OUTPUT": "text_output",
             "OUT_CUM_LOG_PROBS": "cum_log_probs",
             "OUT_OUTPUT_LOG_PROBS": "output_log_probs",
+            "OUT_CONTEXT_LOGITS": "context_logits",
+            "OUT_GENERATION_LOGITS": "generation_logits"
         }
 
     def _get_bls_input_tensors_map(self, request):

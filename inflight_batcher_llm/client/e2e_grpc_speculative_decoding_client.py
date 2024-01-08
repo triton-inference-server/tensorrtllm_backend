@@ -142,10 +142,13 @@ def extract_trtllm_outputs(result):
     sequence_length = sequence_length_data[0, 0]
     cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
     output_log_probs = result.as_numpy("output_log_probs").astype(np.float32)
-    return output_ids, sequence_length, cum_log_probs, output_log_probs
+    context_logits = result.as_numpy("context_logits").astype(np.float32)
+    generation_logits = result.as_numpy("generation_logits").astype(np.float32)
+    return output_ids, sequence_length, cum_log_probs, output_log_probs, context_logits, generation_logits
 
 
-def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs):
+def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs,
+                             context_logits, generation_logits):
     output_ids_data = np.expand_dims(output_ids, axis=(0, 1))
     inputs = [
         prepare_tensor("TOKENS_BATCH", output_ids_data),
@@ -153,6 +156,8 @@ def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs):
                        np.array([[len(output_ids)]], dtype=np.int32)),
         prepare_tensor("CUM_LOG_PROBS", cum_log_probs),
         prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs),
+        prepare_tensor("CONTEXT_LOGITS", context_logits),
+        prepare_tensor("GENERATION_LOGITS", generation_logits)
     ]
 
     return inputs
@@ -209,7 +214,7 @@ def run_speculative_inference(
                                               draft_inputs,
                                               request_id=request_id)
             check_result(draft_result, draft_tensorrt_llm_model_name)
-            draft_output_ids, draft_seq_len, cum_log_probs, output_log_probs = extract_trtllm_outputs(
+            draft_output_ids, draft_seq_len, cum_log_probs, output_log_probs, context_logits, generation_logits = extract_trtllm_outputs(
                 draft_result)
 
             if verbose:
@@ -241,7 +246,7 @@ def run_speculative_inference(
                                             target_inputs,
                                             request_id=request_id)
         check_result(target_result, target_tensorrt_llm_model_name)
-        target_output_ids, seq_length, cum_log_probs, output_log_probs = extract_trtllm_outputs(
+        target_output_ids, seq_length, cum_log_probs, output_log_probs, context_logits, generation_logits = extract_trtllm_outputs(
             target_result)
 
         if verbose:
@@ -279,7 +284,9 @@ def run_speculative_inference(
 
     # Call the postprocessor
     postprocessor_inputs = get_postprocessor_inputs(input_ids, cum_log_probs,
-                                                    output_log_probs)
+                                                    output_log_probs,
+                                                    context_logits,
+                                                    generation_logits)
     postprocessor_result = client_target.infer(postprocessor_model_name,
                                                postprocessor_inputs,
                                                request_id=request_id)

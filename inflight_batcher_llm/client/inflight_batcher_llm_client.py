@@ -121,7 +121,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    streaming_data, end_id, pad_id, prompt_embedding_table_data,
                    prompt_vocab_size_data, lora_weights_data, lora_config_data,
                    return_log_probs_data, top_k_data, top_p_data,
-                   draft_ids_data):
+                   draft_ids_data, return_context_logits_data,
+                   return_generation_logits_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -161,6 +162,16 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
     if draft_ids_data is not None:
         inputs += [
             prepare_tensor("draft_input_ids", draft_ids_data),
+        ]
+    if return_context_logits_data is not None:
+        inputs += [
+            prepare_tensor("return_context_logits",
+                           return_context_logits_data),
+        ]
+    if return_generation_logits_data is not None:
+        inputs += [
+            prepare_tensor("return_generation_logits",
+                           return_generation_logits_data),
         ]
     return inputs
 
@@ -439,6 +450,24 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--return-context-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return context logits, the engine must be built with gather_context_logits or gather_all_token_logits",
+    )
+
+    parser.add_argument(
+        "--return-generation-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return generation logits, the engine must be built with gather_ generation_logits or gather_all_token_logits",
+    )
+
+    parser.add_argument(
         "--top-k",
         type=int,
         required=False,
@@ -561,6 +590,16 @@ if __name__ == "__main__":
     return_log_probs = [[FLAGS.return_log_probs]]
     return_log_probs_data = np.array(return_log_probs, dtype=bool)
 
+    return_context_logits_data = None
+    if FLAGS.return_context_logits:
+        return_context_logits_data = np.array([[FLAGS.return_context_logits]],
+                                              dtype=bool)
+
+    return_generation_logits_data = None
+    if FLAGS.return_generation_logits:
+        return_generation_logits_data = np.array(
+            [[FLAGS.return_generation_logits]], dtype=bool)
+
     repetition_penalty_data = None
     if FLAGS.repetition_penalty is not None:
         repetition_penalty = [[FLAGS.repetition_penalty]]
@@ -587,7 +626,8 @@ if __name__ == "__main__":
         presence_penalty_data, frequency_penalty_data, streaming_data,
         end_id_data, pad_id_data, prompt_embedding_table_data,
         prompt_vocab_size_data, lora_weights_data, lora_config_data,
-        return_log_probs_data, top_k_data, top_p_data, draft_ids_data)
+        return_log_probs_data, top_k_data, top_p_data, draft_ids_data,
+        return_context_logits_data, return_generation_logits_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -627,6 +667,8 @@ if __name__ == "__main__":
     sequence_lengths = []
     cum_log_probs = None
     output_log_probs = None
+    context_logits = None
+    generation_logits = None
 
     user_data = UserData()
     with grpcclient.InferenceServerClient(
@@ -741,10 +783,15 @@ if __name__ == "__main__":
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         sequence_lengths = result.as_numpy('sequence_length')
-                        if (FLAGS.return_log_probs):
+                        if FLAGS.return_log_probs:
                             cum_log_probs = result.as_numpy('cum_log_probs')
                             output_log_probs = result.as_numpy(
                                 'output_log_probs')
+                        if FLAGS.return_context_logits:
+                            context_logits = result.as_numpy('context_logits')
+                        if FLAGS.return_generation_logits:
+                            generation_logits = result.as_numpy(
+                                'generation_logits')
                         if output_ids is not None:
                             for beam_output_ids in output_ids[0]:
                                 tokens = list(beam_output_ids)
@@ -794,5 +841,13 @@ if __name__ == "__main__":
         if FLAGS.return_log_probs:
             print(cum_log_probs)
             print(output_log_probs)
+
+        if FLAGS.return_context_logits:
+            print(f"context_logits.shape: {context_logits.shape}")
+            print(f"context_logits: {context_logits}")
+
+        if FLAGS.return_generation_logits:
+            print(f"generation_logits.shape: {generation_logits.shape}")
+            print(f"generation_logits: {generation_logits}")
 
         sys.exit(not passed)
