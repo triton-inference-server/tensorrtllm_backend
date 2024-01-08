@@ -61,12 +61,19 @@ std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
         }
         else
         {
-            auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, mIsDecoupled)
-                                           : std::make_shared<WorkItem>(request, mIsDecoupled);
-            mPendingWorkItems.push_back(workItem);
-            mPendingWorkItemsReqIds.insert(workItem->requestId());
-            workItem->getTimestamps().exec_start_ns = exec_start_ns;
-            reqExceptions.push_back(nullptr);
+            try
+            {
+                auto workItem = requestId != 0 ? std::make_shared<WorkItem>(request, requestId, mIsDecoupled)
+                                               : std::make_shared<WorkItem>(request, mIsDecoupled);
+                mPendingWorkItems.push_back(workItem);
+                mPendingWorkItemsReqIds.insert(workItem->requestId());
+                workItem->getTimestamps().exec_start_ns = exec_start_ns;
+                reqExceptions.push_back(nullptr);
+            }
+            catch (const std::exception& e)
+            {
+                reqExceptions.emplace_back(std::make_shared<std::runtime_error>(e.what()));
+            }
         }
     }
     return reqExceptions;
