@@ -159,7 +159,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
-            "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.85 or "
+            "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.9 or "
             "max_tokens_in_paged_kv_cache");
     }
 

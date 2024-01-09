@@ -36,7 +36,8 @@ def callback(user_data, result, error):
         print(output, flush=True)
 
 
-def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words):
+def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words, end_id,
+                            pad_id):
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.int32) * output_len
@@ -58,6 +59,14 @@ def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words):
             prepare_tensor("STOP_WORDS_DICT", stop_words_list)
         ]
 
+    if end_id:
+        end_id_data = np.array([[end_id]], dtype=np.int32)
+        preprocessor_inputs += [prepare_tensor("END_ID", end_id_data)]
+
+    if pad_id:
+        pad_id_data = np.array([[pad_id]], dtype=np.int32)
+        preprocessor_inputs += [prepare_tensor("PAD_ID", pad_id_data)]
+
     return preprocessor_inputs
 
 
@@ -67,14 +76,16 @@ def extract_preprocessor_outputs(result):
                            axis=0)
     bad_words_ids = result.as_numpy("BAD_WORDS_IDS").astype(np.int32)
     stop_words_ids = result.as_numpy("STOP_WORDS_IDS").astype(np.int32)
+    end_id = result.as_numpy("OUT_END_ID").astype(np.int32)[0][0]
+    pad_id = result.as_numpy("OUT_PAD_ID").astype(np.int32)[0][0]
 
-    return input_ids, bad_words_ids, stop_words_ids
+    return input_ids, bad_words_ids, stop_words_ids, end_id, pad_id
 
 
 def get_trtllm_inputs(input_ids, input_length, request_output_len,
                       draft_tokens, beam_width, temperature,
-                      repetition_penalty, presence_penalty, bad_words_ids,
-                      stop_words_ids, end_id, pad_id):
+                      repetition_penalty, presence_penalty, frequency_penalty,
+                      bad_words_ids, stop_words_ids, end_id, pad_id):
 
     # input_ids is expected to have shape [input_length]
     # Add batch dimension of 1
@@ -108,6 +119,13 @@ def get_trtllm_inputs(input_ids, input_length, request_output_len,
         inputs.append(prepare_tensor("presence_penalty",
                                      presence_penalty_data))
 
+    if frequency_penalty is not None:
+        frequency_penalty_data = np.array([[frequency_penalty]],
+                                          dtype=np.float32)
+        inputs.append(
+            prepare_tensor("frequency_penalty", frequency_penalty_data))
+
+    print(f"end_id before trtllm: {end_id}")
     if end_id is not None:
         end_id_data = np.array([[end_id]], dtype=np.int32)
         inputs.append(prepare_tensor("end_id", end_id_data))
@@ -136,10 +154,13 @@ def extract_trtllm_outputs(result):
     sequence_length = sequence_length_data[0, 0]
     cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
     output_log_probs = result.as_numpy("output_log_probs").astype(np.float32)
-    return output_ids, sequence_length, cum_log_probs, output_log_probs
+    context_logits = result.as_numpy("context_logits").astype(np.float32)
+    generation_logits = result.as_numpy("generation_logits").astype(np.float32)
+    return output_ids, sequence_length, cum_log_probs, output_log_probs, context_logits, generation_logits
 
 
-def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs):
+def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs,
+                             context_logits, generation_logits):
     output_ids_data = np.expand_dims(output_ids, axis=(0, 1))
     inputs = [
         prepare_tensor("TOKENS_BATCH", output_ids_data),
@@ -147,6 +168,8 @@ def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs):
                        np.array([[len(output_ids)]], dtype=np.int32)),
         prepare_tensor("CUM_LOG_PROBS", cum_log_probs),
         prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs),
+        prepare_tensor("CONTEXT_LOGITS", context_logits),
+        prepare_tensor("GENERATION_LOGITS", generation_logits)
     ]
 
     return inputs
@@ -161,19 +184,20 @@ def encountered_stop_words(input_ids, stop_words_ids):
 
 def run_speculative_inference(
         client_draft, client_target, prompt, output_len, in_num_draft_tokens,
-        request_id, repetition_penalty, presence_penalty, temperature,
-        stop_words, bad_words, end_id, pad_id, beam_width,
+        request_id, repetition_penalty, presence_penalty, frequency_penalty,
+        temperature, stop_words, bad_words, end_id, pad_id, beam_width,
         preprocessor_model_name, draft_tensorrt_llm_model_name,
         target_tensorrt_llm_model_name, postprocessor_model_name, verbose):
 
     # Call the preprocessor
     preprocessor_inputs = get_preprocessor_inputs(prompt, output_len,
-                                                  bad_words, stop_words)
+                                                  bad_words, stop_words,
+                                                  end_id, pad_id)
     preprocessor_result = client_draft.infer(preprocessor_model_name,
                                              preprocessor_inputs,
                                              request_id=request_id)
     check_result(preprocessor_result, preprocessor_model_name)
-    prompt_input_ids, bad_words_ids, stop_words_ids = extract_preprocessor_outputs(
+    prompt_input_ids, bad_words_ids, stop_words_ids, end_id, pad_id = extract_preprocessor_outputs(
         preprocessor_result)
 
     input_ids = prompt_input_ids
@@ -193,18 +217,17 @@ def run_speculative_inference(
                 print(input_ids.tolist())
 
             #Generate up to num_draft_tokens with draft model
-            draft_inputs = get_trtllm_inputs(input_ids, len(input_ids),
-                                             num_draft_tokens, None,
-                                             beam_width, temperature,
-                                             repetition_penalty,
-                                             presence_penalty, bad_words_ids,
-                                             stop_words_ids, end_id, pad_id)
+            draft_inputs = get_trtllm_inputs(
+                input_ids, len(input_ids), num_draft_tokens, None, beam_width,
+                temperature, repetition_penalty, presence_penalty,
+                frequency_penalty, bad_words_ids, stop_words_ids, end_id,
+                pad_id)
 
             draft_result = client_draft.infer(draft_tensorrt_llm_model_name,
                                               draft_inputs,
                                               request_id=request_id)
             check_result(draft_result, draft_tensorrt_llm_model_name)
-            draft_output_ids, draft_seq_len, cum_log_probs, output_log_probs = extract_trtllm_outputs(
+            draft_output_ids, draft_seq_len, cum_log_probs, output_log_probs, context_logits, generation_logits = extract_trtllm_outputs(
                 draft_result)
 
             if verbose:
@@ -229,14 +252,14 @@ def run_speculative_inference(
             input_ids, len(input_ids),
             len(draft_tokens) + 1 if num_draft_tokens > 0 else 1,
             draft_tokens if num_draft_tokens > 0 else None, beam_width,
-            temperature, repetition_penalty, presence_penalty, bad_words_ids,
-            stop_words_ids, end_id, pad_id)
+            temperature, repetition_penalty, presence_penalty,
+            frequency_penalty, bad_words_ids, stop_words_ids, end_id, pad_id)
 
         target_result = client_target.infer(target_tensorrt_llm_model_name,
                                             target_inputs,
                                             request_id=request_id)
         check_result(target_result, target_tensorrt_llm_model_name)
-        target_output_ids, seq_length, cum_log_probs, output_log_probs = extract_trtllm_outputs(
+        target_output_ids, seq_length, cum_log_probs, output_log_probs, context_logits, generation_logits = extract_trtllm_outputs(
             target_result)
 
         if verbose:
@@ -274,7 +297,9 @@ def run_speculative_inference(
 
     # Call the postprocessor
     postprocessor_inputs = get_postprocessor_inputs(input_ids, cum_log_probs,
-                                                    output_log_probs)
+                                                    output_log_probs,
+                                                    context_logits,
+                                                    generation_logits)
     postprocessor_result = client_target.infer(postprocessor_model_name,
                                                postprocessor_inputs,
                                                request_id=request_id)
@@ -370,6 +395,14 @@ if __name__ == '__main__':
         help="The presence penalty value",
     )
 
+    parser.add_argument(
+        "--frequency-penalty",
+        type=float,
+        required=False,
+        default=None,
+        help="The frequency penalty value",
+    )
+
     parser.add_argument('-o',
                         '--output-len',
                         type=int,
@@ -437,9 +470,10 @@ if __name__ == '__main__':
     output_text = run_speculative_inference(
         client_draft, client_target, FLAGS.prompt, FLAGS.output_len,
         FLAGS.num_draft_tokens, FLAGS.request_id, FLAGS.repetition_penalty,
-        FLAGS.presence_penalty, FLAGS.temperature, FLAGS.stop_words,
-        FLAGS.bad_words, FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
-        FLAGS.preprocessor_model_name, FLAGS.draft_tensorrt_llm_model_name,
+        FLAGS.presence_penalty, FLAGS.frequency_penalty, FLAGS.temperature,
+        FLAGS.stop_words, FLAGS.bad_words, FLAGS.end_id, FLAGS.pad_id,
+        FLAGS.beam_width, FLAGS.preprocessor_model_name,
+        FLAGS.draft_tensorrt_llm_model_name,
         FLAGS.target_tensorrt_llm_model_name, FLAGS.postprocessor_model_name,
         FLAGS.verbose)
 

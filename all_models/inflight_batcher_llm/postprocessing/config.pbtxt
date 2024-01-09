@@ -47,6 +47,18 @@ input [
     name: "OUTPUT_LOG_PROBS"
     data_type: TYPE_FP32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "CONTEXT_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
+    optional: true
+  },
+  {
+    name: "GENERATION_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ -1, -1, -1 ]
+    optional: true
   }
 ]
 output [
@@ -64,6 +76,16 @@ output [
     name: "OUT_OUTPUT_LOG_PROBS"
     data_type: TYPE_FP32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "OUT_CONTEXT_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "OUT_GENERATION_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ -1, -1, -1 ]
   }
 ]
 
