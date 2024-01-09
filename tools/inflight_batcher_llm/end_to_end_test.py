@@ -48,6 +48,8 @@ def test_functionality(client, prompts, output_lens):
         output0 = result.as_numpy("INPUT_ID")
         output1 = result.as_numpy("REQUEST_INPUT_LEN")
         output2 = result.as_numpy("REQUEST_OUTPUT_LEN")
+        output_end_id = result.as_numpy("OUT_END_ID")
+        output_pad_id = result.as_numpy("OUT_PAD_ID")
 
         model_name = "tensorrt_llm"
         inputs = [
@@ -55,12 +57,17 @@ def test_functionality(client, prompts, output_lens):
             utils.prepare_tensor("input_lengths", output1, FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output2,
                                  FLAGS.protocol),
+            utils.prepare_tensor("end_id", output_end_id, FLAGS.protocol),
+            utils.prepare_tensor("pad_id", output_pad_id, FLAGS.protocol),
         ]
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
         cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
         output_log_probs = result.as_numpy("output_log_probs").astype(
+            np.float32)
+        context_logits = result.as_numpy("context_logits").astype(np.float32)
+        generation_logits = result.as_numpy("generation_logits").astype(
             np.float32)
 
         model_name = "postprocessing"
@@ -71,12 +78,18 @@ def test_functionality(client, prompts, output_lens):
             utils.prepare_tensor("CUM_LOG_PROBS", cum_log_probs,
                                  FLAGS.protocol),
             utils.prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("CONTEXT_LOGITS", context_logits,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("GENERATION_LOGITS", generation_logits,
                                  FLAGS.protocol)
         ]
         inputs[0].set_data_from_numpy(output0)
         inputs[1].set_data_from_numpy(seq_lengths)
         inputs[2].set_data_from_numpy(cum_log_probs)
         inputs[3].set_data_from_numpy(output_log_probs)
+        inputs[4].set_data_from_numpy(context_logits)
+        inputs[5].set_data_from_numpy(generation_logits)
 
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
@@ -103,6 +116,8 @@ def test_functionality(client, prompts, output_lens):
         ensemble_output = result.as_numpy('text_output')
         ensemble_cum_log_probs = result.as_numpy('cum_log_probs')
         ensemble_output_log_probs = result.as_numpy('output_log_probs')
+        result.as_numpy('context_logits')
+        result.as_numpy('generation_logits')
         assert output0 == ensemble_output
         assert cum_log_probs == ensemble_cum_log_probs
         assert (output_log_probs == ensemble_output_log_probs).all()

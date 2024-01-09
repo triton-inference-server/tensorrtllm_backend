@@ -222,6 +222,8 @@ if __name__ == '__main__':
             np.ones([input0_data.shape[0], 1]).astype(np.int32)
         presence_penalty = 0.0 * \
             np.ones([input0_data.shape[0], 1]).astype(np.float32)
+        frequency_penalty = 0.0 * \
+            np.ones([input0_data.shape[0], 1]).astype(np.float32)
         inputs = [
             utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
             utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
@@ -240,6 +242,8 @@ if __name__ == '__main__':
                                  FLAGS.protocol),
             utils.prepare_tensor("min_length", min_length, FLAGS.protocol),
             utils.prepare_tensor("presence_penalty", presence_penalty,
+                                 FLAGS.protocol),
+            utils.prepare_tensor("frequency_penalty", frequency_penalty,
                                  FLAGS.protocol),
             utils.prepare_tensor("random_seed", random_seed, FLAGS.protocol),
             utils.prepare_tensor("output_log_probs", output_log_probs,

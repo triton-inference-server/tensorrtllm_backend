@@ -75,6 +75,11 @@ public:
         {
             mWorkItemsQueue->clear();
         }
+
+        // signal batch manager to stop processing the work items queue
+        {
+            mBatchManager->shutdown();
+        }
     }
 
     // Get the state of the model that corresponds to this instance.
