@@ -69,7 +69,9 @@ class TritonPythonModel:
             "BAD_WORDS_DICT": "bad_words",
             "STOP_WORDS_DICT": "stop_words",
             "EMBEDDING_BIAS_WORDS": "embedding_bias_words",
-            "EMBEDDING_BIAS_WEIGHTS": "embedding_bias_weights"
+            "EMBEDDING_BIAS_WEIGHTS": "embedding_bias_weights",
+            "END_ID": "end_id",
+            "PAD_ID": "pad_id"
         }
 
         self.preproc_output_to_trtllm_input_map = {
@@ -79,11 +81,11 @@ class TritonPythonModel:
             "BAD_WORDS_IDS": "bad_words_list",
             "STOP_WORDS_IDS": "stop_words_list",
             "EMBEDDING_BIAS": "embedding_bias",
+            "OUT_END_ID": "end_id",
+            "OUT_PAD_ID": "pad_id",
         }
 
         self.trtllm_input_to_bls_input_map = {
-            "end_id": "end_id",
-            "pad_id": "pad_id",
             "beam_width": "beam_width",
             "runtime_top_k": "top_k",
             "runtime_top_p": "top_p",

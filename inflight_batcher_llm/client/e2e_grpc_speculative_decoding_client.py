@@ -36,7 +36,8 @@ def callback(user_data, result, error):
         print(output, flush=True)
 
 
-def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words):
+def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words, end_id,
+                            pad_id):
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.int32) * output_len
@@ -58,6 +59,14 @@ def get_preprocessor_inputs(prompt, output_len, bad_words, stop_words):
             prepare_tensor("STOP_WORDS_DICT", stop_words_list)
         ]
 
+    if end_id:
+        end_id_data = np.array([[end_id]], dtype=np.int32)
+        preprocessor_inputs += [prepare_tensor("END_ID", end_id_data)]
+
+    if pad_id:
+        pad_id_data = np.array([[pad_id]], dtype=np.int32)
+        preprocessor_inputs += [prepare_tensor("PAD_ID", pad_id_data)]
+
     return preprocessor_inputs
 
 
@@ -67,8 +76,10 @@ def extract_preprocessor_outputs(result):
                            axis=0)
     bad_words_ids = result.as_numpy("BAD_WORDS_IDS").astype(np.int32)
     stop_words_ids = result.as_numpy("STOP_WORDS_IDS").astype(np.int32)
+    end_id = result.as_numpy("OUT_END_ID").astype(np.int32)[0][0]
+    pad_id = result.as_numpy("OUT_PAD_ID").astype(np.int32)[0][0]
 
-    return input_ids, bad_words_ids, stop_words_ids
+    return input_ids, bad_words_ids, stop_words_ids, end_id, pad_id
 
 
 def get_trtllm_inputs(input_ids, input_length, request_output_len,
@@ -114,6 +125,7 @@ def get_trtllm_inputs(input_ids, input_length, request_output_len,
         inputs.append(
             prepare_tensor("frequency_penalty", frequency_penalty_data))
 
+    print(f"end_id before trtllm: {end_id}")
     if end_id is not None:
         end_id_data = np.array([[end_id]], dtype=np.int32)
         inputs.append(prepare_tensor("end_id", end_id_data))
@@ -179,12 +191,13 @@ def run_speculative_inference(
 
     # Call the preprocessor
     preprocessor_inputs = get_preprocessor_inputs(prompt, output_len,
-                                                  bad_words, stop_words)
+                                                  bad_words, stop_words,
+                                                  end_id, pad_id)
     preprocessor_result = client_draft.infer(preprocessor_model_name,
                                              preprocessor_inputs,
                                              request_id=request_id)
     check_result(preprocessor_result, preprocessor_model_name)
-    prompt_input_ids, bad_words_ids, stop_words_ids = extract_preprocessor_outputs(
+    prompt_input_ids, bad_words_ids, stop_words_ids, end_id, pad_id = extract_preprocessor_outputs(
         preprocessor_result)
 
     input_ids = prompt_input_ids

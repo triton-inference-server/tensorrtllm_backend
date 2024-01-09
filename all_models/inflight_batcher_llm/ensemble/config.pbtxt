@@ -227,6 +227,14 @@ ensemble_scheduling {
         key: "EMBEDDING_BIAS_WEIGHTS"
         value: "embedding_bias_weights"
       }
+      input_map {
+        key: "END_ID"
+        value: "end_id"
+      }
+      input_map {
+        key: "PAD_ID"
+        value: "pad_id"
+      }
       output_map {
         key: "REQUEST_INPUT_LEN"
         value: "_REQUEST_INPUT_LEN"
@@ -251,6 +259,14 @@ ensemble_scheduling {
         key: "EMBEDDING_BIAS"
         value: "_EMBEDDING_BIAS"
       }
+      output_map {
+        key: "OUT_END_ID"
+        value: "_PREPROCESSOR_END_ID"
+      }
+      output_map {
+        key: "OUT_PAD_ID"
+        value: "_PREPROCESSOR_PAD_ID"
+      }
     },
     {
       model_name: "tensorrt_llm"
@@ -269,11 +285,11 @@ ensemble_scheduling {
       }
       input_map {
           key: "end_id"
-          value: "end_id"
+          value: "_PREPROCESSOR_END_ID"
       }
       input_map {
           key: "pad_id"
-          value: "pad_id"
+          value: "_PREPROCESSOR_PAD_ID"
       }
       input_map {
           key: "embedding_bias"
