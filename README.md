@@ -346,6 +346,7 @@ He was a member of the French Academy of Sciences and the French Academy of Arts
 Soyer was a member of the French Academy of Sciences and
 ```
 
+#### Early stopping
 You can also stop the generation process early by using the `--stop-after-ms`
 option to send a stop request after a few milliseconds:
 
@@ -356,6 +357,54 @@ python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-m
 You will find that the generation process is stopped early and therefore the
 number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
+
+#### Return context logits and/or generation logits
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+
+After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts (`end_to_end_grpc_client.py` and `inflight_batcher_llm_client.py`). For example:
+```bash
+python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 20 --tokenizer-dir /path/to/tokenizer/ \
+--return-context-logits \
+--return-generation-logits
+```
+
+The result should be similar to the following:
+```
+Input sequence:  [28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257]
+Got completed request
+Input: Born in north-east France, Soyer trained as a
+Output beam 0:  has since worked in restaurants in London,
+Output sequence:  [21221, 878, 3867, 284, 3576, 287, 262, 1903, 6303, 82, 13, 679, 468, 1201, 3111, 287, 10808, 287, 3576, 11]
+context_logits.shape: (1, 12, 50257)
+context_logits: [[[ -65.9822     -62.267445   -70.08991   ...  -76.16964    -78.8893
+    -65.90678  ]
+  [-103.40278   -102.55243   -106.119026  ... -108.925415  -109.408585
+   -101.37687  ]
+  [ -63.971176   -64.03466    -67.58809   ...  -72.141235   -71.16892
+    -64.23846  ]
+  ...
+  [ -80.776375   -79.1815     -85.50916   ...  -87.07368    -88.02817
+    -79.28435  ]
+  [ -10.551408    -7.786484   -14.524468  ...  -13.805856   -15.767286
+     -7.9322424]
+  [-106.33096   -105.58956   -111.44852   ... -111.04858   -111.994194
+   -105.40376  ]]]
+generation_logits.shape: (1, 1, 20, 50257)
+generation_logits: [[[[-106.33096  -105.58956  -111.44852  ... -111.04858  -111.994194
+    -105.40376 ]
+   [ -77.867424  -76.96638   -83.119095 ...  -87.82542   -88.53957
+     -75.64877 ]
+   [-136.92282  -135.02484  -140.96051  ... -141.78284  -141.55045
+    -136.01668 ]
+   ...
+   [-100.03721   -98.98237  -105.25507  ... -108.49254  -109.45882
+     -98.95136 ]
+   [-136.78777  -136.16165  -139.13437  ... -142.21495  -143.57468
+    -134.94667 ]
+   [  19.222942   19.127287   14.804495 ...   10.556551    9.685863
+      19.625107]]]]
+```
+
 
 ### Launch Triton server *within Slurm based clusters*
 
