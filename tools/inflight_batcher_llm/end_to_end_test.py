@@ -48,6 +48,8 @@ def test_functionality(client, prompts, output_lens):
         output0 = result.as_numpy("INPUT_ID")
         output1 = result.as_numpy("REQUEST_INPUT_LEN")
         output2 = result.as_numpy("REQUEST_OUTPUT_LEN")
+        output_end_id = result.as_numpy("OUT_END_ID")
+        output_pad_id = result.as_numpy("OUT_PAD_ID")
 
         model_name = "tensorrt_llm"
         inputs = [
@@ -55,6 +57,8 @@ def test_functionality(client, prompts, output_lens):
             utils.prepare_tensor("input_lengths", output1, FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output2,
                                  FLAGS.protocol),
+            utils.prepare_tensor("end_id", output_end_id, FLAGS.protocol),
+            utils.prepare_tensor("pad_id", output_pad_id, FLAGS.protocol),
         ]
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)

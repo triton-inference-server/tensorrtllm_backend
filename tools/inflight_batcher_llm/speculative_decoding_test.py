@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
                 FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
-                None, FLAGS.verbose)
+                None, FLAGS.end_id, FLAGS.pad_id, FLAGS.verbose)
             if FLAGS.verbose:
                 print(f"output_target: {output_target}", flush=True)
 

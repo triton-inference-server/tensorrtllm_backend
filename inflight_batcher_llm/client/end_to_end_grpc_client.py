@@ -40,7 +40,7 @@ def run_inference(triton_client, prompt, output_len, request_id,
                   temperature, stop_words, bad_words, embedding_bias_words,
                   embedding_bias_weights, model_name, streaming, beam_width,
                   overwrite_output_text, return_context_logits_data,
-                  return_generation_logits_data, verbose):
+                  return_generation_logits_data, end_id, pad_id, verbose):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -114,6 +114,13 @@ def run_inference(triton_client, prompt, output_len, request_id,
         inputs.append(
             prepare_tensor("embedding_bias_weights",
                            embedding_bias_weights_data))
+    if end_id is not None:
+        end_id_data = np.array([[end_id]], dtype=np.int32)
+        inputs += [prepare_tensor("end_id", end_id_data)]
+
+    if pad_id is not None:
+        pad_id_data = np.array([[pad_id]], dtype=np.int32)
+        inputs += [prepare_tensor("pad_id", pad_id_data)]
 
     user_data = UserData()
     # Establish stream
@@ -301,6 +308,16 @@ if __name__ == '__main__':
         "Return generation logits, the engine must be built with gather_ generation_logits or gather_all_token_logits",
     )
 
+    parser.add_argument('--end-id',
+                        type=int,
+                        required=False,
+                        help='The token id for end token.')
+
+    parser.add_argument('--pad-id',
+                        type=int,
+                        required=False,
+                        help='The token id for pad token.')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8001"
@@ -331,4 +348,4 @@ if __name__ == '__main__':
         FLAGS.bad_words, embedding_bias_words, embedding_bias_weights,
         FLAGS.model_name, FLAGS.streaming, FLAGS.beam_width,
         FLAGS.overwrite_output_text, return_context_logits_data,
-        return_generation_logits_data, True)
+        return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id, True)
