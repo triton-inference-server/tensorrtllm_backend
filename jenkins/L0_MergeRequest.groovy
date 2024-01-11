@@ -341,9 +341,6 @@ def runTRTLLMBackendTest(caseName)
       if (caseName.contains("-ptuning")) {
         buildExample += "-ptuning"
         testExample += "-ptuning"
-      } else if (caseName.contains("-lora")) {
-        buildExample += "-lora"
-        testExample += "-lora"
       }
 
       if (caseName.contains("-streaming")) {
