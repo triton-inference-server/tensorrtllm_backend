@@ -45,9 +45,13 @@ def parse_arguments():
     parser.add_argument(
         '--log-file',
         type=str,
-        help='path to triton log gile',
+        help='path to triton log file',
         default='triton_log.txt',
     )
+    parser.add_argument('--log-verbose',
+        type=int,
+        default=3,
+        help='verbose level of triton log')
 
     path = str(Path(__file__).parent.absolute()) + '/../all_models/gpt'
     parser.add_argument('--model_repo', type=str, default=path)
@@ -55,12 +59,12 @@ def parse_arguments():
 
 
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
-            model_repo, log, log_file):
+            model_repo, log, log_file, log_verbose):
     cmd = ['mpirun', '--allow-run-as-root']
     for i in range(world_size):
         cmd += ['-n', '1', tritonserver]
         if log and (i == 0):
-            cmd += ['--log-verbose=3', f'--log-file={log_file}']
+            cmd += [f'--log-verbose={log_verbose}', f'--log-file={log_file}']
         cmd += [
             f'--grpc-port={grpc_port}', f'--http-port={http_port}',
             f'--metrics-port={metrics_port}',
@@ -85,5 +89,5 @@ if __name__ == '__main__':
             raise RuntimeError(msg + ' Or use --force.')
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
-                  args.log_file)
+                  args.log_file, args.log_verbose)
     subprocess.Popen(cmd)
