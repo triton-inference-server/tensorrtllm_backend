@@ -72,6 +72,93 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     return engine_dir
 
 
+def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
+                               gpt_2b_lora_model_root, models_root):
+    # Convert GPT from NeMo
+    model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                             "gpt_2b_lora")
+    gpt_2b_nemo_model = os.path.join(models_root, "GPT-2B-001_bf16_tp1.nemo")
+
+    convert_ckpt_cmd = [
+        "python3", f"{tensorrt_llm_gpt_example_root}/nemo_ckpt_convert.py",
+        f"-i={gpt_2b_nemo_model}", "--storage-type=float16", f"-o={model_dir}"
+    ]
+
+    # prepare more test metrials
+    gpt_2b_lora_900_nemo_model = os.path.join(gpt_2b_lora_model_root,
+                                              "gpt2b_lora-900.nemo")
+    convert_lora_train_cmd = [
+        "python3", f"{tensorrt_llm_gpt_example_root}/nemo_lora_convert.py",
+        f"-i={gpt_2b_lora_900_nemo_model}", "--storage-type=float16",
+        "--write-cpp-runtime-tensors", f"-o=gpt-2b-lora-train-900"
+    ]
+    convert_lora_train_tllm_cmd = [
+        "python3", f"{tensorrt_llm_gpt_example_root}/nemo_lora_convert.py",
+        f"-i={gpt_2b_lora_900_nemo_model}", "--storage-type=float16",
+        f"-o=gpt-2b-lora-train-900-tllm"
+    ]
+
+    check_call(f"cp {gpt_2b_lora_model_root}/gpt2b_lora-900.nemo ./",
+               shell=True,
+               cwd=tensorrt_llm_gpt_example_root)
+    check_call(f"cp {gpt_2b_lora_model_root}/input.csv ./",
+               shell=True,
+               cwd=tensorrt_llm_gpt_example_root)
+
+    # Build GPT
+    engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                              "gpt_2b_lora_ib")
+
+    build_cmd = [
+        "python3",
+        f"{tensorrt_llm_gpt_example_root}/build.py",
+        f"--model_dir={model_dir}/1-gpu",
+        "--dtype=float16",
+        "--use_gpt_attention_plugin=float16",
+        "--use_gemm_plugin=float16",
+        "--use_layernorm_plugin=float16",
+        "--use_lora_plugin=float16",
+        "--lora_target_modules=attn_qkv",
+        "--remove_input_padding",
+        "--max_batch_size=8",
+        "--max_input_len=924",
+        "--max_output_len=128",
+        f"--output_dir={engine_dir}",
+    ]
+
+    if type == "ifb":
+        build_cmd += [
+            "--use_inflight_batching",
+            "--paged_kv_cache",
+        ]
+    convert_ckpt_cmd = " ".join(convert_ckpt_cmd)
+    build_cmd = " ".join(build_cmd)
+    convert_lora_train_cmd = " ".join(convert_lora_train_cmd)
+    convert_lora_train_tllm_cmd = " ".join(convert_lora_train_tllm_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gpt_example_root)
+        check_call(convert_ckpt_cmd, shell=True)
+        check_call(convert_lora_train_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gpt_example_root)
+        check_call(convert_lora_train_tllm_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gpt_example_root)
+        check_call(build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_ckpt_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+        print_info(f"Skipped: {convert_lora_train_cmd}")
+        print_info(f"Skipped: {convert_lora_train_tllm_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
     # Build GPT
     if type == "python_backend":

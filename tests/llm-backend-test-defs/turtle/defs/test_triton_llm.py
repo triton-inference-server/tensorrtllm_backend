@@ -830,3 +830,107 @@ def test_gpt_next_ptuning_ifb(
             "--request-output-len=8", "--check-output"
         ]
         venv_check_call(llm_backend_venv, run_cmd)
+
+
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("MAX_NUM_SEQUENCE", [""])
+@pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
+                         ids=["disableTrtOverlap"])
+@pytest.mark.parametrize("BATCHING_STRATEGY", ["inflight_fused_batching"])
+@pytest.mark.parametrize("DECOUPLED_MODE", ["False"],
+                         ids=["disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+def test_gpt_2b_lora_ifb(
+        E2E_MODEL_NAME, MAX_NUM_SEQUENCE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION, ENABLE_TRT_OVERLAP, BATCHING_STRATEGY,
+        DECOUPLED_MODE, TRITON_MAX_BATCH_SIZE, MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE, NORMALIZE_LOG_PROBS,
+        PREPROCESSING_INSTANCE_COUNT, POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT, EXCLUDE_INPUT_IN_OUTPUT,
+        inflight_batcher_llm_client_root, tensorrt_llm_example_root,
+        tensorrt_llm_gpt_example_root, gpt_2b_lora_model_root, models_root,
+        llm_backend_venv):
+    if BATCHING_STRATEGY == "V1":
+        pytest.skip("Skipping. LoRA is not supported in V1.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
+
+    llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_gpt_2b_lora_engine("ifb",
+                                             tensorrt_llm_gpt_example_root,
+                                             gpt_2b_lora_model_root,
+                                             models_root)
+    # Prepare model repo
+    new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+
+    # Modify config.pbtxt
+    TOKENIZER_PATH = os.path.join(models_root, "gpt-next",
+                                  "gpt-next-tokenizer-hf-v2")
+    TOKENIZER_TYPE = "auto"
+    modify_ib_config_pbtxt(
+        new_model_repo, ENGINE_PATH, TOKENIZER_PATH, TOKENIZER_TYPE,
+        llm_backend_repo_root, DECOUPLED_MODE, MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE, BATCH_SCHEDULER_POLICY, BATCHING_STRATEGY,
+        MAX_NUM_SEQUENCE, KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT, ENABLE_TRT_OVERLAP, TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS, MAX_BEAM_WIDTH, ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS, PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT, ACCUMULATE_TOKEN, BLS_INSTANCE_COUNT)
+
+    # Generate reference output
+    run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
+    # Input with virtual tokens:
+    input_tokens = os.path.join(tensorrt_llm_gpt_example_root, "input.csv")
+    output_tokens = os.path.join(tensorrt_llm_gpt_example_root, "output.csv")
+    lora_path = os.path.join(tensorrt_llm_gpt_example_root,
+                             "gpt-2b-lora-train-900")
+    lora_tllm_path = os.path.join(tensorrt_llm_gpt_example_root,
+                                  "gpt-2b-lora-train-900-tllm")
+    run_cmd = [
+        f"{run_py_path}",
+        "--max_output_len=8",
+        f"--lora_dir={lora_tllm_path}",
+        "--lora_ckpt_source=nemo",
+        "--lora_task_uids=lora",
+        f"--input_file={input_tokens}",
+        f"--output_csv={output_tokens}",
+        f"--engine_dir={ENGINE_PATH}",
+        "--use_py_session",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+    # Launch Triton Server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
+        shell=True)
+    check_server_ready()
+
+    # Run Test
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--input-tokens-csv={input_tokens}",
+        f"--output-tokens-csv={output_tokens}",
+        "--request-output-len=8",
+        "--check-output",
+        f"--lora-path={lora_path}",
+    ]
+    venv_check_call(llm_backend_venv, run_cmd)
