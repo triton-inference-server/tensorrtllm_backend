@@ -244,6 +244,14 @@ def get_device_memory():
 
 
 @pytest.fixture(scope="session")
+def models_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+
+    return models_root
+
+
+@pytest.fixture(scope="session")
 def llama_v2_tokenizer_model_root():
     models_root = llm_models_root()
     assert models_root, "Did you set LLM_MODELS_ROOT?"
@@ -304,6 +312,18 @@ def gpt_next_ptuning_model_root():
         gpt_next_ptuning_model_root
     ), f"{gpt_next_ptuning_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_next_ptuning_model_root
+
+
+@pytest.fixture(scope="session")
+def gpt_2b_lora_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    gpt_2b_lora_model_root = os.path.join(models_root, "lora", "gpt-next-2b")
+
+    assert os.path.exists(
+        gpt_2b_lora_model_root
+    ), f"{gpt_2b_lora_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return gpt_2b_lora_model_root
 
 
 # Returns an array of total memory for each available device

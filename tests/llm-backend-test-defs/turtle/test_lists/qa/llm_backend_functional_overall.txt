@@ -357,3 +357,4 @@ test_triton_rcca.py::test_rcca_bug_4342666[False-1-True-False-0-128-disableDecou
 test_triton_rcca.py::test_rcca_bug_4342666[False-1-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_rcca.py::test_rcca_bug_4342666[False-4-True-False-0-128-disableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_rcca.py::test_rcca_bug_4342666[False-4-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_2b_lora_ifb[False-1-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
