@@ -174,7 +174,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
     }
 
-    bool enableTrtOverlap = true;
+    bool enableTrtOverlap = false;
     try
     {
         enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
@@ -182,7 +182,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     catch (const std::exception& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
+        TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to false");
     }
 
     bool normalizeLogProbs = true;
