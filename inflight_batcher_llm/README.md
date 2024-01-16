@@ -88,25 +88,25 @@ parameters: {
 }
 ```
 
-By default, in-flight batching will try to overlap the execution of batches of
+In-flight batching is able to overlap the execution of batches of
 requests. It may have a negative impact on performance when the number of
-requests is too small. To disable that feature, set the `enable_trt_overlap`
-parameter to `False` in the `config.pbtxt` file:
+requests is too small. To enable that feature, set the `enable_trt_overlap`
+parameter to `True` in the `config.pbtxt` file:
 
 ```
 parameters: {
   key: "enable_trt_overlap"
   value: {
-    string_value: "False"
+    string_value: "True"
   }
 }
 ```
 
-Or, equivalently, add `enable_trt_overlap:False` to the invocation of the
+Or, equivalently, add `enable_trt_overlap:True` to the invocation of the
 `fill_template.py` tool:
 
 ```bash
-python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:False"
+python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:True"
 ```
 
 To reuse previously computed KV cache values (e.g. for system prompt), set `enable_kv_cache_reuse`
