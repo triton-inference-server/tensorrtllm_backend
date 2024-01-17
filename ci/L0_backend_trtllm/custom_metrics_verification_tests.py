@@ -46,6 +46,8 @@ metric_to_stat_dict = {
     "inflight_batcher_specific_metric=micro_batch_id": "MicroBatch ID",
     "inflight_batcher_specific_metric=generation_requests":
     "Generation Requests",
+    "inflight_batcher_specific_metric=terminated_requests":
+    "Terminated Requests",
     "v1_specific_metric=total_context_tokens": "Total Context Tokens",
     "v1_specific_metric=total_generation_tokens": "Total Generation Tokens",
     "v1_specific_metric=empty_generation_slots": "Empty Generation Slots",

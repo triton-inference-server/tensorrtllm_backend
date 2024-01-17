@@ -144,185 +144,7 @@ python3 -m pip install --upgrade pip && \
 
 RET=0
 
-reset_model_repo
-
-### 1-GPU TRT engine
-SERVER_ARGS="--model_repo=${MODEL_DIR}"
-
-# inflight batching OFF (V1)
-# streaming OFF
-SERVER_LOG="./1gpu_v1_no_streaming_server.log"
-cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
-rm -rf ${MODEL_DIR}/tensorrt_llm_bls
-replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
-replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
-replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_1_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${max_queue_delay_microseconds}' "1000000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
-replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
-replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
-# Copy the engine and place it into the model folder
-cp -r ${BASE_DIR}/engines/inflight_1_gpu/ triton_model_repo/tensorrt_llm/1
-
-run_server "${SERVER_ARGS}"
-wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/benchmark_core_model.py \
-    --max-input-len=500 \
-    dataset --dataset=${DATASET} \
-    --tokenizer-dir=${TOKENIZER_DIR}
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching benchmark_core_model: line ${LINENO}\n***"
-    kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
-    RET=1
-fi
-set +e
-
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
-    --max-input-len=500 \
-    --dataset=${DATASET}
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing v1 end-to-end test: line ${LINENO}\n***"
-    kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
-    RET=1
-fi
-set +e
-
-curl localhost:8002/metrics -o 1gpu_v1_no_stream_metrics.out
-
-kill_server
-wait_for_server_terminated ${SERVER_PID[@]}
-
-# inflight batching ON
-# streaming OFF
-SERVER_LOG="./1gpu_IFB_no_streaming_server.log"
-replace_config_tags 'V1' 'inflight_fused_batching' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-
-run_server "${SERVER_ARGS}"
-wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/benchmark_core_model.py \
-    --max-input-len=500 \
-    dataset --dataset=${DATASET} \
-    --tokenizer-dir=${TOKENIZER_DIR}
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching benchmark_core_model: line ${LINENO}\n***"
-    kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
-    RET=1
-fi
-set +e
-
-set -e
-python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
-    --max-input-len=500 \
-    --dataset=${DATASET}
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching end-to-end test: line ${LINENO}\n***"
-    kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
-    RET=1
-fi
-set +e
-
-curl localhost:8002/metrics -o 1gpu_IFB_no_stream_metrics.out
-
-kill_server
-wait_for_server_terminated ${SERVER_PID[@]}
-
-# Start a clean server to verify base metrics are being
-# reported correctly
-SERVER_LOG="./1gpu_IFB_no_streaming_base_metrics.log"
-run_server "${SERVER_ARGS}"
-wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-set -e
-
-python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
-if [ $? -ne 0 ]; then
-    cat ${BASE_METRICS_VERIFICATION_LOG}
-    RET=1
-fi
-set +e
-
-kill_server
-wait_for_server_terminated ${SERVER_PID[@]}
-
-# inflight batching ON
-# streaming ON
-SERVER_LOG="./1gpu_IFB_streaming_server.log"
-replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-
-run_server "${SERVER_ARGS}"
-wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
-if [ "$WAIT_RET" != "0" ]; then
-    # Cleanup
-    kill $SERVER_PID > /dev/null 2>&1 || true
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set -e
-python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
-    --prompt="My name is"
-
-if [ $? -ne 0 ]; then
-    cat $SERVER_LOG
-    echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test: line ${LINENO}\n***"
-    kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
-    RET=1
-fi
-set +e
-
-curl localhost:8002/metrics -o 1gpu_IFB_stream_metrics.out
-
-kill_server
-wait_for_server_terminated ${SERVER_PID[@]}
-
-### Multi GPU TRT engine
-NUM_GPUS_TO_TEST=("2" "4")
+NUM_GPUS_TO_TEST=("1" "2" "4")
 for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
     if [ "$AVAILABLE_GPUS" -lt "$NUM_GPU" ]; then
@@ -330,10 +152,6 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
 
     SERVER_ARGS="--world_size=${NUM_GPU} --model_repo=${MODEL_DIR}"
-
-    # inflight batching OFF (V1)
-    # streaming OFF
-    SERVER_LOG="./${NUM_GPU}gpu_v1_no_streaming_server.log"
 
     reset_model_repo
 
@@ -346,9 +164,9 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-    replace_config_tags '${batching_strategy}' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${batching_strategy}' 'INVALID' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_${NUM_GPU}_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
-    replace_config_tags '${max_queue_delay_microseconds}' "0" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${max_queue_delay_microseconds}' "50000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
@@ -356,6 +174,24 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     # Copy the engine and place it into the model folder
     cp -r ${BASE_DIR}/engines/inflight_${NUM_GPU}_gpu/ triton_model_repo/tensorrt_llm/1
+
+    # Invalid GPT model Type
+    SERVER_LOG="./${NUM_GPU}gpu_invalid_batch_strat.log"
+
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+    # Expect invalid GPT model type error to be gracefully handled
+    if [ `grep -c "Invalid gpt_model_type" $SERVER_LOG` == "0" ]; then
+        echo -e "\n***\n*** GPT model type error not handled gracefully: line ${LINENO}\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+
+    # inflight batching OFF (V1)
+    # streaming OFF
+    SERVER_LOG="./${NUM_GPU}gpu_v1_no_streaming_server.log"
+    replace_config_tags 'INVALID' 'V1' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
     run_server "${SERVER_ARGS}"
     wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
@@ -375,7 +211,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     if [ $? -ne 0 ]; then
         cat $SERVER_LOG
-        echo -e "\n***\n*** Error executing v1 benchmark_core_model test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        echo -e "\n***\n*** Error executing v1 benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
         RET=1
@@ -389,7 +225,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     if [ $? -ne 0 ]; then
         cat $SERVER_LOG
-        echo -e "\n***\n*** Error executing v1 end-to-end test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        echo -e "\n***\n*** Error executing v1 end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
         RET=1
@@ -423,7 +259,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     if [ $? -ne 0 ]; then
         cat $SERVER_LOG
-        echo -e "\n***\n*** Error executing inflight batching benchmark_core_model test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        echo -e "\n***\n*** Error executing inflight batching benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
         RET=1
@@ -437,7 +273,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     if [ $? -ne 0 ]; then
         cat $SERVER_LOG
-        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
         RET=1
@@ -493,7 +329,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     if [ $? -ne 0 ]; then
         cat $SERVER_LOG
-        echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPUs: line ${LINENO}\n***"
+        echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
         RET=1

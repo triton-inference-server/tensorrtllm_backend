@@ -35,10 +35,6 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#ifdef TRITON_ENABLE_METRICS
-#include "custom_metrics_reporter/custom_metrics_reporter.h"
-#endif
-
 using namespace ::triton::common; // TritonJson
 
 namespace triton::backend::inflight_batcher_llm
@@ -53,7 +49,8 @@ namespace triton::backend::inflight_batcher_llm
 class ModelState
 {
 public:
-    static TRITONSERVER_Error* Create(TRITONBACKEND_Model* triton_model, ModelState** state);
+    static TRITONSERVER_Error* Create(
+        TRITONBACKEND_Model* triton_model, const std::string& name, const uint64_t version, ModelState** state);
 
     template <typename T>
     T GetParameter(const std::string& name)
@@ -65,28 +62,24 @@ public:
 
     virtual ~ModelState() = default;
 
-#ifdef TRITON_ENABLE_METRICS
-    TRITONSERVER_Error* InitCustomMetricsReporter(
-        const std::string& model_name, const uint64_t version, const bool is_v1_model);
-    TRITONSERVER_Error* UpdateCustomMetrics(const std::string& statistics);
-#endif
     common::TritonJson::Value& GetModelConfig();
+    const std::string& GetModelName() const;
+    uint64_t GetModelVersion() const;
 
 private:
-#ifdef TRITON_ENABLE_METRICS
-    std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
-#endif
+    const std::string model_name_;
+    uint64_t model_version_;
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
 
-    ModelState(TRITONBACKEND_Model* triton_model, TritonJson::Value&& model_config)
-        : model_config_(std::move(model_config))
+    ModelState(
+        TRITONBACKEND_Model* triton_model, const std::string& name, uint64_t version, TritonJson::Value&& model_config)
+        : model_name_(name)
+        , model_version_(version)
+        , model_config_(std::move(model_config))
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
-#ifdef TRITON_ENABLE_METRICS
-        custom_metrics_reporter_ = std::make_unique<custom_metrics_reporter::CustomMetricsReporter>();
-#endif
     }
 };
 
