@@ -52,9 +52,9 @@ const std::vector<std::string> CustomMetricsReporter::v1_specific_labels_{
     "total_context_tokens", "total_generation_tokens", "empty_generation_slots"};
 
 const std::vector<std::string> CustomMetricsReporter::IFB_specific_keys_{
-    "Total Context Tokens", "Generation Requests", "MicroBatch ID"};
+    "Total Context Tokens", "Generation Requests", "MicroBatch ID", "Terminated Requests"};
 const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
-    "total_context_tokens", "generation_requests", "micro_batch_id"};
+    "total_context_tokens", "generation_requests", "micro_batch_id", "terminated_requests"};
 
 const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
 const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
@@ -125,7 +125,7 @@ const std::vector<std::string>& TritonMetricGroup::JsonKeys() const
     return json_keys_;
 }
 
-TRITONSERVER_Error* CustomMetricsReporter::InitReporter(
+TRITONSERVER_Error* CustomMetricsReporter::InitializeReporter(
     const std::string& model_name, const uint64_t version, const bool is_v1_model)
 {
     /* REQUEST METRIC GROUP */
@@ -194,7 +194,11 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(const std::string
         {
             triton::common::TritonJson::Value value_json;
             uint64_t value;
-            metrics.Find(key.c_str(), &value_json);
+            if (!metrics.Find(key.c_str(), &value_json))
+            {
+                std::string errStr = std::string("Failed to find " + key + " in metrics.");
+                return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+            }
             if (key == "Timestamp")
             {
                 std::string timestamp;

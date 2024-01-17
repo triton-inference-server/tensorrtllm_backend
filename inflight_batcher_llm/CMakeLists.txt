@@ -231,7 +231,6 @@ set_property(
 )
 
 if(TRITON_ENABLE_METRICS)
-  message("Compiling statistics reporter...")
   list(APPEND REPORTER_SRCS
        src/custom_metrics_reporter/custom_metrics_reporter.cc)
   list(APPEND REPORTER_HDRS

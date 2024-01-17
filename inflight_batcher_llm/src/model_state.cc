@@ -29,11 +29,11 @@
 namespace triton::backend::inflight_batcher_llm
 {
 
-TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
+TRITONSERVER_Error* ModelState::Create(
+    TRITONBACKEND_Model* triton_model, const std::string& name, const uint64_t version, ModelState** state)
 {
     TRITONSERVER_Message* config_message;
     RETURN_IF_ERROR(TRITONBACKEND_ModelConfig(triton_model, 1 /* config_version */, &config_message));
-
     // We can get the model configuration as a json string from
     // config_message, parse it with our favorite json parser to create
     // DOM that we can access when we need to example the
@@ -52,7 +52,7 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model, ModelS
 
     try
     {
-        *state = new ModelState(triton_model, std::move(model_config));
+        *state = new ModelState(triton_model, name, version, std::move(model_config));
     }
     catch (const std::exception& ex)
     {
@@ -66,6 +66,16 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model, ModelS
 common::TritonJson::Value& ModelState::GetModelConfig()
 {
     return model_config_;
+}
+
+const std::string& ModelState::GetModelName() const
+{
+    return model_name_;
+}
+
+uint64_t ModelState::GetModelVersion() const
+{
+    return model_version_;
 }
 
 template <>
@@ -139,20 +149,5 @@ bool ModelState::GetParameter<bool>(const std::string& name)
         throw std::runtime_error(err);
     }
 }
-
-#ifdef TRITON_ENABLE_METRICS
-TRITONSERVER_Error* ModelState::InitCustomMetricsReporter(
-    const std::string& model_name, const uint64_t version, const bool is_v1_model)
-{
-    RETURN_IF_ERROR(custom_metrics_reporter_->InitReporter(model_name, version, is_v1_model));
-    return nullptr; // success
-}
-
-TRITONSERVER_Error* ModelState::UpdateCustomMetrics(const std::string& custom_metrics)
-{
-    RETURN_IF_ERROR(custom_metrics_reporter_->UpdateCustomMetrics(custom_metrics));
-    return nullptr; // success
-}
-#endif
 
 } // namespace triton::backend::inflight_batcher_llm
