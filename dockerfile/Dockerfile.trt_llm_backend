@@ -3,7 +3,7 @@ ARG BASE_TAG=23.12-py3
 
 FROM ${BASE_IMAGE}:${BASE_TAG} as base
 
-RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev python-is-python3
+RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev python-is-python3 ccache git-lfs
 
 COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
