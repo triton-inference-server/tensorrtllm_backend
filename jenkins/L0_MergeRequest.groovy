@@ -3,13 +3,14 @@ import groovy.transform.Field
 
 // LLM repository configuration
 BACKEND_REPO = "https://gitlab-master.nvidia.com/ftp/tekit_backend.git"
-BACKEND_DEFAULT_BRANCH = "main"
+BACKEND_BRANCH = "main"
 BACKEND_ROOT = "backend"
 BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-staging-20240115"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-sbsa-1"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
-TURTLE_BRANCH = "25261fe0ad132419f7859bd9945cb0635ddfce37" // v5.0.4
+TURTLE_BRANCH = "main"
 TURTLE_ROOT = "turtle"
 
 CASE_TO_EXAMPLE = [
@@ -249,7 +250,7 @@ def runBuild()
     sh "timeout 30 mount || true"
     // allow to checkout from forked repo, svc_tensorrt needs to have access to the repo, otherwise clone will fail
     // Step 1: cloning tekit source code
-    checkoutSource(env.gitlabSourceRepoHttpUrl ? env.gitlabSourceRepoHttpUrl: BACKEND_REPO, env.gitlabBranch ? env.gitlabBranch : BACKEND_DEFAULT_BRANCH, BACKEND_ROOT)
+    checkoutSource(env.gitlabSourceRepoHttpUrl ? env.gitlabSourceRepoHttpUrl: BACKEND_REPO, env.gitlabBranch ? env.gitlabBranch : BACKEND_BRANCH, BACKEND_ROOT)
     sh "cd ${BACKEND_ROOT} && git config --unset core.hooksPath"
     sh "cd ${BACKEND_ROOT} && git lfs install"
     sh "cd ${BACKEND_ROOT} && git submodule update --init --recursive"
@@ -418,6 +419,41 @@ def runLLMBackendTestTURTLE(platform, testList, perfMode=false, timeout=0)
     uploadArtifacts("results-${platform}-${testList}.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/test-results/")
 }
 
+
+def triggerGH200RemoteJob(stage, testContext="", splitId=0, splits=1, perfMode=false)
+{
+    script
+    {
+        def branch = env.gitlabBranch ? env.gitlabBranch : BACKEND_BRANCH
+        def parameters = """
+            token=L1_Nightly_Token
+            hostJobName=${JOB_NAME}
+            hostBuildNumber=${BUILD_NUMBER}
+            dockerImage=${BACKEND_SBSA_DOCKER_IMAGE}
+            gitlabBranch=${branch}
+            stage=${stage}
+            testContext=${testContext}
+            splitId=${splitId}
+            splits=${splits}
+            perfMode=${perfMode}
+        """.stripIndent()
+
+        def handle = triggerRemoteJob(
+            job: "https://prod.blsm.nvidia.com/sw-tensorrt-static-1/job/LLM-Backend/job/${BACKEND_BRANCH}/job/helpers/job/gh200-${stage}/",
+            auth: CredentialsAuth(credentials: "STATIC_1_TOKEN"),
+            parameters: parameters,
+            pollInterval: 60,
+            abortTriggeredJob: true,
+        )
+        def status = handle.getBuildResult().toString()
+
+        if (status != "SUCCESS") {
+            error "Downstream job did not succeed"
+        }
+    }
+}
+
+
 pipeline {
     agent {
       kubernetes createKubernetesPodConfig("", "agent")
@@ -452,14 +488,30 @@ pipeline {
           updateGitlabCommitStatus name: "Jenkins build", state: 'running'
         }
       }
-      stage("Build") {
-        agent {
-          kubernetes createKubernetesPodConfig(BACKEND_DOCKER_IMAGE, "build")
-        }
-        steps {
-          runBuild()
+      stage("Build")
+      {
+        parallel
+        {
+          stage("Build X86_64") {
+            agent {
+              kubernetes createKubernetesPodConfig(BACKEND_DOCKER_IMAGE, "build")
+            }
+            steps {
+              runBuild()
+            }
+          }
+          stage("Build SBSA"){
+            agent {
+                kubernetes createKubernetesPodConfig("", "agent")
+            }
+            steps
+            {
+              triggerGH200RemoteJob("Build")
+            }
+          }
         }
       }
+
       stage("Test")
       {
         parallel {
