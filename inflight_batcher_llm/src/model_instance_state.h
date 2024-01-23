@@ -36,15 +36,19 @@
 
 #include "tensorrt_llm/batch_manager/BatchManager.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
-#include "tensorrt_llm/batch_manager/batchScheduler.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
+#include "tensorrt_llm/batch_manager/schedulerPolicy.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 
 #include "model_state.h"
 #include "work_item.h"
 #include "work_items_queue.h"
+
+#ifdef TRITON_ENABLE_METRICS
+#include "custom_metrics_reporter/custom_metrics_reporter.h"
+#endif
 
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
@@ -132,6 +136,9 @@ private:
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
 
     std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
+#ifdef TRITON_ENABLE_METRICS
+    std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
+#endif
 };
 
 } // namespace triton::backend::inflight_batcher_llm

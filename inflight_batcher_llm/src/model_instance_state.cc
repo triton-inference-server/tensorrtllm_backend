@@ -77,6 +77,12 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "v1/inflight_batching/inflight_fused_batching.");
     }
 
+#ifdef TRITON_ENABLE_METRICS
+    custom_metrics_reporter_ = std::make_unique<custom_metrics_reporter::CustomMetricsReporter>();
+    custom_metrics_reporter_->InitializeReporter(
+        model_state->GetModelName(), model_state->GetModelVersion(), (mTrtGptModelType == TrtGptModelType::V1));
+#endif
+
     // Check if model is in decoupled mode:
     triton::common::TritonJson::Value transaction_policy;
     model_state_->GetModelConfig().MemberAsObject("model_transaction_policy", &transaction_policy);
@@ -163,17 +169,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "max_tokens_in_paged_kv_cache");
     }
 
-    std::optional<int32_t> maxNumSequences = std::nullopt;
-    try
-    {
-        maxNumSequences = model_state_->GetParameter<int32_t>("max_num_sequences");
-    }
-    catch (const std::exception& e)
-    {
-        // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
-    }
-
     bool enableTrtOverlap = false;
     try
     {
@@ -232,7 +227,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
 
     TrtGptModelOptionalParams optionalParams;
-    optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
@@ -479,7 +473,7 @@ void ModelInstanceState::logStats(const std::string& s)
 {
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
 #ifdef TRITON_ENABLE_METRICS
-    LOG_IF_ERROR(model_state_->UpdateCustomMetrics(s), "Failed updating TRT LLM statistics");
+    LOG_IF_ERROR(custom_metrics_reporter_->UpdateCustomMetrics(s), "Failed updating TRT LLM statistics");
 #endif
 }
 
