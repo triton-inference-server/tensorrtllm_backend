@@ -169,17 +169,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "max_tokens_in_paged_kv_cache");
     }
 
-    std::optional<int32_t> maxNumSequences = std::nullopt;
-    try
-    {
-        maxNumSequences = model_state_->GetParameter<int32_t>("max_num_sequences");
-    }
-    catch (const std::exception& e)
-    {
-        // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
-    }
-
     bool enableTrtOverlap = false;
     try
     {
@@ -238,7 +227,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
 
     TrtGptModelOptionalParams optionalParams;
-    optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
