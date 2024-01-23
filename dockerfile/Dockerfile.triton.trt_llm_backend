@@ -2,7 +2,7 @@ ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:23.11-py3-min
 
 FROM ${BASE_IMAGE} as base
 
-RUN apt-get update -q=2 && apt-get install -y --no-install-recommends python3-pip
+RUN apt-get update -q=2 && apt-get install -y --no-install-recommends python3-pip ccache git-lfs
 # Remove previous TRT installation
 # We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
 RUN apt-get remove -y tensorrt*

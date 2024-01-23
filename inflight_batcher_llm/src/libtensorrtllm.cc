@@ -65,22 +65,17 @@ extern "C"
         // TRITONBACKEND_Model. If anything goes wrong with initialization
         // of the model state then an error is returned and Triton will fail
         // to load the model.
-        ModelState* model_state;
-        RETURN_IF_ERROR(ModelState::Create(model, &model_state));
-        RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
-
-#ifdef TRITON_ENABLE_METRICS
         const char* cname;
         RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
-        std::string name(cname);
+        const std::string name(cname);
 
         uint64_t version;
         RETURN_IF_ERROR(TRITONBACKEND_ModelVersion(model, &version));
 
-        bool is_v1_model = ((model_state->GetParameter<std::string>("gpt_model_type") == "V1")
-            || (model_state->GetParameter<std::string>("gpt_model_type") == "v1"));
-        LOG_IF_ERROR(model_state->InitCustomMetricsReporter(name, version, is_v1_model), "Failed initializing metrics");
-#endif                  // TRITON_ENABLE_METRICS
+        ModelState* model_state;
+        RETURN_IF_ERROR(ModelState::Create(model, name, version, &model_state));
+        RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+
         return nullptr; // success
     }
 
