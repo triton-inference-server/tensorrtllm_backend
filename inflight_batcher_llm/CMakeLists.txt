@@ -208,19 +208,11 @@ target_compile_options(
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
 
-add_library(tensorrt_llm STATIC IMPORTED)
+add_library(tensorrt_llm SHARED IMPORTED)
 set_property(
   TARGET tensorrt_llm
   PROPERTY IMPORTED_LOCATION
-           "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
-
-add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
-set_property(
-  TARGET tensorrt_llm_batch_manager
-  PROPERTY
-    IMPORTED_LOCATION
-    "${TRTLLM_DIR}/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a"
-)
+           "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so")
 
 add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
 set_property(
@@ -260,7 +252,7 @@ if(TRITON_ENABLE_METRICS)
            triton-core-serverapi # from repo-core
            triton-core-serverstub # from repo-core
            triton-backend-utils # from repo-backend
-           tensorrt_llm_batch_manager)
+           tensorrt_llm)
 
   target_compile_definitions(triton-tensorrt-llm-backend
                              PRIVATE TRITON_ENABLE_METRICS=1)
@@ -291,8 +283,7 @@ endif() # TRITON_BUILD
 
 target_link_libraries(
   triton-tensorrt-llm-backend
-  PRIVATE tensorrt_llm_batch_manager
-          tensorrt_llm
+  PRIVATE tensorrt_llm
           triton-core-serverapi # from repo-core
           triton-core-backendapi # from repo-core
           triton-core-serverstub # from repo-core
@@ -319,11 +310,13 @@ if(WIN32)
 else()
   set_target_properties(
     triton-tensorrt-llm-backend
-    PROPERTIES POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME triton_tensorrtllm
-               LINK_DEPENDS
-               ${CMAKE_CURRENT_BINARY_DIR}/libtriton_tensorrtllm.ldscript
-               LINK_FLAGS "-Wl,--version-script libtriton_tensorrtllm.ldscript")
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      OUTPUT_NAME triton_tensorrtllm
+      LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_tensorrtllm.ldscript
+      LINK_FLAGS
+      "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
+  )
 endif()
 
 #
@@ -344,6 +337,12 @@ if(TRITON_BUILD)
     LIBINFER_PLUGIN_TENSORRT_LLM
     "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so*"
     FOLLOW_SYMLINKS)
+  install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
+
+  file(GLOB LIBINFER_PLUGIN_TENSORRT_LLM
+       "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so*"
+       FOLLOW_SYMLINKS)
   install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
           DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
 endif() # TRITON_BUILD
