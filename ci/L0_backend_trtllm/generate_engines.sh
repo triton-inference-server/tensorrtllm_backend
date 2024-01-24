@@ -53,7 +53,6 @@ function build_tensorrt_engine_inflight_batcher {
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --parallel_build \
                  --output_dir="${OUTPUT_DIR}"
