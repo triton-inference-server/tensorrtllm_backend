@@ -156,7 +156,6 @@ python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --parallel_build \
                  --output_dir=engines/fp16/4-gpu

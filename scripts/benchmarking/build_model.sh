@@ -59,7 +59,6 @@ if [ "$MODEL" = "mistral-7b-fp16" ]; then
       --use_gemm_plugin float16  \
       --output_dir "$ENGINE_PATH"  \
       --max_batch_size "$BS" --max_input_len 32256 --max_output_len 512 \
-      --use_rmsnorm_plugin float16  \
       --enable_context_fmha --remove_input_padding \
       --use_inflight_batching --paged_kv_cache \
       --max_num_tokens "$MAX_TOKENS"

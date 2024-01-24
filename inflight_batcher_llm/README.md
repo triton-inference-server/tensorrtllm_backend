@@ -39,7 +39,6 @@ python3 build.py --model_dir=${model_directory} \
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --output_dir=engines/fp16/1-gpu
 ```

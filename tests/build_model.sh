@@ -32,7 +32,6 @@ if [ "$MODEL" = "gpt" ]; then
         --dtype float16 \
         --use_gpt_attention_plugin float16 \
         --use_gemm_plugin float16 \
-        --use_layernorm_plugin float16 \
         --enable_context_fmha \
         --remove_input_padding \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
@@ -76,7 +75,7 @@ if [ "$MODEL" = "llama" ]; then
     # Dummy weights because 7B is the minimal size for LLaMA
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --use_gpt_attention_plugin --use_gemm_plugin \
         --output_dir llama_outputs
     python3 ../run.py --max_output_len=1 --engine_dir llama_outputs --tokenizer_dir=${LLAMA}
 
@@ -92,7 +91,7 @@ if [ "$MODEL" = "mistral" ]; then
     # Dummy weights because 7B is the minimal size for Mistral
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --use_gpt_attention_plugin --use_gemm_plugin \
         --output_dir mistral_7b_outputs --max_input_len=8192
     # Equivalent to LLaMA at this stage except the tokenizer
     python3 ../run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_attention_window_size=4096 --engine_dir mistral_7b_outputs
@@ -109,7 +108,7 @@ if [ "$MODEL" = "mistral-ib" ]; then
     # Dummy weights because 7B is the minimal size for Mistral
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha --use_inflight_batching --paged_kv_cache \
-        --use_gpt_attention_plugin --use_gemm_plugin --use_rmsnorm_plugin \
+        --use_gpt_attention_plugin --use_gemm_plugin \
         --output_dir ib_mistral_7b_outputs --max_input_len=8192
 
     popd # tensorrt_llm/examples/llama
@@ -124,7 +123,7 @@ if [ "$MODEL" = "gptj" ]; then
     # Dummy weights because 7B is the minimal size for GPT-J
     python3 build.py --dtype=float16 --n_layer=2 \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin --use_layernorm_plugin
+        --use_gpt_attention_plugin --use_gemm_plugin
     python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ}
 
     popd # tensorrt_llm/examples/gptj
@@ -148,7 +147,6 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --use_gpt_attention_plugin float16 \
         --paged_kv_cache \
         --use_gemm_plugin float16 \
-        --use_layernorm_plugin float16 \
         --remove_input_padding \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
@@ -174,7 +172,6 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --use_gpt_attention_plugin float16 \
         --paged_kv_cache \
         --use_gemm_plugin float16 \
-        --use_layernorm_plugin float16 \
         --enable_context_fmha --use_paged_context_fmha \
         --remove_input_padding --max_draft_len 5 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
@@ -207,7 +204,6 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         --use_gpt_attention_plugin \
         --paged_kv_cache \
         --use_gemm_plugin \
-        --use_layernorm_plugin \
         --remove_input_padding \
         --max_batch_size 4 --max_input_len 128 --max_output_len 128 --max_beam_width 1 \
         --output_dir trt_engine/email_composition/fp16/1-gpu/ --hidden_act gelu --enable_context_fmha \
@@ -234,7 +230,6 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
         --use_gpt_attention_plugin float16 \
         --paged_kv_cache \
         --use_gemm_plugin float16 \
-        --use_layernorm_plugin float16 \
         --use_lora_plugin float16 \
         --lora_target_modules attn_qkv \
         --remove_input_padding \
