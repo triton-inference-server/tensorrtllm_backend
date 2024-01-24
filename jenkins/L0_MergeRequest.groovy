@@ -272,9 +272,6 @@ def runBuild()
     container("trt-llm-backend") {
       // Step 4: build tensorrt-llm backend
       sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --trt_root /usr/local/tensorrt"
-      sh "cd ${BACKEND_ROOT} && mkdir tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu/"
-      sh "cd ${BACKEND_ROOT} && mv tensorrt_llm/cpp/build/tensorrt_llm/batch_manager/libtensorrt_llm_batch_manager_static.a tensorrt_llm/cpp/tensorrt_llm/batch_manager/x86_64-linux-gnu/libtensorrt_llm_batch_manager_static.pre_cxx11.a"
-      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && patch -N CMakeLists.txt -i CMakeLists.txt.patch"
       sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh"
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
