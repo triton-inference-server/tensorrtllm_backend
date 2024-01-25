@@ -226,6 +226,27 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
+    std::optional<std::vector<int32_t>> gpuDeviceIds;
+    try
+    {
+        gpuDeviceIds = model_state_->GetParameter<std::vector<int32_t>>("gpu_device_ids");
+
+        if (gpuDeviceIds)
+        {
+            std::string deviceIdInfo("Using GPU device ids: ");
+            for (auto const& deviceId : gpuDeviceIds.value())
+            {
+                deviceIdInfo += std::to_string(deviceId) + " ";
+            }
+            TLLM_LOG_INFO(deviceIdInfo);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
+    }
+
     TrtGptModelOptionalParams optionalParams;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
@@ -233,6 +254,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
     optionalParams.normalizeLogProbs = normalizeLogProbs;
+    optionalParams.deviceIds = gpuDeviceIds;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
