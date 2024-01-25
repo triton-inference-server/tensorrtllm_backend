@@ -356,3 +356,9 @@ parameters: {
     string_value: "${normalize_log_probs}"
   }
 }
+parameters: {
+  key: "gpu_device_ids"
+  value: {
+    string_value: "${gpu_device_ids}"
+  }
+}
