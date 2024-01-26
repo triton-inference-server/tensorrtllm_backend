@@ -52,12 +52,14 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
     user_data = utils.UserData()
     for i, ids in enumerate(input_start_ids):
         output0_len = np.ones_like([[1]]).astype(np.int32) * output_lens[i]
+        end_id = np.ones_like([[1]]).astype(np.int32) * -1
         inputs = [
             utils.prepare_tensor("input_ids", ids, FLAGS.protocol),
             utils.prepare_tensor("input_lengths", input_lens[i],
                                  FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
+            utils.prepare_tensor("end_id", end_id, FLAGS.protocol),
         ]
 
         time.sleep(delays[i])
