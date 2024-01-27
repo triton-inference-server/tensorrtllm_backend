@@ -145,9 +145,11 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --dtype float16 \
         --use_inflight_batching \
         --use_gpt_attention_plugin float16 \
-        --paged_kv_cache \
-        --use_gemm_plugin float16 \
         --remove_input_padding \
+        --paged_kv_cache \
+        --enable_context_fmha_fp32_acc \
+        --use_paged_context_fmha \
+        --use_gemm_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
 

@@ -131,6 +131,7 @@ print_test_params () {
     echo "PREPROCESSING_INSTANCE_COUNT: ${PREPROCESSING_INSTANCE_COUNT}"
     echo "POSTPROCESSING_INSTANCE_COUNT: ${POSTPROCESSING_INSTANCE_COUNT}"
     echo "NORMALIZE_LOG_PROBS: ${NORMALIZE_LOG_PROBS}"
+    echo "ENABLE_CHUNKED_CONTEXT: ${ENABLE_CHUNKED_CONTEXT}"
     echo "GPU_DEVICE_IDS: ${GPU_DEVICE_IDS}"
     echo "run_all_tests: ${run_all_tests}"
     echo "----------------------------------"
@@ -140,7 +141,7 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},gpu_device_ids:${GPU_DEVICE_IDS}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -434,6 +435,7 @@ MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
 BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
 ENABLE_TRT_OVERLAPS=( "false" "true" )
+ENABLE_CHUNKED_CONTEXTS=( "false" "true" )
 
 TRITON_MAX_BATCH_SIZE="128"
 MAX_QUEUE_DELAY_MICROSECONDS="0"
@@ -470,6 +472,7 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
+    for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -479,8 +482,12 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
             continue
         fi
-	# For V1, batchScheduler currently cannot properly estimate kvCache usage
+        # For V1, batchScheduler currently cannot properly estimate kvCache usage
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
+            continue
+        fi
+        # mistral is built without chunked context support
+        if [[ "$MODEL" = "mistral-ib" && "${ENABLE_CHUNKED_CONTEXT}" == "true" ]]; then
             continue
         fi
 
@@ -494,10 +501,12 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
     done
     done
     done
+    done
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
     ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+    ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
 
     # -------------------------------
     # Exclude input in output test
@@ -559,6 +568,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
     for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
+    for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -568,7 +578,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
             continue
         fi
-	# For V1, batchScheduler currently cannot properly estimate kvCache usage
+        # For V1, batchScheduler currently cannot properly estimate kvCache usage
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
             continue
         fi
@@ -584,10 +594,12 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     done
     done
+    done
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
     ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+    ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
 
     # --------------------
     # Python BLS test
@@ -670,7 +682,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-    	# LoRA is not supported in V1
+        # LoRA is not supported in V1
         if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
             continue
         fi
@@ -702,7 +714,7 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-    	# Speculative decoding is not supported in V1
+        # Speculative decoding is not supported in V1
         if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
             continue
         fi

@@ -221,6 +221,7 @@ The following table shows the fields that may to be modified before deployment:
 | `enable_trt_overlap` | Optional (default=`false`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
+| `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 
