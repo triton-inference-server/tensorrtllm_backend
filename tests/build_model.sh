@@ -72,11 +72,17 @@ if [ "$MODEL" = "llama" ]; then
     pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
-    # Dummy weights because 7B is the minimal size for LLaMA
-    python3 build.py --dtype=float16 --n_layer=2 \
+
+    echo "Convert LLaMA from HF"
+    python3 convert_checkpoint.py --model_dir ${LLAMA} --dtype float16 --output_dir ./c-model/llama-7b/fp16
+
+    echo "Build LLaMA"
+    trtllm-build --checkpoint_dir ./c-model/llama-7b/fp16  \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin \
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
         --output_dir llama_outputs
+
     python3 ../run.py --max_output_len=1 --engine_dir llama_outputs --tokenizer_dir=${LLAMA}
 
     popd # tensorrt_llm/examples/llama
@@ -88,11 +94,18 @@ if [ "$MODEL" = "mistral" ]; then
     pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
-    # Dummy weights because 7B is the minimal size for Mistral
-    python3 build.py --dtype=float16 --n_layer=2 \
+
+    echo "Convert Mistral from HF"
+    python3 convert_checkpoint.py --model_dir ${MISTRAL} --dtype float16 --output_dir ./c-model/mistral-7b/fp16
+
+    echo "Build Mistral"
+    trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin \
-        --output_dir mistral_7b_outputs --max_input_len=8192
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
+        --max_input_len 8192 \
+        --output_dir mistral_7b_outputs
+
     # Equivalent to LLaMA at this stage except the tokenizer
     python3 ../run.py --max_output_len=1 --tokenizer_dir=${MISTRAL} --max_attention_window_size=4096 --engine_dir mistral_7b_outputs
 
@@ -105,11 +118,19 @@ if [ "$MODEL" = "mistral-ib" ]; then
     pushd tensorrt_llm/examples/llama
 
     pip install -r requirements.txt
-    # Dummy weights because 7B is the minimal size for Mistral
-    python3 build.py --dtype=float16 --n_layer=2 \
-        --enable_context_fmha --use_inflight_batching --paged_kv_cache \
-        --use_gpt_attention_plugin --use_gemm_plugin \
-        --output_dir ib_mistral_7b_outputs --max_input_len=8192
+
+    echo "Convert Mistral from HF"
+    python3 convert_checkpoint.py --model_dir ${MISTRAL} --dtype float16 --output_dir ./c-model/mistral-7b/fp16
+
+    echo "Build Mistral with inflight batching"
+    trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
+        --enable_context_fmha \
+        --remove_input_padding \
+        --paged_kv_cache \
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
+        --max_input_len 8192 \
+        --output_dir ib_mistral_7b_outputs
 
     popd # tensorrt_llm/examples/llama
 
@@ -120,11 +141,18 @@ if [ "$MODEL" = "gptj" ]; then
     pushd tensorrt_llm/examples/gptj
 
     pip install -r requirements.txt
-    # Dummy weights because 7B is the minimal size for GPT-J
-    python3 build.py --dtype=float16 --n_layer=2 \
+
+    echo "Convert GPT-J from HF"
+    python3 convert_checkpoint.py --model_dir ${GPTJ} --dtype float16 --output_dir ./c-model/gpt-j-6b/fp16
+
+    echo "Build GPT-J"
+    trtllm-build --checkpoint_dir ./c-model/gpt-j-6b/fp16  \
         --enable_context_fmha \
-        --use_gpt_attention_plugin --use_gemm_plugin
-    python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ}
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
+        --output_dir gptj_outputs
+
+    python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ} --engine_dir gptj_outputs
 
     popd # tensorrt_llm/examples/gptj
 
