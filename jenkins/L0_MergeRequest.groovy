@@ -13,6 +13,8 @@ TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.g
 TURTLE_BRANCH = "main"
 TURTLE_ROOT = "turtle"
 
+BUILD_CORES = "16"
+
 CASE_TO_EXAMPLE = [
   "gpt": "gpt",
   "opt": "opt",
@@ -121,12 +123,12 @@ def createKubernetesPodConfig(image, type)
                     tty: true
                     resources:
                       requests:
-                        cpu: '16'
+                        cpu: ${BUILD_CORES}
                         memory: 64Gi
                         ephemeral-storage: 100Gi
                       limits:
-                        cpu: '16'
-                        memory: 64Gi
+                        cpu: ${BUILD_CORES}
+                        memory: 96Gi
                         ephemeral-storage: 100Gi
                     imagePullPolicy: Always"""
         break
@@ -271,7 +273,7 @@ def runBuild()
 
     container("trt-llm-backend") {
       // Step 4: build tensorrt-llm backend
-      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --trt_root /usr/local/tensorrt"
+      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py -j ${BUILD_CORES} --trt_root /usr/local/tensorrt"
       sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh"
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
