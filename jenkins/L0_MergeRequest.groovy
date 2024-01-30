@@ -142,10 +142,9 @@ def createKubernetesPodConfig(image, type)
 
         targetCould = "kubernetes"
         selectors = """
-                  nvidia.com/node_type: gpu_tester
                   kubernetes.io/os: linux
                   nvidia.com/gpu_type: ${type}
-                  nvidia.com/driver_version: '550.40.02'"""
+                  nvidia.com/driver_version: '550.40.07'"""
 
         containerConfig = """
                   - name: trt-llm-backend
