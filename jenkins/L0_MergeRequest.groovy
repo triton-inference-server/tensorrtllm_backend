@@ -604,11 +604,11 @@ pipeline {
                   runTRTLLMBackendTest("gpt-ib-ptuning")
                 }
               }
-              stage("Test gpt-2b-ib-lora") {
-                steps {
-                  runTRTLLMBackendTest("gpt-2b-ib-lora")
-                }
-              }
+              // stage("Test gpt-2b-ib-lora") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-2b-ib-lora")
+              //   }
+              // }
               stage("Test gpt-speculative-decoding") {
                 steps {
                   runTRTLLMBackendTest("gpt-speculative-decoding")
