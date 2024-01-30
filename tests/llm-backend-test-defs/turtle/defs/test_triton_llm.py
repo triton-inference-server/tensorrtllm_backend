@@ -199,7 +199,8 @@ def test_mistral_v1_7b_ifb(
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build Engine
     ENGINE_PATH = prepare_mistral_v1_7b_engine(
-        "ifb", tensorrt_llm_llama_example_root)
+        "ifb", tensorrt_llm_llama_example_root,
+        mistral_v1_tokenizer_model_root)
 
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
@@ -268,7 +269,8 @@ def test_mistral_v1_7b_python_backend(
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build Engine
     ENGINE_PATH = prepare_mistral_v1_7b_engine(
-        "python_backend", tensorrt_llm_llama_example_root)
+        "python_backend", tensorrt_llm_llama_example_root,
+        mistral_v1_tokenizer_model_root)
     # Prepare model repo
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "gpt")
