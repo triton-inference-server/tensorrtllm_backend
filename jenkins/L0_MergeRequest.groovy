@@ -39,7 +39,8 @@ CASE_TO_MODEL = [
   "gpt-ib-streaming": "gpt2",
   "gpt-ib-ptuning": "gpt2",
   "gpt-speculative-decoding": "gpt2",
-  "gpt-2b-ib-lora": "gpt-2b-ib-lora"
+  "gpt-2b-ib-lora": "gpt-2b-ib-lora",
+  "gpt-gather-logits": "gpt2"
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -317,7 +318,7 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
     }
@@ -333,7 +334,12 @@ def runTRTLLMBackendTest(caseName)
         sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib"
         sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
       }
-    } else {
+    }
+    else if (caseName.contains("gather-logits")){
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-gather-logits"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-gather-logits/fp16/1-gpu/ ${modelPath} ${tokenizerType}"
+    }
+    else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
       def testExample = CASE_TO_EXAMPLE[caseName]
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
@@ -606,6 +612,11 @@ pipeline {
               stage("Test gpt-speculative-decoding") {
                 steps {
                   runTRTLLMBackendTest("gpt-speculative-decoding")
+                }
+              }
+              stage("Test gpt-gather-logits") {
+                steps {
+                  runTRTLLMBackendTest("gpt-gather-logits")
                 }
               }
             }

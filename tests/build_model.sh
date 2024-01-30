@@ -211,8 +211,6 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
 
 fi
 
-
-
 if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     # GPT2
@@ -275,4 +273,32 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     cp ${GPT_2B_LORA}/input.csv .
 
     popd # tensorrt_llm/examples/gpt
+fi
+
+if [ "$MODEL" = "gpt-gather-logits" ]; then
+
+    # GPT2
+    pushd tensorrt_llm/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    echo "Convert GPT from HF"
+    python3 hf_gpt_convert.py -i ${GPT2} -o ./c-model/gpt2/fp16 --storage-type float16
+
+    echo "Build GPT: float16 | src FT | gather_all_token_logits"
+    python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
+        --dtype float16 \
+        --use_gpt_attention_plugin float16 \
+        --use_gemm_plugin float16 \
+        --enable_context_fmha \
+        --remove_input_padding \
+        --max_batch_size 128 --max_input_len 300 --max_output_len 300 \
+        --use_inflight_batching \
+        --paged_kv_cache \
+        --gather_all_token_logits \
+        --output_dir trt_engine/gpt2-gather-logits/fp16/1-gpu/ --hidden_act gelu \
+        --max_num_tokens 38400
+
+    popd # tensorrt_llm/examples/gpt
+
 fi
