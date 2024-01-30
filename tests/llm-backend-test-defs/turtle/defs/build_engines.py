@@ -208,37 +208,53 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
     if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_7b_python_backend")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "llama_v2_7b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_7b_ifb")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "llama_v2_7b_ifb")
     # The path of weights in data server
     meta_ckpt_dir = os.path.join(llama_v2_tokenizer_model_root, "7B")
-    build_cmd = [
+
+    convert_cmd = [
         "python3",
-        f"{tensorrt_llm_llama_example_root}/build.py",
+        "convert_checkpoint.py",
         f"--meta_ckpt_dir={meta_ckpt_dir}",
+        f"--output_dir={ckpt_dir}",
         "--dtype=bfloat16",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--remove_input_padding",
-        "--use_gemm_plugin=bfloat16",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
+        "--use_gpt_attention_plugin=bfloat16",
+        "--use_gemm_plugin=bfloat16",
+        "--remove_input_padding",
+        "--enable_context_fmha",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
             "--paged_kv_cache",
         ]
 
+    convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
         check_call(install_requirement_cmd,
                    shell=True,
                    cwd=tensorrt_llm_llama_example_root)
-        check_call(build_cmd, shell=True)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
 
     else:
         print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
@@ -250,40 +266,54 @@ def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
     if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_70b_python_backend")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "llama_v2_70b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "llama_v2_70b_ifb")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "llama_v2_70b_ifb")
     # The path of weights in data server
     meta_ckpt_dir = os.path.join(llama_v2_tokenizer_model_root, "70B")
-    build_cmd = [
+    convert_cmd = [
         "python3",
-        f"{tensorrt_llm_llama_example_root}/build.py",
+        "convert_checkpoint.py",
         f"--meta_ckpt_dir={meta_ckpt_dir}",
+        f"--output_dir={ckpt_dir}",
         "--dtype=bfloat16",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--n_kv_head=32",
-        "--remove_input_padding",
-        "--use_gemm_plugin=bfloat16",
-        f"--output_dir={engine_dir}",
         "--world_size=8",
         "--tp_size=8",
     ]
 
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--use_gpt_attention_plugin=bfloat16",
+        "--use_gemm_plugin=bfloat16",
+        "--remove_input_padding",
+        "--enable_context_fmha",
+    ]
+
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
             "--paged_kv_cache",
         ]
 
+    convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
         check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
                    shell=True,
                    cwd=tensorrt_llm_llama_example_root)
         check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
 
     else:
         print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
@@ -374,41 +404,57 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
     return engine_dir, output_model_dir
 
 
-def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root):
+def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
+                                 mistral_v1_tokenizer_model_root):
     if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "mistral_v1_7b_python_backend")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "mistral_v1_7b_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "mistral_v1_7b_ifb")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "mistral_v1_7b_ifb")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--model_dir={mistral_v1_tokenizer_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
+    ]
 
     build_cmd = [
-        "python3",
-        f"build.py",
-        "--dtype=float16",
-        "--n_layer=2",
-        "--enable_context_fmha",
-        "--use_gpt_attention_plugin",
-        "--use_gemm_plugin",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
+        "--use_gpt_attention_plugin=float16",
+        "--use_gemm_plugin=float16",
+        "--remove_input_padding",
+        "--enable_context_fmha",
         "--max_input_len=8192",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
             "--paged_kv_cache",
         ]
 
+    convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
         check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
                    shell=True,
                    cwd=tensorrt_llm_llama_example_root)
         check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
 
     else:
         print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
@@ -478,38 +524,53 @@ def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir",
                                   "rcca_nvbug_4342666_python_backend")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "rcca_nvbug_4342666_python_backend")
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_llama_example_root,
                                   "engine_dir", "rcca_nvbug_4342666_ifb")
+        ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                                "rcca_nvbug_4342666_ifb")
     # Weights of Llama-v2-7b-chat model
     meta_ckpt_dir = os.path.join(llama_v2_tokenizer_model_root, "7BF")
-    build_cmd = [
+    convert_cmd = [
         "python3",
-        "build.py",
+        "convert_checkpoint.py",
         f"--meta_ckpt_dir={meta_ckpt_dir}",
+        f"--output_dir={ckpt_dir}",
         "--dtype=bfloat16",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--remove_input_padding",
-        "--use_gemm_plugin=bfloat16",
-        "--max_beam_width=4",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
+        "--use_gpt_attention_plugin=bfloat16",
+        "--use_gemm_plugin=bfloat16",
+        "--remove_input_padding",
+        "--enable_context_fmha",
+        "--max_beam_width=4",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
             "--paged_kv_cache",
         ]
 
+    convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
         check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
                    shell=True,
                    cwd=tensorrt_llm_llama_example_root)
         check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
 
     else:
         print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
