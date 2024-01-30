@@ -667,9 +667,9 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
 
     # Input with virtual tokens:
     python3 ../run.py --max_output_len=8 \
-        --lora_dir=gpt-2b-lora-train-900-tllm \
+        --lora_dir=gpt2b_lora-900.nemo \
         --lora_ckpt_source nemo \
-        --lora_task_uids lora \
+        --lora_task_uids 0 \
         --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output.csv --use_py_session
 
     popd

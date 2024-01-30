@@ -54,9 +54,9 @@ if [ "$MODEL" = "opt" ]; then
 
     echo "OPT builder"
     trtllm-build --checkpoint_dir ./c-model/opt-125m/fp16  \
-                --use_gemm_plugin float16 \
-                --use_gpt_attention_plugin float16 \
-                --enable_context_fmha \
+                --gemm_plugin float16 \
+                --gpt_attention_plugin float16 \
+                --context_fmha=enable \
                 --max_batch_size 8 \
                 --max_input_len 924 \
                 --max_output_len 100 \
@@ -78,9 +78,9 @@ if [ "$MODEL" = "llama" ]; then
 
     echo "Build LLaMA"
     trtllm-build --checkpoint_dir ./c-model/llama-7b/fp16  \
-        --enable_context_fmha \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
+        --context_fmha=enable \
+        --gpt_attention_plugin float16 \
+        --gemm_plugin float16 \
         --output_dir llama_outputs
 
     python3 ../run.py --max_output_len=1 --engine_dir llama_outputs --tokenizer_dir=${LLAMA}
@@ -100,9 +100,9 @@ if [ "$MODEL" = "mistral" ]; then
 
     echo "Build Mistral"
     trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
-        --enable_context_fmha \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
+        --context_fmha=enable \
+        --gpt_attention_plugin float16 \
+        --gemm_plugin float16 \
         --max_input_len 8192 \
         --output_dir mistral_7b_outputs
 
@@ -124,11 +124,11 @@ if [ "$MODEL" = "mistral-ib" ]; then
 
     echo "Build Mistral with inflight batching"
     trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
-        --enable_context_fmha \
-        --remove_input_padding \
-        --paged_kv_cache \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
+        --context_fmha=enable \
+        --remove_input_padding=enable \
+        --paged_kv_cache=enable \
+        --gpt_attention_plugin float16 \
+        --gemm_plugin float16 \
         --max_input_len 8192 \
         --output_dir ib_mistral_7b_outputs
 
@@ -147,9 +147,9 @@ if [ "$MODEL" = "gptj" ]; then
 
     echo "Build GPT-J"
     trtllm-build --checkpoint_dir ./c-model/gpt-j-6b/fp16  \
-        --enable_context_fmha \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
+        --context_fmha=enable \
+        --gpt_attention_plugin float16 \
+        --gemm_plugin float16 \
         --output_dir gptj_outputs
 
     python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ} --engine_dir gptj_outputs
