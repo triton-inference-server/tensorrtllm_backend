@@ -747,3 +747,37 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
         kill_triton_server
     done
 fi
+
+if [ "$MODEL" = "gpt-gather-logits" ]; then
+
+    DECOUPLED_MODE="False"
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+        launch_triton_server
+
+        # Test client
+        pushd inflight_batcher_llm/client
+
+        python3 inflight_batcher_llm_client.py \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --return-context-logits \
+            --return-generation-logits
+        popd # inflight_batcher_llm/client
+
+        pushd tools/inflight_batcher_llm
+        python3 end_to_end_test.py \
+            -i http \
+            --max-input-len 192 \
+            --dataset ../dataset/mini_cnn_eval.json
+
+        popd # tools/inflight_batcher_llm
+
+        kill_triton_server
+    done
+fi

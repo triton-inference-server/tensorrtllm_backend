@@ -70,6 +70,9 @@ def test_functionality(client, prompts, output_lens):
         generation_logits = result.as_numpy("generation_logits").astype(
             np.float32)
 
+        print(f"context_logits.shape: {context_logits.shape}")
+        print(f"generation_logits.shape: {generation_logits.shape}")
+
         model_name = "postprocessing"
         inputs = [
             utils.prepare_tensor("TOKENS_BATCH", output0, FLAGS.protocol),
@@ -116,11 +119,15 @@ def test_functionality(client, prompts, output_lens):
         ensemble_output = result.as_numpy('text_output')
         ensemble_cum_log_probs = result.as_numpy('cum_log_probs')
         ensemble_output_log_probs = result.as_numpy('output_log_probs')
-        result.as_numpy('context_logits')
-        result.as_numpy('generation_logits')
+        ensemble_context_logits = result.as_numpy('context_logits')
+        ensemble_generation_logits = result.as_numpy('generation_logits')
+
         assert output0 == ensemble_output
         assert cum_log_probs == ensemble_cum_log_probs
         assert (output_log_probs == ensemble_output_log_probs).all()
+        assert (context_logits == ensemble_context_logits).all()
+        assert (generation_logits == ensemble_generation_logits).all()
+
         if FLAGS.verbose:
             print('Response: {}'.format(result.get_response()))
             print('Output: {}'.format(ensemble_output))
