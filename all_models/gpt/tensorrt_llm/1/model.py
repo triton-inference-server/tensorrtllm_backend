@@ -84,6 +84,7 @@ class TritonPythonModel:
         hidden_size = config['builder_config']['hidden_size'] // world_size
         vocab_size = config['builder_config']['vocab_size']
         num_layers = config['builder_config']['num_layers']
+        max_batch_size = config['builder_config']['max_batch_size']
         num_kv_heads = num_heads
         if "num_kv_heads" in config['builder_config'].keys():
             num_kv_heads = (config['builder_config']['num_kv_heads'] +
@@ -96,6 +97,7 @@ class TritonPythonModel:
         self.rank = mpi_rank()
 
         model_config = ModelConfig(
+            max_batch_size=max_batch_size,
             num_heads=num_heads,
             num_kv_heads=num_kv_heads,
             hidden_size=hidden_size,

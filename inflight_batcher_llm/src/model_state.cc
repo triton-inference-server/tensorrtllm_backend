@@ -29,6 +29,20 @@
 namespace triton::backend::inflight_batcher_llm
 {
 
+/// Helper function to parse a csv delimited string to a vector ints
+std::vector<int32_t> csvStrToVecInt(std::string const& str)
+{
+    std::vector<int32_t> output;
+    std::stringstream ss(str);
+    while (ss.good())
+    {
+        std::string substr;
+        getline(ss, substr, ',');
+        output.push_back(std::stoi(substr));
+    }
+    return output;
+}
+
 TRITONSERVER_Error* ModelState::Create(
     TRITONBACKEND_Model* triton_model, const std::string& name, const uint64_t version, ModelState** state)
 {
@@ -105,6 +119,14 @@ template <>
 int32_t ModelState::GetParameter<int32_t>(const std::string& name)
 {
     return std::stoi(GetParameter<std::string>(name));
+}
+
+template <>
+std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(const std::string& name)
+{
+    auto deviceIdsStr = GetParameter<std::string>(name);
+    // Parse as comma delimited string
+    return csvStrToVecInt(deviceIdsStr);
 }
 
 template <>

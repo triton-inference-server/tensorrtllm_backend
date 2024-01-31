@@ -356,3 +356,15 @@ parameters: {
     string_value: "${normalize_log_probs}"
   }
 }
+parameters: {
+  key: "enable_chunked_context"
+  value: {
+    string_value: "${enable_chunked_context}"
+  }
+}
+parameters: {
+  key: "gpu_device_ids"
+  value: {
+    string_value: "${gpu_device_ids}"
+  }
+}

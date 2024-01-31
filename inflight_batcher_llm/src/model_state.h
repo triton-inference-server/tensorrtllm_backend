@@ -104,4 +104,7 @@ float ModelState::GetParameter<float>(const std::string& name);
 template <>
 bool ModelState::GetParameter<bool>(const std::string& name);
 
+template <>
+std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(const std::string& name);
+
 } // namespace triton::backend::inflight_batcher_llm
