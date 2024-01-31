@@ -148,12 +148,35 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING(e.what());
     }
 
+    bool enableChunkedContext = false;
+    try
+    {
+        enableChunkedContext = model_state_->GetParameter<bool>("enable_chunked_context");
+        if (enableChunkedContext)
+        {
+            TLLM_LOG_WARNING(
+                "enable_chunked_context is set to true, will use context chunking "
+                "(requires building the model with use_paged_context_fmha).");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("enable_chunked_context is not specified, will be set to false.");
+    }
+
     if (mIsDecoupled && schedulerPolicy != SchedulerPolicy::GUARANTEED_NO_EVICT)
     {
-        TLLM_LOG_WARNING(
-            "The batch scheduler policy will be set to guaranteed_no_evict"
-            "since the backend operates in decoupled mode");
-        schedulerPolicy = SchedulerPolicy::GUARANTEED_NO_EVICT;
+        if (!enableChunkedContext)
+        {
+            TLLM_LOG_WARNING(
+                "Decoupled mode with a batch scheduler policy other than guaranteed_no_evict "
+                "requires building the model with use_paged_context_fmha and setting "
+                "enable_chunked_context to true. "
+                "The batch scheduler policy will be set to guaranteed_no_evict "
+                "since enable_chunked_context is false.");
+            schedulerPolicy = SchedulerPolicy::GUARANTEED_NO_EVICT;
+        }
     }
 
     std::optional<float> kvCacheFreeGpuMemFraction = std::nullopt;
@@ -226,6 +249,27 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
+    std::optional<std::vector<int32_t>> gpuDeviceIds;
+    try
+    {
+        gpuDeviceIds = model_state_->GetParameter<std::vector<int32_t>>("gpu_device_ids");
+
+        if (gpuDeviceIds)
+        {
+            std::string deviceIdInfo("Using GPU device ids: ");
+            for (auto const& deviceId : gpuDeviceIds.value())
+            {
+                deviceIdInfo += std::to_string(deviceId) + " ";
+            }
+            TLLM_LOG_INFO(deviceIdInfo);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
+    }
+
     TrtGptModelOptionalParams optionalParams;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
@@ -233,6 +277,8 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
     optionalParams.normalizeLogProbs = normalizeLogProbs;
+    optionalParams.enableChunkedContext = enableChunkedContext;
+    optionalParams.deviceIds = gpuDeviceIds;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,

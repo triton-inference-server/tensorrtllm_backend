@@ -208,48 +208,11 @@ target_compile_options(
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
 
-add_library(tensorrt_llm STATIC IMPORTED)
+add_library(tensorrt_llm SHARED IMPORTED)
 set_property(
   TARGET tensorrt_llm
   PROPERTY IMPORTED_LOCATION
-           "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm_static.a")
-
-add_library(tensorrt_llm_batch_manager STATIC IMPORTED)
-execute_process(
-  COMMAND ${Python3_EXECUTABLE} "-c"
-          "import torch; print(torch.compiled_with_cxx11_abi(),end='');"
-  RESULT_VARIABLE _PYTHON_SUCCESS
-  OUTPUT_VARIABLE USE_CXX11_ABI)
-message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
-
-set(BATCH_MANAGER_ARCH "unknown")
-
-message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-  set(BATCH_MANAGER_ARCH "x86_64-linux-gnu")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-  set(BATCH_MANAGER_ARCH "aarch64-linux-gnu")
-else()
-  message(
-    FATAL_ERROR
-      "The system processor type is unsupported: ${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-
-if(USE_CXX11_ABI)
-  set_property(
-    TARGET tensorrt_llm_batch_manager
-    PROPERTY
-      IMPORTED_LOCATION
-      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${BATCH_MANAGER_ARCH}/libtensorrt_llm_batch_manager_static.a"
-  )
-else()
-  set_property(
-    TARGET tensorrt_llm_batch_manager
-    PROPERTY
-      IMPORTED_LOCATION
-      "${TRTLLM_DIR}/cpp/tensorrt_llm/batch_manager/${BATCH_MANAGER_ARCH}/libtensorrt_llm_batch_manager_static.pre_cxx11.a"
-  )
-endif()
+           "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so")
 
 add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
 set_property(
@@ -289,7 +252,7 @@ if(TRITON_ENABLE_METRICS)
            triton-core-serverapi # from repo-core
            triton-core-serverstub # from repo-core
            triton-backend-utils # from repo-backend
-           tensorrt_llm_batch_manager)
+           tensorrt_llm)
 
   target_compile_definitions(triton-tensorrt-llm-backend
                              PRIVATE TRITON_ENABLE_METRICS=1)
@@ -320,8 +283,7 @@ endif() # TRITON_BUILD
 
 target_link_libraries(
   triton-tensorrt-llm-backend
-  PRIVATE tensorrt_llm_batch_manager
-          tensorrt_llm
+  PRIVATE tensorrt_llm
           triton-core-serverapi # from repo-core
           triton-core-backendapi # from repo-core
           triton-core-serverstub # from repo-core
@@ -348,11 +310,13 @@ if(WIN32)
 else()
   set_target_properties(
     triton-tensorrt-llm-backend
-    PROPERTIES POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME triton_tensorrtllm
-               LINK_DEPENDS
-               ${CMAKE_CURRENT_BINARY_DIR}/libtriton_tensorrtllm.ldscript
-               LINK_FLAGS "-Wl,--version-script libtriton_tensorrtllm.ldscript")
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      OUTPUT_NAME triton_tensorrtllm
+      LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_tensorrtllm.ldscript
+      LINK_FLAGS
+      "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
+  )
 endif()
 
 #
@@ -373,6 +337,12 @@ if(TRITON_BUILD)
     LIBINFER_PLUGIN_TENSORRT_LLM
     "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so*"
     FOLLOW_SYMLINKS)
+  install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
+
+  file(GLOB LIBINFER_PLUGIN_TENSORRT_LLM
+       "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so*"
+       FOLLOW_SYMLINKS)
   install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
           DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
 endif() # TRITON_BUILD
