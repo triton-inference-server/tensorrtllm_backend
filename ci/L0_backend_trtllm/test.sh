@@ -39,6 +39,10 @@ CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
 CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
 SERVER_PID=0
 
+# Force environment to use python version 3
+apt update -q=2 \
+    && apt install -y python-is-python3
+
 # Helpers ===============================
 function replace_config_tags {
   tag_to_replace="${1}"
