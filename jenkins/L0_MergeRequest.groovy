@@ -5,7 +5,7 @@ import groovy.transform.Field
 BACKEND_REPO = "https://gitlab-master.nvidia.com/ftp/tekit_backend.git"
 BACKEND_BRANCH = "main"
 BACKEND_ROOT = "backend"
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-staging-20240115"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-staging-63ca8816"
 BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-sbsa-1"
 
 // TURTLE repository configuration
@@ -13,7 +13,19 @@ TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.g
 TURTLE_BRANCH = "main"
 TURTLE_ROOT = "turtle"
 
-BUILD_CORES = "16"
+// TODO: Move common variables to an unified location
+BUILD_CORES_REQUEST = "4"
+BUILD_CORES_LIMIT = "16"
+BUILD_MEMORY_REQUEST = "12Gi"
+BUILD_MEMORY_LIMIT = "96Gi"
+BUILD_JOBS = "16"
+
+TESTER_CORES = "12"
+TESTER_MEMORY = "96Gi"
+BUILD_JOBS_IN_TESTER = "8"
+
+CCACHE_DIR="/mnt/sw-tensorrt-pvc/scratch.trt_ccache/llm_ccache"
+MODEL_CACHE_DIR="/home/scratch.trt_llm_data/llm-models"
 
 CASE_TO_EXAMPLE = [
   "gpt": "gpt",
@@ -121,30 +133,35 @@ def createKubernetesPodConfig(image, type)
                     volumeMounts:
                     - name: dshm
                       mountPath: /dev/shm
+                    - name: scratch-trt-llm-data
+                      mountPath: /home/scratch.trt_llm_data
+                    - name: sw-tensorrt-pvc
+                      mountPath: /mnt/sw-tensorrt-pvc
+                      readOnly: false
                     tty: true
                     resources:
                       requests:
-                        cpu: ${BUILD_CORES}
-                        memory: 64Gi
+                        cpu: ${BUILD_CORES_REQUEST}
+                        memory: ${BUILD_MEMORY_REQUEST}
                         ephemeral-storage: 100Gi
                       limits:
-                        cpu: ${BUILD_CORES}
-                        memory: 96Gi
+                        cpu: ${BUILD_CORES_LIMIT}
+                        memory: ${BUILD_MEMORY_LIMIT}
                         ephemeral-storage: 100Gi
                     imagePullPolicy: Always"""
         break
     default:
         def hasMultipleGPUs = (type.indexOf("x8") > -1)
         def gpuCount =  hasMultipleGPUs? "8" : "1"
-        // Increase memorySize to 96GB to run C++ tests for GPT-J
-        def memorySize = hasMultipleGPUs ? "320Gi" : "96Gi"
-        def storageSize = hasMultipleGPUs ? "2000Gi" : "200Gi"
+        def memorySize = hasMultipleGPUs ? "960Gi" : "${TESTER_MEMORY}"
+        def storageSize = hasMultipleGPUs ? "2000Gi" : "300Gi"
+        def driverVersion = "550.40.07"
 
         targetCould = "kubernetes"
         selectors = """
                   kubernetes.io/os: linux
                   nvidia.com/gpu_type: ${type}
-                  nvidia.com/driver_version: '550.40.07'"""
+                  nvidia.com/driver_version: '${driverVersion}'"""
 
         containerConfig = """
                   - name: trt-llm-backend
@@ -153,12 +170,12 @@ def createKubernetesPodConfig(image, type)
                     tty: true
                     resources:
                       requests:
-                        cpu: '16'
+                        cpu: ${TESTER_CORES}
                         memory: ${memorySize}
                         nvidia.com/gpu: ${gpuCount}
                         ephemeral-storage: ${storageSize}
                       limits:
-                        cpu: '16'
+                        cpu: ${TESTER_CORES}
                         memory: ${memorySize}
                         nvidia.com/gpu: ${gpuCount}
                         ephemeral-storage: ${storageSize}
@@ -168,6 +185,9 @@ def createKubernetesPodConfig(image, type)
                       mountPath: /dev/shm
                     - name: scratch-trt-llm-data
                       mountPath: /home/scratch.trt_llm_data
+                    - name: sw-tensorrt-pvc
+                      mountPath: /mnt/sw-tensorrt-pvc
+                      readOnly: false
                     securityContext:
                       capabilities:
                         add:
@@ -207,6 +227,9 @@ def createKubernetesPodConfig(image, type)
                   nfs:
                     server: 10.117.145.14
                     path: /vol/scratch1/scratch.michaeln_blossom
+                - name: sw-tensorrt-pvc
+                  persistentVolumeClaim:
+                    claimName: sw-tensorrt-pvc
         """.stripIndent(),
     ]
 
@@ -272,8 +295,13 @@ def runBuild()
     uploadArtifacts("tensorrt_llm_backend.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/")
 
     container("trt-llm-backend") {
+      // Random sleep to avoid resource contention
+      sleep(10 * Math.random())
+      sh "nproc && free -g && hostname"
+      sh "cat ${CCACHE_DIR}/ccache.conf"
+
       // Step 4: build tensorrt-llm backend
-      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py -j ${BUILD_CORES} --trt_root /usr/local/tensorrt"
+      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_JOBS} --trt_root /usr/local/tensorrt"
       sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh"
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
@@ -309,7 +337,7 @@ def runTRTLLMBackendTest(caseName)
 {
   container("trt-llm-backend") {
 
-    def modelPath = "/home/scratch.trt_llm_data/llm-models/" + CASE_TO_MODEL[caseName]
+    def modelPath = "${MODEL_CACHE_DIR}/" + CASE_TO_MODEL[caseName]
     def tokenizerType = "auto"
     def backendPath = sh (script: "realpath ${BACKEND_ROOT}",returnStdout: true).trim()
 
@@ -353,7 +381,7 @@ def runTRTLLMBackendTest(caseName)
       }
 
       if (caseName.contains("gpt-2b")) {
-        modelPath = "/home/scratch.trt_llm_data/llm-models/gpt-next/gpt-next-tokenizer-hf-v2"
+        modelPath = "${MODEL_CACHE_DIR}/gpt-next/gpt-next-tokenizer-hf-v2"
         tokenizerType = "auto"
       }
 
@@ -377,16 +405,18 @@ def runLLMBackendTestTURTLE(platform, testList, perfMode=false, timeout=0)
         script
         {
           // Step 1.1: setup python environments
-          sh "timeout 30 mount || true"
-          sh "ps -aux"
-          sh "nvidia-smi"
+          // Random sleep to avoid resource contention
+          sleep(10 * Math.random())
+          sh "nproc && free -g && hostname"
+          sh "cat ${MODEL_CACHE_DIR}/README"
+          sh "nvidia-smi -q"
 
           sh "rm -rf ${platform}-${testList}.tar.gz ${platform}-${testList}/*"
           sh "ls -lah"
 
           def turtleCmdLine = [
               "LLM_BACKEND_ROOT=${backendPath}",
-              "LLM_MODELS_ROOT=/home/scratch.trt_llm_data/llm-models",
+              "LLM_MODELS_ROOT=${MODEL_CACHE_DIR}",
               "python3",
               turtleBinPath,
               "--test-prefix ${platform}",
@@ -473,6 +503,7 @@ pipeline {
     environment {
       //Workspace normally is: /home/jenkins/agent/workspace/LLM/L0_MergeRequest@tmp/
       HF_HOME="${env.WORKSPACE_TMP}/.cache/huggingface"
+      CCACHE_DIR="${CCACHE_DIR}"
     }
     post {
         unsuccessful {
