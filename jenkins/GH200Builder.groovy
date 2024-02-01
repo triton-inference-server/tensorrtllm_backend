@@ -97,7 +97,7 @@ def runBuild()
     // WAR: PVC mount is not setup on GH200 machines, use a small local cache as a WAR
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
         // Random sleep to avoid resource contention
-        sleep(30 * Math.random())
+        sleep(10 * Math.random())
         sh "nproc && free -g && hostname"
         sh "ccache -M 10Gi"
         sh "cat ${CCACHE_DIR}/ccache.conf"
