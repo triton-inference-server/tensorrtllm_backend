@@ -53,7 +53,6 @@ TRITONSERVER_Error* ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
-    , mIsDecoupled(false)
 {
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -83,11 +82,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         model_state->GetModelName(), model_state->GetModelVersion(), (mTrtGptModelType == TrtGptModelType::V1));
 #endif
 
-    // Check if model is in decoupled mode:
-    triton::common::TritonJson::Value transaction_policy;
-    model_state_->GetModelConfig().MemberAsObject("model_transaction_policy", &transaction_policy);
-    transaction_policy.MemberAsBool("decoupled", &mIsDecoupled);
-    mWorkItemsQueue = std::make_unique<WorkItemsQueue>(mIsDecoupled);
+    mWorkItemsQueue = std::make_unique<WorkItemsQueue>(isDecoupled());
 
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -165,7 +160,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_chunked_context is not specified, will be set to false.");
     }
 
-    if (mIsDecoupled && schedulerPolicy != SchedulerPolicy::GUARANTEED_NO_EVICT)
+    if (isDecoupled() && schedulerPolicy != SchedulerPolicy::GUARANTEED_NO_EVICT)
     {
         if (!enableChunkedContext)
         {
@@ -249,26 +244,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<std::vector<int32_t>> gpuDeviceIds;
-    try
-    {
-        gpuDeviceIds = model_state_->GetParameter<std::vector<int32_t>>("gpu_device_ids");
-
-        if (gpuDeviceIds)
-        {
-            std::string deviceIdInfo("Using GPU device ids: ");
-            for (auto const& deviceId : gpuDeviceIds.value())
-            {
-                deviceIdInfo += std::to_string(deviceId) + " ";
-            }
-            TLLM_LOG_INFO(deviceIdInfo);
-        }
-    }
-    catch (const std::exception& e)
-    {
-        // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
-    }
+    auto const gpuDeviceIds = model_state_->GetDeviceIds();
 
     TrtGptModelOptionalParams optionalParams;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;

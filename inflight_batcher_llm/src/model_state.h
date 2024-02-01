@@ -35,6 +35,8 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
+#include <optional>
+
 using namespace ::triton::common; // TritonJson
 
 namespace triton::backend::inflight_batcher_llm
@@ -66,11 +68,25 @@ public:
     const std::string& GetModelName() const;
     uint64_t GetModelVersion() const;
 
+    std::optional<std::vector<int32_t>> GetDeviceIds()
+    {
+        return gpu_device_ids_;
+    }
+
+    bool IsDecoupled() const
+    {
+        return is_decoupled_;
+    }
+
 private:
     const std::string model_name_;
     uint64_t model_version_;
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
+
+    // model parameters
+    std::optional<std::vector<int32_t>> gpu_device_ids_;
+    bool is_decoupled_ = false;
 
     ModelState(
         TRITONBACKEND_Model* triton_model, const std::string& name, uint64_t version, TritonJson::Value&& model_config)
@@ -80,7 +96,11 @@ private:
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
+
+        LoadParameters();
     }
+
+    void LoadParameters();
 };
 
 template <>
