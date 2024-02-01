@@ -230,15 +230,15 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--use_gemm_plugin=bfloat16",
-        "--remove_input_padding",
-        "--enable_context_fmha",
+        "--gpt_attention_plugin=bfloat16",
+        "--gemm_plugin=bfloat16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
 
     convert_cmd = " ".join(convert_cmd)
@@ -289,15 +289,15 @@ def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--use_gemm_plugin=bfloat16",
-        "--remove_input_padding",
-        "--enable_context_fmha",
+        "--gpt_attention_plugin=bfloat16",
+        "--gemm_plugin=bfloat16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
 
     convert_cmd = " ".join(convert_cmd)
@@ -429,16 +429,16 @@ def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
-        "--use_gpt_attention_plugin=float16",
-        "--use_gemm_plugin=float16",
-        "--remove_input_padding",
-        "--enable_context_fmha",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
         "--max_input_len=8192",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
 
     convert_cmd = " ".join(convert_cmd)
@@ -545,16 +545,16 @@ def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
         f"--output_dir={engine_dir}",
-        "--use_gpt_attention_plugin=bfloat16",
-        "--use_gemm_plugin=bfloat16",
-        "--remove_input_padding",
-        "--enable_context_fmha",
+        "--gpt_attention_plugin=bfloat16",
+        "--gemm_plugin=bfloat16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
         "--max_beam_width=4",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
 
     convert_cmd = " ".join(convert_cmd)
