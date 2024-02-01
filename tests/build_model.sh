@@ -74,10 +74,10 @@ if [ "$MODEL" = "llama" ]; then
     pip install -r requirements.txt
 
     echo "Convert LLaMA from HF"
-    python3 convert_checkpoint.py --model_dir ${LLAMA} --dtype float16 --output_dir ./c-model/llama-7b/fp16
+    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/llama-7b/fp16
 
     echo "Build LLaMA"
-    trtllm-build --checkpoint_dir ./c-model/llama-7b/fp16  \
+    trtllm-build --model_config ./c-model/llama-7b/fp16/config.json  \
         --context_fmha=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
@@ -96,10 +96,10 @@ if [ "$MODEL" = "mistral" ]; then
     pip install -r requirements.txt
 
     echo "Convert Mistral from HF"
-    python3 convert_checkpoint.py --model_dir ${MISTRAL} --dtype float16 --output_dir ./c-model/mistral-7b/fp16
+    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/mistral-7b/fp16
 
     echo "Build Mistral"
-    trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
+    trtllm-build --model_config ./c-model/mistral-7b/fp16/config.json  \
         --context_fmha=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
@@ -120,10 +120,10 @@ if [ "$MODEL" = "mistral-ib" ]; then
     pip install -r requirements.txt
 
     echo "Convert Mistral from HF"
-    python3 convert_checkpoint.py --model_dir ${MISTRAL} --dtype float16 --output_dir ./c-model/mistral-7b/fp16
+    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/mistral-7b/fp16
 
     echo "Build Mistral with inflight batching"
-    trtllm-build --checkpoint_dir ./c-model/mistral-7b/fp16  \
+    trtllm-build --model_config ./c-model/mistral-7b/fp16/config.json  \
         --context_fmha=enable \
         --remove_input_padding=enable \
         --paged_kv_cache=enable \
@@ -143,10 +143,10 @@ if [ "$MODEL" = "gptj" ]; then
     pip install -r requirements.txt
 
     echo "Convert GPT-J from HF"
-    python3 convert_checkpoint.py --model_dir ${GPTJ} --dtype float16 --output_dir ./c-model/gpt-j-6b/fp16
+    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/gpt-j-6b/fp16
 
     echo "Build GPT-J"
-    trtllm-build --checkpoint_dir ./c-model/gpt-j-6b/fp16  \
+    trtllm-build --model_config ./c-model/gpt-j-6b/fp16/config.json  \
         --context_fmha=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
