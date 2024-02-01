@@ -740,7 +740,7 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
         # Test client
         pushd tools/inflight_batcher_llm
 
-        python3 speculative_decoding_test.py --max-input-len 200 --dataset ../dataset/mini_cnn_eval.json --url-draft localhost:8004 --url-target localhost:8001
+        python3 speculative_decoding_test.py --max-input-len 200 --dataset ../dataset/mini_cnn_eval_spec_decoding.json --url-draft localhost:8004 --url-target localhost:8001
 
         popd # inflight_batcher_llm/client
 
