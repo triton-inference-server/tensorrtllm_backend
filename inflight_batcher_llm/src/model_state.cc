@@ -77,6 +77,34 @@ TRITONSERVER_Error* ModelState::Create(
     return nullptr; // success
 }
 
+void ModelState::LoadParameters()
+{
+    // Check if model is in decoupled mode:
+    triton::common::TritonJson::Value transaction_policy;
+    model_config_.MemberAsObject("model_transaction_policy", &transaction_policy);
+    transaction_policy.MemberAsBool("decoupled", &is_decoupled_);
+
+    try
+    {
+        gpu_device_ids_ = GetParameter<std::vector<int32_t>>("gpu_device_ids");
+
+        if (gpu_device_ids_)
+        {
+            std::string deviceIdInfo("Using GPU device ids: ");
+            for (auto const& deviceId : gpu_device_ids_.value())
+            {
+                deviceIdInfo += std::to_string(deviceId) + " ";
+            }
+            TLLM_LOG_INFO(deviceIdInfo);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
+    }
+}
+
 common::TritonJson::Value& ModelState::GetModelConfig()
 {
     return model_config_;

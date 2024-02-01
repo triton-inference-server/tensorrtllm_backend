@@ -94,7 +94,7 @@ public:
 
     bool isDecoupled() const
     {
-        return mIsDecoupled;
+        return model_state_->IsDecoupled();
     }
 
     /// @brief For stop requests, or in case of error during enqueue, we need to send a
@@ -130,7 +130,6 @@ private:
 
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
-    bool mIsDecoupled;
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
