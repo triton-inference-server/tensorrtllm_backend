@@ -1177,14 +1177,14 @@ def test_gpt_2b_lora_ifb(
     output_tokens = os.path.join(tensorrt_llm_gpt_example_root, "output.csv")
     lora_path = os.path.join(tensorrt_llm_gpt_example_root,
                              "gpt-2b-lora-train-900")
-    lora_tllm_path = os.path.join(tensorrt_llm_gpt_example_root,
-                                  "gpt-2b-lora-train-900-tllm")
+    lora_nemo_path = os.path.join(tensorrt_llm_gpt_example_root,
+                                  "gpt2b_lora-900.nemo")
     run_cmd = [
         f"{run_py_path}",
         "--max_output_len=8",
-        f"--lora_dir={lora_tllm_path}",
+        f"--lora_dir={lora_nemo_path}",
         "--lora_ckpt_source=nemo",
-        "--lora_task_uids=lora",
+        "--lora_task_uids=0",
         f"--input_file={input_tokens}",
         f"--output_csv={output_tokens}",
         f"--engine_dir={ENGINE_PATH}",
