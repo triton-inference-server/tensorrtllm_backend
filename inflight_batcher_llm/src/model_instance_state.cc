@@ -272,27 +272,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
 }
 
-// For stop requests, or in case of error during enqueue, we need to send a
-// response to the client
-void ModelInstanceState::sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg)
-{
-    TRITONBACKEND_ResponseFactory* factory_ptr;
-    // Create response factory for this request
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
-
-    TRITONSERVER_Error* err = nullptr;
-    if (!errMsg.empty())
-    {
-        TLLM_LOG_ERROR(errMsg);
-        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
-    }
-    TRITONBACKEND_Response* response;
-    LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
-    LOG_IF_ERROR(
-        TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
-}
-
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
     std::vector<WorkItemsQueue::RequestWrapper> requestsToPush;
@@ -314,7 +293,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
                     // Check if request is in progress or in queue, if not ignore
                     mWorkItemsQueue->stopWorkItem(requestId);
                     // Send a response back to client for stop request
-                    sendEnqueueResponse(request);
+                    utils::sendEnqueueResponse(request);
                 }
                 else
                 {
@@ -330,7 +309,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         {
             // In case of error, no work item is added to queue, so response
             // callback needs to be called
-            sendEnqueueResponse(request, e.what());
+            utils::sendEnqueueResponse(request, e.what());
         }
     }
 
@@ -342,7 +321,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         auto e = exceptions.at(r);
         if (e)
         {
-            sendEnqueueResponse(request, e->what());
+            utils::sendEnqueueResponse(request, e->what());
         }
     }
 

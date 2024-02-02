@@ -64,5 +64,9 @@ std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* req
 /// @brief Get the value of a boolean tensor
 bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName);
 
+/// @brief For stop requests, or in case of error during enqueue, we need to send a
+/// response to the client
+void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
+
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm
