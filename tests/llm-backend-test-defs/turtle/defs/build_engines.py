@@ -281,7 +281,6 @@ def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
         f"--meta_ckpt_dir={meta_ckpt_dir}",
         f"--output_dir={ckpt_dir}",
         "--dtype=bfloat16",
-        "--world_size=8",
         "--tp_size=8",
     ]
 
