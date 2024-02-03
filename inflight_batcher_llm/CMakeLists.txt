@@ -204,6 +204,7 @@ target_compile_options(
     -Wno-unused-parameter
     -Wno-deprecated-declarations
     -Wno-type-limits>
+    -D_GLIBCXX_USE_CXX11_ABI=0
     $<$<CXX_COMPILER_ID:MSVC>:/Wall
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
@@ -232,6 +233,8 @@ if(TRITON_ENABLE_METRICS)
               ${REPORTER_SRCS} ${REPORTER_HDRS})
   target_compile_features(triton-custom-metrics-reporter-library
                           PRIVATE cxx_std_17)
+  target_compile_options(triton-custom-metrics-reporter-library
+                         PRIVATE -D_GLIBCXX_USE_CXX11_ABI=0)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(triton-custom-metrics-reporter-library
                            PRIVATE /W1 /D_WIN32_WINNT=0x0A00 /EHsc)

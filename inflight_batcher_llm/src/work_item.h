@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "triton/backend/backend_common.h"
