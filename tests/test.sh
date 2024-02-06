@@ -768,9 +768,19 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
             --tokenizer-dir ${TOKENIZER_PATH} \
             --return-context-logits \
             --return-generation-logits
+
+        python3 inflight_batcher_llm_client.py \
+            --tokenizer-dir ${TOKENIZER_PATH}
         popd # inflight_batcher_llm/client
 
         pushd tools/inflight_batcher_llm
+        python3 end_to_end_test.py \
+            -i http \
+            --max-input-len 192 \
+            --return-context-logits \
+            --return-generation-logits \
+            --dataset ../dataset/mini_cnn_eval.json
+
         python3 end_to_end_test.py \
             -i http \
             --max-input-len 192 \

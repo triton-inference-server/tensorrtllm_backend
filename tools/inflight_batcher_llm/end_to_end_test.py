@@ -23,7 +23,12 @@ def callback(user_data, start_time, result, error):
     user_data._latencies.append(latency)
 
 
-def test_functionality(client, prompts, output_lens):
+def test_functionality(client,
+                       prompts,
+                       output_lens,
+                       vocabSizePadded=50257,
+                       return_context_logits=False,
+                       return_generation_logits=False):
     print(f"[INFO] Start testing on {len(prompts)} prompts.")
     for i, prompt in enumerate(prompts):
 
@@ -50,6 +55,7 @@ def test_functionality(client, prompts, output_lens):
         output2 = result.as_numpy("REQUEST_OUTPUT_LEN")
         output_end_id = result.as_numpy("OUT_END_ID")
         output_pad_id = result.as_numpy("OUT_PAD_ID")
+        inputIds = output0  # Use to check context logits shape
 
         model_name = "tensorrt_llm"
         inputs = [
@@ -60,6 +66,21 @@ def test_functionality(client, prompts, output_lens):
             utils.prepare_tensor("end_id", output_end_id, FLAGS.protocol),
             utils.prepare_tensor("pad_id", output_pad_id, FLAGS.protocol),
         ]
+        if return_context_logits:
+            return_context_logits_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_context_logits",
+                                     return_context_logits_flag,
+                                     FLAGS.protocol),
+            ]
+        if return_generation_logits:
+            return_generation_logits_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_generation_logits",
+                                     return_generation_logits_flag,
+                                     FLAGS.protocol),
+            ]
+
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
@@ -112,6 +133,20 @@ def test_functionality(client, prompts, output_lens):
             utils.prepare_tensor("stop_words", stop_words_list,
                                  FLAGS.protocol),
         ]
+        if return_context_logits:
+            return_context_logits_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_context_logits",
+                                     return_context_logits_flag,
+                                     FLAGS.protocol),
+            ]
+        if return_generation_logits:
+            return_generation_logits_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_generation_logits",
+                                     return_generation_logits_flag,
+                                     FLAGS.protocol),
+            ]
 
         result = client.infer(model_name, inputs, request_id=str(i))
 
@@ -127,6 +162,43 @@ def test_functionality(client, prompts, output_lens):
         assert (output_log_probs == ensemble_output_log_probs).all()
         assert (context_logits == ensemble_context_logits).all()
         assert (generation_logits == ensemble_generation_logits).all()
+
+        ensemble_context_logits_shape = ensemble_context_logits.shape
+        assert (len(ensemble_context_logits_shape) == 3)
+        if return_context_logits:
+            # Expect shape [1, prompt_length, vocabSizePadded]
+            assert (ensemble_context_logits_shape[0] == 1)  # One request
+            assert (ensemble_context_logits_shape[1] == inputIds.size
+                    )  # Prompt length
+            assert (ensemble_context_logits_shape[2] == vocabSizePadded
+                    )  # VocabSizePadded
+        else:
+            # Expect shape [1, 1, 1]
+            assert (ensemble_context_logits_shape[0] == 1)
+            assert (ensemble_context_logits_shape[1] == 1)
+            assert (ensemble_context_logits_shape[2] == 1)
+            assert (ensemble_context_logits[0][0][0] == 0
+                    )  # Dummy tensor's value is 0
+
+        ensemble_generation_logits_shape = ensemble_generation_logits.shape
+        assert (len(ensemble_generation_logits_shape) == 4)
+
+        if return_generation_logits:
+            # Expect shape [1, beam_width, output_length, vocabSizePadded]
+            assert (ensemble_generation_logits_shape[0] == 1)  # One request
+            assert (ensemble_generation_logits_shape[1] == 1
+                    )  # Beam width (default)
+            assert (ensemble_generation_logits_shape[2] == output_lens[i]
+                    )  # Output length
+            assert (ensemble_generation_logits_shape[3] == vocabSizePadded
+                    )  # VocabSizePadded
+        else:
+            assert (ensemble_generation_logits_shape[0] == 1)
+            assert (ensemble_generation_logits_shape[1] == 1)
+            assert (ensemble_generation_logits_shape[2] == 1)
+            assert (ensemble_generation_logits_shape[3] == 1)
+            assert (ensemble_generation_logits[0][0][0][0] == 0
+                    )  # Dummy tensor's value is 0
 
         if FLAGS.verbose:
             print('Response: {}'.format(result.get_response()))
@@ -237,6 +309,16 @@ if __name__ == '__main__':
                         required=True,
                         help='Dataset path used for the test.')
 
+    parser.add_argument('--return-context-logits',
+                        action="store_true",
+                        default=False,
+                        help='Return context logits.')
+
+    parser.add_argument('--return-generation-logits',
+                        action="store_true",
+                        default=False,
+                        help='Return generation logits.')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
@@ -265,5 +347,8 @@ if __name__ == '__main__':
             # 1.3 is a magic number that converts number of words to number of tokens
             output_lens.append(int(len(output.split(' ')) * 1.3))
 
-    test_functionality(client, prompts, output_lens)
+    vocabSizePadded = 50257  # gpt
+    test_functionality(client, prompts, output_lens, vocabSizePadded,
+                       FLAGS.return_context_logits,
+                       FLAGS.return_generation_logits)
     test_performance(client, prompts, output_lens)
