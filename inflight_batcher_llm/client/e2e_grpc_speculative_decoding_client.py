@@ -125,7 +125,6 @@ def get_trtllm_inputs(input_ids, input_length, request_output_len,
         inputs.append(
             prepare_tensor("frequency_penalty", frequency_penalty_data))
 
-    print(f"end_id before trtllm: {end_id}")
     if end_id is not None:
         end_id_data = np.array([[end_id]], dtype=np.int32)
         inputs.append(prepare_tensor("end_id", end_id_data))

@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include <nlohmann/json.hpp>
 #include <unordered_map>
@@ -94,12 +93,8 @@ public:
 
     bool isDecoupled() const
     {
-        return mIsDecoupled;
+        return model_state_->IsDecoupled();
     }
-
-    /// @brief For stop requests, or in case of error during enqueue, we need to send a
-    /// response to the client
-    void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
 
     /// @brief Add the request to the WorkItemsQueue
     void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
@@ -130,7 +125,6 @@ private:
 
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
-    bool mIsDecoupled;
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;

@@ -51,21 +51,33 @@ def parse_arguments():
 
     path = str(Path(__file__).parent.absolute()) + '/../all_models/gpt'
     parser.add_argument('--model_repo', type=str, default=path)
+
+    parser.add_argument(
+        '--tensorrt_llm_model_name',
+        type=str,
+        help='Name of the tensorrt_llm Triton model in the repo',
+        default='tensorrt_llm',
+    )
+
     return parser.parse_args()
 
 
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
-            model_repo, log, log_file):
+            model_repo, log, log_file, tensorrt_llm_model_name):
     cmd = ['mpirun', '--allow-run-as-root']
     for i in range(world_size):
-        cmd += ['-n', '1', tritonserver]
+        cmd += ['-n', '1', tritonserver, f'--model-repository={model_repo}']
         if log and (i == 0):
             cmd += ['--log-verbose=3', f'--log-file={log_file}']
+        # If rank is not 0, skip loading of models other than `tensorrt_llm_model_name`
+        if (i != 0):
+            cmd += [
+                '--model-control-mode=explicit',
+                f'--load-model={tensorrt_llm_model_name}'
+            ]
         cmd += [
             f'--grpc-port={grpc_port}', f'--http-port={http_port}',
-            f'--metrics-port={metrics_port}',
-            f'--model-repository={model_repo}',
-            '--disable-auto-complete-config',
+            f'--metrics-port={metrics_port}', '--disable-auto-complete-config',
             f'--backend-config=python,shm-region-prefix-name=prefix{i}_', ':'
         ]
     return cmd
@@ -85,5 +97,5 @@ if __name__ == '__main__':
             raise RuntimeError(msg + ' Or use --force.')
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
-                  args.log_file)
+                  args.log_file, args.tensorrt_llm_model_name)
     subprocess.Popen(cmd)

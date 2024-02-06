@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "NvInfer.h"
 #include "tensorrt_llm/common/logger.h"
@@ -63,6 +62,10 @@ std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* req
 
 /// @brief Get the value of a boolean tensor
 bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName);
+
+/// @brief For stop requests, or in case of error during enqueue, we need to send a
+/// response to the client
+void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm
