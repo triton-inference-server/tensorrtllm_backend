@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#define _GLIBCXX_USE_CXX11_ABI 0
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 #include <map>

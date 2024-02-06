@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/plugins/api/tllmPlugin.h"
@@ -34,6 +33,8 @@
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
+
+#include <optional>
 
 using namespace ::triton::common; // TritonJson
 
@@ -66,11 +67,25 @@ public:
     const std::string& GetModelName() const;
     uint64_t GetModelVersion() const;
 
+    std::optional<std::vector<int32_t>> GetDeviceIds()
+    {
+        return gpu_device_ids_;
+    }
+
+    bool IsDecoupled() const
+    {
+        return is_decoupled_;
+    }
+
 private:
     const std::string model_name_;
     uint64_t model_version_;
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
+
+    // model parameters
+    std::optional<std::vector<int32_t>> gpu_device_ids_;
+    bool is_decoupled_ = false;
 
     ModelState(
         TRITONBACKEND_Model* triton_model, const std::string& name, uint64_t version, TritonJson::Value&& model_config)
@@ -80,7 +95,11 @@ private:
     {
         mTrtLogger = std::make_shared<tensorrt_llm::runtime::TllmLogger>();
         initTrtLlmPlugins(mTrtLogger.get());
+
+        LoadParameters();
     }
+
+    void LoadParameters();
 };
 
 template <>

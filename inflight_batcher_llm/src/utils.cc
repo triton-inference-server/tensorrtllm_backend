@@ -236,4 +236,23 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
     return boolean;
 }
 
+void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg)
+{
+    TRITONBACKEND_ResponseFactory* factory_ptr;
+    // Create response factory for this request
+    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
+
+    TRITONSERVER_Error* err = nullptr;
+    if (!errMsg.empty())
+    {
+        TLLM_LOG_ERROR(errMsg);
+        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
+    }
+    TRITONBACKEND_Response* response;
+    LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
+    LOG_IF_ERROR(
+        TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
+    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
+}
+
 } // namespace triton::backend::inflight_batcher_llm::utils
