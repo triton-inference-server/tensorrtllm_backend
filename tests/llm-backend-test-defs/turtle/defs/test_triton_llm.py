@@ -40,6 +40,7 @@ def stop_triton_server():
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("FEATURE_NAME", [
@@ -62,6 +63,7 @@ def test_llama_v2_7b_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -114,6 +116,7 @@ def test_llama_v2_7b_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -163,6 +166,7 @@ def test_llama_v2_7b_ifb(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_mistral_v1_7b_ifb(
@@ -180,6 +184,7 @@ def test_mistral_v1_7b_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -229,6 +234,7 @@ def test_mistral_v1_7b_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -351,6 +357,7 @@ def test_mistral_v1_7b_python_backend(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_llama_v2_70b_ifb(
@@ -368,6 +375,7 @@ def test_llama_v2_70b_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -416,6 +424,7 @@ def test_llama_v2_70b_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -538,6 +547,7 @@ def test_gpt_350m_python_backend(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("FEATURE_NAME", [
@@ -560,6 +570,7 @@ def test_gpt_350m_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -613,6 +624,7 @@ def test_gpt_350m_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -780,6 +792,7 @@ def test_gpt_gather_logits_ifb(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["True"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_350m_speculative_decoding(
@@ -797,6 +810,7 @@ def test_gpt_350m_speculative_decoding(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -860,6 +874,7 @@ def test_gpt_350m_speculative_decoding(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -945,6 +960,7 @@ def test_gpt_350m_speculative_decoding(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_175b_ifb(
@@ -962,6 +978,7 @@ def test_gpt_175b_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -1008,6 +1025,7 @@ def test_gpt_175b_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -1054,6 +1072,7 @@ def test_gpt_175b_ifb(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
@@ -1073,6 +1092,7 @@ def test_gpt_next_ptuning_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -1123,6 +1143,7 @@ def test_gpt_next_ptuning_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -1213,6 +1234,7 @@ def test_gpt_next_ptuning_ifb(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_2b_lora_ifb(
@@ -1230,6 +1252,7 @@ def test_gpt_2b_lora_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -1282,6 +1305,7 @@ def test_gpt_2b_lora_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
