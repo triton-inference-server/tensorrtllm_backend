@@ -411,6 +411,10 @@ def runLLMBackendTestTURTLE(platform, testList, perfMode=false, timeout=0)
           sh "cat ${MODEL_CACHE_DIR}/README"
           sh "nvidia-smi -q"
 
+          sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
+          sh "mkdir /opt/tritonserver/backends/tensorrtllm"
+          sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
+
           sh "rm -rf ${platform}-${testList}.tar.gz ${platform}-${testList}/*"
           sh "ls -lah"
 

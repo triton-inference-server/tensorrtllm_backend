@@ -82,6 +82,7 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
     ENABLE_KV_CACHE_REUSE = "False"
     NORMALIZE_LOG_PROBS = "True"
     ENABLE_CHUNKED_CONTEXT = "False"
+    GPU_DEVICE_IDS = ""
     PREPROCESSING_INSTANCE_COUNT = "1"
     POSTPROCESSING_INSTANCE_COUNT = "1"
     ACCUMULATE_TOKEN = "False"
@@ -123,6 +124,7 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
