@@ -72,6 +72,9 @@ class TritonPythonModel:
         elif tokenizer_type == 'llama':
             self.tokenizer = LlamaTokenizer.from_pretrained(
                 tokenizer_dir, legacy=False, padding_side='left')
+        elif tokenizer_type == "sp":
+            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
+                                         padding_side='left')
         else:
             raise AttributeError(
                 f'Unexpected tokenizer type: {tokenizer_type}')
