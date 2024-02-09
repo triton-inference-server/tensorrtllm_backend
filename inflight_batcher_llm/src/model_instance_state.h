@@ -133,6 +133,8 @@ private:
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
 #endif
+
+    bool mHasActiveRequests;
 };
 
 } // namespace triton::backend::inflight_batcher_llm
