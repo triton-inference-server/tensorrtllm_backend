@@ -448,6 +448,8 @@ def extract_print_stats(ip_token_len_list, responses, user_data, FLAGS):
         with open("prfetto_dump.json", "w") as file:
             json.dump(json_dict, file, indent=4)
 
+    return print_data_dict
+
 
 def extract_string_from_nested_list(nested_list):
     if isinstance(nested_list, str):

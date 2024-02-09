@@ -270,6 +270,7 @@ run_cpp_trtllm_backend_tests () {
 
     python3 benchmark_core_model.py \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+        ${CHECK_PERF_FLAG} \
         --concurrency 8 \
         -i http \
         --max-input-len 300 \
@@ -290,12 +291,17 @@ run_cpp_trtllm_backend_tests () {
             --tokenizer-dir ${TOKENIZER_PATH} \
             --tokenizer-type ${TOKENIZER_TYPE}
 
+        # Performance check.
         python3 benchmark_core_model.py \
+            --check-perf-json ../../tests/ref_results.json \
+            --check-perf-key ${MODEL} \
+            --check-perf-rtol 0.05 \
+            --check-perf-atol 50 \
             --concurrency 8 \
             -i grpc \
             --max-input-len 300 \
             --request-rate -1 \
-            --num-requests 100 \
+            --num-requests 1000 \
             token-norm-dist \
             --input-mean 128 --input-stdev 0 \
             --output-mean 20 --output-stdev 0
