@@ -457,6 +457,14 @@ def runLLMBackendTestTURTLE(platform, testList, perfMode=false, timeout=0)
     uploadArtifacts("results-${platform}-${testList}.tar.gz", "sw-tensorrt-generic/llm-artifacts/${JOB_NAME}/${BUILD_NUMBER}/test-results/")
 }
 
+def runCPPUnitTest()
+{
+  container("trt-llm-backend") {
+      sh "nvidia-smi"
+      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && ./build/tests/inferenceAnswerTest"
+    }
+}
+
 
 def triggerGH200RemoteJob(stage, testContext="", splitId=0, splits=1, perfMode=false)
 {
@@ -614,6 +622,11 @@ pipeline {
               stage("Test gpt-ib-streaming") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-streaming")
+                }
+              }
+              stage("CPP Unit Tests") {
+                steps {
+                  runCPPUnitTest()
                 }
               }
             }
