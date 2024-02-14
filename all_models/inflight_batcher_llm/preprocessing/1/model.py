@@ -29,7 +29,7 @@ from typing import List
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer, T5Tokenizer
 
 
 class TritonPythonModel:
@@ -56,30 +56,18 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        self.tokenizer_type = model_config['parameters']['tokenizer_type'][
-            'string_value']
         self.add_special_tokens = model_config['parameters'].get(
             'add_special_tokens',
             {'string_value': "false"})['string_value'].lower() in [
                 'true', '1', 't', 'y', 'yes'
             ]
 
-        if self.tokenizer_type == 't5':
-            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
-                                         padding_side='left')
-        elif self.tokenizer_type == 'auto':
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_dir, padding_side='left', trust_remote_code=True)
-        elif self.tokenizer_type == 'llama':
-            self.tokenizer = LlamaTokenizer.from_pretrained(
-                tokenizer_dir, legacy=False, padding_side='left')
-        elif self.tokenizer_type == "sp":
-            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
-                                         padding_side='left')
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                       legacy=False,
+                                                       padding_side='left',
+                                                       trust_remote_code=True)
+        if isinstance(self.tokenizer, T5Tokenizer):
             self.tokenizer_bos_id = self.tokenizer.sp_model.bos_id()
-        else:
-            raise AttributeError(
-                f'Unexpected tokenizer type: {self.tokenizer_type}')
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.tokenizer_end_id = self.tokenizer.encode(
@@ -238,7 +226,7 @@ class TritonPythonModel:
         """
             query : batch string (2D numpy array)
         """
-        if self.tokenizer_type == 'sp':
+        if isinstance(self.tokenizer, T5Tokenizer):
             start_ids = [
                 np.array([self.tokenizer_bos_id] + self.tokenizer.encode(
                     s[0].decode(), add_special_tokens=self.add_special_tokens)

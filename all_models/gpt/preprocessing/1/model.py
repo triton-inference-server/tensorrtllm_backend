@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
 from torch.nn.utils.rnn import pad_sequence
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer
 
 
 class TritonPythonModel:
@@ -33,23 +33,12 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        tokenizer_type = model_config['parameters']['tokenizer_type'][
-            'string_value']
 
-        if tokenizer_type == 't5':
-            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
-                                         padding_side='left')
-        elif tokenizer_type == 'auto':
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_dir, padding_side='left', trust_remote_code=True)
-        elif tokenizer_type == 'llama':
-            self.tokenizer = LlamaTokenizer.from_pretrained(
-                tokenizer_dir, legacy=False, padding_side='left')
-        else:
-            raise AttributeError(
-                f'Unexpected tokenizer type: {tokenizer_type}')
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                       padding_side='left',
+                                                       legacy=False,
+                                                       trust_remote_code=True)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-
         self.pad_id = self.tokenizer.encode(self.tokenizer.pad_token,
                                             add_special_tokens=False)[0]
 

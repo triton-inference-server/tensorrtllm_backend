@@ -33,7 +33,6 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
@@ -46,10 +45,10 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -103,12 +102,10 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
 
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,

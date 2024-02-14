@@ -5,7 +5,6 @@ MODEL_SPEC=$1
 RECORD_SERVER_STATS="${2:-"false"}"
 
 TOKENIZER_DIR=/trt_llm_data/llm-models/llama-models/llama-7b-hf
-TOKENIZER_TYPE=llama
 
 set -e
 
@@ -84,6 +83,6 @@ for MODEL_SPEC in "${MODEL_SPEC_LIST[@]}"; do
     bash build_model.sh $MODEL $ENGINE_PATH $BS $MAX_INPUT_SEQLEN $MAX_OUTPUT_SEQLEN $MAX_TOKENS $TP $PP $WORLD_SIZE
 
     echo -e " \n ******** RUNNING $MODEL with TP=$TP PP=$PP  *************** \n"
-    bash test.sh $MODEL $ENGINE_PATH $TOKENIZER_DIR $TOKENIZER_TYPE $BS $MAX_INPUT_SEQLEN $TP $PP $WORLD_SIZE $RECORD_SERVER_STATS
+    bash test.sh $MODEL $ENGINE_PATH $TOKENIZER_DIR $BS $MAX_INPUT_SEQLEN $TP $PP $WORLD_SIZE $RECORD_SERVER_STATS
 
 done

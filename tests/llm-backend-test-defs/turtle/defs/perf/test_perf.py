@@ -211,23 +211,21 @@ class InflightBatchingMetricPerfTest(AbstractPerfScriptTestClass):
         return str(self._config)
 
     def set_runtime_configs(self, benchmark_script, working_dir,
-                            perf_cache_fpath, dataset, tokenizer_dir,
-                            tokenizer_type) -> None:
+                            perf_cache_fpath, dataset, tokenizer_dir) -> None:
         self._benchmark_script = benchmark_script
         self._working_dir = working_dir
         self._perf_cache_fpath = perf_cache_fpath
         self._dataset = dataset
         self._tokenizer_dir = tokenizer_dir
-        self._tokenizer_type = tokenizer_type
 
     def get_commands(self) -> List[PerfScriptTestCmd]:
         benchmark_cmd = [
             self._benchmark_script,
             f"--concurrency={self._config.concurrency}",
-            f"--max-input-len={self._config.max_input_len}", "dataset",
+            f"--max-input-len={self._config.max_input_len}",
+            "dataset",
             f"--dataset={self._dataset}",
             f"--tokenizer-dir={self._tokenizer_dir}",
-            f"--tokenizer-type={self._tokenizer_type}"
         ]
 
         benchmark_cmd = PerfScriptTestCmd(benchmark_cmd, isPython=True)
@@ -318,10 +316,9 @@ class TestInflightBatchingPerf:
         dataset_path = os.path.join(llm_backend_root, "tools", "dataset",
                                     "mini_cnn_eval.json")
         working_dir = llm_backend_venv.get_working_directory()
-        tokenizer_type = "llama"
         case.set_runtime_configs(benchmark_script, working_dir,
                                  trt_performance_cache_fpath, dataset_path,
-                                 llama_v2_tokenizer_model_root, tokenizer_type)
+                                 llama_v2_tokenizer_model_root)
         case.run_metrics(turtle_case_name, llm_backend_venv,
                          trt_gpu_clock_lock, llm_session_data_writer,
                          output_dir)

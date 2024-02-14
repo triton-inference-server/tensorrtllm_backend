@@ -95,12 +95,10 @@ def test_llama_v2_7b_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -133,16 +131,14 @@ def test_llama_v2_7b_ifb(
     # Run Test
     feature_name = f"{FEATURE_NAME}"
     tokenizer_dir = f"{llama_v2_tokenizer_model_root}"
-    tokenizer_type = "llama"
 
     if DECOUPLED_MODE == "False":
         run_cpp_backend_tests(feature_name, llm_backend_venv,
-                              inflight_batcher_llm_client_root, tokenizer_dir,
-                              tokenizer_type)
+                              inflight_batcher_llm_client_root, tokenizer_dir)
     else:
         run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
                                         inflight_batcher_llm_client_root,
-                                        tokenizer_dir, tokenizer_type)
+                                        tokenizer_dir)
 
 
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
@@ -213,12 +209,10 @@ def test_mistral_v1_7b_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = mistral_v1_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -286,7 +280,6 @@ def test_mistral_v1_7b_python_backend(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = mistral_v1_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
@@ -299,10 +292,10 @@ def test_mistral_v1_7b_python_backend(
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
 
     # Launch Triton Server
@@ -317,7 +310,6 @@ def test_mistral_v1_7b_python_backend(
         run_cmd = [
             f"{llm_backend_gpt_example_root}/end_to_end_test.py",
             f"--tokenizer_dir={TOKENIZER_PATH}",
-            f"--tokenizer_type={TOKENIZER_TYPE}",
         ]
         venv_check_call(llm_backend_venv, run_cmd)
     elif TEST_TYPE == "accuracy":
@@ -326,7 +318,6 @@ def test_mistral_v1_7b_python_backend(
             "--text=Born in north-east France, Soyer trained as a",
             "--output_len=10",
             f"--tokenizer_dir={TOKENIZER_PATH}",
-            f"--tokenizer_type={TOKENIZER_TYPE}",
         ]
 
         output = venv_check_output(llm_backend_venv,
@@ -403,12 +394,10 @@ def test_llama_v2_70b_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -477,7 +466,6 @@ def test_gpt_350m_python_backend(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, "triton_repo",
@@ -490,10 +478,10 @@ def test_gpt_350m_python_backend(
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH},tokenizer_type:{TOKENIZER_TYPE}",
+        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}",
         shell=True)
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -507,7 +495,6 @@ def test_gpt_350m_python_backend(
         run_cmd = [
             f"{llm_backend_gpt_example_root}/end_to_end_test.py",
             f"--tokenizer_dir={TOKENIZER_PATH}",
-            f"--tokenizer_type={TOKENIZER_TYPE}",
         ]
         venv_check_call(llm_backend_venv, run_cmd)
     elif TEST_TYPE == "accuracy":
@@ -516,7 +503,6 @@ def test_gpt_350m_python_backend(
             "--text=Born in north-east France, Soyer trained as a",
             "--output_len=10",
             f"--tokenizer_dir={TOKENIZER_PATH}",
-            f"--tokenizer_type={TOKENIZER_TYPE}",
         ]
 
         output = venv_check_output(llm_backend_venv,
@@ -603,12 +589,10 @@ def test_gpt_350m_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -641,16 +625,14 @@ def test_gpt_350m_ifb(
     # Run Test
     feature_name = f"{FEATURE_NAME}"
     tokenizer_dir = f"{gpt_tokenizer_model_root}"
-    tokenizer_type = "auto"
 
     if DECOUPLED_MODE == "False":
         run_cpp_backend_tests(feature_name, llm_backend_venv,
-                              inflight_batcher_llm_client_root, tokenizer_dir,
-                              tokenizer_type)
+                              inflight_batcher_llm_client_root, tokenizer_dir)
     else:
         run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
                                         inflight_batcher_llm_client_root,
-                                        tokenizer_dir, tokenizer_type)
+                                        tokenizer_dir)
 
 
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "client"])
@@ -719,12 +701,10 @@ def test_gpt_gather_logits_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -853,12 +833,10 @@ def test_gpt_350m_speculative_decoding(
     # Modify two suits of config.pbtxt
     ## first suit
     TOKENIZER_PATH = gpt2_medium_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -882,13 +860,11 @@ def test_gpt_350m_speculative_decoding(
     )
     ## second suit
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     ENABLE_KV_CACHE_REUSE = "False"
     modify_ib_config_pbtxt(
         new_model_repo_draft,
         DRAFT_ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -1004,12 +980,10 @@ def test_gpt_175b_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -1122,12 +1096,10 @@ def test_gpt_next_ptuning_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -1284,12 +1256,10 @@ def test_gpt_2b_lora_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = os.path.join(models_root, "gpt-next",
                                   "gpt-next-tokenizer-hf-v2")
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,

@@ -35,7 +35,7 @@ from functools import partial
 
 import numpy as np
 import tritonclient.grpc as grpcclient
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer
 from tritonclient.utils import InferenceServerException, np_to_triton_dtype
 
 #
@@ -513,27 +513,16 @@ if __name__ == "__main__":
 
     else:
         print('=========')
-        if not os.path.exists(FLAGS.tokenizer_dir):
-            print(
-                "Input tokens are not provided and tokenizer directory does not exist: ",
-                FLAGS.tokenizer_dir)
-            exit()
+        if (os.path.isdir(FLAGS.tokenizer_dir)
+                and not os.path.exists(FLAGS.tokenizer_dir)):
+            raise FileNotFoundError(
+                "Input tokens are not provided and tokenizer directory does"
+                f" not exist: {FLAGS.tokenizer_dir}", )
 
-        if FLAGS.tokenizer_type == 't5':
-            tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
-                                    padding_side='left')
-        elif FLAGS.tokenizer_type == 'auto':
-            tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                      padding_side='left',
-                                                      trust_remote_code=True)
-        elif FLAGS.tokenizer_type == 'llama':
-            tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                       legacy=False,
-                                                       padding_side='left')
-        else:
-            raise AttributeError(
-                f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
-
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  legacy=False,
+                                                  padding_side='left',
+                                                  trust_remote_code=True)
         tokenizer.pad_token = tokenizer.eos_token
         pad_id = tokenizer.encode(tokenizer.pad_token,
                                   add_special_tokens=False)[0]

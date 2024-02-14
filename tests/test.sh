@@ -3,7 +3,6 @@
 MODEL=$1
 TARGET_ENGINE_PATH=$2
 TOKENIZER_PATH=$3
-TOKENIZER_TYPE=$4
 DRAFT_ENGINE_PATH=$5
 
 set -ex
@@ -22,8 +21,8 @@ fi
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ] || [ "$MODEL" = "mistral" ]; then
     # Modify config.pbtxt
     python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${TARGET_ENGINE_PATH}
-    python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
-    python3 tools/fill_template.py -i all_models/gpt/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE}
+    python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH}
+    python3 tools/fill_template.py -i all_models/gpt/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH}
 
     # Launch Triton Server
     mpirun --allow-run-as-root \
@@ -41,35 +40,30 @@ if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
         --protocol=http \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        --tokenizer_dir ${TOKENIZER_PATH}
 
     python3 client.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
         --protocol=grpc \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        --tokenizer_dir ${TOKENIZER_PATH}
 
     # Async Client
     python3 client_async.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
         --protocol=http \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        --tokenizer_dir ${TOKENIZER_PATH}
 
     python3 client_async.py \
         --text="Born in north-east France, Soyer trained as a" \
         --output_len=10 \
         --protocol=grpc \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        --tokenizer_dir ${TOKENIZER_PATH}
 
     # End to end test
     python3 end_to_end_test.py \
-        --tokenizer_dir ${TOKENIZER_PATH} \
-        --tokenizer_type ${TOKENIZER_TYPE}
+        --tokenizer_dir ${TOKENIZER_PATH}
 
     # Benchmark Core Model
     python3 benchmark_core_model.py \
@@ -142,8 +136,8 @@ fill_triton_repo () {
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
     python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
 }
@@ -183,7 +177,6 @@ run_cpp_trtllm_backend_tests () {
         # TODO: Once we switch to using real weights, add `--check-output` arg
         python3 inflight_batcher_llm_client.py \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} \
             --input-tokens-csv='../../tools/dataset/long_input.csv' \
             --output-tokens-csv='../../tools/dataset/long_output.csv' \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
@@ -206,8 +199,7 @@ run_cpp_trtllm_backend_tests () {
     python3 inflight_batcher_llm_client.py \
         ${CHECK_OUTPUT_FLAG} \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-        --tokenizer-dir ${TOKENIZER_PATH} \
-        --tokenizer-type ${TOKENIZER_TYPE}
+        --tokenizer-dir ${TOKENIZER_PATH}
 
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
 
@@ -242,7 +234,6 @@ run_cpp_trtllm_backend_tests () {
             --request-output-len=128 \
             --stop-after-ms 100 \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} \
             --request-id 1 \
             2>&1 | tee output_w_stop
         grep "Got cancellation response" output_w_stop
@@ -251,7 +242,6 @@ run_cpp_trtllm_backend_tests () {
         python3 inflight_batcher_llm_client.py \
             --request-output-len=10 \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} \
             --return-log-probs --top-k 2 \
             2>&1 | tee output_log_probs
 
@@ -259,7 +249,6 @@ run_cpp_trtllm_backend_tests () {
         python3 inflight_batcher_llm_client.py \
             ${CHECK_OUTPUT_FLAG} \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} \
             --request-id my_request 2>&1 | tee output_str_request
     fi
 
@@ -277,7 +266,6 @@ run_cpp_trtllm_backend_tests () {
         dataset \
         --dataset ../dataset/mini_cnn_eval.json \
         --tokenizer-dir ${TOKENIZER_PATH} \
-        --tokenizer-type ${TOKENIZER_TYPE}
 
     if [[ "$run_all_tests" == "true" ]]; then
         python3 benchmark_core_model.py \
@@ -289,7 +277,6 @@ run_cpp_trtllm_backend_tests () {
             dataset \
             --dataset ../dataset/mini_cnn_eval.json \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE}
 
         # Performance check.
         python3 benchmark_core_model.py \
@@ -372,8 +359,7 @@ run_cpp_trtllm_streaming_backend_tests() {
     python3 inflight_batcher_llm_client.py \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
         --streaming \
-        --tokenizer-dir ${TOKENIZER_PATH} \
-        --tokenizer-type ${TOKENIZER_TYPE}
+        --tokenizer-dir ${TOKENIZER_PATH}
 #        --check-output \
 
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
@@ -384,8 +370,7 @@ run_cpp_trtllm_streaming_backend_tests() {
             --request-output-len=128 \
             --stop-after-ms 100 \
             --request-id 1 \
-            --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
+            --tokenizer-dir ${TOKENIZER_PATH} 2>&1 | tee output_w_stop
 
         grep "Got cancellation response" output_w_stop
 
@@ -397,8 +382,7 @@ run_cpp_trtllm_streaming_backend_tests() {
             --stop-after-ms 100 \
             --request-id 1 \
             --stop-via-request-cancel \
-            --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} 2>&1 | tee output_w_stop
+            --tokenizer-dir ${TOKENIZER_PATH} 2>&1 | tee output_w_stop
 
         grep "Request is cancelled" output_w_stop
 
@@ -409,7 +393,6 @@ run_cpp_trtllm_streaming_backend_tests() {
             --end-id 268 \
             --request-id 1 \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --tokenizer-type ${TOKENIZER_TYPE} \
             --input-tokens-csv='../../tools/dataset/short_input_end_id.csv' \
             --output-tokens-csv='../../tools/dataset/short_output_end_id.csv' \
             --check-output

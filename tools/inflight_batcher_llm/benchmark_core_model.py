@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import partial
 
 import numpy as np
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer
 from utils import utils
 
 
@@ -312,20 +312,9 @@ if __name__ == '__main__':
 
     print(FLAGS.workload)
     if FLAGS.workload == "dataset":
-
-        if FLAGS.tokenizer_type == 't5':
-            tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
-                                    padding_side='left')
-        elif FLAGS.tokenizer_type == 'auto':
-            tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                      padding_side='left')
-        elif FLAGS.tokenizer_type == 'llama':
-            tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                       legacy=False,
-                                                       padding_side='left')
-        else:
-            raise AttributeError(
-                f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                                  legacy=False,
+                                                  padding_side='left')
         tokenizer.pad_token = tokenizer.eos_token
         prompt_cnt = 0
 
