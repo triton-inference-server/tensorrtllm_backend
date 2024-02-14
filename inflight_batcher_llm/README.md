@@ -294,7 +294,7 @@ cd tools/inflight_batcher_llm
 ```
 Example: Run dataset with 10 req/sec requested rate with provided tokenizer.
 ```
-python3 benchmark_core_model.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --tokenizer_type <> --num_requests 5000
+python3 benchmark_core_model.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --num_requests 5000
 ```
 Example: Generate I/O seqlen tokens with input normal distribution with mean_seqlen=128, stdev=10. Output normal distribution with mean_seqlen=20, stdev=2. Set stdev=0 to get constant seqlens.
 ```

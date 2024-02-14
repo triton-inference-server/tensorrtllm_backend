@@ -89,12 +89,10 @@ def test_rcca_bug_4323566(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = gpt_tokenizer_model_root
-    TOKENIZER_TYPE = "auto"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
@@ -205,12 +203,10 @@ def test_rcca_bug_4342666(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = llama_v2_tokenizer_model_root
-    TOKENIZER_TYPE = "llama"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_PATH,
         TOKENIZER_PATH,
-        TOKENIZER_TYPE,
         llm_backend_repo_root,
         DECOUPLED_MODE,
         MAX_TOKENS_IN_KV_CACHE,
