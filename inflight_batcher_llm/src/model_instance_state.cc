@@ -244,6 +244,39 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
+    std::optional<DecodingMode> decodingMode = std::nullopt;
+    try
+    {
+        std::string decodingModeStr = model_state_->GetParameter<std::string>("decoding_mode");
+        if (decodingModeStr == "top_k")
+        {
+            decodingMode = DecodingMode::TopK();
+        }
+        else if (decodingModeStr == "top_p")
+        {
+            decodingMode = DecodingMode::TopP();
+        }
+        else if (decodingModeStr == "top_k_top_p")
+        {
+            decodingMode = DecodingMode::TopKTopP();
+        }
+        else if (decodingModeStr == "beam_search")
+        {
+            decodingMode = DecodingMode::BeamSearch();
+        }
+        else
+        {
+            throw std::runtime_error("");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        TLLM_LOG_WARNING(
+            "decoding_mode parameter is invalid or not specified"
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search})."
+            "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
+    }
+
     auto const gpuDeviceIds = model_state_->GetDeviceIds();
 
     TrtGptModelOptionalParams optionalParams;
@@ -255,6 +288,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.normalizeLogProbs = normalizeLogProbs;
     optionalParams.enableChunkedContext = enableChunkedContext;
     optionalParams.deviceIds = gpuDeviceIds;
+    optionalParams.decodingMode = decodingMode;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
