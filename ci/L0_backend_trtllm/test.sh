@@ -160,7 +160,6 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
-    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
@@ -169,7 +168,6 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${max_queue_delay_microseconds}' "50000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
-    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
 
     # Copy the engine and place it into the model folder

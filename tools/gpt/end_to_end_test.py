@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import argparse
 
 import numpy as np
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer
 from utils import utils
 
 if __name__ == '__main__':
@@ -65,12 +65,6 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='Specify tokenizer directory')
-    parser.add_argument('--tokenizer_type',
-                        type=str,
-                        default='auto',
-                        required=False,
-                        choices=['auto', 't5', 'llama'],
-                        help='Specify tokenizer type')
 
     FLAGS = parser.parse_args()
     if (FLAGS.protocol != "http") and (FLAGS.protocol != "grpc"):
@@ -82,19 +76,9 @@ if __name__ == '__main__':
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
 
-    if FLAGS.tokenizer_type == 't5':
-        tokenizer = T5Tokenizer(vocab_file=FLAGS.tokenizer_dir,
-                                padding_side='left')
-    elif FLAGS.tokenizer_type == 'auto':
-        tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                  padding_side='left')
-    elif FLAGS.tokenizer_type == 'llama':
-        tokenizer = LlamaTokenizer.from_pretrained(FLAGS.tokenizer_dir,
-                                                   legacy=False,
-                                                   padding_side='left')
-    else:
-        raise AttributeError(
-            f'Unexpected tokenizer type: {FLAGS.tokenizer_type}')
+    tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
+                                              legacy=False,
+                                              padding_side='left')
     tokenizer.pad_token = tokenizer.eos_token
     pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
     end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]

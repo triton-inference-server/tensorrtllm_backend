@@ -34,6 +34,7 @@ include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
 project(tritontensorrtllmbackend LANGUAGES C CXX)
 
+add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
 #
 # Options
 #
@@ -45,6 +46,7 @@ project(tritontensorrtllmbackend LANGUAGES C CXX)
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_METRICS "Include metrics support in server" ON)
+option(BUILD_TESTS "Build Google tests" ON)
 
 if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
   message(
@@ -100,8 +102,14 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
-set(SRCS src/libtensorrtllm.cc src/work_item.cc src/work_items_queue.cc
-         src/model_instance_state.cc src/model_state.cc src/utils.cc)
+set(SRCS
+    src/libtensorrtllm.cc
+    src/work_item.cc
+    src/work_items_queue.cc
+    src/model_instance_state.cc
+    src/model_state.cc
+    src/utils.cc
+    src/inference_answer.cc)
 
 add_library(triton-tensorrt-llm-backend SHARED ${SRCS})
 
@@ -204,7 +212,6 @@ target_compile_options(
     -Wno-unused-parameter
     -Wno-deprecated-declarations
     -Wno-type-limits>
-    -D_GLIBCXX_USE_CXX11_ABI=0
     $<$<CXX_COMPILER_ID:MSVC>:/Wall
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
@@ -233,8 +240,6 @@ if(TRITON_ENABLE_METRICS)
               ${REPORTER_SRCS} ${REPORTER_HDRS})
   target_compile_features(triton-custom-metrics-reporter-library
                           PRIVATE cxx_std_17)
-  target_compile_options(triton-custom-metrics-reporter-library
-                         PRIVATE -D_GLIBCXX_USE_CXX11_ABI=0)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(triton-custom-metrics-reporter-library
                            PRIVATE /W1 /D_WIN32_WINNT=0x0A00 /EHsc)
@@ -320,6 +325,11 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
+endif()
+
+if(BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
 endif()
 
 #

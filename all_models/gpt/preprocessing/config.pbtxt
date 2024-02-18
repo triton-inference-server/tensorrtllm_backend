@@ -63,13 +63,6 @@ parameters {
   }
 }
 
-parameters {
-  key: "tokenizer_type"
-  value: {
-    string_value: "${tokenizer_type}"
-  }
-}
-
 instance_group [
     {
         count: 1

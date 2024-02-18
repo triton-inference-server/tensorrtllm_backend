@@ -11,5 +11,7 @@ mkdir $BUILD_DIR
 BUILD_DIR=$(cd -- "$BUILD_DIR" && pwd)
 cd $BUILD_DIR
 
+export LD_LIBRARY_PATH="/usr/local/cuda/compat/lib.real:${LD_LIBRARY_PATH}"
+
 cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ..
 make install
