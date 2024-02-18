@@ -64,6 +64,7 @@ namespace triton::backend::inflight_batcher_llm
 
 class ModelInstanceState
 {
+    using DecodingMode = tensorrt_llm::runtime::DecodingMode;
     using InferenceRequest = tensorrt_llm::batch_manager::InferenceRequest;
     using NamedTensor = tensorrt_llm::batch_manager::NamedTensor;
     using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
@@ -133,6 +134,8 @@ private:
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
 #endif
+
+    bool mHasActiveRequests;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

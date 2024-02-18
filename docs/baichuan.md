@@ -40,8 +40,8 @@ python build.py --model_dir ${HF_BAICHUAN_MODEL} \
 ```bash
 cp all_models/inflight_batcher_llm/ baichuan_ifb -r
 
-python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,preprocessing_instance_count:1
-python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
+python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False
 python3 tools/fill_template.py -i baichuan_ifb/ensemble/config.pbtxt triton_max_batch_size:64
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:600
@@ -174,8 +174,8 @@ python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_tr
 ```bash
 cp all_models/inflight_batcher_llm/ baichuan_ifb -r
 
-python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,preprocessing_instance_count:1
-python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},tokenizer_type:auto,triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tools/fill_template.py -i baichuan_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
+python3 tools/fill_template.py -i baichuan_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_BAICHUAN_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,bls_instance_count:1,accumulate_tokens:True
 python3 tools/fill_template.py -i baichuan_ifb/ensemble/config.pbtxt triton_max_batch_size:64
 python3 tools/fill_template.py -i baichuan_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:/tmp/baichuan/13B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:600

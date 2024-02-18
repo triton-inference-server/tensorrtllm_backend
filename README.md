@@ -62,35 +62,49 @@ Starting with Triton 23.10 release, you can follow steps described in the
 [Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
 guide and use the
 [build.py](https://github.com/triton-inference-server/server/blob/main/build.py)
-script.
+script to build the TRT-LLM backend.
 
-A sample command to build a Triton Server container with all options enabled is
-shown below, which will build the same TRT-LLM container as the one on the NGC.
+The below commands will build the same Triton TRT-LLM container as the one on the NGC.
 
 ```bash
-BASE_CONTAINER_IMAGE_NAME=nvcr.io/nvidia/tritonserver:23.10-py3-min
-TENSORRTLLM_BACKEND_REPO_TAG=release/0.5.0
-PYTHON_BACKEND_REPO_TAG=r23.10
+# Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
+cd tensorrtllm_backend
+# Specify the build args for the dockerfile.
+BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.01-py3-min
+TRT_VERSION=9.2.0.5
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
 
-# Run the build script. The flags for some features or endpoints can be removed if not needed.
+docker build -t trtllm_base
+             --build-arg BASE_IMAGE="${BASE_IMAGE}"
+             --build-arg TRT_VER="${TRT_VERSION}"
+             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}"
+             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}"
+             -f dockerfile/Dockerfile.triton.trt_llm_backend .
+
+# Run the build script from Triton Server repo. The flags for some features or
+# endpoints can be removed if not needed. Please refer to the support matrix to
+# see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
+TRTLLM_BASE_IMAGE=trtllm_base
+TENSORRTLLM_BACKEND_REPO_TAG=v0.7.2
+PYTHON_BACKEND_REPO_TAG=r24.01
+
+cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
               --enable-metrics --enable-gpu-metrics --enable-cpu-metrics \
               --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
               --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
               --backend=ensemble --enable-gpu --endpoint=http --endpoint=grpc \
-              --image=base,${BASE_CONTAINER_IMAGE_NAME} \
+              --image=base,${TRTLLM_BASE_IMAGE} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
               --backend=python:${PYTHON_BACKEND_REPO_TAG}
 ```
 
-The `BASE_CONTAINER_IMAGE_NAME` is the base image that will be used to build the
-container. By default it is set to the most recent min image of Triton, on NGC,
-that matches the Triton release you are building for. You can change it to a
-different image if needed by setting the `--image` flag like the command below.
-The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are the tags of
-the TensorRT-LLM backend and Python backend repositories that will be used
-to build the container. You can also remove the features or endpoints that you
-don't need by removing the corresponding flags.
+The `TRTLLM_BASE_IMAGE` is the base image that will be used to build the
+container. The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are
+the tags of the TensorRT-LLM backend and Python backend repositories that will
+be used to build the container. You can also remove the features or endpoints
+that you don't need by removing the corresponding flags.
 
 #### Option 2. Build via Docker
 
@@ -222,6 +236,7 @@ The following table shows the fields that may to be modified before deployment:
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 | `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
+| `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 

@@ -52,6 +52,7 @@ TRITONSERVER_Error* ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
+    , mHasActiveRequests(false)
 {
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -243,6 +244,39 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
+    std::optional<DecodingMode> decodingMode = std::nullopt;
+    try
+    {
+        std::string decodingModeStr = model_state_->GetParameter<std::string>("decoding_mode");
+        if (decodingModeStr == "top_k")
+        {
+            decodingMode = DecodingMode::TopK();
+        }
+        else if (decodingModeStr == "top_p")
+        {
+            decodingMode = DecodingMode::TopP();
+        }
+        else if (decodingModeStr == "top_k_top_p")
+        {
+            decodingMode = DecodingMode::TopKTopP();
+        }
+        else if (decodingModeStr == "beam_search")
+        {
+            decodingMode = DecodingMode::BeamSearch();
+        }
+        else
+        {
+            throw std::runtime_error("");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        TLLM_LOG_WARNING(
+            "decoding_mode parameter is invalid or not specified"
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search})."
+            "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
+    }
+
     auto const gpuDeviceIds = model_state_->GetDeviceIds();
 
     TrtGptModelOptionalParams optionalParams;
@@ -254,6 +288,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.normalizeLogProbs = normalizeLogProbs;
     optionalParams.enableChunkedContext = enableChunkedContext;
     optionalParams.deviceIds = gpuDeviceIds;
+    optionalParams.decodingMode = decodingMode;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
@@ -367,7 +402,11 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         if (world_size > 1)
         {
             int64_t num_new_work_items = rval.size();
-            commSession.bcast(num_new_work_items, 0);
+            mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
+            if (mHasActiveRequests)
+            {
+                commSession.bcast(num_new_work_items, 0);
+            }
 
             if (num_new_work_items > 0)
             {
@@ -387,6 +426,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         // subordinate ranks hang until master rank sends work
         int64_t num_new_work_items;
         commSession.bcast(num_new_work_items, 0);
+        mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
         if (num_new_work_items > 0)
         {
             std::vector<int64_t> packed;
@@ -440,7 +480,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
 
     auto const& commSession = COMM_SESSION;
 
-    if (commSession.getSize() > 1)
+    if (commSession.getSize() > 1 && mHasActiveRequests)
     {
         // Broadcast number of stopped requests
         commSession.bcast(nStoppedReqIds, 0);

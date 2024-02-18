@@ -368,3 +368,9 @@ parameters: {
     string_value: "${gpu_device_ids}"
   }
 }
+parameters: {
+  key: "decoding_mode"
+  value: {
+    string_value: "${decoding_mode}"
+  }
+}

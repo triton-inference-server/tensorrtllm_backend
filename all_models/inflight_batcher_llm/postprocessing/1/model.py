@@ -28,7 +28,7 @@ import json
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from transformers import AutoTokenizer
 
 
 class TritonPythonModel:
@@ -55,26 +55,16 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        tokenizer_type = model_config['parameters']['tokenizer_type'][
-            'string_value']
         self.skip_special_tokens = model_config['parameters'].get(
             'skip_special_tokens',
             {'string_value': "true"})['string_value'].lower() in [
                 'true', '1', 't', 'y', 'yes'
             ]
 
-        if tokenizer_type == 't5':
-            self.tokenizer = T5Tokenizer(vocab_file=tokenizer_dir,
-                                         padding_side='left')
-        elif tokenizer_type == 'auto':
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_dir, padding_side='left', trust_remote_code=True)
-        elif tokenizer_type == 'llama':
-            self.tokenizer = LlamaTokenizer.from_pretrained(
-                tokenizer_dir, legacy=False, padding_side='left')
-        else:
-            raise AttributeError(
-                f'Unexpected tokenizer type: {tokenizer_type}')
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
+                                                       legacy=False,
+                                                       padding_side='left',
+                                                       trust_remote_code=True)
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Parse model output configs
