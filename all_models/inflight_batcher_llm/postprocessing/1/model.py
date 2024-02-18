@@ -108,21 +108,65 @@ class TritonPythonModel:
             sequence_lengths = pb_utils.get_input_tensor_by_name(
                 request, 'SEQUENCE_LENGTH').as_numpy()
 
+            output_tensors = []
+
             # Get cum log probs
             cum_log_probs = pb_utils.get_input_tensor_by_name(
-                request, 'CUM_LOG_PROBS').as_numpy()
+                request, "CUM_LOG_PROBS"
+            )
 
-            # Get sequence length
+            output_tensors.append(
+                pb_utils.Tensor(
+                    "OUT_CUM_LOG_PROBS",
+                    cum_log_probs.as_numpy() if cum_log_probs else np.empty(shape=(1)),
+                )
+            )
+
+            # Get log probs
             output_log_probs = pb_utils.get_input_tensor_by_name(
-                request, 'OUTPUT_LOG_PROBS').as_numpy()
+                request, "OUTPUT_LOG_PROBS"
+            )
 
+            output_tensors.append(
+                pb_utils.Tensor(
+                    "OUT_OUTPUT_LOG_PROBS",
+                    (
+                        output_log_probs.as_numpy()
+                        if output_log_probs
+                        else np.empty(shape=(1, 1))
+                    ),
+                )
+            )
             # Get context logits
             context_logits = pb_utils.get_input_tensor_by_name(
-                request, 'CONTEXT_LOGITS').as_numpy()
+                request, "CONTEXT_LOGITS"
+            )
 
+            output_tensors.append(
+                pb_utils.Tensor(
+                    "OUT_CONTEXT_LOGITS",
+                    (
+                        context_logits.as_numpy()
+                        if context_logits
+                        else np.empty(shape=(1, 1))
+                    ),
+                )
+            )
             # Get generation logits
             generation_logits = pb_utils.get_input_tensor_by_name(
-                request, 'GENERATION_LOGITS').as_numpy()
+                request, "GENERATION_LOGITS"
+            )
+
+            output_tensors.append(
+                pb_utils.Tensor(
+                    "OUT_GENERATION_LOGITS",
+                    (
+                        generation_logits.as_numpy()
+                        if generation_logits
+                        else np.empty(shape=(1, 1, 1))
+                    ),
+                )
+            )
 
             # Reshape Input
             # tokens_batch = tokens_batch.reshape([-1, tokens_batch.shape[0]])
@@ -133,21 +177,10 @@ class TritonPythonModel:
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
-            output_tensor = pb_utils.Tensor(
+            output_tensors.append(pb_utils.Tensor(
                 'OUTPUT',
                 np.array(outputs).astype(self.output_dtype))
-
-            out_cum_log_probs = pb_utils.Tensor('OUT_CUM_LOG_PROBS',
-                                                cum_log_probs)
-
-            out_output_log_probs = pb_utils.Tensor('OUT_OUTPUT_LOG_PROBS',
-                                                   output_log_probs)
-
-            out_context_logits = pb_utils.Tensor('OUT_CONTEXT_LOGITS',
-                                                 context_logits)
-
-            out_generation_logits = pb_utils.Tensor('OUT_GENERATION_LOGITS',
-                                                    generation_logits)
+            )
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.
@@ -156,10 +189,7 @@ class TritonPythonModel:
             #
             # pb_utils.InferenceResponse(
             #    output_tensors=..., TritonError("An error occurred"))
-            inference_response = pb_utils.InferenceResponse(output_tensors=[
-                output_tensor, out_cum_log_probs, out_output_log_probs,
-                out_context_logits, out_generation_logits
-            ])
+            inference_response = pb_utils.InferenceResponse(output_tensors=output_tensors)
             responses.append(inference_response)
 
         # You should return a list of pb_utils.InferenceResponse. Length
