@@ -656,6 +656,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_gpt_gather_logits_ifb(
@@ -673,6 +674,7 @@ def test_gpt_gather_logits_ifb(
     ENABLE_KV_CACHE_REUSE,
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -720,6 +722,7 @@ def test_gpt_gather_logits_ifb(
         ENABLE_KV_CACHE_REUSE,
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
