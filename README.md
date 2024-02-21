@@ -75,11 +75,11 @@ TRT_VERSION=9.2.0.5
 TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
 TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
 
-docker build -t trtllm_base
-             --build-arg BASE_IMAGE="${BASE_IMAGE}"
-             --build-arg TRT_VER="${TRT_VERSION}"
-             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}"
-             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}"
+docker build -t trtllm_base \
+             --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+             --build-arg TRT_VER="${TRT_VERSION}" \
+             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}" \
+             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}" \
              -f dockerfile/Dockerfile.triton.trt_llm_backend .
 
 # Run the build script from Triton Server repo. The flags for some features or
@@ -375,7 +375,7 @@ client code to see how early stopping is achieved.
 #### Return context logits and/or generation logits
 If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
 
-After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts (`end_to_end_grpc_client.py` and `inflight_batcher_llm_client.py`). For example:
+After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash
 python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 20 --tokenizer-dir /path/to/tokenizer/ \
 --return-context-logits \
