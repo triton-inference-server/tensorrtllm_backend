@@ -127,7 +127,7 @@ def runBuild()
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
         // Step 4: build tensorrt-llm backend
         sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real' --trt_root /usr/local/tensorrt"
-        sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh"
+        sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
         sh "tar -zcf tensorrt_llm_backend_internal_aarch64.tar.gz ${BACKEND_ROOT}"
     }
     uploadArtifacts("tensorrt_llm_backend_internal_aarch64.tar.gz", "sw-tensorrt-generic/llm-artifacts/${hostJobName}/${hostBuildNumber}/")

@@ -28,6 +28,9 @@ rm -rf tools/dataset
 
 rm -rf jenkins
 
+#Remove the unit tests
+rm -rf inflight_batcher_llm/tests
+
 # exit if the keyword is found
 grep "__LUNOWUD" -R > /dev/null && exit 1
 grep "tekit" -R > /dev/null && exit 1
