@@ -10,6 +10,13 @@ set -o pipefail
 nvidia-smi
 source tools/utils.sh
 
+kill_triton_server () {
+    pkill -9 -f tritonserver
+}
+
+# Kill titonserver if it is still pending from previous test
+kill_triton_server || true
+
 if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ]; then
     MAX_ATTENTION_WINDOW_SIZE="2048"
     MAX_SEQUENCE_LEN="8704" # max_input_len + max_output_len
@@ -141,10 +148,6 @@ fill_triton_repo () {
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
-}
-
-kill_triton_server () {
-    pkill -9 -f tritonserver
 }
 
 launch_triton_server () {
