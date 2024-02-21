@@ -39,6 +39,11 @@ def parse_arguments():
         '-f',
         action='store_true',
         help='launch tritonserver regardless of other instances running')
+    parser.add_argument(
+        '--foreground',
+        action='store_true',
+        help='launch tritonserver in the foreground',
+    )
     parser.add_argument('--log',
                         action='store_true',
                         help='log triton server stats into log_file')
@@ -98,4 +103,6 @@ if __name__ == '__main__':
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
                   args.log_file, args.tensorrt_llm_model_name)
-    subprocess.Popen(cmd)
+    proc = subprocess.Popen(cmd)
+    if args.foreground:
+        proc.wait()
