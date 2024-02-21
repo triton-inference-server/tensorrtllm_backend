@@ -302,7 +302,7 @@ def runBuild()
 
       // Step 4: build tensorrt-llm backend
       sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_JOBS} --trt_root /usr/local/tensorrt"
-      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh"
+      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
     // Step 5: upload package to artifactory

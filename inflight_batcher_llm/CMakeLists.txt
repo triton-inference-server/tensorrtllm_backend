@@ -46,7 +46,7 @@ add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_METRICS "Include metrics support in server" ON)
-option(BUILD_TESTS "Build Google tests" ON)
+option(BUILD_TESTS "Build Google tests" OFF)
 
 if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
   message(
