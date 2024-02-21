@@ -14,6 +14,8 @@ GPT_2B_LORA=/home/scratch.trt_llm_data/llm-models/lora/gpt-next-2b
 
 set -e
 
+pkill -9 -f tritonserver || true
+
 # install deps
 pip3 install -r tensorrt_llm/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
@@ -81,6 +83,7 @@ if [ "$MODEL" = "llama" ]; then
         --context_fmha=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
+        --max_batch_size 8 \
         --output_dir llama_outputs
 
     python3 ../run.py --max_output_len=1 --engine_dir llama_outputs --tokenizer_dir=${LLAMA}
@@ -104,6 +107,7 @@ if [ "$MODEL" = "mistral" ]; then
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
         --max_input_len 8192 \
+        --max_batch_size 8 \
         --output_dir mistral_7b_outputs
 
     # Equivalent to LLaMA at this stage except the tokenizer
@@ -150,6 +154,7 @@ if [ "$MODEL" = "gptj" ]; then
         --context_fmha=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
+        --max_batch_size 8 \
         --output_dir gptj_outputs
 
     python3 ../run.py --max_output_len=1 --tokenizer_dir=${GPTJ} --engine_dir gptj_outputs
