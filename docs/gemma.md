@@ -4,7 +4,10 @@
 
 <!-- TODO add more steps -->
 ```bash
-export TOKENIZER_DIR=/home/scratch.bhsueh_sw_1/workspace/TensorRT-LLM/deepmind_2/models/taurus_nv/checkpoints/tmp_vocab.model
+CKPT_PATH=/tmp/models/gemma_nv/checkpoints/tmp_2b_it
+UNIFIED_CKPT_PATH=/tmp/checkpoints/tmp_2b_it_tensorrt_llm/bf16/tp1/
+TOKENIZER_DIR=/tmp/models/gemma_nv/checkpoints/tmp_vocab.model
+ENGINE_PATH=/tmp/gemma/2B/bf16/1-gpu/
 
 ```
 
