@@ -495,6 +495,10 @@ def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+    elif type == "python_backend":
+        build_cmd += [
+            "--max_batch_size=8",
+        ]
 
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
