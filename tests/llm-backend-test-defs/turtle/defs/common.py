@@ -62,6 +62,7 @@ def modify_ib_config_pbtxt(
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
     GPU_DEVICE_IDS,
+    DECODING_MODE,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -87,7 +88,7 @@ def modify_ib_config_pbtxt(
         f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
         f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
         f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
-        f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS}",
+        f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}",
         shell=True)
     check_call(
         f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
