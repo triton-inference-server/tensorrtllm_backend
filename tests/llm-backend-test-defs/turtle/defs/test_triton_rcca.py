@@ -46,6 +46,7 @@ def get_rcca_path():
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
 @pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
+@pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4323566(
@@ -64,6 +65,7 @@ def test_rcca_bug_4323566(
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
     GPU_DEVICE_IDS,
+    DECODING_MODE,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -109,6 +111,7 @@ def test_rcca_bug_4323566(
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
         GPU_DEVICE_IDS,
+        DECODING_MODE,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
@@ -154,6 +157,7 @@ def test_rcca_bug_4323566(
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
 @pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
+@pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1", "4"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 def test_rcca_bug_4342666(
@@ -172,6 +176,7 @@ def test_rcca_bug_4342666(
     NORMALIZE_LOG_PROBS,
     ENABLE_CHUNKED_CONTEXT,
     GPU_DEVICE_IDS,
+    DECODING_MODE,
     PREPROCESSING_INSTANCE_COUNT,
     POSTPROCESSING_INSTANCE_COUNT,
     ACCUMULATE_TOKEN,
@@ -223,6 +228,7 @@ def test_rcca_bug_4342666(
         NORMALIZE_LOG_PROBS,
         ENABLE_CHUNKED_CONTEXT,
         GPU_DEVICE_IDS,
+        DECODING_MODE,
         PREPROCESSING_INSTANCE_COUNT,
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
