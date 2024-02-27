@@ -155,7 +155,7 @@ def createKubernetesPodConfig(image, type)
         def gpuCount =  hasMultipleGPUs? "8" : "1"
         def memorySize = hasMultipleGPUs ? "960Gi" : "${TESTER_MEMORY}"
         def storageSize = hasMultipleGPUs ? "2000Gi" : "300Gi"
-        def driverVersion = "550.40.07"
+        def driverVersion = "550.54.14"
 
         targetCould = "kubernetes"
         selectors = """
