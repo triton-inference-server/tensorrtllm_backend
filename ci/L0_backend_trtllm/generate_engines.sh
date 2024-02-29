@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -53,7 +53,6 @@ function build_tensorrt_engine_inflight_batcher {
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --parallel_build \
                  --output_dir="${OUTPUT_DIR}"

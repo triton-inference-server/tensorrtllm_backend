@@ -39,7 +39,6 @@ python3 build.py --model_dir=${model_directory} \
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --output_dir=engines/fp16/1-gpu
 ```
@@ -88,25 +87,25 @@ parameters: {
 }
 ```
 
-By default, in-flight batching will try to overlap the execution of batches of
+In-flight batching is able to overlap the execution of batches of
 requests. It may have a negative impact on performance when the number of
-requests is too small. To disable that feature, set the `enable_trt_overlap`
-parameter to `False` in the `config.pbtxt` file:
+requests is too small. To enable that feature, set the `enable_trt_overlap`
+parameter to `True` in the `config.pbtxt` file:
 
 ```
 parameters: {
   key: "enable_trt_overlap"
   value: {
-    string_value: "False"
+    string_value: "True"
   }
 }
 ```
 
-Or, equivalently, add `enable_trt_overlap:False` to the invocation of the
+Or, equivalently, add `enable_trt_overlap:True` to the invocation of the
 `fill_template.py` tool:
 
 ```bash
-python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:False"
+python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:True"
 ```
 
 To reuse previously computed KV cache values (e.g. for system prompt), set `enable_kv_cache_reuse`
@@ -150,6 +149,111 @@ python inflight_batcher_llm_client.py --stop-after-ms 200 --request-output-len 2
 You will find that the generation process is stopped early and therefore the number of generated tokens is lower than 200.
 
 You can have a look at the client code to see how early stopping is achieved.
+
+## Running LoRA inference with inflight batching
+
+Build a model with LoRA enable
+
+```
+BASE_MODEL=llama-7b-hf
+
+python3 tensorrt_llm/examples/llama/build.py --model_dir ${BASE_MODEL} \
+                --dtype float16 \
+                --remove_input_padding \
+                --use_gpt_attention_plugin float16 \
+                --enable_context_fmha \
+                --use_gemm_plugin float16 \
+                --output_dir "/tmp/llama_7b_with_lora_qkv/trt_engines/fp16/1-gpu/" \
+                --max_batch_size 128 \
+                --max_input_len 512 \
+                --max_output_len 50 \
+                --use_lora_plugin float16 \
+                --lora_target_modules "attn_q" "attn_k" "attn_v" \
+                --use_inflight_batching \
+		        --paged_kv_cache \
+                --max_lora_rank 8 \
+                --world_size 1 --tp_size 1
+```
+
+Create a Triton model repository and launch the Triton server as described above.
+
+Now generate LoRA tensors that will be passed in with each request to triton.
+
+```
+git-lfs clone https://huggingface.co/qychen/luotuo-lora-7b-0.1
+git-lfs clone https://huggingface.co/kunishou/Japanese-Alpaca-LoRA-7b-v0
+
+python3 tensorrt_llm/examples/hf_lora_convert.py -i Japanese-Alpaca-LoRA-7b-v0 -o Japanese-Alpaca-LoRA-7b-v0-weights --storage-type float16
+python3 tensorrt_llm/examples/hf_lora_convert.py -i luotuo-lora-7b-0.1 -o luotuo-lora-7b-0.1-weights --storage-type float16
+```
+
+Launch tritonserver as describe above
+
+Run Multi-LoRA example by issuing  multiple concurrent requests.
+The inflight batcher will execute mixed batches with multiple LoRAs in the same batch.
+
+```
+INPUT_TEXT=("美国的首都在哪里? \n答案:" "美国的首都在哪里? \n答案:" "美国的首都在哪里? \n答案:" "アメリカ合衆国の首都はどこですか? \n答え:" "アメリカ合衆国の首都はどこですか? \n答え:" "アメリカ合衆国の首都はどこですか? \n答え:")
+LORA_PATHS=("" "luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights" "" "luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights")
+
+for index in ${!INPUT_TEXT[@]}; do
+    text=${INPUT_TEXT[$index]}
+    lora_path=${LORA_PATHS[$index]}
+    lora_arg=""
+    if [ "${lora_path}" != "" ]; then
+        lora_arg="--lora-path ${lora_path}"
+    fi
+
+    python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py \
+        --top-k 0 \
+        --top-p 0.5 \
+        --request-output-len 10 \
+        --text "${text}" \
+        --tokenizer-dir /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf \
+        ${lora_arg} &
+done
+
+wait
+```
+
+Example Output:
+```
+Input sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901]
+Input sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901]
+Input sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901]
+Input sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901]
+Input sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901]
+Input sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901]
+Got completed request
+Input: アメリカ合衆国の首都はどこですか? \n答え:
+Output beam 0: ワシントン D.C.
+Output sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901, 29871, 31028, 30373, 30203, 30279, 30203, 360, 29889, 29907, 29889]
+Got completed request
+Input: 美国的首都在哪里? \n答案:
+Output beam 0: Washington, D.C.
+What is the
+Output sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901, 7660, 29892, 360, 29889, 29907, 29889, 13, 5618, 338, 278]
+Got completed request
+Input: 美国的首都在哪里? \n答案:
+Output beam 0: Washington D.C.
+Washington D.
+Output sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901, 7660, 360, 29889, 29907, 29889, 13, 29956, 7321, 360, 29889]
+Got completed request
+Input: アメリカ合衆国の首都はどこですか? \n答え:
+Output beam 0: Washington, D.C.
+Which of
+Output sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901, 7660, 29892, 360, 29889, 29907, 29889, 13, 8809, 436, 310]
+Got completed request
+Input: アメリカ合衆国の首都はどこですか? \n答え:
+Output beam 0: Washington D.C.
+1. ア
+Output sequence:  [1, 29871, 30310, 30604, 30303, 30439, 30733, 235, 164, 137, 30356, 30199, 31688, 30769, 30449, 31250, 30589, 30499, 30427, 30412, 29973, 320, 29876, 234, 176, 151, 30914, 29901, 7660, 360, 29889, 29907, 29889, 13, 29896, 29889, 29871, 30310]
+Got completed request
+Input: 美国的首都在哪里? \n答案:
+Output beam 0: 华盛顿
+W
+Output sequence:  [1, 29871, 30630, 30356, 30210, 31688, 30769, 30505, 232, 150, 173, 30755, 29973, 320, 29876, 234, 176, 151, 233, 164, 139, 29901, 29871, 31266, 234, 158, 158, 236, 164, 194, 13, 29956]
+```
 
 ## Run the e2e/benchmark_core_model to benchmark
 

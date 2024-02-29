@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,6 +27,10 @@
 
 #include "model_instance_state.h"
 
+#include "tensorrt_llm/common/mpiUtils.h"
+
+namespace mpi = tensorrt_llm::mpi;
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -49,7 +53,7 @@ TRITONSERVER_Error* ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
-    , mIsDecoupled(false)
+    , mHasActiveRequests(false)
 {
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -73,11 +77,13 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             "v1/inflight_batching/inflight_fused_batching.");
     }
 
-    // Check if model is in decoupled mode:
-    triton::common::TritonJson::Value transaction_policy;
-    model_state_->GetModelConfig().MemberAsObject("model_transaction_policy", &transaction_policy);
-    transaction_policy.MemberAsBool("decoupled", &mIsDecoupled);
-    mWorkItemsQueue = std::make_unique<WorkItemsQueue>(mIsDecoupled);
+#ifdef TRITON_ENABLE_METRICS
+    custom_metrics_reporter_ = std::make_unique<custom_metrics_reporter::CustomMetricsReporter>();
+    custom_metrics_reporter_->InitializeReporter(
+        model_state->GetModelName(), model_state->GetModelVersion(), (mTrtGptModelType == TrtGptModelType::V1));
+#endif
+
+    mWorkItemsQueue = std::make_unique<WorkItemsQueue>(isDecoupled());
 
     // Note: std::string::compare fails this test (always return non-zero
     // value). Using old school strcmp instead.
@@ -138,12 +144,35 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING(e.what());
     }
 
-    if (mIsDecoupled && schedulerPolicy != SchedulerPolicy::GUARANTEED_NO_EVICT)
+    bool enableChunkedContext = false;
+    try
     {
-        TLLM_LOG_WARNING(
-            "The batch scheduler policy will be set to guaranteed_no_evict"
-            "since the backend operates in decoupled mode");
-        schedulerPolicy = SchedulerPolicy::GUARANTEED_NO_EVICT;
+        enableChunkedContext = model_state_->GetParameter<bool>("enable_chunked_context");
+        if (enableChunkedContext)
+        {
+            TLLM_LOG_WARNING(
+                "enable_chunked_context is set to true, will use context chunking "
+                "(requires building the model with use_paged_context_fmha).");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("enable_chunked_context is not specified, will be set to false.");
+    }
+
+    if (isDecoupled() && schedulerPolicy != SchedulerPolicy::GUARANTEED_NO_EVICT)
+    {
+        if (!enableChunkedContext)
+        {
+            TLLM_LOG_WARNING(
+                "Decoupled mode with a batch scheduler policy other than guaranteed_no_evict "
+                "requires building the model with use_paged_context_fmha and setting "
+                "enable_chunked_context to true. "
+                "The batch scheduler policy will be set to guaranteed_no_evict "
+                "since enable_chunked_context is false.");
+            schedulerPolicy = SchedulerPolicy::GUARANTEED_NO_EVICT;
+        }
     }
 
     std::optional<float> kvCacheFreeGpuMemFraction = std::nullopt;
@@ -155,22 +184,11 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
-            "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.85 or "
+            "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.9 or "
             "max_tokens_in_paged_kv_cache");
     }
 
-    std::optional<int32_t> maxNumSequences = std::nullopt;
-    try
-    {
-        maxNumSequences = model_state_->GetParameter<int32_t>("max_num_sequences");
-    }
-    catch (const std::exception& e)
-    {
-        // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("max_num_sequences is not specified, will be set to the TRT engine max_batch_size");
-    }
-
-    bool enableTrtOverlap = true;
+    bool enableTrtOverlap = false;
     try
     {
         enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
@@ -178,7 +196,18 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     catch (const std::exception& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to true");
+        TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to false");
+    }
+
+    bool normalizeLogProbs = true;
+    try
+    {
+        normalizeLogProbs = model_state_->GetParameter<bool>("normalize_log_probs");
+    }
+    catch (const std::exception& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("normalize_log_probs is not specified, will be set to true");
     }
 
     bool excludeInputInOutput = false;
@@ -216,13 +245,17 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
+    auto const gpuDeviceIds = model_state_->GetDeviceIds();
+
     TrtGptModelOptionalParams optionalParams;
-    optionalParams.maxNumSequences = maxNumSequences;
     optionalParams.kvCacheConfig.maxTokens = maxTokensInPagedKvCache;
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
     optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
+    optionalParams.normalizeLogProbs = normalizeLogProbs;
+    optionalParams.enableChunkedContext = enableChunkedContext;
+    optionalParams.deviceIds = gpuDeviceIds;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
@@ -232,33 +265,12 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); }, optionalParams,
         std::nullopt, std::nullopt, excludeInputInOutput);
 
-    if (getCommWorldRank() != 0)
+    if (COMM_SESSION.getRank() != 0)
     {
         while (true)
         {
         }
     }
-}
-
-// For stop requests, or in case of error during enqueue, we need to send a
-// response to the client
-void ModelInstanceState::sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg)
-{
-    TRITONBACKEND_ResponseFactory* factory_ptr;
-    // Create response factory for this request
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
-
-    TRITONSERVER_Error* err = nullptr;
-    if (!errMsg.empty())
-    {
-        TLLM_LOG_ERROR(errMsg);
-        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
-    }
-    TRITONBACKEND_Response* response;
-    LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
-    LOG_IF_ERROR(
-        TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
@@ -272,7 +284,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         TRITONBACKEND_Request* request = requests[r];
         try
         {
-            auto requestId = utils::getRequestId(request);
+            auto requestId = utils::getRequestId(request, mRequestIdStrMap);
             bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
 
             if (stopRequest)
@@ -282,7 +294,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
                     // Check if request is in progress or in queue, if not ignore
                     mWorkItemsQueue->stopWorkItem(requestId);
                     // Send a response back to client for stop request
-                    sendEnqueueResponse(request);
+                    utils::sendEnqueueResponse(request);
                 }
                 else
                 {
@@ -298,7 +310,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         {
             // In case of error, no work item is added to queue, so response
             // callback needs to be called
-            sendEnqueueResponse(request, e.what());
+            utils::sendEnqueueResponse(request, e.what());
         }
     }
 
@@ -310,7 +322,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
         auto e = exceptions.at(r);
         if (e)
         {
-            sendEnqueueResponse(request, e->what());
+            utils::sendEnqueueResponse(request, e->what());
         }
     }
 
@@ -326,8 +338,10 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         return rval;
     }
 
-    auto world_size = getCommWorldSize();
-    auto rank = getCommWorldRank();
+    auto const& commSession = COMM_SESSION;
+
+    auto world_size = commSession.getSize();
+    auto rank = commSession.getRank();
     if (rank == 0)
     {
         auto numPendingWorkItems = mWorkItemsQueue->numPendingWorkItems();
@@ -355,7 +369,11 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
         if (world_size > 1)
         {
             int64_t num_new_work_items = rval.size();
-            bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+            mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
+            if (mHasActiveRequests)
+            {
+                commSession.bcast(num_new_work_items, 0);
+            }
 
             if (num_new_work_items > 0)
             {
@@ -366,7 +384,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
                     packed.push_back(static_cast<int64_t>(vpacked.size()));
                     packed.insert(packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
                 }
-                bcast(packed, 0, COMM_WORLD);
+                commSession.bcast(packed, 0);
             }
         }
     }
@@ -374,11 +392,12 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
     {
         // subordinate ranks hang until master rank sends work
         int64_t num_new_work_items;
-        bcast(&num_new_work_items, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+        commSession.bcast(num_new_work_items, 0);
+        mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
         if (num_new_work_items > 0)
         {
             std::vector<int64_t> packed;
-            bcast(packed, 0, COMM_WORLD);
+            commSession.bcast(packed, 0);
             int64_t* packed_ptr = packed.data();
             for (int64_t count = 0; count < num_new_work_items; ++count)
             {
@@ -395,9 +414,14 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
 void ModelInstanceState::sendResponse(
     uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
 {
-    if (getCommWorldRank() == 0)
+    if (COMM_SESSION.getRank() == 0)
     {
-        std::string errStr = std::string("Failed to send Triton response for requestId: ") + std::to_string(requestId);
+        std::string errStr = std::string("Failed to send Triton response for requestId: ")
+            + utils::getRequestIdStr(requestId, mRequestIdStrMap);
+        if (final_response)
+        {
+            mRequestIdStrMap.erase(requestId);
+        }
         try
         {
             auto workItem = mWorkItemsQueue->getInProgressWorkItem(requestId);
@@ -421,24 +445,26 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
 
     int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
-    if (getCommWorldSize() > 1)
+    auto const& commSession = COMM_SESSION;
+
+    if (commSession.getSize() > 1 && mHasActiveRequests)
     {
         // Broadcast number of stopped requests
-        bcast(&nStoppedReqIds, 1, MPI_TYPE_INT64_T, 0, COMM_WORLD);
+        commSession.bcast(nStoppedReqIds, 0);
 
         if (nStoppedReqIds > 0)
         {
             // Broadcast stopped requests Ids
-            if (getCommWorldRank() == 0)
+            if (commSession.getRank() == 0)
             {
                 // Store the requestIds in a contiguous vector
                 std::vector<uint64_t> stoppedReqIdsVec(stoppedReqIds.begin(), stoppedReqIds.end());
-                bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
+                commSession.bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), mpi::MpiType::kUINT64, 0);
             }
             else
             {
                 std::vector<uint64_t> stoppedReqIdsVec(nStoppedReqIds);
-                bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), MPI_TYPE_UINT64_T, 0, COMM_WORLD);
+                commSession.bcast(stoppedReqIdsVec.data(), stoppedReqIdsVec.size(), mpi::MpiType::kUINT64, 0);
                 // Store the requestIds in the set
                 stoppedReqIds.clear();
                 std::copy(stoppedReqIdsVec.begin(), stoppedReqIdsVec.end(),
@@ -446,6 +472,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
             }
         }
     }
+
     return stoppedReqIds;
 }
 
@@ -453,7 +480,7 @@ void ModelInstanceState::logStats(const std::string& s)
 {
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
 #ifdef TRITON_ENABLE_METRICS
-    LOG_IF_ERROR(model_state_->UpdateCustomMetrics(s), "Failed updating TRT LLM statistics");
+    LOG_IF_ERROR(custom_metrics_reporter_->UpdateCustomMetrics(s), "Failed updating TRT LLM statistics");
 #endif
 }
 

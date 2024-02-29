@@ -1,5 +1,5 @@
 <!--
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -41,70 +41,58 @@ available in the main [server](https://github.com/triton-inference-server/server
 repo. If you don't find your answer there you can ask questions on the
 [issues page](https://github.com/triton-inference-server/tensorrtllm_backend/issues).
 
-## Building the TensorRT-LLM Backend
+## Accessing the TensorRT-LLM Backend
 
 There are several ways to access the TensorRT-LLM Backend.
 
-**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker)**
+**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker).**
 
-### Option 1. Run the Docker Container
+### Run the Pre-built Docker Container
 
 Starting with Triton 23.10 release, Triton includes a container with the TensorRT-LLM
 Backend and Python Backend. This container should have everything to run a
 TensorRT-LLM model. You can find this container on the
 [Triton NGC page](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver).
 
-### Option 2. Build via the build.py Script in Server Repo
+### Build the Docker Container
+
+#### Option 1. Build via the `build.py` Script in Server Repo
 
 Starting with Triton 23.10 release, you can follow steps described in the
 [Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
 guide and use the
 [build.py](https://github.com/triton-inference-server/server/blob/main/build.py)
-script to build the TRT-LLM backend.
+script.
 
-The below commands will build the same Triton TRT-LLM container as the one on the NGC.
+A sample command to build a Triton Server container with all options enabled is
+shown below, which will build the same TRT-LLM container as the one on the NGC.
 
 ```bash
-# Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
-cd tensorrtllm_backend
-# Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.01-py3-min
-TRT_VERSION=9.2.0.5
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
+BASE_CONTAINER_IMAGE_NAME=nvcr.io/nvidia/tritonserver:23.10-py3-min
+TENSORRTLLM_BACKEND_REPO_TAG=release/0.5.0
+PYTHON_BACKEND_REPO_TAG=r23.10
 
-docker build -t trtllm_base
-             --build-arg BASE_IMAGE="${BASE_IMAGE}"
-             --build-arg TRT_VER="${TRT_VERSION}"
-             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}"
-             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}"
-             -f dockerfile/Dockerfile.triton.trt_llm_backend .
-
-# Run the build script from Triton Server repo. The flags for some features or
-# endpoints can be removed if not needed. Please refer to the support matrix to
-# see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
-TRTLLM_BASE_IMAGE=trtllm_base
-TENSORRTLLM_BACKEND_REPO_TAG=v0.7.2
-PYTHON_BACKEND_REPO_TAG=r24.01
-
-cd server
+# Run the build script. The flags for some features or endpoints can be removed if not needed.
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
               --enable-metrics --enable-gpu-metrics --enable-cpu-metrics \
               --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
               --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
               --backend=ensemble --enable-gpu --endpoint=http --endpoint=grpc \
-              --image=base,${TRTLLM_BASE_IMAGE} \
+              --image=base,${BASE_CONTAINER_IMAGE_NAME} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
               --backend=python:${PYTHON_BACKEND_REPO_TAG}
 ```
 
-The `TRTLLM_BASE_IMAGE` is the base image that will be used to build the
-container. The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are
-the tags of the TensorRT-LLM backend and Python backend repositories that will
-be used to build the container. You can also remove the features or endpoints
-that you don't need by removing the corresponding flags.
+The `BASE_CONTAINER_IMAGE_NAME` is the base image that will be used to build the
+container. By default it is set to the most recent min image of Triton, on NGC,
+that matches the Triton release you are building for. You can change it to a
+different image if needed by setting the `--image` flag like the command below.
+The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are the tags of
+the TensorRT-LLM backend and Python backend repositories that will be used
+to build the container. You can also remove the features or endpoints that you
+don't need by removing the corresponding flags.
 
-### Option 3. Build via Docker
+#### Option 2. Build via Docker
 
 The version of Triton Server used in this build option can be found in the
 [Dockerfile](./dockerfile/Dockerfile.trt_llm_backend).
@@ -168,7 +156,6 @@ python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
                  --paged_kv_cache \
                  --use_gemm_plugin float16 \
                  --remove_input_padding \
-                 --use_layernorm_plugin float16 \
                  --hidden_act gelu \
                  --parallel_build \
                  --output_dir=engines/fp16/4-gpu
@@ -210,7 +197,7 @@ cp tensorrt_llm/examples/gpt/engines/fp16/4-gpu/* triton_model_repo/tensorrt_llm
 ```
 
 ### Modify the model configuration
-The following table shows the fields that need to be modified before deployment:
+The following table shows the fields that may to be modified before deployment:
 
 *triton_model_repo/preprocessing/config.pbtxt*
 
@@ -223,17 +210,18 @@ The following table shows the fields that need to be modified before deployment:
 
 | Name | Description
 | :----------------------: | :-----------------------------: |
-| `decoupled` | Controls streaming. Decoupled mode must be set to `True` if using the streaming option from the client. |
-| `max_beam_width` | The maximum beam width that any request may ask for when using beam search |
-| `gpt_model_type` | Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
-| `gpt_model_path` | Path to the TensorRT-LLM engines for deployment. In this example, the path should be set to `/tensorrtllm_backend/triton_model_repo/tensorrt_llm/1` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
-| `max_tokens_in_paged_kv_cache` | The maximum size of the KV cache in number of tokens |
-| `max_attention_window_size` | When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults to maximum sequence length |
-| `batch_scheduler_policy` | Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused.|
-| `kv_cache_free_gpu_mem_fraction` | Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache|
-| `max_num_sequences` | Maximum number of sequences that the in-flight batching scheme can maintain state for. Defaults to `max_batch_size` if `enable_trt_overlap` is `false` and to `2 * max_batch_size` if `enable_trt_overlap` is `true`, where `max_batch_size` is the TRT engine maximum batch size.
-| `enable_trt_overlap` | Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
-| `exclude_input_in_output` | Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
+| `gpt_model_type` | Mandatory. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
+| `gpt_model_path` | Mandatory. Path to the TensorRT-LLM engines for deployment. In this example, the path should be set to `/tensorrtllm_backend/triton_model_repo/tensorrt_llm/1` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
+| `batch_scheduler_policy` | Mandatory. Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused.|
+| `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `True` if using the streaming option from the client. |
+| `max_beam_width` | Optional (default=1). The maximum beam width that any request may ask for when using beam search.|
+| `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |
+| `max_attention_window_size` | Optional (default=max_sequence_length). When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults attends to all tokens in sequence. |
+| `kv_cache_free_gpu_mem_fraction` | Optional (default=0.9). Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache.|
+| `enable_trt_overlap` | Optional (default=`false`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
+| `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
+| `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
+| `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 
@@ -357,6 +345,7 @@ He was a member of the French Academy of Sciences and the French Academy of Arts
 Soyer was a member of the French Academy of Sciences and
 ```
 
+#### Early stopping
 You can also stop the generation process early by using the `--stop-after-ms`
 option to send a stop request after a few milliseconds:
 
@@ -367,6 +356,54 @@ python inflight_batcher_llm/client/inflight_batcher_llm_client.py --stop-after-m
 You will find that the generation process is stopped early and therefore the
 number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
+
+#### Return context logits and/or generation logits
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+
+After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts (`end_to_end_grpc_client.py` and `inflight_batcher_llm_client.py`). For example:
+```bash
+python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 20 --tokenizer-dir /path/to/tokenizer/ \
+--return-context-logits \
+--return-generation-logits
+```
+
+The result should be similar to the following:
+```
+Input sequence:  [28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257]
+Got completed request
+Input: Born in north-east France, Soyer trained as a
+Output beam 0:  has since worked in restaurants in London,
+Output sequence:  [21221, 878, 3867, 284, 3576, 287, 262, 1903, 6303, 82, 13, 679, 468, 1201, 3111, 287, 10808, 287, 3576, 11]
+context_logits.shape: (1, 12, 50257)
+context_logits: [[[ -65.9822     -62.267445   -70.08991   ...  -76.16964    -78.8893
+    -65.90678  ]
+  [-103.40278   -102.55243   -106.119026  ... -108.925415  -109.408585
+   -101.37687  ]
+  [ -63.971176   -64.03466    -67.58809   ...  -72.141235   -71.16892
+    -64.23846  ]
+  ...
+  [ -80.776375   -79.1815     -85.50916   ...  -87.07368    -88.02817
+    -79.28435  ]
+  [ -10.551408    -7.786484   -14.524468  ...  -13.805856   -15.767286
+     -7.9322424]
+  [-106.33096   -105.58956   -111.44852   ... -111.04858   -111.994194
+   -105.40376  ]]]
+generation_logits.shape: (1, 1, 20, 50257)
+generation_logits: [[[[-106.33096  -105.58956  -111.44852  ... -111.04858  -111.994194
+    -105.40376 ]
+   [ -77.867424  -76.96638   -83.119095 ...  -87.82542   -88.53957
+     -75.64877 ]
+   [-136.92282  -135.02484  -140.96051  ... -141.78284  -141.55045
+    -136.01668 ]
+   ...
+   [-100.03721   -98.98237  -105.25507  ... -108.49254  -109.45882
+     -98.95136 ]
+   [-136.78777  -136.16165  -139.13437  ... -142.21495  -143.57468
+    -134.94667 ]
+   [  19.222942   19.127287   14.804495 ...   10.556551    9.685863
+      19.625107]]]]
+```
+
 
 ### Launch Triton server *within Slurm based clusters*
 

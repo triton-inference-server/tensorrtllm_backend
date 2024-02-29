@@ -67,6 +67,8 @@ def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
         np.ones([input_start_ids.shape[0], 1]).astype(np.int32)
     presence_penalty = 0.0 * \
         np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
+    frequency_penalty = 0.0 * \
+        np.ones([input_start_ids.shape[0], 1]).astype(np.float32)
     bad_words_list = np.concatenate([
         np.zeros([input_start_ids.shape[0], 1, 1]).astype(np.int32),
         (-1 * np.ones([input_start_ids.shape[0], 1, 1])).astype(np.int32)
@@ -92,6 +94,7 @@ def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
                        flags.protocol),
         prepare_tensor("min_length", min_length, flags.protocol),
         prepare_tensor("presence_penalty", presence_penalty, flags.protocol),
+        prepare_tensor("frequency_penalty", frequency_penalty, flags.protocol),
         prepare_tensor("random_seed", random_seed, flags.protocol),
         prepare_tensor("output_log_probs", output_log_probs, flags.protocol),
         # prepare_tensor("bad_words_list", bad_words_list, flags.protocol),
