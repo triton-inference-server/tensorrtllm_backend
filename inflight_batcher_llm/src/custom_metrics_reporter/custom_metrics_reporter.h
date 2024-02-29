@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -140,7 +140,7 @@ public:
     /// \param is_v1_model Whether the model type is v1 or an inflight
     /// batching model.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* InitReporter(const std::string& model, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* InitializeReporter(const std::string& model, const uint64_t version, const bool is_v1_model);
 
     /// Updates the vector of TritonMetricGroup objects with a
     /// JSON-formatted statistics string.

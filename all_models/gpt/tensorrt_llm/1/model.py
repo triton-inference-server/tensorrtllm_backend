@@ -1,12 +1,10 @@
 import json
-import os
 
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 
-import tensorrt_llm
-from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
+from tensorrt_llm.runtime import ModelRunner, SamplingConfig
 
 
 def mpi_comm():
@@ -64,58 +62,10 @@ class TritonPythonModel:
         """
         model_config = json.loads(args['model_config'])
         engine_dir = model_config['parameters']['engine_dir']['string_value']
-        config_path = os.path.join(engine_dir, 'config.json')
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        use_gpt_attention_plugin = config['plugin_config'][
-            'gpt_attention_plugin']
-        self.remove_input_padding = config['plugin_config'][
-            'remove_input_padding']
-        model = config['builder_config']['name']
-        dtype = config['builder_config']['precision']
-        tensor_parallel = config['builder_config']['tensor_parallel']
-        pipeline_parallel = 1
-        if 'pipeline_parallel' in config['builder_config']:
-            pipeline_parallel = config['builder_config']['pipeline_parallel']
-        world_size = tensor_parallel * pipeline_parallel
-        assert world_size == tensorrt_llm.mpi_world_size(), \
-            f'Engine world size ({world_size}) != Runtime world size ({tensorrt_llm.mpi_world_size()})'
-        num_heads = config['builder_config']['num_heads'] // world_size
-        hidden_size = config['builder_config']['hidden_size'] // world_size
-        vocab_size = config['builder_config']['vocab_size']
-        num_layers = config['builder_config']['num_layers']
-        num_kv_heads = num_heads
-        if "num_kv_heads" in config['builder_config'].keys():
-            num_kv_heads = (config['builder_config']['num_kv_heads'] +
-                            world_size - 1) // world_size
-        elif "multi_query_mode" in config['builder_config'].keys():
-            num_kv_heads = 1 if config['builder_config'][
-                'multi_query_mode'] else num_heads
-
         self.comm = mpi_comm()
         self.rank = mpi_rank()
-
-        model_config = ModelConfig(
-            num_heads=num_heads,
-            num_kv_heads=num_kv_heads,
-            hidden_size=hidden_size,
-            vocab_size=vocab_size,
-            num_layers=num_layers,
-            gpt_attention_plugin=use_gpt_attention_plugin,
-            remove_input_padding=self.remove_input_padding)
-        engine_name = get_engine_name(model, dtype, world_size, self.rank)
-        serialize_path = os.path.join(engine_dir, engine_name)
-        with open(serialize_path, 'rb') as f:
-            engine_buffer = f.read()
-        runtime_mapping = tensorrt_llm.Mapping(world_size=world_size,
-                                               rank=self.rank,
-                                               gpus_per_node=8,
-                                               tp_size=tensor_parallel,
-                                               pp_size=pipeline_parallel)
-        torch.cuda.set_device(self.rank % runtime_mapping.gpus_per_node)
-        self.decoder = GenerationSession(model_config, engine_buffer,
-                                         runtime_mapping)
-
+        self.runner = ModelRunner.from_dir(engine_dir=engine_dir,
+                                           rank=self.rank)
         if self.rank != 0:
             while (True):
                 self.execute([None])
@@ -173,6 +123,8 @@ class TritonPythonModel:
                     request, 'min_length')
                 inputs['presence_penalty'] = get_input_scalar_by_name(
                     request, 'presence_penalty')
+                inputs['frequency_penalty'] = get_input_scalar_by_name(
+                    request, 'frequency_penalty')
                 inputs['random_seed'] = get_input_scalar_by_name(
                     request, 'random_seed')
                 inputs['output_log_probs'] = get_input_scalar_by_name(
@@ -181,7 +133,6 @@ class TritonPythonModel:
             # Broadcast requests to other clients
             inputs = self.comm.bcast(inputs, root=0)
             input_ids = inputs['input_ids'].cuda()
-            input_lengths = inputs['input_lengths'].cuda()
             end_id = inputs['end_id']
             pad_id = inputs['pad_id']
 
@@ -203,22 +154,14 @@ class TritonPythonModel:
                 sampling_config.min_length = inputs['min_length']
             if inputs['presence_penalty'] is not None:
                 sampling_config.presence_penalty = inputs['presence_penalty']
+            if inputs['frequency_penalty'] is not None:
+                sampling_config.frequency_penalty = inputs['frequency_penalty']
             sampling_config.random_seed = inputs['random_seed']
             sampling_config.output_log_probs = inputs['output_log_probs']
-            if self.remove_input_padding:
-                self.decoder.setup(
-                    batch_size=input_ids.size(0),
-                    max_context_length=torch.max(input_lengths).item(),
-                    max_new_tokens=inputs['request_output_len'])
-            else:
-                self.decoder.setup(input_ids.size(0), input_ids.size(1),
-                                   inputs['request_output_len'])
-            if self.remove_input_padding:
-                output_ids = self.decoder.decode_batch(input_ids,
-                                                       sampling_config)
-            else:
-                output_ids = self.decoder.decode(input_ids, input_lengths,
-                                                 sampling_config)
+            sampling_config.return_dict = True
+
+            outputs = self.runner.generate(input_ids, sampling_config)
+            output_ids = outputs["output_ids"]
 
             if self.rank == 0:
                 # Create output tensors. You need pb_utils.Tensor
@@ -231,7 +174,7 @@ class TritonPythonModel:
 
                 if sampling_config.output_log_probs:
                     # [max_new_tokens, batch_size, num_beams] -> [batch_size, max_new_tokens, num_beams]
-                    log_probs = self.decoder.log_probs.transpose(
+                    log_probs = self.runner.session.log_probs.transpose(
                         0, 1).cpu().numpy()
                     output_tensors.append(
                         pb_utils.Tensor("log_probs", log_probs))

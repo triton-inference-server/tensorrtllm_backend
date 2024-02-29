@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -78,12 +78,15 @@ class TritonPythonModel:
                 f'Unexpected tokenizer type: {tokenizer_type}')
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        self.pad_id = self.tokenizer.encode(self.tokenizer.pad_token,
-                                            add_special_tokens=False)[0]
+        self.tokenizer_end_id = self.tokenizer.encode(
+            self.tokenizer.eos_token, add_special_tokens=False)[0]
+        self.tokenizer_pad_id = self.tokenizer.encode(
+            self.tokenizer.pad_token, add_special_tokens=False)[0]
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
-            "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS"
+            "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
+            "OUT_END_ID", "OUT_PAD_ID"
         ]
         input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
         for input_name in input_names:
@@ -165,6 +168,22 @@ class TritonPythonModel:
             if embedding_bias_weights is not None:
                 embedding_bias_weights = embedding_bias_weights.as_numpy()
 
+            # Take the end_id from the input tensors
+            # If not specified, use tokenizer to get end_id
+            end_id = pb_utils.get_input_tensor_by_name(request, 'END_ID')
+            if end_id is not None:
+                end_id = end_id.as_numpy()
+            else:
+                end_id = [[self.tokenizer_end_id]]
+
+            # Take the pad_id from the input tensors
+            # If not specified, use tokenizer to get pad_id
+            pad_id = pb_utils.get_input_tensor_by_name(request, 'PAD_ID')
+            if pad_id is not None:
+                pad_id = pad_id.as_numpy()
+            else:
+                pad_id = [[self.tokenizer_pad_id]]
+
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
             bad_words = self._to_word_list_format(bad_words_dict)
@@ -188,11 +207,15 @@ class TritonPythonModel:
                                                     stop_words)
             embedding_bias_tensor = pb_utils.Tensor('EMBEDDING_BIAS',
                                                     embedding_bias)
+            end_id_tensor = pb_utils.Tensor('OUT_END_ID',
+                                            np.array(end_id, dtype=np.int32))
+            pad_id_tensor = pb_utils.Tensor('OUT_PAD_ID',
+                                            np.array(pad_id, dtype=np.int32))
 
             inference_response = pb_utils.InferenceResponse(output_tensors=[
                 input_id_tensor, bad_words_ids_tensor, stop_words_ids_tensor,
                 request_input_len_tensor, request_output_len_tensor,
-                embedding_bias_tensor
+                embedding_bias_tensor, end_id_tensor, pad_id_tensor
             ])
             responses.append(inference_response)
 
@@ -226,7 +249,8 @@ class TritonPythonModel:
         start_ids = np.stack([
             np.pad(seq, (0, max_len - seq.shape[0]),
                    'constant',
-                   constant_values=(0, self.pad_id)) for seq in start_ids
+                   constant_values=(0, self.tokenizer_pad_id))
+            for seq in start_ids
         ])
 
         return start_ids, start_lengths

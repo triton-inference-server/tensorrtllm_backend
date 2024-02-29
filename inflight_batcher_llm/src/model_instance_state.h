@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 #define _GLIBCXX_USE_CXX11_ABI 0
 
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
@@ -35,20 +36,22 @@
 
 #include "tensorrt_llm/batch_manager/BatchManager.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
-#include "tensorrt_llm/batch_manager/batchScheduler.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
+#include "tensorrt_llm/batch_manager/schedulerPolicy.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
-#include "tensorrt_llm/common/mpiUtils.h"
 
 #include "model_state.h"
 #include "work_item.h"
 #include "work_items_queue.h"
 
+#ifdef TRITON_ENABLE_METRICS
+#include "custom_metrics_reporter/custom_metrics_reporter.h"
+#endif
+
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
-using namespace tensorrt_llm::mpi;
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -76,6 +79,11 @@ public:
         {
             mWorkItemsQueue->clear();
         }
+
+        // signal batch manager to stop processing the work items queue
+        {
+            mBatchManager->shutdown();
+        }
     }
 
     // Get the state of the model that corresponds to this instance.
@@ -86,12 +94,8 @@ public:
 
     bool isDecoupled() const
     {
-        return mIsDecoupled;
+        return model_state_->IsDecoupled();
     }
-
-    /// @brief For stop requests, or in case of error during enqueue, we need to send a
-    /// response to the client
-    void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
 
     /// @brief Add the request to the WorkItemsQueue
     void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
@@ -122,10 +126,16 @@ private:
 
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
-    bool mIsDecoupled;
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
+
+    std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
+#ifdef TRITON_ENABLE_METRICS
+    std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
+#endif
+
+    bool mHasActiveRequests;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

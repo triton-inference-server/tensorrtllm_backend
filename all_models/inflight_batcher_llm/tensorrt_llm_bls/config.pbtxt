@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -110,6 +110,12 @@ input [
     optional: true
   },
   {
+    name: "frequency_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "random_seed"
     data_type: TYPE_UINT64
     dims: [ 1 ]
@@ -119,6 +125,20 @@ input [
     name: "return_log_probs"
     data_type: TYPE_BOOL
     dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_context_logits"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "return_generation_logits"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
     optional: true
   },
   {
@@ -173,6 +193,16 @@ output [
     name: "output_log_probs"
     data_type: TYPE_FP32
     dims: [ -1, -1 ]
+  },
+  {
+    name: "context_logits"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "generation_logits"
+    data_type: TYPE_FP32
+    dims: [ -1, -1, -1 ]
   }
 ]
 

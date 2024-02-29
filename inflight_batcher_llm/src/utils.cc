@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -139,7 +139,7 @@ TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
     }
 }
 
-uint64_t getRequestId(TRITONBACKEND_Request* request)
+uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap)
 {
     const char* charRequestId;
     TRITONBACKEND_RequestId(request, &charRequestId);
@@ -155,13 +155,32 @@ uint64_t getRequestId(TRITONBACKEND_Request* request)
             }
             catch (const std::exception& e)
             {
-                std::string err = std::string("Invalid requestId, must be uint64_t. Got ") + strRequestId;
-                throw std::runtime_error(err);
+                std::hash<std::string> hasher;
+                requestId = hasher(strRequestId);
+
+                // Check for hash collisions
+                // If requestID already exists in the map with the same string, increment the ID and check again
+                for (auto it = requestIdStrMap.find(requestId);
+                     it != requestIdStrMap.end() && it->second != strRequestId;)
+                {
+                    requestId++;
+                }
             }
+            requestIdStrMap.insert({requestId, strRequestId});
         }
     }
 
     return requestId;
+}
+
+std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std::string> const& requestIdStrMap)
+{
+    auto it = requestIdStrMap.find(requestId);
+    if (it != requestIdStrMap.end())
+    {
+        return it->second;
+    }
+    return std::to_string(requestId);
 }
 
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
@@ -215,6 +234,25 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
     bool boolean = *reinterpret_cast<const bool*>(buffer);
 
     return boolean;
+}
+
+void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg)
+{
+    TRITONBACKEND_ResponseFactory* factory_ptr;
+    // Create response factory for this request
+    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
+
+    TRITONSERVER_Error* err = nullptr;
+    if (!errMsg.empty())
+    {
+        TLLM_LOG_ERROR(errMsg);
+        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
+    }
+    TRITONBACKEND_Response* response;
+    LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
+    LOG_IF_ERROR(
+        TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
+    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
 }
 
 } // namespace triton::backend::inflight_batcher_llm::utils
