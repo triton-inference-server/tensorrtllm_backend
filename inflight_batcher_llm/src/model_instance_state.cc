@@ -405,7 +405,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
             mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
             if (mHasActiveRequests)
             {
-                commSession.bcast(num_new_work_items, 0);
+                commSession.bcastValue(num_new_work_items, 0);
             }
 
             if (num_new_work_items > 0)
@@ -425,7 +425,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
     {
         // subordinate ranks hang until master rank sends work
         int64_t num_new_work_items;
-        commSession.bcast(num_new_work_items, 0);
+        commSession.bcastValue(num_new_work_items, 0);
         mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
         if (num_new_work_items > 0)
         {
@@ -483,7 +483,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
     if (commSession.getSize() > 1 && mHasActiveRequests)
     {
         // Broadcast number of stopped requests
-        commSession.bcast(nStoppedReqIds, 0);
+        commSession.bcastValue(nStoppedReqIds, 0);
 
         if (nStoppedReqIds > 0)
         {
