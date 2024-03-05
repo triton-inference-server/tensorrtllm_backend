@@ -40,6 +40,7 @@
 #include "tensorrt_llm/batch_manager/namedTensor.h"
 #include "tensorrt_llm/batch_manager/schedulerPolicy.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
+#include "tensorrt_llm/runtime/decodingMode.h"
 
 #include "model_state.h"
 #include "work_item.h"
