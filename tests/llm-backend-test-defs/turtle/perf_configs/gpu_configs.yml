@@ -31,12 +31,18 @@ GPUs:
     H100 PCIe:
         sm_clk: 1000
         mem_clk: 1593
+    H20:
+        sm_clk: 1980
+        mem_clk: 2619
     GH200 120GB:
         sm_clk: 1980
         mem_clk: 2619
     GH200 480GB:
         sm_clk: 1980
         mem_clk: 2619
+    L20:
+        sm_clk: 1665
+        mem_clk: 9001
     L40S:
         sm_clk: 2520
         mem_clk: 9001
