@@ -5,15 +5,20 @@
 
 ```bash
 export HF_LLAMA_MODEL=llama-7b-hf/
-python build.py --model_dir ${HF_LLAMA_MODEL} \
-                --dtype float16 \
-                --remove_input_padding \
-                --use_gpt_attention_plugin float16 \
-                --enable_context_fmha \
-                --use_gemm_plugin float16 \
-                --output_dir /tmp/llama/7B/trt_engines/fp16/1-gpu/ \
-                 --paged_kv_cache \
-                --max_batch_size 64
+export UNIFIED_CKPT_PATH=/tmp/ckpt/llama/7b/
+export ENGINE_PATH=/tmp/engines/llama/7b/
+python convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
+                             --output_dir ${UNIFIED_CKPT_PATH} \
+                             --dtype float16
+
+trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH} \
+             --remove_input_padding enable \
+             --gpt_attention_plugin float16 \
+             --context_fmha enable \
+             --gemm_plugin float16 \
+             --output_dir ${ENGINE_PATH} \
+             --paged_kv_cache enable \
+             --max_batch_size 64
 ```
 
 * Prepare configs
@@ -25,7 +30,7 @@ python3 tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer
 python3 tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False
 python3 tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:/tmp/llama/7B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0
+python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0
 ```
 
 * Launch server
@@ -114,7 +119,7 @@ python3 tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer
 python3 tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
 python3 tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,bls_instance_count:1,accumulate_tokens:True
 python3 tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:/tmp/llama/7B/trt_engines/fp16/1-gpu/,max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0
+python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:0
 
 pip install SentencePiece
 python3 scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
