@@ -128,7 +128,7 @@ parameters {
 parameters {
   key: "add_special_tokens"
   value: {
-    string_value: "False"
+    string_value: "${add_special_tokens}"
   }
 }
 

@@ -219,7 +219,6 @@ The following table shows the fields that may to be modified before deployment:
 | Name | Description
 | :----------------------: | :-----------------------------: |
 | `tokenizer_dir` | The path to the tokenizer for the model. In this example, the path should be set to `/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
-| `tokenizer_type` | The type of the tokenizer for the model, `t5`, `auto` and `llama` are supported. In this example, the type should be set to `auto` |
 
 *triton_model_repo/tensorrt_llm/config.pbtxt*
 
@@ -228,7 +227,7 @@ The following table shows the fields that may to be modified before deployment:
 | `gpt_model_type` | Mandatory. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
 | `gpt_model_path` | Mandatory. Path to the TensorRT-LLM engines for deployment. In this example, the path should be set to `/tensorrtllm_backend/triton_model_repo/tensorrt_llm/1` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
 | `batch_scheduler_policy` | Mandatory. Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused.|
-| `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `True` if using the streaming option from the client. |
+| `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `true` if using the streaming option from the client. |
 | `max_beam_width` | Optional (default=1). The maximum beam width that any request may ask for when using beam search.|
 | `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |
 | `max_attention_window_size` | Optional (default=max_sequence_length). When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults attends to all tokens in sequence. |
