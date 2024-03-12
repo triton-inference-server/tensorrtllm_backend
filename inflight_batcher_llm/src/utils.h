@@ -61,11 +61,11 @@ std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request);
 
 /// @brief Get the value of a boolean tensor
-bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName);
+bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string const& inputTensorName);
 
 /// @brief For stop requests, or in case of error during enqueue, we need to send a
 /// response to the client
-void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
+void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errMsg = "");
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm
