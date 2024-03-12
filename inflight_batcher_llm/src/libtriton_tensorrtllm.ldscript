@@ -26,6 +26,5 @@
 {
   global:
     TRITONBACKEND_*;
-    *InferenceAnswer*;
   local: *;
 };

@@ -31,7 +31,6 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 #include <unordered_set>
-#include <utils.h>
 
 namespace triton::backend::inflight_batcher_llm
 {

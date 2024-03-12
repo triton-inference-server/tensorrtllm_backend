@@ -1,4 +1,5 @@
 {
 "gpt-ib": { "Avg. latency (ms)": 2014.22, "OP tokens/sec": 4794.71},
-"mistral-ib": { "Avg. latency (ms)": 18337.78, "OP tokens/sec": 543.56}
+"mistral-ib": { "Avg. latency (ms)": 18337.78, "OP tokens/sec": 543.56},
+"mistral-ib-mm": { "Avg. latency (ms)": 27203.73, "OP tokens/sec": 365.07}
 }

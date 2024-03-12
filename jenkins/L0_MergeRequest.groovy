@@ -34,6 +34,7 @@ CASE_TO_EXAMPLE = [
   "llama": "llama",
   "mistral": "mistral",
   "mistral-ib": "mistral-ib",
+  "mistral-ib-mm" : "mistral-ib",
   "gptj": "gptj",
   "gpt-ib": "gpt-ib",
   "gpt-ib-streaming": "gpt-ib",
@@ -47,6 +48,7 @@ CASE_TO_MODEL = [
   "llama": "llama-models/llama-7b-hf",
   "mistral": "mistral-7b-v0.1",
   "mistral-ib": "mistral-7b-v0.1",
+  "mistral-ib-mm" : "mistral-7b-v0.1",
   "gptj": "gpt-j-6b",
   "gpt-ib": "gpt2",
   "gpt-ib-streaming": "gpt2",
@@ -62,6 +64,7 @@ CASE_TO_ENGINE_DIR = [
   "llama": "llama/llama_outputs",
   "mistral": "llama/mistral_7b_outputs",
   "mistral-ib": "llama/ib_mistral_7b_outputs",
+  "mistral-ib-mm": "llama/ib_mistral_7b_outputs",
   "gptj": "gptj/gpt_outputs",
   "gpt-ib": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
   "gpt-ib-streaming": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
@@ -349,6 +352,8 @@ def runTRTLLMBackendTest(caseName)
     if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
+      sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm_common.so /opt/tritonserver/backends/tensorrtllm"
+      sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/triton_tensorrtllm_worker /opt/tritonserver/backends/tensorrtllm"
     }
 
     if (caseName.contains("llama")) {
@@ -384,6 +389,10 @@ def runTRTLLMBackendTest(caseName)
       if (caseName.contains("gpt-2b")) {
         modelPath = "${MODEL_CACHE_DIR}/gpt-next/gpt-next-tokenizer-hf-v2"
         tokenizerType = "auto"
+      }
+
+      if (caseName.contains("-mm")) {
+        testExample += "-mm"
       }
 
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
@@ -462,7 +471,8 @@ def runCPPUnitTest()
 {
   container("trt-llm-backend") {
       sh "nvidia-smi"
-      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && ./build/tests/inferenceAnswerTest"
+      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm/build/tests && ./inferenceAnswerTest"
+      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm/build/tests && ./modelStateTest"
     }
 }
 
@@ -618,6 +628,11 @@ pipeline {
               stage("Test mistral-ib") {
                 steps {
                   runTRTLLMBackendTest("mistral-ib")
+                }
+              }
+              stage("Test mistral-ib-mm") {
+                steps {
+                  runTRTLLMBackendTest("mistral-ib-mm")
                 }
               }
               stage("Test gpt-ib-streaming") {

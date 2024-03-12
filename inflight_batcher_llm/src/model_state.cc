@@ -26,6 +26,10 @@
 
 #include "model_state.h"
 
+#include "tensorrt_llm/common/mpiUtils.h"
+
+#include <algorithm>
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -118,6 +122,75 @@ std::string const& ModelState::GetModelName() const
 uint64_t ModelState::GetModelVersion() const
 {
     return model_version_;
+}
+
+const std::string ModelState::GetWorkerPath()
+{
+    std::string workerPath = "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker";
+    try
+    {
+        workerPath = GetParameter<std::string>("worker_path");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING("worker_path is not specified, will use default value");
+    }
+
+    return workerPath;
+}
+
+std::vector<int64_t> ModelState::serialize() const
+{
+    // model name
+    // model version
+    // model config
+    size_t totalSize = 3;
+
+    int nameSize = (model_name_.size() + sizeof(int64_t)) / sizeof(int64_t);
+    totalSize += nameSize;
+
+    TritonJson::WriteBuffer buffer;
+    model_config_.Write(&buffer);
+
+    totalSize += buffer.Size();
+
+    std::vector<int64_t> packed(totalSize);
+    int64_t* ptr = packed.data();
+
+    *ptr++ = model_name_.size();
+    std::memcpy(ptr, model_name_.c_str(), model_name_.size());
+    ptr += nameSize;
+
+    *ptr++ = model_version_;
+    *ptr++ = buffer.Size();
+    std::memcpy(ptr, buffer.Base(), buffer.Size());
+
+    return packed;
+}
+
+ModelState ModelState::deserialize(int64_t const* packed_ptr)
+{
+    auto const nameSize = *packed_ptr++;
+    char const* cname = reinterpret_cast<char const*>(packed_ptr);
+    packed_ptr += (nameSize + sizeof(int64_t)) / sizeof(int64_t);
+
+    const uint64_t version = *packed_ptr++;
+
+    auto const jsonSize = *packed_ptr++;
+    char const* jsonBuffer = reinterpret_cast<char const*>(packed_ptr);
+    common::TritonJson::Value model_config;
+    TRITONSERVER_Error* err = model_config.Parse(jsonBuffer, jsonSize);
+    if (err)
+    {
+        throw std::runtime_error("Failed to parse model config");
+    }
+
+    return ModelState{nullptr, cname, version, std::move(model_config)};
+}
+
+ModelState ModelState::deserialize(std::vector<int64_t> const& packed)
+{
+    return ModelState::deserialize(packed.data());
 }
 
 template <>

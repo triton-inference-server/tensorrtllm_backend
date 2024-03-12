@@ -488,6 +488,12 @@ if __name__ == "__main__":
                         default=[],
                         help='The requested output tensors')
 
+    parser.add_argument('--model-name',
+                        type=str,
+                        required=False,
+                        default='tensorrt_llm',
+                        help='Specify model name')
+
     FLAGS = parser.parse_args()
 
     tokenizer = None
@@ -679,7 +685,7 @@ if __name__ == "__main__":
                 )
                 # Send request
                 triton_client.async_stream_infer(
-                    'tensorrt_llm',
+                    FLAGS.model_name,
                     inputs,
                     outputs=outputs,
                     request_id=request_id,
@@ -690,7 +696,7 @@ if __name__ == "__main__":
 
                     if not FLAGS.stop_via_request_cancel:
                         triton_client.async_stream_infer(
-                            'tensorrt_llm',
+                            FLAGS.model_name,
                             stop_inputs,
                             request_id=request_id,
                             parameters={'Streaming': FLAGS.streaming})
@@ -729,7 +735,7 @@ if __name__ == "__main__":
             else:
                 # Send request
                 infer_future = triton_client.async_infer(
-                    'tensorrt_llm',
+                    FLAGS.model_name,
                     inputs,
                     outputs=outputs,
                     request_id=request_id,
@@ -746,7 +752,7 @@ if __name__ == "__main__":
                         infer_future.cancel()
                     else:
                         triton_client.async_infer(
-                            'tensorrt_llm',
+                            FLAGS.model_name,
                             stop_inputs,
                             request_id=request_id,
                             callback=partial(callback, user_data),

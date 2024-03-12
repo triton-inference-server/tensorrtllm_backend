@@ -11,13 +11,14 @@ nvidia-smi
 source tools/utils.sh
 
 kill_triton_server () {
+    pkill -9 -f triton_tensorrtllm_worker || true
     pkill -9 -f tritonserver
 }
 
 # Kill titonserver if it is still pending from previous test
 kill_triton_server || true
 
-if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ]; then
+if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistral-ib-mm" ]; then
     MAX_ATTENTION_WINDOW_SIZE="2048"
     MAX_SEQUENCE_LEN="8704" # max_input_len + max_output_len
 else
@@ -449,7 +450,7 @@ TRITON_METRICS_PORT="8002"
 GPU_DEVICE_IDS=""
 DECODING_MODE="top_k_top_p"
 
-if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
+if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistral-ib-mm" ]; then
 
     # To make sure that torch is not a dependency for C++ backend
     pip3 uninstall -y torch
@@ -483,6 +484,13 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ]; then
         # mistral is built without chunked context support
         if [[ "$MODEL" = "mistral-ib" && "${ENABLE_CHUNKED_CONTEXT}" == "true" ]]; then
             continue
+        fi
+        if [[ "$MODEL" = "mistral-ib-mm" && "${ENABLE_CHUNKED_CONTEXT}" == "true" ]]; then
+            continue
+        fi
+
+        if [[ "$MODEL" = "mistral-ib-mm" ]]; then
+            export TRTLLM_ORCHESTRATOR=1
         fi
 
         launch_triton_server

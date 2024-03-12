@@ -255,4 +255,43 @@ void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errM
     LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
 }
 
+bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
+    std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue)
+{
+    try
+    {
+        auto requestId = utils::getRequestId(request, requestIdStrMap);
+        bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
+
+        if (stopRequest)
+        {
+            if (requestId != 0)
+            {
+                // Check if request is in progress or in queue, if not ignore
+                workItemsQueue.stopWorkItem(requestId);
+                // Send a response back to client for stop request
+                utils::sendEnqueueResponse(request);
+            }
+            else
+            {
+                throw std::runtime_error("Cannot send stop request without specifying a request_id");
+            }
+        }
+        else
+        {
+            requestsToPush.emplace_back(requestId, request);
+        }
+
+        return stopRequest;
+    }
+    catch (std::exception const& e)
+    {
+        // In case of error, no work item is added to queue, so response
+        // callback needs to be called
+        utils::sendEnqueueResponse(request, e.what());
+    }
+
+    return false;
+}
+
 } // namespace triton::backend::inflight_batcher_llm::utils

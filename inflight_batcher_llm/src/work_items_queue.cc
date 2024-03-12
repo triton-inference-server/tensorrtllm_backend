@@ -46,8 +46,8 @@ void WorkItemsQueue::clear()
 
 /// @brief Add a batch of new work item to the queue
 /// Throws an error if requestId already exists
-std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
-    std::vector<RequestWrapper>& requestsToPush, uint64_t exec_start_ns)
+std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(std::vector<RequestWrapper>& requestsToPush,
+    uint64_t exec_start_ns, std::function<void(std::shared_ptr<WorkItem>)> const& workItemCb)
 {
     std::lock_guard<std::mutex> lk(mMutex);
     std::vector<std::shared_ptr<std::exception>> reqExceptions;
@@ -69,6 +69,11 @@ std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
                 mPendingWorkItemsReqIds.insert(workItem->requestId());
                 workItem->getTimestamps().exec_start_ns = exec_start_ns;
                 reqExceptions.push_back(nullptr);
+
+                if (workItemCb)
+                {
+                    workItemCb(workItem);
+                }
             }
             catch (std::exception const& e)
             {
@@ -114,6 +119,29 @@ std::tuple<std::shared_ptr<WorkItem>, bool> WorkItemsQueue::pop()
     return {workItem, stoppedRequest};
 }
 
+void WorkItemsQueue::markInProgress(const uint64_t requestId)
+{
+    std::lock_guard<std::mutex> lk(mMutex);
+
+    if (mPendingWorkItemsReqIds.find(requestId) == mPendingWorkItemsReqIds.end())
+    {
+        std::string warnStr
+            = "Received in-progress notification for unknown request ID " + std::to_string(requestId) + ", ignoring";
+        TLLM_LOG_WARNING(warnStr);
+        return;
+    }
+
+    auto it = std::find_if(mPendingWorkItems.begin(), mPendingWorkItems.end(),
+        [requestId](std::shared_ptr<WorkItem> const& wi) { return wi->requestId() == requestId; });
+
+    auto workItem = *it;
+    mPendingWorkItems.erase(it);
+    mPendingWorkItemsReqIds.erase(requestId);
+    SET_TIMESTAMP(workItem->getTimestamps().compute_start_ns);
+
+    mInProgressWorkItems.emplace(std::make_pair(workItem->requestId(), workItem));
+}
+
 void WorkItemsQueue::markFinished(const uint64_t requestId)
 {
     std::lock_guard<std::mutex> lk(mMutex);
@@ -131,7 +159,6 @@ void WorkItemsQueue::markFinished(const uint64_t requestId)
 void WorkItemsQueue::stopWorkItem(const uint64_t requestId)
 {
     std::lock_guard<std::mutex> lk(mMutex);
-    TLLM_LOG_DEBUG("Stopping request");
     if (hasInProgressReqId(requestId) || hasPendingReqId(requestId))
     {
         mStoppedReqIds.emplace(requestId);

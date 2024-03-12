@@ -66,6 +66,7 @@ public:
     common::TritonJson::Value& GetModelConfig();
     std::string const& GetModelName() const;
     uint64_t GetModelVersion() const;
+    const std::string GetWorkerPath();
 
     std::optional<std::vector<int32_t>> GetDeviceIds()
     {
@@ -77,6 +78,12 @@ public:
         return is_decoupled_;
     }
 
+    [[nodiscard]] std::vector<int64_t> serialize() const;
+
+    static ModelState deserialize(int64_t const* packed_ptr);
+
+    static ModelState deserialize(std::vector<int64_t> const& packed);
+
 private:
     const std::string model_name_;
     uint64_t model_version_;
@@ -87,6 +94,9 @@ private:
     std::optional<std::vector<int32_t>> gpu_device_ids_;
     bool is_decoupled_ = false;
 
+    void LoadParameters();
+
+public:
     ModelState(
         TRITONBACKEND_Model* triton_model, std::string const& name, uint64_t version, TritonJson::Value&& model_config)
         : model_name_(name)
@@ -98,8 +108,6 @@ private:
 
         LoadParameters();
     }
-
-    void LoadParameters();
 };
 
 template <>
