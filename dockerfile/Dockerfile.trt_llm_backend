@@ -62,3 +62,14 @@ RUN cd /app/tensorrt_llm/build && pip3 install *.whl
 # Install TensorRT-LLM backend
 RUN mkdir /opt/tritonserver/backends/tensorrtllm
 COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
+
+# install huggingface
+RUN pip install huggingface_hub
+RUN pip install hf_transfer
+RUN env HF_HUB_ENABLE_HF_TRANSFER=1
+
+# copy files that will be used for running triton server
+COPY ../dockerfile/launch_triton_server.py .
+COPY ../dockerfile/hub.py .
+
+ENTRYPOINT ["python3", "launch_triton_server.py"]
