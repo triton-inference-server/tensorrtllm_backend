@@ -70,7 +70,7 @@ std::vector<std::shared_ptr<std::exception>> WorkItemsQueue::pushBatch(
                 workItem->getTimestamps().exec_start_ns = exec_start_ns;
                 reqExceptions.push_back(nullptr);
             }
-            catch (const std::exception& e)
+            catch (std::exception const& e)
             {
                 reqExceptions.emplace_back(std::make_shared<std::runtime_error>(e.what()));
             }
@@ -149,7 +149,7 @@ std::unordered_set<uint64_t> WorkItemsQueue::getCancelledInProgressReqIds() cons
     std::unordered_set<uint64_t> cancelledInProgressReqIds;
     {
         std::lock_guard<std::mutex> lk(mMutex);
-        for (const auto& pair : mInProgressWorkItems)
+        for (auto const& pair : mInProgressWorkItems)
         {
             bool is_cancelled = false;
             TRITONBACKEND_ResponseFactoryIsCancelled(pair.second->response_factory(), &is_cancelled);

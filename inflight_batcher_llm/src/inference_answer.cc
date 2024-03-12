@@ -47,7 +47,7 @@ std::vector<int64_t> InferenceAnswer::serialize() const
 
     packed.push_back(final_response_ ? 1 : 0);
 
-    const auto num_elements = (err_msg_.size() + sizeof(int64_t) - 1) / sizeof(int64_t);
+    auto const num_elements = (err_msg_.size() + sizeof(int64_t) - 1) / sizeof(int64_t);
 
     packed.push_back(static_cast<int64_t>(err_msg_.size()));
 
@@ -82,7 +82,7 @@ std::shared_ptr<InferenceAnswer> InferenceAnswer::deserialize(int64_t const* pac
 
     answer->final_response_ = *packed_ptr++ != 0;
 
-    const auto num_chars = *packed_ptr++;
+    auto const num_chars = *packed_ptr++;
     answer->err_msg_.reserve(num_chars);
 
     int64_t i = 0;

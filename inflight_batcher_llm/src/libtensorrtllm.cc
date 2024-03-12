@@ -64,7 +64,7 @@ extern "C"
         // TRITONBACKEND_Model. If anything goes wrong with initialization
         // of the model state then an error is returned and Triton will fail
         // to load the model.
-        const char* cname;
+        char const* cname;
         RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
         const std::string name(cname);
 

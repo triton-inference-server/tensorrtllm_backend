@@ -103,20 +103,20 @@ public:
 
     /// @brief  Callback passed to GptManager to get new inference requests
     /// @return Up to max_num_requests inference requests.
-    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests);
+    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(int const max_num_requests);
 
     /// @brief  Callback passed to GptManager to send responses back to client
     void sendResponse(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response,
-        const std::string& errMsg);
+        std::string const& errMsg);
     /// @brief Callback passed to GptManager to get ids of stopped requests
     std::unordered_set<uint64_t> pollStopSignals();
 
     /// @brief  Callback passed to GptManager to print stats
-    void logStats(const std::string& s);
+    void logStats(std::string const& s);
 
     /// @brief Method that sends Triton response back to client
     TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem,
-        std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg);
+        std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg);
 
 private:
     /// @brief Constructor

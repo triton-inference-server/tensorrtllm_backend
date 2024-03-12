@@ -56,7 +56,7 @@ public:
 
     std::shared_ptr<InferenceRequest> getInferenceRequest() const;
 
-    bool hasOutputName(const std::string& outputName);
+    bool hasOutputName(std::string const& outputName);
 
     /// timestamp storage for Triton base metrics
     struct Timestamps

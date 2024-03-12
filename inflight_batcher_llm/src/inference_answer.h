@@ -46,7 +46,7 @@ public:
     }
 
     InferenceAnswer(uint64_t request_id, std::list<NamedTensor> const& response_tensors, bool final_response,
-        const std::string& err_msg)
+        std::string const& err_msg)
         : request_id_(request_id)
         , response_tensors_(response_tensors)
         , final_response_(final_response)
@@ -69,16 +69,16 @@ public:
         return response_tensors_;
     }
 
-    const std::string& GetErrorMessage() const
+    std::string const& GetErrorMessage() const
     {
         return err_msg_;
     }
 
     [[nodiscard]] std::vector<int64_t> serialize() const;
 
-    static std::shared_ptr<InferenceAnswer> deserialize(const std::vector<int64_t>& packed);
+    static std::shared_ptr<InferenceAnswer> deserialize(std::vector<int64_t> const& packed);
 
-    static std::shared_ptr<InferenceAnswer> deserialize(const int64_t* packed_ptr);
+    static std::shared_ptr<InferenceAnswer> deserialize(int64_t const* packed_ptr);
 
 private:
     uint64_t request_id_;

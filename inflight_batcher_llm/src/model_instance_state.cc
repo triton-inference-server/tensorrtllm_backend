@@ -40,7 +40,7 @@ TRITONSERVER_Error* ModelInstanceState::Create(
     {
         *state = new ModelInstanceState(model_state, triton_model_instance);
     }
-    catch (const std::exception& ex)
+    catch (std::exception const& ex)
     {
         std::string errStr = std::string("unexpected error when creating modelInstanceState: ") + ex.what();
         return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
@@ -100,7 +100,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxBeamWidth = model_state_->GetParameter<int32_t>("max_beam_width");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("max_beam_width is not specified, will use default value of 1");
@@ -111,7 +111,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxTokensInPagedKvCache = model_state_->GetParameter<int32_t>("max_tokens_in_paged_kv_cache");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -138,7 +138,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
                 "(must be max_utilization or guaranteed_no_evict)");
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         TLLM_LOG_WARNING(e.what());
     }
@@ -154,7 +154,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
                 "(requires building the model with use_paged_context_fmha).");
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_chunked_context is not specified, will be set to false.");
@@ -179,7 +179,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         kvCacheFreeGpuMemFraction = model_state_->GetParameter<float>("kv_cache_free_gpu_mem_fraction");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -192,7 +192,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to false");
@@ -203,7 +203,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         normalizeLogProbs = model_state_->GetParameter<bool>("normalize_log_probs");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("normalize_log_probs is not specified, will be set to true");
@@ -214,7 +214,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         excludeInputInOutput = model_state_->GetParameter<bool>("exclude_input_in_output");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("exclude_input_in_output is not specified, will be set to false");
@@ -225,7 +225,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -238,7 +238,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         enableKVCacheReuse = model_state_->GetParameter<bool>("enable_kv_cache_reuse");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
@@ -269,7 +269,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
             throw std::runtime_error("");
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         TLLM_LOG_WARNING(
             "decoding_mode parameter is invalid or not specified"
@@ -294,8 +294,8 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
         [this](int max_num_requests) { return get_inference_requests(max_num_requests); },
         [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
-            const std::string& errMsg) { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-        [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); }, optionalParams,
+            std::string const& errMsg) { return sendResponse(requestId, response_tensors, final_response, errMsg); },
+        [this]() { return pollStopSignals(); }, [this](std::string const& s) { return logStats(s); }, optionalParams,
         std::nullopt, std::nullopt, excludeInputInOutput);
 
     if (COMM_SESSION.getRank() != 0)
@@ -339,7 +339,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
                 requestsToPush.emplace_back(requestId, request);
             }
         }
-        catch (const std::exception& e)
+        catch (std::exception const& e)
         {
             // In case of error, no work item is added to queue, so response
             // callback needs to be called
@@ -363,7 +363,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
 }
 
 // Return up to max_num_requests inference requests.
-std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_requests(const int max_num_requests)
+std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_requests(int const max_num_requests)
 {
     std::list<std::shared_ptr<InferenceRequest>> rval;
     if (max_num_requests <= 0)
@@ -445,7 +445,7 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
 }
 
 void ModelInstanceState::sendResponse(
-    uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
+    uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg)
 {
     if (COMM_SESSION.getRank() == 0)
     {
@@ -461,7 +461,7 @@ void ModelInstanceState::sendResponse(
             auto tritonErr = sendTritonResponse(workItem, response_tensors, final_response, errMsg);
             LOG_IF_ERROR(tritonErr, errStr);
         }
-        catch (const std::exception& e)
+        catch (std::exception const& e)
         {
             TLLM_LOG_ERROR(errStr);
         }
@@ -509,7 +509,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
     return stoppedReqIds;
 }
 
-void ModelInstanceState::logStats(const std::string& s)
+void ModelInstanceState::logStats(std::string const& s)
 {
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
 #ifdef TRITON_ENABLE_METRICS
@@ -518,7 +518,7 @@ void ModelInstanceState::logStats(const std::string& s)
 }
 
 TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkItem> workItem,
-    std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
+    std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg)
 {
     TRITONBACKEND_ResponseFactory* response_factory;
     response_factory = workItem->response_factory();
