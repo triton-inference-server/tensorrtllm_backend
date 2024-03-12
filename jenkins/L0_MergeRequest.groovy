@@ -5,8 +5,9 @@ import groovy.transform.Field
 BACKEND_REPO = "https://gitlab-master.nvidia.com/ftp/tekit_backend.git"
 BACKEND_BRANCH = "main"
 BACKEND_ROOT = "backend"
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-staging-63ca8816"
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:dev-triton-23.12-trt9.2.0.5-sbsa-1"
+// Naming rule: [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.01-py3-x86_64-ubuntu22.04-trt9.3.0.1-pypi-devel-202403061430-472"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.01-py3-aarch64-ubuntu22.04-trt9.3.0.1-src_non_cxx11_abi-devel-202403061430-472"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
