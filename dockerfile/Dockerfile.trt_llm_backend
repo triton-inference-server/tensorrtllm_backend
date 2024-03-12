@@ -61,4 +61,5 @@ RUN cd /app/tensorrt_llm/build && pip3 install *.whl
 
 # Install TensorRT-LLM backend
 RUN mkdir /opt/tritonserver/backends/tensorrtllm
+ENV LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorrtllm:${LD_LIBRARY_PATH}
 COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
