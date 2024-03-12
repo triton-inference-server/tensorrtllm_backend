@@ -18,8 +18,6 @@ rm .gitmodules
 rm -rf tekit
 rm -rf tensorrt_llm
 
-rm dockerfile/Dockerfile.dev
-
 rm scripts/package_trt_llm_backend.sh
 
 rm -rf tests
