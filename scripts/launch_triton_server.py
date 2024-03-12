@@ -1,4 +1,5 @@
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -55,8 +56,16 @@ def parse_arguments():
     parser.add_argument(
         '--tensorrt_llm_model_name',
         type=str,
-        help='Name of the tensorrt_llm Triton model in the repo',
+        help=
+        'Name(s) of the tensorrt_llm Triton model in the repo. Use comma to separate if multiple model names',
         default='tensorrt_llm',
+    )
+
+    parser.add_argument(
+        '--multi-model',
+        action='store_true',
+        help=
+        'Enable support for multiple TRT-LLM models in the Triton model repository'
     )
 
     return parser.parse_args()
@@ -71,10 +80,10 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             cmd += ['--log-verbose=3', f'--log-file={log_file}']
         # If rank is not 0, skip loading of models other than `tensorrt_llm_model_name`
         if (i != 0):
-            cmd += [
-                '--model-control-mode=explicit',
-                f'--load-model={tensorrt_llm_model_name}'
-            ]
+            cmd += ['--model-control-mode=explicit']
+            model_names = tensorrt_llm_model_name.split(',')
+            for name in model_names:
+                cmd += [f'--load-model={name}']
         cmd += [
             f'--grpc-port={grpc_port}', f'--http-port={http_port}',
             f'--metrics-port={metrics_port}', '--disable-auto-complete-config',
@@ -98,4 +107,8 @@ if __name__ == '__main__':
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
                   args.log_file, args.tensorrt_llm_model_name)
-    subprocess.Popen(cmd)
+    env = os.environ.copy()
+    if args.multi_model:
+        assert args.world_size == 1, 'World size must be 1 when using multi-model. Processes will be spawned automatically to run the multi-GPU models'
+        env['TRTLLM_ORCHESTRATOR'] = '1'
+    subprocess.Popen(cmd, env=env)

@@ -26,6 +26,9 @@
 
 #pragma once
 
+#include "work_item.h"
+#include "work_items_queue.h"
+
 #include "NvInfer.h"
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
@@ -66,6 +69,11 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string co
 /// @brief For stop requests, or in case of error during enqueue, we need to send a
 /// response to the client
 void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errMsg = "");
+
+/// @brief Handle a Triton request and add it to the requests to push if applicable
+/// @return Is the request a stop request
+bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
+    std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue);
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm

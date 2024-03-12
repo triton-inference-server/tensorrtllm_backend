@@ -338,6 +338,36 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
+    # Multi-model
+    SERVER_LOG="./${NUM_GPU}gpu_multi_model.log"
+    run_server "${SERVER_ARGS} --multi-model"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    set -e
+    python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
+        --max-input-len=500 \
+        --dataset=${DATASET}
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_PID[@]}
+        RET=1
+    fi
+    set +e
+
+    curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
 
 done
 
