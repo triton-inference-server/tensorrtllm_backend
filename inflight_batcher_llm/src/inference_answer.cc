@@ -33,36 +33,45 @@ static int kBitsinByte = 8;
 
 std::vector<int64_t> InferenceAnswer::serialize() const
 {
-    std::list<int64_t> packed;
+    // request ID
+    // num tensors
+    // final answer
+    // err msg
+    size_t totalSize = 4;
 
-    packed.push_back(static_cast<int64_t>(request_id_));
-
-    packed.push_back(static_cast<int64_t>(response_tensors_.size()));
     for (auto const& tensor : response_tensors_)
     {
-        auto packed_tensor = tensor.serialize();
-        packed.push_back(static_cast<int64_t>(packed_tensor.size()));
-        packed.insert(packed.end(), packed_tensor.begin(), packed_tensor.end());
+        totalSize += tensor.serializedSize();
+        ++totalSize;
     }
 
-    packed.push_back(final_response_ ? 1 : 0);
+    const int64_t num_elements = (err_msg_.size() + sizeof(int64_t) - 1) / sizeof(int64_t);
+    totalSize += num_elements;
 
-    auto const num_elements = (err_msg_.size() + sizeof(int64_t) - 1) / sizeof(int64_t);
+    std::vector<int64_t> vpacked(totalSize);
+    int64_t* ptr = vpacked.data();
+    *ptr++ = request_id_;
+    *ptr++ = static_cast<int64_t>(response_tensors_.size());
+    for (auto const& tensor : response_tensors_)
+    {
+        auto size = tensor.serializedSize();
+        *ptr++ = size;
+        tensor.serialize(ptr, size);
+        ptr += size;
+    }
+    *ptr++ = final_response_ ? 1 : 0;
+    *ptr++ = err_msg_.size();
 
-    packed.push_back(static_cast<int64_t>(err_msg_.size()));
-
-    for (size_t i = 0; i < num_elements; ++i)
+    for (int64_t i = 0; i < num_elements; ++i)
     {
         int64_t buffer = 0;
         for (size_t j = 0; j < sizeof(int64_t) && (i * sizeof(int64_t) + j) < err_msg_.size(); ++j)
         {
             buffer |= static_cast<int64_t>(err_msg_[i * sizeof(int64_t) + j]) << (j * kBitsinByte);
         }
-        packed.push_back(buffer);
+        *ptr++ = buffer;
     }
 
-    std::vector<int64_t> vpacked{
-        std::make_move_iterator(std::begin(packed)), std::make_move_iterator(std::end(packed))};
     return vpacked;
 }
 
