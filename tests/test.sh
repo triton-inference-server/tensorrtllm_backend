@@ -698,7 +698,14 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
             --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv \
             --output-tokens-csv ../../tensorrt_llm/examples/gpt/output.csv \
             --check-output --request-output-len 8 \
-            --lora-path ../../tensorrt_llm/examples/gpt/gpt-2b-lora-train-900
+            --lora-path ../../tensorrt_llm/examples/gpt/gpt-2b-lora-train-900 \
+            --lora-task-id 12345
+
+        python3 inflight_batcher_llm_client.py \
+            --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv \
+            --output-tokens-csv ../../tensorrt_llm/examples/gpt/output.csv \
+            --check-output --request-output-len 8 \
+            --lora-task-id 12345
 
         popd # inflight_batcher_llm/client
 

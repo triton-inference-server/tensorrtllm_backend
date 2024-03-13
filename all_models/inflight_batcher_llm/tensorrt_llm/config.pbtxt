@@ -214,6 +214,17 @@ input [
     reshape: { shape: [ ] }
     optional: true
   },
+  # the unique task ID for the given LoRA.
+  # To perform inference with a specific LoRA for the first time `lora_task_id` `lora_weights` and `lora_config` must all be given.
+  # The LoRA will be cached, so that subsequent requests for the same task only require `lora_task_id`.
+  # If the cache is full the oldest LoRA will be evicted to make space for new ones.  An error is returned if `lora_task_id` is not cached.
+  {
+    name: "lora_task_id"
+	data_type: TYPE_UINT64
+	dims: [ 1 ]
+    reshape: { shape: [ ] }
+	optional: true
+  },
   # weights for a lora adapter shape [ num_lora_modules_layers, D x Hi + Ho x D ]
   # where the last dimension holds the in / out adapter weights for the associated module (e.g. attn_qkv) and model layer
   # each of the in / out tensors are first flattened and then concatenated together in the format above.
@@ -366,6 +377,30 @@ parameters: {
   key: "gpu_device_ids"
   value: {
     string_value: "${gpu_device_ids}"
+  }
+}
+parameters: {
+  key: "lora_cache_optimal_adapter_size"
+  value: {
+    string_value: "${lora_cache_optimal_adapter_size}"
+  }
+}
+parameters: {
+  key: "lora_cache_max_adapter_size"
+  value: {
+    string_value: "${lora_cache_max_adapter_size}"
+  }
+}
+parameters: {
+  key: "lora_cache_gpu_memory_fraction"
+  value: {
+    string_value: "${lora_cache_gpu_memory_fraction}"
+  }
+}
+parameters: {
+  key: "lora_cache_host_memory_bytes"
+  value: {
+    string_value: "${lora_cache_host_memory_bytes}"
   }
 }
 parameters: {

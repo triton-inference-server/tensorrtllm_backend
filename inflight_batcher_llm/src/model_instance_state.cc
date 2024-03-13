@@ -301,6 +301,55 @@ ModelInstanceState::ModelInstanceState(
             "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
     }
 
+    // parse LoRA / Peft cache parameters
+    // lora_cache_max_adapter_size
+    // lora_cache_optimal_adapter_size
+    // lora_cache_gpu_memory_fraction
+    // lora_cache_host_memory_bytes
+
+    SizeType maxAdapterSize = 64;
+    SizeType optimalAdapterSize = 8;
+    std::optional<size_t> hostCacheSize = std::nullopt;
+    std::optional<float> deviceCachePercent = std::nullopt;
+
+    std::string fieldName = "lora_cache_max_adapter_size";
+    try
+    {
+        maxAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 64");
+    }
+
+    fieldName = "lora_cache_optimal_adapter_size";
+    try
+    {
+        optimalAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 8");
+    }
+    fieldName = "lora_cache_gpu_memory_fraction";
+    try
+    {
+        deviceCachePercent = model_state_->GetParameter<float>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 0.05");
+    }
+    fieldName = "lora_cache_host_memory_bytes";
+    try
+    {
+        hostCacheSize = model_state_->GetParameter<size_t>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
+    }
+
     auto const gpuDeviceIds = model_state_->GetDeviceIds();
 
     TrtGptModelOptionalParams optionalParams;
@@ -313,6 +362,16 @@ ModelInstanceState::ModelInstanceState(
     optionalParams.enableChunkedContext = enableChunkedContext;
     optionalParams.deviceIds = gpuDeviceIds;
     optionalParams.decodingMode = decodingMode;
+
+    optionalParams.peftCacheManagerConfig.maxAdapterSize = maxAdapterSize;
+    optionalParams.peftCacheManagerConfig.optimalAdapterSize = optimalAdapterSize;
+    optionalParams.peftCacheManagerConfig.deviceCachePercent = deviceCachePercent;
+    optionalParams.peftCacheManagerConfig.hostCacheSize = hostCacheSize;
+
+    // TODO (grclark) find better defaults for these
+    optionalParams.peftCacheManagerConfig.numEnsureWorkers = ModelInstanceState::kPeftCacheNumEnsureWorkers;
+    optionalParams.peftCacheManagerConfig.numCopyStreams = ModelInstanceState::kPeftCacheNumCopyStreams;
+    optionalParams.peftCacheManagerConfig.numPutWorkers = ModelInstanceState::kPeftCacheNumPutWorkers;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,

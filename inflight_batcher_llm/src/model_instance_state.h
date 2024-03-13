@@ -76,6 +76,13 @@ class ModelInstanceState
     using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
 
 public:
+    // number of cpu workers used to move weights host cache to gpu cache
+    static constexpr SizeType kPeftCacheNumEnsureWorkers = 4;
+    // number of cuda streams used for H2D copies of peft cache pages
+    static constexpr SizeType kPeftCacheNumCopyStreams = 4;
+    // number of cpu workers used to load weight into host cache
+    static constexpr SizeType kPeftCacheNumPutWorkers = 4;
+
     /// @brief Create a ModelInstanceObject when running in non-orchestrator mode
     static TRITONSERVER_Error* Create(
         ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, ModelInstanceState** state);
