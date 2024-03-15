@@ -1345,12 +1345,24 @@ def test_gpt_2b_lora_ifb(
     check_server_ready()
 
     # Run Test
-    run_cmd = [
+    gen_cache_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
         f"--input-tokens-csv={input_tokens}",
         f"--output-tokens-csv={output_tokens}",
         "--request-output-len=8",
         "--check-output",
         f"--lora-path={lora_path}",
+        "--lora-task-id=12345",
+    ]
+    venv_check_call(llm_backend_venv, gen_cache_cmd)
+
+    # Test GPU cache
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        f"--input-tokens-csv={input_tokens}",
+        f"--output-tokens-csv={output_tokens}",
+        "--request-output-len=8",
+        "--check-output",
+        "--lora-task-id=12345",
     ]
     venv_check_call(llm_backend_venv, run_cmd)
