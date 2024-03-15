@@ -191,7 +191,7 @@ and postprocessing models together.
 - "tensorrt_llm_bls": This model can also be used to chain the preprocessing,
 tensorrt_llm and postprocessing models together. The BLS model has an optional
 parameter `accumulate_tokens` which can be used in streaming mode to call the
-preprocessing model with all accumulated tokens, instead of only one token.
+postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
 To learn more about ensemble and BLS models, please see the
