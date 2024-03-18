@@ -401,8 +401,18 @@ ModelInstanceState::ModelInstanceState(
 
     if (rank != 0 || mLeaderOrchComm)
     {
-        while (true)
+        while (!mModelUnloadRequest.load())
         {
+        }
+
+        if (mReceiverThread.joinable())
+        {
+            mReceiverThread.join();
+        }
+
+        if (mSenderThread.joinable())
+        {
+            mSenderThread.join();
         }
     }
 }
@@ -432,6 +442,7 @@ void ModelInstanceState::RecvMpiThread()
             }
 
             mSenderCV.notify_all();
+            mModelUnloadRequest.store(true);
             TLLM_LOG_INFO("Leader recv thread exiting");
             break;
         }

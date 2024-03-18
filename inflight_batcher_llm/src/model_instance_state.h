@@ -168,6 +168,7 @@ private:
     std::condition_variable mSenderCV;
     std::unordered_set<uint64_t> mStoppedReqIds;
     std::mutex mStoppedReqIdsMutex;
+    std::atomic<bool> mModelUnloadRequest = false;
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;

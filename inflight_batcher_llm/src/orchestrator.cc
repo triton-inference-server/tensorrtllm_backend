@@ -184,6 +184,11 @@ void OrchestratorCommunicator::PollStopSignalThread(int const intervalInMs)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(intervalInMs));
 
+        if (mShutdownRequest.load())
+        {
+            break;
+        }
+
         // Merge cancelled requests into stopped requests Ids
         auto cancelledReqIds = mWorkItemsQueue->getCancelledInProgressReqIds();
 
@@ -231,6 +236,7 @@ void OrchestratorCommunicator::shutdown()
     }
 
     mSenderCV.notify_all();
+    mShutdownRequest.store(true);
 
     if (mSenderThread.joinable())
     {
@@ -239,6 +245,10 @@ void OrchestratorCommunicator::shutdown()
     if (mAnswerThread.joinable())
     {
         mAnswerThread.join();
+    }
+    if (mPollStopSignalThread.joinable())
+    {
+        mPollStopSignalThread.join();
     }
 }
 
