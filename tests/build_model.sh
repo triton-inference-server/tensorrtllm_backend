@@ -27,17 +27,16 @@ if [ "$MODEL" = "gpt" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from HF"
-    python3 hf_gpt_convert.py -i ${GPT2} -o ./c-model/gpt2/fp16 --storage-type float16
+    python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
 
-    echo "Build GPT: float16 | src FT | remove_input_padding"
-    python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
-        --dtype float16 \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
-        --enable_context_fmha \
-        --remove_input_padding \
+    echo "Build GPT: float16 | remove_input_padding"
+    trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
+        --gpt_attention_plugin float16 \
+        --gemm_plugin float16 \
+        --context_fmha enable \
+        --remove_input_padding enable \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
-        --output_dir trt_engine/gpt2/fp16/1-gpu/ --hidden_act gelu
+        --output_dir trt_engine/gpt2/fp16/1-gpu/
 
     python3 ../run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/ --tokenizer_dir ${GPT2}
 
@@ -171,20 +170,18 @@ if [ "$MODEL" = "gpt-ib" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from HF"
-    python3 hf_gpt_convert.py -i ${GPT2} -o ./c-model/gpt2/fp16 --storage-type float16
+    python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
 
-    echo "Build GPT: float16 | src FT"
-    python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
-        --dtype float16 \
-        --use_inflight_batching \
-        --use_gpt_attention_plugin float16 \
-        --remove_input_padding \
-        --paged_kv_cache \
-        --enable_context_fmha_fp32_acc \
-        --use_paged_context_fmha \
-        --use_gemm_plugin float16 \
+    echo "Build GPT: float16"
+    trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --context_fmha_fp32_acc enable \
+        --use_paged_context_fmha enable \
+        --gemm_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
-        --output_dir trt_engine/gpt2-ib/fp16/1-gpu/ --hidden_act gelu
+        --output_dir trt_engine/gpt2-ib/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
 
@@ -198,19 +195,19 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from HF"
-    python3 hf_gpt_convert.py -i ${GPT2_MEDIUM} -o ./c-model/gpt2-medium/fp16 --storage-type float16
+    python3 convert_checkpoint.py --model_dir ${GPT2_MEDIUM} --dtype float16 --output_dir ./c-model/gpt2-medium/fp16
 
-    echo "Build GPT: float16 | src FT"
-    python3 build.py --model_dir=./c-model/gpt2-medium/fp16/1-gpu \
-        --dtype float16 \
-        --use_inflight_batching \
-        --use_gpt_attention_plugin float16 \
-        --paged_kv_cache \
-        --use_gemm_plugin float16 \
-        --enable_context_fmha --use_paged_context_fmha \
-        --remove_input_padding --max_draft_len 5 \
+    echo "Build GPT: float16"
+    trtllm-build --checkpoint_dir ./c-model/gpt2-medium/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --context_fmha enable \
+        --use_paged_context_fmha enable \
+        --max_draft_len 5 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
-        --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/ --hidden_act gelu
+        --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
 
@@ -223,23 +220,23 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
 
     pip3 install -r requirements.txt
 
-    echo "Convert GPT from HF"
-    python3 nemo_ckpt_convert.py -i ${GPT2_NEXT_PTUNING}/megatron_converted_8b_tp4_pp1.nemo -o ./c-model/email_composition/fp16 --storage-type float16 --tensor-parallelism 1 --processes 1
-#
+    echo "Convert GPT from NeMo"
+    python3 convert_checkpoint.py --nemo_ckpt_path ${GPT2_NEXT_PTUNING}/megatron_converted_8b_tp4_pp1.nemo --dtype float16 --output_dir ./c-model/email_composition/fp16
+
     echo "Convert ptuning table"
     python3 nemo_prompt_convert.py -i ${GPT2_NEXT_PTUNING}/email_composition.nemo -o email_composition.npy
 
     cp ${GPT2_NEXT_PTUNING}/input.csv ./
 
-    echo "Build GPT: float16 | src FT"
-    python3 build.py --model_dir=./c-model/email_composition/fp16/1-gpu \
-        --use_inflight_batching \
-        --use_gpt_attention_plugin \
-        --paged_kv_cache \
-        --use_gemm_plugin \
-        --remove_input_padding \
+    echo "Build GPT: float16"
+    trtllm-build --checkpoint_dir ./c-model/email_composition/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --context_fmha enable \
         --max_batch_size 4 --max_input_len 128 --max_output_len 128 --max_beam_width 1 \
-        --output_dir trt_engine/email_composition/fp16/1-gpu/ --hidden_act gelu --enable_context_fmha \
+        --output_dir trt_engine/email_composition/fp16/1-gpu/ \
         --max_prompt_embedding_table_size 300
 
     popd # tensorrt_llm/examples/gpt
@@ -254,18 +251,15 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from NeMo"
-    python3 nemo_ckpt_convert.py -i ${GPT_2B} -o ./c-model/gpt-2b-lora/fp16 --storage-type float16
+    python3 convert_checkpoint.py --nemo_ckpt_path ${GPT_2B} --dtype float16 --lora_target_modules attn_qkv --output_dir ./c-model/gpt-2b-lora/fp16
 
-    echo "Build GPT: float16 | src FT"
-    python3 build.py --model_dir=./c-model/gpt-2b-lora/fp16/1-gpu \
-        --dtype float16 \
-        --use_inflight_batching \
-        --use_gpt_attention_plugin float16 \
-        --paged_kv_cache \
-        --use_gemm_plugin float16 \
-        --use_lora_plugin float16 \
-        --lora_target_modules attn_qkv \
-        --remove_input_padding \
+    echo "Build GPT: float16"
+    trtllm-build --checkpoint_dir ./c-model/gpt-2b-lora/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --lora_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt-2b-lora-ib/fp16/1-gpu/
 
@@ -288,20 +282,18 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from HF"
-    python3 hf_gpt_convert.py -i ${GPT2} -o ./c-model/gpt2/fp16 --storage-type float16
+    python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
 
-    echo "Build GPT: float16 | src FT | gather_all_token_logits"
-    python3 build.py --model_dir=./c-model/gpt2/fp16/1-gpu \
-        --dtype float16 \
-        --use_gpt_attention_plugin float16 \
-        --use_gemm_plugin float16 \
-        --enable_context_fmha \
-        --remove_input_padding \
+    echo "Build GPT: float16 | gather_all_token_logits"
+    trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --context_fmha enable \
         --max_batch_size 128 --max_input_len 300 --max_output_len 300 \
-        --use_inflight_batching \
-        --paged_kv_cache \
         --gather_all_token_logits \
-        --output_dir trt_engine/gpt2-gather-logits/fp16/1-gpu/ --hidden_act gelu \
+        --output_dir trt_engine/gpt2-gather-logits/fp16/1-gpu/ \
         --max_num_tokens 38400
 
     popd # tensorrt_llm/examples/gpt

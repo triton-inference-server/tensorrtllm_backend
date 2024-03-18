@@ -159,21 +159,19 @@ cd tensorrt_llm/examples/gpt
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
 pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
 
-# Convert weights from HF Tranformers to FT format
-python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 4 --storage-type float16
+# Convert weights from HF Tranformers to TensorRT-LLM checkpoint
+python3 convert_checkpoint.py --model_dir gpt2 \
+        --dtype float16 \
+        --tp_size 4 \
+        --output_dir ./c-model/gpt2/fp16/4-gpu
 
 # Build TensorRT engines
-python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
-                 --world_size=4 \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --hidden_act gelu \
-                 --parallel_build \
-                 --output_dir=engines/fp16/4-gpu
+trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --output_dir engines/fp16/4-gpu
 ```
 
 ### Create the model repository
@@ -373,7 +371,7 @@ number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
 
 #### Return context logits and/or generation logits
-If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
 
 After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash
