@@ -35,6 +35,7 @@
 
 #include "tensorrt_llm/common/mpiUtils.h"
 
+#include <atomic>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -84,6 +85,7 @@ private:
 
     std::thread mAnswerThread;
     std::thread mPollStopSignalThread;
+    std::atomic<bool> mShutdownRequest = false;
 
     std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
 };

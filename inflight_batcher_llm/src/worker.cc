@@ -52,6 +52,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    delete state;
+
     MPI_Finalize();
     return 0;
 }
