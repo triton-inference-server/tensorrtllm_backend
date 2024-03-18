@@ -631,11 +631,11 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     pushd tensorrt_llm/examples/gpt
 
     # Input with virtual tokens:
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --prompt_table_path=email_composition.npy --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_w_prompt.csv
+    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/tokenizer.model --prompt_table_path=email_composition.npy --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_w_prompt.csv
 
     #Input w/o virtual tokens:
     echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/1-gpu/tokenizer.model --input_file=input_wo_prompt.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_wo_prompt.csv
+    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/tokenizer.model --input_file=input_wo_prompt.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_wo_prompt.csv
 
     popd
 

@@ -8,12 +8,12 @@ install_requirement_cmd = "pip3 install -r requirements.txt"
 def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
                             gpt_tokenizer_model_root):
     # Convert GPT weights from HF
-    model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                             "gpt_350m")
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_350m")
     convert_cmd = [
-        "python3", f"{tensorrt_llm_gpt_example_root}/hf_gpt_convert.py",
-        f"-i={gpt_tokenizer_model_root}", "--storage-type=float16",
-        f"-o={model_dir}"
+        "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
+        f"--model_dir={gpt_tokenizer_model_root}", "--dtype=float16",
+        f"--output_dir={ckpt_dir}"
     ]
 
     # Build GPT
@@ -27,19 +27,16 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt350m_medium_ifb")
     build_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/build.py",
-        f"--model_dir={model_dir}/1-gpu",
-        "--dtype=float16",
-        "--use_gpt_attention_plugin=float16",
-        "--use_gemm_plugin=float16",
-        "--enable_context_fmha",
-        "--use_paged_context_fmha",
-        "--remove_input_padding",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--context_fmha=enable",
+        "--use_paged_context_fmha=enable",
+        "--remove_input_padding=enable",
         "--max_batch_size=64",
         "--max_input_len=924",
         "--max_output_len=100",
-        "--hidden_act=gelu",
         f"--output_dir={engine_dir}",
     ]
 
@@ -50,8 +47,7 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb" or type == "medium_ifb":
         build_cmd += [
-            "--use_inflight_batching",
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
@@ -74,12 +70,12 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
 def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
                                      gpt_tokenizer_model_root):
     # Convert GPT weights from HF
-    model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                             "gpt_gather_logits")
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_gather_logits")
     convert_cmd = [
-        "python3", f"{tensorrt_llm_gpt_example_root}/hf_gpt_convert.py",
-        f"-i={gpt_tokenizer_model_root}", "--storage-type=float16",
-        f"-o={model_dir}"
+        "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
+        f"--model_dir={gpt_tokenizer_model_root}", "--dtype=float16",
+        f"--output_dir={ckpt_dir}"
     ]
 
     # Build GPT
@@ -87,27 +83,23 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
                               "gpt_gather_logits")
 
     build_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/build.py",
-        f"--model_dir={model_dir}/1-gpu",
-        "--dtype=float16",
-        "--use_gpt_attention_plugin=float16",
-        "--use_gemm_plugin=float16",
-        "--enable_context_fmha",
-        "--remove_input_padding",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--context_fmha=enable",
+        "--remove_input_padding=enable",
         "--max_batch_size=128",
         "--max_input_len=300",
         "--max_output_len=300",
         "--gather_all_token_logits",
         "--max_num_tokens=38400",
-        "--hidden_act=gelu",
         f"--output_dir={engine_dir}",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
@@ -130,13 +122,14 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
 def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
                                gpt_2b_lora_model_root, models_root):
     # Convert GPT from NeMo
-    model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                             "gpt_2b_lora")
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_2b_lora")
     gpt_2b_nemo_model = os.path.join(models_root, "GPT-2B-001_bf16_tp1.nemo")
 
     convert_ckpt_cmd = [
-        "python3", f"{tensorrt_llm_gpt_example_root}/nemo_ckpt_convert.py",
-        f"-i={gpt_2b_nemo_model}", "--storage-type=float16", f"-o={model_dir}"
+        "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
+        f"--nemo_ckpt_path={gpt_2b_nemo_model}", "--dtype=float16",
+        "--lora_target_modules=attn_qkv", f"--output_dir={ckpt_dir}"
     ]
 
     # prepare more test metrials
@@ -165,15 +158,12 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
                               "gpt_2b_lora_ib")
 
     build_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/build.py",
-        f"--model_dir={model_dir}/1-gpu",
-        "--dtype=float16",
-        "--use_gpt_attention_plugin=float16",
-        "--use_gemm_plugin=float16",
-        "--use_lora_plugin=float16",
-        "--lora_target_modules=attn_qkv",
-        "--remove_input_padding",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--lora_plugin=float16",
+        "--remove_input_padding=enable",
         "--max_batch_size=8",
         "--max_input_len=924",
         "--max_output_len=128",
@@ -182,8 +172,7 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
     convert_ckpt_cmd = " ".join(convert_ckpt_cmd)
     build_cmd = " ".join(build_cmd)
@@ -214,6 +203,17 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
 
 
 def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_175b")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_gpt_example_root}/../generate_checkpoint_config.py",
+        f"--output_path={ckpt_dir}/config.json",
+        "--architecture=GPTForCausalLM", "--dtype=float16",
+        "--num_hidden_layers=96", "--num_attention_heads=96",
+        "--hidden_size=12288", "--vocab_size=51200", "--hidden_act=gelu",
+        "--tp_size=8"
+    ]
     # Build GPT
     if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
@@ -221,38 +221,36 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt_175b_ifb")
+
     build_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/build.py",
-        "--world_size=8",
-        "--remove_input_padding",
-        "--hidden_act=gelu",
-        "--n_layer=96",
-        "--n_embd=12288",
-        "--n_head=96",
+        "trtllm-build",
+        f"--model_config={engine_dir}/ckpt_config.json",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--gemm_plugin=float16",
         "--max_batch_size=32",
         "--max_input_len=512",
         "--max_output_len=32",
-        "--use_gpt_attention_plugin",
-        "--use_gemm_plugin",
         f"--output_dir={engine_dir}",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
 
+    convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
         check_call(install_requirement_cmd,
                    shell=True,
                    cwd=tensorrt_llm_gpt_example_root)
+        check_call(convert_cmd, shell=True, cwd=tensorrt_llm_gpt_example_root)
         check_call(build_cmd, shell=True, cwd=tensorrt_llm_gpt_example_root)
 
     else:
         print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
@@ -384,16 +382,14 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
     # Convert weights from HF
     nemo_model_path = os.path.join(gpt_next_ptuning_model_root,
                                    "megatron_converted_8b_tp4_pp1.nemo")
-    output_model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                                    "gpt_next_ptuning")
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_next_ptuning")
     convert_weights_cmd = [
         "python3",
-        "nemo_ckpt_convert.py",
-        f"-i={nemo_model_path}",
-        f"-o={output_model_dir}",
-        "--storage-type=float16",
-        " --tensor-parallelism=1",
-        "--processes=1",
+        "convert_checkpoint.py",
+        f"--nemo_ckpt_path={nemo_model_path}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
     ]
 
     # Convert ptuning table
@@ -413,22 +409,18 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
 
     # Build engine
     build_cmd = [
-        "python3",
-        "build.py",
-        f"--model_dir={output_model_dir}/1-gpu",
-        "--dtype=float16",
-        "--use_inflight_batching",
-        "--use_gpt_attention_plugin=float16",
-        "--paged_kv_cache",
-        "--use_gemm_plugin=float16",
-        "--remove_input_padding",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--paged_kv_cache=enable",
+        "--gemm_plugin=float16",
+        "--context_fmha=enable",
         "--max_batch_size=8",
         "--max_input_len=924",
         "--max_output_len=128",
         "--max_beam_width=1",
         f"--output_dir={engine_dir}",
-        "--hidden_act=gelu",
-        "--enable_context_fmha",
         "--max_prompt_embedding_table_size=800",
     ]
 
@@ -454,9 +446,8 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
         print_info(f"Skipped: {build_cmd}")
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
-    assert os.path.exists(
-        output_model_dir), f"{output_model_dir} does not exists."
-    return engine_dir, output_model_dir
+    assert os.path.exists(ckpt_dir), f"{ckpt_dir} does not exists."
+    return engine_dir, ckpt_dir
 
 
 def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
@@ -523,12 +514,12 @@ def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
 def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
                                       gpt_tokenizer_model_root):
     # Convert GPT weights from HF
-    model_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                             "rcca_nvbug_4323566")
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "rcca_nvbug_4323566")
     convert_cmd = [
-        "python3", f"{tensorrt_llm_gpt_example_root}/hf_gpt_convert.py",
-        f"-i={gpt_tokenizer_model_root}", "--storage-type=float16",
-        f"-o={model_dir}"
+        "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
+        f"--model_dir={gpt_tokenizer_model_root}", "--dtype=float16",
+        f"--output_dir={ckpt_dir}"
     ]
 
     # Build GPT
@@ -539,25 +530,21 @@ def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "rcca_nvbug_4323566_ifb")
     build_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/build.py",
-        f"--model_dir={model_dir}/1-gpu",
-        "--dtype=float16",
-        "--use_gpt_attention_plugin=float16",
-        "--use_gemm_plugin=float16",
-        "--enable_context_fmha",
-        "--remove_input_padding",
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--context_fmha=enable",
+        "--remove_input_padding=enable",
         "--max_batch_size=64",
         "--max_input_len=924",
         "--max_output_len=100",
-        "--hidden_act=gelu",
         f"--output_dir={engine_dir}",
     ]
 
     if type == "ifb":
         build_cmd += [
-            "--use_inflight_batching",
-            "--paged_kv_cache",
+            "--paged_kv_cache=enable",
         ]
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)

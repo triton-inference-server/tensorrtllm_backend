@@ -1153,7 +1153,7 @@ def test_gpt_next_ptuning_ifb(
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
-    vocab_file = os.path.join(output_model_dir, "1-gpu", "tokenizer.model")
+    vocab_file = os.path.join(output_model_dir, "tokenizer.model")
     # 1. Input with virtual tokens:
     if VIRTUAL_TOKENS == "True":
         prompt_table = os.path.join(tensorrt_llm_gpt_example_root,
