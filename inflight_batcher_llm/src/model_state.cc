@@ -26,6 +26,10 @@
 
 #include "model_state.h"
 
+#include "tensorrt_llm/common/mpiUtils.h"
+
+#include <algorithm>
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -44,7 +48,7 @@ std::vector<int32_t> csvStrToVecInt(std::string const& str)
 }
 
 TRITONSERVER_Error* ModelState::Create(
-    TRITONBACKEND_Model* triton_model, const std::string& name, const uint64_t version, ModelState** state)
+    TRITONBACKEND_Model* triton_model, std::string const& name, const uint64_t version, ModelState** state)
 {
     TRITONSERVER_Message* config_message;
     RETURN_IF_ERROR(TRITONBACKEND_ModelConfig(triton_model, 1 /* config_version */, &config_message));
@@ -55,7 +59,7 @@ TRITONSERVER_Error* ModelState::Create(
     // nice errors (currently the underlying implementation is
     // rapidjson... but others could be added). You can use any json
     // parser you prefer.
-    const char* buffer;
+    char const* buffer;
     size_t byte_size;
     RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(config_message, &buffer, &byte_size));
 
@@ -68,7 +72,7 @@ TRITONSERVER_Error* ModelState::Create(
     {
         *state = new ModelState(triton_model, name, version, std::move(model_config));
     }
-    catch (const std::exception& ex)
+    catch (std::exception const& ex)
     {
         std::string errStr = std::string("unexpected error when creating modelState: ") + ex.what();
         return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
@@ -98,7 +102,7 @@ void ModelState::LoadParameters()
             TLLM_LOG_INFO(deviceIdInfo);
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
@@ -110,7 +114,7 @@ common::TritonJson::Value& ModelState::GetModelConfig()
     return model_config_;
 }
 
-const std::string& ModelState::GetModelName() const
+std::string const& ModelState::GetModelName() const
 {
     return model_name_;
 }
@@ -120,8 +124,77 @@ uint64_t ModelState::GetModelVersion() const
     return model_version_;
 }
 
+const std::string ModelState::GetWorkerPath()
+{
+    std::string workerPath = "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker";
+    try
+    {
+        workerPath = GetParameter<std::string>("worker_path");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING("worker_path is not specified, will use default value");
+    }
+
+    return workerPath;
+}
+
+std::vector<int64_t> ModelState::serialize() const
+{
+    // model name
+    // model version
+    // model config
+    size_t totalSize = 3;
+
+    int nameSize = (model_name_.size() + sizeof(int64_t)) / sizeof(int64_t);
+    totalSize += nameSize;
+
+    TritonJson::WriteBuffer buffer;
+    model_config_.Write(&buffer);
+
+    totalSize += buffer.Size();
+
+    std::vector<int64_t> packed(totalSize);
+    int64_t* ptr = packed.data();
+
+    *ptr++ = model_name_.size();
+    std::memcpy(ptr, model_name_.c_str(), model_name_.size());
+    ptr += nameSize;
+
+    *ptr++ = model_version_;
+    *ptr++ = buffer.Size();
+    std::memcpy(ptr, buffer.Base(), buffer.Size());
+
+    return packed;
+}
+
+ModelState ModelState::deserialize(int64_t const* packed_ptr)
+{
+    auto const nameSize = *packed_ptr++;
+    char const* cname = reinterpret_cast<char const*>(packed_ptr);
+    packed_ptr += (nameSize + sizeof(int64_t)) / sizeof(int64_t);
+
+    const uint64_t version = *packed_ptr++;
+
+    auto const jsonSize = *packed_ptr++;
+    char const* jsonBuffer = reinterpret_cast<char const*>(packed_ptr);
+    common::TritonJson::Value model_config;
+    TRITONSERVER_Error* err = model_config.Parse(jsonBuffer, jsonSize);
+    if (err)
+    {
+        throw std::runtime_error("Failed to parse model config");
+    }
+
+    return ModelState{nullptr, cname, version, std::move(model_config)};
+}
+
+ModelState ModelState::deserialize(std::vector<int64_t> const& packed)
+{
+    return ModelState::deserialize(packed.data());
+}
+
 template <>
-std::string ModelState::GetParameter<std::string>(const std::string& name)
+std::string ModelState::GetParameter<std::string>(std::string const& name)
 {
     TritonJson::Value parameters;
     TRITONSERVER_Error* err = model_config_.MemberAsObject("parameters", &parameters);
@@ -144,13 +217,13 @@ std::string ModelState::GetParameter<std::string>(const std::string& name)
 }
 
 template <>
-int32_t ModelState::GetParameter<int32_t>(const std::string& name)
+int32_t ModelState::GetParameter<int32_t>(std::string const& name)
 {
     return std::stoi(GetParameter<std::string>(name));
 }
 
 template <>
-std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(const std::string& name)
+std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(std::string const& name)
 {
     auto deviceIdsStr = GetParameter<std::string>(name);
     // Parse as comma delimited string
@@ -158,31 +231,31 @@ std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(const std::s
 }
 
 template <>
-uint32_t ModelState::GetParameter<uint32_t>(const std::string& name)
+uint32_t ModelState::GetParameter<uint32_t>(std::string const& name)
 {
     return (uint32_t) std::stoul(GetParameter<std::string>(name));
 }
 
 template <>
-int64_t ModelState::GetParameter<int64_t>(const std::string& name)
+int64_t ModelState::GetParameter<int64_t>(std::string const& name)
 {
     return std::stoll(GetParameter<std::string>(name));
 }
 
 template <>
-uint64_t ModelState::GetParameter<uint64_t>(const std::string& name)
+uint64_t ModelState::GetParameter<uint64_t>(std::string const& name)
 {
     return std::stoull(GetParameter<std::string>(name));
 }
 
 template <>
-float ModelState::GetParameter<float>(const std::string& name)
+float ModelState::GetParameter<float>(std::string const& name)
 {
     return std::stof(GetParameter<std::string>(name));
 }
 
 template <>
-bool ModelState::GetParameter<bool>(const std::string& name)
+bool ModelState::GetParameter<bool>(std::string const& name)
 {
     auto val = GetParameter<std::string>(name);
     if (val == "True" || val == "true" || val == "TRUE" || val == "1")

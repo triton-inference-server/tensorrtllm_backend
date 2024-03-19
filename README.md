@@ -159,21 +159,19 @@ cd tensorrt_llm/examples/gpt
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
 pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
 
-# Convert weights from HF Tranformers to FT format
-python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 4 --storage-type float16
+# Convert weights from HF Tranformers to TensorRT-LLM checkpoint
+python3 convert_checkpoint.py --model_dir gpt2 \
+        --dtype float16 \
+        --tp_size 4 \
+        --output_dir ./c-model/gpt2/fp16/4-gpu
 
 # Build TensorRT engines
-python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
-                 --world_size=4 \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --hidden_act gelu \
-                 --parallel_build \
-                 --output_dir=engines/fp16/4-gpu
+trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --output_dir engines/fp16/4-gpu
 ```
 
 ### Create the model repository
@@ -191,7 +189,7 @@ and postprocessing models together.
 - "tensorrt_llm_bls": This model can also be used to chain the preprocessing,
 tensorrt_llm and postprocessing models together. The BLS model has an optional
 parameter `accumulate_tokens` which can be used in streaming mode to call the
-preprocessing model with all accumulated tokens, instead of only one token.
+postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
 To learn more about ensemble and BLS models, please see the
@@ -236,6 +234,7 @@ The following table shows the fields that may to be modified before deployment:
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 | `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
+| `gpu_device_ids` | Optional (default=unspecified). Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. |
 | `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
@@ -274,6 +273,15 @@ cd /tensorrtllm_backend
 # --world_size is the number of GPUs you want to use for serving
 python3 scripts/launch_triton_server.py --world_size=4 --model_repo=/tensorrtllm_backend/triton_model_repo
 ```
+
+In order to use multiple TensorRT-LLM models, use the `--multi-model` option. The `--world_size` must be 1 as the TensorRT-LLM backend will dynamically launch TensorRT-LLM workers as needed.
+
+```bash
+cd /tensorrtllm_backend
+python3 scripts/launch_triton_server.py --model_repo=/tensorrtllm_backend/triton_model_repo --multi-model
+```
+
+When using the `--multi-model` option, the Triton model repository can contain multiple TensorRT-LLM models. When running multiple TensorRT-LLM models, the `gpu_device_ids` parameter should be specified in the models `config.pbtxt` configuration files. It is up to you to ensure there is no overlap between allocated GPU IDs.
 
 When successfully deployed, the server produces logs similar to the following ones.
 ```
@@ -373,7 +381,7 @@ number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
 
 #### Return context logits and/or generation logits
-If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
 
 After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash

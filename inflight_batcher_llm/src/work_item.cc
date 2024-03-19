@@ -25,6 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "work_item.h"
+
+#include "utils.h"
+
 #include <map>
 
 namespace triton::backend::inflight_batcher_llm
@@ -72,7 +75,7 @@ std::shared_ptr<tensorrt_llm::batch_manager::InferenceRequest> WorkItem::getInfe
     return mInferenceRequest;
 }
 
-bool WorkItem::hasOutputName(const std::string& outputName)
+bool WorkItem::hasOutputName(std::string const& outputName)
 {
     return (mRequestOutputNames.find(outputName) != mRequestOutputNames.end());
 }
@@ -91,9 +94,9 @@ std::shared_ptr<tensorrt_llm::batch_manager::InferenceRequest> WorkItem::createI
         TRITONBACKEND_Input* input = 0L;
         TRITONBACKEND_RequestInputByIndex(request, idx, &input);
 
-        const char* input_name = 0L;
+        char const* input_name = 0L;
         TRITONSERVER_DataType data_type = TRITONSERVER_TYPE_INVALID;
-        const int64_t* shape = 0L;
+        int64_t const* shape = 0L;
         uint32_t dims_count = 0;
         uint64_t byte_size = 0;
         uint32_t buffer_count = 0;
@@ -116,7 +119,7 @@ std::shared_ptr<tensorrt_llm::batch_manager::InferenceRequest> WorkItem::createI
         uint64_t buffer_offset = 0;
         for (int64_t buffer_id = 0; buffer_id < buffer_count; ++buffer_id)
         {
-            const void* buffer = 0L;
+            void const* buffer = 0L;
             uint64_t buffer_byte_size = 0;
             TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
             int64_t memory_type_id = 0;

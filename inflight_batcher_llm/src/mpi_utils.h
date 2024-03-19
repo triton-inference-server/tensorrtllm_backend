@@ -26,65 +26,61 @@
 
 #pragma once
 
-#include "tensorrt_llm/batch_manager/namedTensor.h"
+#include <cstdint>
+#include <memory>
+#include <variant>
+#include <vector>
 
-#include <list>
-
-using namespace tensorrt_llm::batch_manager;
+// fwd declarations
+struct TRITONBACKEND_Request;
 
 namespace triton::backend::inflight_batcher_llm
 {
 
-// Represent an answer from TRT-LLM that can be sent back to Triton
-// This class provides helper methods to serialize/deserialize
-class InferenceAnswer
+// fwd declarations
+class InferenceAnswer;
+
+constexpr int32_t kMPI_ID_TAG{127};
+constexpr int32_t kMPI_DATA_TAG{1023};
+
+enum class MpiId : uint64_t
 {
-public:
-    explicit InferenceAnswer(uint64_t request_id)
-        : request_id_(request_id)
+    PENDING_REQUEST = 1,
+    REQUEST_IN_PROGRESS = 2,
+    REQUEST_ANSWER = 3,
+    STOP_REQUEST = 4,
+    CANCEL_REQUEST = 5,
+    TERMINATION = 6,
+};
+
+struct PendingRequestData
+{
+    std::vector<TRITONBACKEND_Request*> requests;
+};
+
+// Used by REQUEST_IN_PROGRESS and CANCEL_REQUEST
+struct RequestIdsData
+{
+    std::vector<uint64_t> ids;
+};
+
+struct RequestAnswerData
+{
+    std::shared_ptr<InferenceAnswer> answer;
+};
+
+using MpiMessageData = std::variant<PendingRequestData, RequestIdsData, RequestAnswerData>;
+
+struct MpiMessage
+{
+    MpiMessage(MpiId _id)
+        : id(_id)
     {
     }
 
-    InferenceAnswer(uint64_t request_id, std::list<NamedTensor> const& response_tensors, bool final_response,
-        std::string const& err_msg)
-        : request_id_(request_id)
-        , response_tensors_(response_tensors)
-        , final_response_(final_response)
-        , err_msg_(err_msg)
-    {
-    }
+    MpiId id;
 
-    uint64_t GetRequestId() const
-    {
-        return request_id_;
-    }
-
-    bool IsFinalResponse() const
-    {
-        return final_response_;
-    }
-
-    std::list<NamedTensor> const& GetTensors() const
-    {
-        return response_tensors_;
-    }
-
-    std::string const& GetErrorMessage() const
-    {
-        return err_msg_;
-    }
-
-    [[nodiscard]] std::vector<int64_t> serialize() const;
-
-    static std::shared_ptr<InferenceAnswer> deserialize(std::vector<int64_t> const& packed);
-
-    static std::shared_ptr<InferenceAnswer> deserialize(int64_t const* packed_ptr);
-
-private:
-    uint64_t request_id_;
-    std::list<NamedTensor> response_tensors_;
-    bool final_response_;
-    std::string err_msg_;
+    MpiMessageData data;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

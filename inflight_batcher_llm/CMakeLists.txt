@@ -102,19 +102,19 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
-set(SRCS
-    src/libtensorrtllm.cc
-    src/work_item.cc
-    src/work_items_queue.cc
-    src/model_instance_state.cc
-    src/model_state.cc
-    src/utils.cc
-    src/inference_answer.cc)
+set(COMMON_SRCS
+    src/work_item.cc src/work_items_queue.cc src/model_instance_state.cc
+    src/model_state.cc src/utils.cc src/inference_answer.cc)
 
-add_library(triton-tensorrt-llm-backend SHARED ${SRCS})
+add_library(triton-tensorrt-llm-common SHARED ${COMMON_SRCS})
 
-add_library(TritonTensorRTLLMBackend::triton-tensorrt-llm-backend ALIAS
-            triton-tensorrt-llm-backend)
+set(BACKEND_SRCS src/libtensorrtllm.cc src/orchestrator.cc)
+
+add_library(triton-tensorrt-llm-backend SHARED ${BACKEND_SRCS})
+
+set(WORKER_SRCS src/worker.cc)
+
+add_executable(triton-tensorrt-llm-worker ${WORKER_SRCS})
 
 enable_language(CUDA)
 
@@ -191,21 +191,22 @@ list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
 include_directories(${COMMON_HEADER_DIRS})
 
 target_include_directories(
-  triton-tensorrt-llm-backend
-  PRIVATE ${TRTLLM_DIR}/cpp
-          ${TRTLLM_DIR}/cpp/include
-          ${CMAKE_CURRENT_SOURCE_DIR}/src
-          ${CUDA_INCLUDE_DIRS}
-          ${CUDNN_ROOT_DIR}/include
-          ${NCCL_INCLUDE_DIR}
-          ${3RDPARTY_DIR}/cutlass/include
-          ${MPI_INCLUDE_PATH}
-          ${COMMON_HEADER_DIR})
+  triton-tensorrt-llm-common
+  PUBLIC ${TRTLLM_DIR}/cpp
+         ${TRTLLM_DIR}/cpp/include
+         ${CMAKE_CURRENT_SOURCE_DIR}/src
+         ${CUDA_INCLUDE_DIRS}
+         ${CUDNN_ROOT_DIR}/include
+         ${NCCL_INCLUDE_DIR}
+         ${3RDPARTY_DIR}/cutlass/include
+         ${MPI_INCLUDE_PATH}
+         ${COMMON_HEADER_DIR})
 
+target_compile_features(triton-tensorrt-llm-common PRIVATE cxx_std_17)
 target_compile_features(triton-tensorrt-llm-backend PRIVATE cxx_std_17)
-target_compile_options(
-  triton-tensorrt-llm-backend
-  PRIVATE
+target_compile_features(triton-tensorrt-llm-worker PRIVATE cxx_std_17)
+
+set(COMPILE_OPTIONS
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall
     -Wextra
@@ -215,6 +216,10 @@ target_compile_options(
     $<$<CXX_COMPILER_ID:MSVC>:/Wall
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
+
+target_compile_options(triton-tensorrt-llm-common PRIVATE ${COMPILE_OPTIONS})
+target_compile_options(triton-tensorrt-llm-backend PRIVATE ${COMPILE_OPTIONS})
+target_compile_options(triton-tensorrt-llm-worker PRIVATE ${COMPILE_OPTIONS})
 
 add_library(tensorrt_llm SHARED IMPORTED)
 set_property(
@@ -262,9 +267,9 @@ if(TRITON_ENABLE_METRICS)
            triton-backend-utils # from repo-backend
            tensorrt_llm)
 
-  target_compile_definitions(triton-tensorrt-llm-backend
+  target_compile_definitions(triton-tensorrt-llm-common
                              PRIVATE TRITON_ENABLE_METRICS=1)
-  target_link_libraries(triton-tensorrt-llm-backend
+  target_link_libraries(triton-tensorrt-llm-common
                         PRIVATE triton-custom-metrics-reporter-library)
 endif()
 
@@ -290,16 +295,21 @@ if(TRITON_BUILD)
 endif() # TRITON_BUILD
 
 target_link_libraries(
-  triton-tensorrt-llm-backend
-  PRIVATE tensorrt_llm
-          triton-core-serverapi # from repo-core
-          triton-core-backendapi # from repo-core
-          triton-core-serverstub # from repo-core
-          triton-backend-utils # from repo-backend
-          ${MPI_LIBRARIES}
-          ${CUDA_LIBRARIES}
-          nvinfer
-          nvinfer_plugin_tensorrt_llm)
+  triton-tensorrt-llm-common
+  PUBLIC tensorrt_llm
+         triton-core-serverapi # from repo-core
+         triton-core-backendapi # from repo-core
+         triton-core-serverstub # from repo-core
+         triton-backend-utils # from repo-backend
+         ${MPI_LIBRARIES}
+         ${CUDA_LIBRARIES}
+         nvinfer
+         nvinfer_plugin_tensorrt_llm)
+
+target_link_libraries(triton-tensorrt-llm-backend
+                      PRIVATE triton-tensorrt-llm-common)
+target_link_libraries(triton-tensorrt-llm-worker
+                      PRIVATE triton-tensorrt-llm-common)
 
 FetchContent_Declare(
   json
@@ -308,13 +318,19 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json)
 
-target_link_libraries(triton-tensorrt-llm-backend
+target_link_libraries(triton-tensorrt-llm-common
                       PRIVATE nlohmann_json::nlohmann_json)
 
 if(WIN32)
   set_target_properties(
     triton-tensorrt-llm-backend PROPERTIES POSITION_INDEPENDENT_CODE ON
                                            OUTPUT_NAME triton_tensorrtllm)
+  set_target_properties(
+    triton-tensorrt-llm-worker PROPERTIES POSITION_INDEPENDENT_CODE ON
+                                          OUTPUT_NAME triton_tensorrtllm_worker)
+  set_target_properties(
+    triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
+                                          OUTPUT_NAME triton_tensorrtllm_common)
 else()
   set_target_properties(
     triton-tensorrt-llm-backend
@@ -325,62 +341,14 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
+  set_target_properties(triton-tensorrt-llm-worker
+                        PROPERTIES OUTPUT_NAME triton_tensorrtllm_worker)
+  set_target_properties(
+    triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
+                                          OUTPUT_NAME triton_tensorrtllm_common)
 endif()
 
 if(BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
-
-#
-# Install
-#
-include(GNUInstallDirs)
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonTensorRTLLMBackend)
-
-install(
-  TARGETS triton-tensorrt-llm-backend
-  EXPORT triton-tensorrt-llm-backend-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
-
-if(TRITON_BUILD)
-  file(
-    GLOB
-    LIBINFER_PLUGIN_TENSORRT_LLM
-    "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so*"
-    FOLLOW_SYMLINKS)
-  install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
-          DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
-
-  file(GLOB LIBINFER_PLUGIN_TENSORRT_LLM
-       "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so*"
-       FOLLOW_SYMLINKS)
-  install(FILES ${LIBINFER_PLUGIN_TENSORRT_LLM}
-          DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/tensorrtllm)
-endif() # TRITON_BUILD
-
-install(
-  EXPORT triton-tensorrt-llm-backend-targets
-  FILE TritonTensorRTLLMBackendTargets.cmake
-  NAMESPACE TritonTensorRTLLMBackend::
-  DESTINATION ${INSTALL_CONFIGDIR})
-
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-  ${CMAKE_CURRENT_LIST_DIR}/cmake/TritonTensorRTLLMBackendConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendConfig.cmake
-  INSTALL_DESTINATION ${INSTALL_CONFIGDIR})
-
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendConfig.cmake
-        DESTINATION ${INSTALL_CONFIGDIR})
-
-#
-# Export from build tree
-#
-export(
-  EXPORT triton-tensorrt-llm-backend-targets
-  FILE ${CMAKE_CURRENT_BINARY_DIR}/TritonTensorRTLLMBackendTargets.cmake
-  NAMESPACE TritonTensorRTLLMBackend::)
-
-export(PACKAGE TritonTensorRTLLMBackend)

@@ -31,7 +31,6 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 #include <unordered_set>
-#include <utils.h>
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -56,7 +55,7 @@ public:
 
     std::shared_ptr<InferenceRequest> getInferenceRequest() const;
 
-    bool hasOutputName(const std::string& outputName);
+    bool hasOutputName(std::string const& outputName);
 
     /// timestamp storage for Triton base metrics
     struct Timestamps

@@ -26,12 +26,14 @@
 
 #pragma once
 
-#include <nlohmann/json.hpp>
+#include <queue>
 #include <unordered_map>
 
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
+
+#include "tensorrt_llm/common/mpiUtils.h"
 
 #include "tensorrt_llm/batch_manager/BatchManager.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
@@ -42,7 +44,9 @@
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/runtime/decodingMode.h"
 
+#include "inference_answer.h"
 #include "model_state.h"
+#include "mpi_utils.h"
 #include "work_item.h"
 #include "work_items_queue.h"
 
@@ -50,6 +54,7 @@
 #include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
 
+using namespace tensorrt_llm::mpi;
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
 
@@ -71,8 +76,21 @@ class ModelInstanceState
     using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
 
 public:
+    // number of cpu workers used to move weights host cache to gpu cache
+    static constexpr SizeType kPeftCacheNumEnsureWorkers = 4;
+    // number of cuda streams used for H2D copies of peft cache pages
+    static constexpr SizeType kPeftCacheNumCopyStreams = 4;
+    // number of cpu workers used to load weight into host cache
+    static constexpr SizeType kPeftCacheNumPutWorkers = 4;
+
+    /// @brief Create a ModelInstanceObject when running in non-orchestrator mode
     static TRITONSERVER_Error* Create(
         ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, ModelInstanceState** state);
+
+    /// @brief Create a ModelInstanceObject for workers when running in orchestrator mode
+    /// @param leaderOrchComm MPI inter-communicator containing MPI_COMM_WORLD and the parent process.
+    /// Is only used for the leader rank (0) and is ignored for other ranks.
+    static bool Create(ModelState* model_state, MPI_Comm leaderOrchComm, ModelInstanceState** state);
 
     virtual ~ModelInstanceState()
     {
@@ -103,30 +121,54 @@ public:
 
     /// @brief  Callback passed to GptManager to get new inference requests
     /// @return Up to max_num_requests inference requests.
-    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(const int max_num_requests);
+    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(int const max_num_requests);
+    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests_leader(int const max_num_requests);
 
     /// @brief  Callback passed to GptManager to send responses back to client
     void sendResponse(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response,
-        const std::string& errMsg);
+        std::string const& errMsg);
+    void sendResponseLeader(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response,
+        std::string const& errMsg);
     /// @brief Callback passed to GptManager to get ids of stopped requests
     std::unordered_set<uint64_t> pollStopSignals();
 
     /// @brief  Callback passed to GptManager to print stats
-    void logStats(const std::string& s);
+    void logStats(std::string const& s);
 
     /// @brief Method that sends Triton response back to client
-    TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem,
-        std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg);
+    static TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem,
+        std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg,
+        WorkItemsQueue& workItemsQueue, TRITONBACKEND_ModelInstance* model_instance);
 
 private:
     /// @brief Constructor
-    ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance);
+    ModelInstanceState(
+        ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, MPI_Comm model_comm);
+
+    void RecvMpiThread();
+    void AnsMpiThread();
+    void SendMessage(MpiMessage&& message);
+
+    void broadcast_inference_requests(std::list<std::shared_ptr<InferenceRequest>>& rval);
 
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;
 
     TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
+
+    // Only valid for leader-worker ranks
+    std::unique_ptr<MpiComm> mLeaderOrchComm;
+    std::thread mReceiverThread;
+    std::queue<std::shared_ptr<InferenceRequest>> mRecvRequests;
+    std::mutex mRecRequestsMutex;
+    std::thread mSenderThread;
+    std::queue<MpiMessage> mSenderQueue;
+    std::mutex mSenderMutex;
+    std::condition_variable mSenderCV;
+    std::unordered_set<uint64_t> mStoppedReqIds;
+    std::mutex mStoppedReqIdsMutex;
+    std::atomic<bool> mModelUnloadRequest = false;
 
     std::shared_ptr<GptManager> mBatchManager;
     std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;

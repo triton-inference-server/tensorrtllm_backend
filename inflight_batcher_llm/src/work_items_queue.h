@@ -29,7 +29,6 @@
 #include "tensorrt_llm/common/logger.h"
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
-#include "utils.h"
 #include "work_item.h"
 #include <list>
 
@@ -73,8 +72,8 @@ public:
 
     /// @brief Add a batch of new work item to the queue
     /// Throws an error if requestId already exists
-    std::vector<std::shared_ptr<std::exception>> pushBatch(
-        std::vector<RequestWrapper>& requestsToPush, uint64_t exec_start_ns);
+    std::vector<std::shared_ptr<std::exception>> pushBatch(std::vector<RequestWrapper>& requestsToPush,
+        uint64_t exec_start_ns, std::function<void(std::shared_ptr<WorkItem>)> const& workItemCb = nullptr);
 
     /// @brief Get a new work item from the queue, and move it to the list of
     /// in progress work items if it hasn't been stopped
@@ -94,6 +93,10 @@ public:
         std::lock_guard<std::mutex> lk(mMutex);
         return mInProgressWorkItems.at(requestId);
     }
+
+    /// @brief Mark a request as being in progress
+    /// @param requestId
+    void markInProgress(const uint64_t requestId);
 
     /// @brief  Mark a request as being finished
     /// @param requestId
