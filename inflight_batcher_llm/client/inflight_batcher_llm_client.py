@@ -119,10 +119,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, frequency_penalty_data,
                    streaming_data, end_id, pad_id, prompt_embedding_table_data,
-                   prompt_vocab_size_data, lora_weights_data, lora_config_data,
-                   return_log_probs_data, top_k_data, top_p_data,
-                   draft_ids_data, return_context_logits_data,
-                   return_generation_logits_data):
+                   prompt_vocab_size_data, lora_task_id_data,
+                   lora_weights_data, lora_config_data, return_log_probs_data,
+                   top_k_data, top_p_data, draft_ids_data,
+                   return_context_logits_data, return_generation_logits_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -142,6 +142,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                            prompt_embedding_table_data),
             prepare_tensor("prompt_vocab_size", prompt_vocab_size_data)
         ]
+    if lora_task_id_data is not None:
+        inputs += [prepare_tensor("lora_task_id", lora_task_id_data)]
     if lora_weights_data is not None:
         inputs += [
             prepare_tensor("lora_weights", lora_weights_data),
@@ -421,6 +423,11 @@ if __name__ == "__main__":
                         default='',
                         required=False,
                         help="LoRA weights")
+    parser.add_argument("--lora-task-id",
+                        type=int,
+                        default=None,
+                        required=False,
+                        help="LoRA task id")
     parser.add_argument(
         "--exclude-input-in-output",
         action="store_true",
@@ -487,6 +494,12 @@ if __name__ == "__main__":
                         nargs='+',
                         default=[],
                         help='The requested output tensors')
+
+    parser.add_argument('--model-name',
+                        type=str,
+                        required=False,
+                        default='tensorrt_llm',
+                        help='Specify model name')
 
     FLAGS = parser.parse_args()
 
@@ -562,6 +575,9 @@ if __name__ == "__main__":
         except Exception:
             lora_config_data = np.load(
                 os.path.join(FLAGS.lora_path, "model.lora_keys.npy"))
+    lora_task_id_data = None
+    if FLAGS.lora_task_id is not None and FLAGS.lora_task_id != 0:
+        lora_task_id_data = np.array([[FLAGS.lora_task_id]], dtype=np.uint64)
 
     input_ids_data = np.array(input_ids, dtype=np.int32)
     input_lengths = [[len(ii)] for ii in input_ids]
@@ -614,9 +630,10 @@ if __name__ == "__main__":
         beam_width_data, temperature_data, repetition_penalty_data,
         presence_penalty_data, frequency_penalty_data, streaming_data,
         end_id_data, pad_id_data, prompt_embedding_table_data,
-        prompt_vocab_size_data, lora_weights_data, lora_config_data,
-        return_log_probs_data, top_k_data, top_p_data, draft_ids_data,
-        return_context_logits_data, return_generation_logits_data)
+        prompt_vocab_size_data, lora_task_id_data, lora_weights_data,
+        lora_config_data, return_log_probs_data, top_k_data, top_p_data,
+        draft_ids_data, return_context_logits_data,
+        return_generation_logits_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -679,7 +696,7 @@ if __name__ == "__main__":
                 )
                 # Send request
                 triton_client.async_stream_infer(
-                    'tensorrt_llm',
+                    FLAGS.model_name,
                     inputs,
                     outputs=outputs,
                     request_id=request_id,
@@ -690,7 +707,7 @@ if __name__ == "__main__":
 
                     if not FLAGS.stop_via_request_cancel:
                         triton_client.async_stream_infer(
-                            'tensorrt_llm',
+                            FLAGS.model_name,
                             stop_inputs,
                             request_id=request_id,
                             parameters={'Streaming': FLAGS.streaming})
@@ -729,7 +746,7 @@ if __name__ == "__main__":
             else:
                 # Send request
                 infer_future = triton_client.async_infer(
-                    'tensorrt_llm',
+                    FLAGS.model_name,
                     inputs,
                     outputs=outputs,
                     request_id=request_id,
@@ -746,7 +763,7 @@ if __name__ == "__main__":
                         infer_future.cancel()
                     else:
                         triton_client.async_infer(
-                            'tensorrt_llm',
+                            FLAGS.model_name,
                             stop_inputs,
                             request_id=request_id,
                             callback=partial(callback, user_data),

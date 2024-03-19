@@ -59,7 +59,7 @@ const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
 const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
 const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
 
-uint64_t convertTimestampToSeconds(const std::string& ts)
+uint64_t convertTimestampToSeconds(std::string const& ts)
 {
     std::tm tm = {};
     std::stringstream ss(ts);
@@ -70,9 +70,9 @@ uint64_t convertTimestampToSeconds(const std::string& ts)
     return time_in_seconds;
 }
 
-TritonMetricGroup::TritonMetricGroup(const std::string& metric_family_label,
-    const std::string& metric_family_description, const std::string& category_label,
-    const std::vector<std::string>& json_keys, const std::vector<std::string>& sub_labels)
+TritonMetricGroup::TritonMetricGroup(std::string const& metric_family_label,
+    std::string const& metric_family_description, std::string const& category_label,
+    std::vector<std::string> const& json_keys, std::vector<std::string> const& sub_labels)
     : metric_family_label_(metric_family_label)
     , metric_family_description_(metric_family_description)
     , category_label_(category_label)
@@ -81,14 +81,14 @@ TritonMetricGroup::TritonMetricGroup(const std::string& metric_family_label,
 {
 }
 
-TRITONSERVER_Error* TritonMetricGroup::CreateGroup(const std::string& model_name, const uint64_t version)
+TRITONSERVER_Error* TritonMetricGroup::CreateGroup(std::string const& model_name, const uint64_t version)
 {
     TRITONSERVER_MetricFamily* metric_family = nullptr;
     RETURN_IF_ERROR(TRITONSERVER_MetricFamilyNew(&metric_family, TRITONSERVER_METRIC_KIND_GAUGE,
         metric_family_label_.c_str(), metric_family_description_.c_str()));
     metric_family_.reset(metric_family);
 
-    std::vector<const TRITONSERVER_Parameter*> labels;
+    std::vector<TRITONSERVER_Parameter const*> labels;
     std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_label(
         TRITONSERVER_ParameterNew("model", TRITONSERVER_PARAMETER_STRING, model_name.c_str()));
     std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_version(
@@ -120,13 +120,13 @@ TRITONSERVER_Error* TritonMetricGroup::UpdateGroup(std::vector<uint64_t>& values
     return nullptr; // success
 }
 
-const std::vector<std::string>& TritonMetricGroup::JsonKeys() const
+std::vector<std::string> const& TritonMetricGroup::JsonKeys() const
 {
     return json_keys_;
 }
 
 TRITONSERVER_Error* CustomMetricsReporter::InitializeReporter(
-    const std::string& model_name, const uint64_t version, const bool is_v1_model)
+    std::string const& model_name, const uint64_t version, bool const is_v1_model)
 {
     /* REQUEST METRIC GROUP */
     request_metric_family_ = std::make_unique<TritonMetricGroup>(
@@ -179,18 +179,18 @@ TRITONSERVER_Error* CustomMetricsReporter::InitializeReporter(
     return nullptr; // success
 }
 
-TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(const std::string& custom_metrics)
+TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const& custom_metrics)
 {
     triton::common::TritonJson::Value metrics;
     std::vector<std::string> members;
     metrics.Parse(custom_metrics);
     metrics.Members(&members);
 
-    for (const auto& metric_group : metric_groups_)
+    for (auto const& metric_group : metric_groups_)
     {
         std::vector<std::string> metric_group_keys = metric_group->JsonKeys();
         std::vector<uint64_t> metric_group_values;
-        for (const auto& key : metric_group_keys)
+        for (auto const& key : metric_group_keys)
         {
             triton::common::TritonJson::Value value_json;
             uint64_t value;
