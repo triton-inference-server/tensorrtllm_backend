@@ -129,7 +129,7 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
     convert_ckpt_cmd = [
         "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
         f"--nemo_ckpt_path={gpt_2b_nemo_model}", "--dtype=float16",
-        "--lora_target_modules=attn_qkv", f"--output_dir={ckpt_dir}"
+        f"--output_dir={ckpt_dir}"
     ]
 
     # prepare more test metrials
@@ -163,6 +163,9 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
         "--gpt_attention_plugin=float16",
         "--gemm_plugin=float16",
         "--lora_plugin=float16",
+        f"--lora_dir={gpt_2b_lora_900_nemo_model}",
+        "--lora_ckpt_source=nemo",
+        "--lora_target_modules=attn_qkv",
         "--remove_input_padding=enable",
         "--max_batch_size=8",
         "--max_input_len=924",
