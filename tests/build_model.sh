@@ -251,7 +251,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     pip3 install -r requirements.txt
 
     echo "Convert GPT from NeMo"
-    python3 convert_checkpoint.py --nemo_ckpt_path ${GPT_2B} --dtype float16 --lora_target_modules attn_qkv --output_dir ./c-model/gpt-2b-lora/fp16
+    python3 convert_checkpoint.py --nemo_ckpt_path ${GPT_2B} --dtype float16 --output_dir ./c-model/gpt-2b-lora/fp16
 
     echo "Build GPT: float16"
     trtllm-build --checkpoint_dir ./c-model/gpt-2b-lora/fp16 \
@@ -260,6 +260,9 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
         --paged_kv_cache enable \
         --gemm_plugin float16 \
         --lora_plugin float16 \
+        --lora_dir ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
+        --lora_ckpt_source nemo \
+        --lora_target_modules attn_qkv \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --output_dir trt_engine/gpt-2b-lora-ib/fp16/1-gpu/
 
