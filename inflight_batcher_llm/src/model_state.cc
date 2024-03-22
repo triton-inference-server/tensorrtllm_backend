@@ -27,25 +27,12 @@
 #include "model_state.h"
 
 #include "tensorrt_llm/common/mpiUtils.h"
+#include "utils.h"
 
 #include <algorithm>
 
 namespace triton::backend::inflight_batcher_llm
 {
-
-/// Helper function to parse a csv delimited string to a vector ints
-std::vector<int32_t> csvStrToVecInt(std::string const& str)
-{
-    std::vector<int32_t> output;
-    std::stringstream ss(str);
-    while (ss.good())
-    {
-        std::string substr;
-        getline(ss, substr, ',');
-        output.push_back(std::stoi(substr));
-    }
-    return output;
-}
 
 TRITONSERVER_Error* ModelState::Create(
     TRITONBACKEND_Model* triton_model, std::string const& name, const uint64_t version, ModelState** state)
@@ -227,7 +214,7 @@ std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(std::string 
 {
     auto deviceIdsStr = GetParameter<std::string>(name);
     // Parse as comma delimited string
-    return csvStrToVecInt(deviceIdsStr);
+    return utils::csvStrToVecInt(deviceIdsStr);
 }
 
 template <>
@@ -271,6 +258,14 @@ bool ModelState::GetParameter<bool>(std::string const& name)
         std::string err = "Cannot convert " + val + " to a boolean.";
         throw std::runtime_error(err);
     }
+}
+
+template <>
+std::vector<std::vector<int32_t>> ModelState::GetParameter<std::vector<std::vector<int32_t>>>(std::string const& name)
+{
+    auto str = GetParameter<std::string>(name);
+    // Parse as comma delimited string and {} as array bounders
+    return utils::csvStrToVecVecInt(str);
 }
 
 } // namespace triton::backend::inflight_batcher_llm

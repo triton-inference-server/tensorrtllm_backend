@@ -42,8 +42,8 @@ function(add_gtest test_name test_src)
   add_executable(${test_name} ${test_src})
 
   target_link_libraries(
-    ${test_name} PRIVATE gtest_main triton-tensorrt-llm-common tensorrt_llm
-                         ${CUDA_LIBRARIES})
+    ${test_name} PRIVATE gtest_main gmock_main triton-tensorrt-llm-common
+                         tensorrt_llm ${CUDA_LIBRARIES})
 
   target_compile_features(${test_name} PRIVATE cxx_std_17)
   target_compile_definitions(${test_name}
@@ -55,6 +55,7 @@ endfunction()
 
 add_gtest(inferenceAnswerTest inferenceAnswer.cpp)
 add_gtest(modelStateTest modelState.cpp)
+add_gtest(utilsTest utilsTest.cpp)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/first.json
                ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)

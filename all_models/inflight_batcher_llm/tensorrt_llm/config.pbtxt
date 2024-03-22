@@ -415,3 +415,9 @@ parameters: {
     string_value: "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker"
   }
 }
+parameters: {
+  key: "medusa_choices"
+    value: {
+      string_value: "${medusa_choices}"
+  }
+}
