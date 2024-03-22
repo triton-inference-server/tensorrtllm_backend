@@ -75,5 +75,11 @@ void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errM
 bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
     std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue);
 
+/// Helper functions to parse a csv delimited string to a vector ints
+std::vector<int32_t> csvStrToVecInt(std::string const& str);
+
+/// Helper functions to parse a csv delimited string to a vector of vector ints
+std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str);
+
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm

@@ -134,4 +134,7 @@ bool ModelState::GetParameter<bool>(std::string const& name);
 template <>
 std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(std::string const& name);
 
+template <>
+std::vector<std::vector<int32_t>> ModelState::GetParameter<std::vector<std::vector<int32_t>>>(std::string const& name);
+
 } // namespace triton::backend::inflight_batcher_llm
