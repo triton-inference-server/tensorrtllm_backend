@@ -35,12 +35,29 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(result)
 
 
-def run_inference(triton_client, prompt, output_len, request_id,
-                  repetition_penalty, presence_penalty, frequency_penalty,
-                  temperature, stop_words, bad_words, embedding_bias_words,
-                  embedding_bias_weights, model_name, streaming, beam_width,
-                  overwrite_output_text, return_context_logits_data,
-                  return_generation_logits_data, end_id, pad_id, verbose):
+def run_inference(triton_client,
+                  prompt,
+                  output_len,
+                  request_id,
+                  repetition_penalty,
+                  presence_penalty,
+                  frequency_penalty,
+                  temperature,
+                  stop_words,
+                  bad_words,
+                  embedding_bias_words,
+                  embedding_bias_weights,
+                  model_name,
+                  streaming,
+                  beam_width,
+                  overwrite_output_text,
+                  return_context_logits_data,
+                  return_generation_logits_data,
+                  end_id,
+                  pad_id,
+                  verbose,
+                  num_draft_tokens=0,
+                  use_draft_logits=None):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -56,6 +73,15 @@ def run_inference(triton_client, prompt, output_len, request_id,
         prepare_tensor("beam_width", beam_width_data),
         prepare_tensor("temperature", temperature_data),
     ]
+
+    if num_draft_tokens > 0:
+        inputs.append(
+            prepare_tensor("num_draft_tokens",
+                           np.array([[num_draft_tokens]], dtype=np.int32)))
+    if use_draft_logits is not None:
+        inputs.append(
+            prepare_tensor("use_draft_logits",
+                           np.array([[use_draft_logits]], dtype=bool)))
 
     if bad_words:
         bad_words_list = np.array([bad_words], dtype=object)
@@ -145,24 +171,27 @@ def run_inference(triton_client, prompt, output_len, request_id,
         else:
             output = result.as_numpy('text_output')
             if streaming and beam_width == 1:
-                new_output = output[0].decode("utf8")
+                new_output = output[0].decode("utf-8")
                 if overwrite_output_text:
                     output_text = new_output
                 else:
                     output_text += new_output
             else:
-                output_text = output[0].decode("utf8")
+                output_text = output[0].decode("utf-8")
                 if verbose:
                     print(output, flush=True)
 
             if return_context_logits_data is not None:
                 context_logits = result.as_numpy('context_logits')
-                print(f"context_logits.shape: {context_logits.shape}")
-                print(f"context_logits: {context_logits}")
+                if verbose:
+                    print(f"context_logits.shape: {context_logits.shape}")
+                    print(f"context_logits: {context_logits}")
             if return_generation_logits_data is not None:
                 generation_logits = result.as_numpy('generation_logits')
-                print(f"generation_logits.shape: {generation_logits.shape}")
-                print(f"generation_logits: {generation_logits}")
+                if verbose:
+                    print(
+                        f"generation_logits.shape: {generation_logits.shape}")
+                    print(f"generation_logits: {generation_logits}")
 
     if streaming and beam_width == 1:
         if verbose:

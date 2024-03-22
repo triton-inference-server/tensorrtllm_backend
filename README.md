@@ -178,19 +178,83 @@ trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
 
 There are five models in the [`all_models/inflight_batcher_llm`](./all_models/inflight_batcher_llm/)
 directory that will be used in this example:
-- "preprocessing": This model is used for tokenizing, meaning the conversion from
+
+#### preprocessing
+
+This model is used for tokenizing, meaning the conversion from
 prompts(string) to input_ids(list of ints).
-- "tensorrt_llm": This model is a wrapper of your TensorRT-LLM model and is used
-for inferencing
-- "postprocessing": This model is used for de-tokenizing, meaning the conversion
+
+#### tensorrt_llm
+
+This model is a wrapper of your TensorRT-LLM model and is used
+for inferencing.
+Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/inference_request.md)
+
+#### postprocessing
+
+This model is used for de-tokenizing, meaning the conversion
 from output_ids(list of ints) to outputs(string).
-- "ensemble": This model can be used to chain the preprocessing, tensorrt_llm
+
+#### ensemble
+
+This model can be used to chain the preprocessing, tensorrt_llm
 and postprocessing models together.
-- "tensorrt_llm_bls": This model can also be used to chain the preprocessing,
-tensorrt_llm and postprocessing models together. The BLS model has an optional
+
+#### tensorrt_llm_bls
+
+This model can also be used to chain the preprocessing,
+tensorrt_llm and postprocessing models together.
+
+The BLS model has an optional
 parameter `accumulate_tokens` which can be used in streaming mode to call the
 postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
+
+The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding.
+
+BLS Inputs
+
+| Name | Shape | Type | Description |
+| :------------: | :---------------: | :-----------: | :--------: |
+| `text_input` | [ -1 ] | `string` | Prompt text |
+| `max_tokens` | [ -1 ] | `int32` | number of tokens to generate |
+| `bad_words` | [2, num_bad_words] | `int32` | Bad words list |
+| `stop_words` | [2, num_stop_words] | `int32` | Stop words list |
+| `end_id` | [1] | `int32` | End token Id. If not specified, defaults to -1 |
+| `pad_id` | [1] | `int32` | Pad token Id |
+| `temperature` | [1] | `float32` | Sampling Config param: `temperature` |
+| `top_k` | [1] | `int32` | Sampling Config param: `topK` |
+| `top_p` | [1] | `float32` | Sampling Config param: `topP` |
+| `len_penalty` | [1] | `float32` | Sampling Config param: `lengthPenalty` |
+| `repetition_penalty` | [1] | `float` | Sampling Config param: `repetitionPenalty` |
+| `min_length` | [1] | `int32_t` | Sampling Config param: `minLength` |
+| `presence_penalty` | [1] | `float` | Sampling Config param: `presencePenalty` |
+| `frequency_penalty` | [1] | `float` | Sampling Config param: `frequencyPenalty` |
+| `random_seed` | [1] | `uint64_t` | Sampling Config param: `randomSeed` |
+| `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output |
+| `return_context_logits` | [1] | `bool` | When `true`, include context logits in the output |
+| `return_generation_logits` | [1] | `bool` | When `true`, include generation logits in the output |
+| `beam_width` | [1] | `int32_t` | (Default=1) Beam width for this request; set to 1 for greedy sampling |
+| `stream` | [1] | `bool` | (Default=`false`). When `true`, stream out tokens as they are generated. When `false` return only when the full generation has completed.  |
+| `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
+| `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
+| `lora_task_id` | [1] | `uint64` | Task ID for the given lora_weights.  This ID is expected to be globally unique.  To perform inference with a specific LoRA for the first time `lora_task_id` `lora_weights` and `lora_config` must all be given.  The LoRA will be cached, so that subsequent requests for the same task only require `lora_task_id`. If the cache is full the oldest LoRA will be evicted to make space for new ones.  An error is returned if `lora_task_id` is not cached |
+| `lora_weights` | [ num_lora_modules_layers, D x Hi + Ho x D ] | `float` (model data type) | weights for a lora adapter. see [lora docs](lora.md#lora-tensor-format-details) for more details. |
+| `lora_config` | [ num_lora_modules_layers, 3] | `int32t` | lora configuration tensor. `[ module_id, layer_idx, adapter_size (D aka R value) ]` see [lora docs](lora.md#lora-tensor-format-details) for more details. |
+| `embedding_bias_words` | [-1] | `string` | Embedding bias words |
+| `embedding_bias_weights` | [-1] | `float32` | Embedding bias weights |
+| `num_draft_tokens` | [1] | int32 | number of tokens to get from draft model during speculative decoding |
+| `use_draft_logits` | [1] | `bool` | use logit comparison during speculative decoding |
+
+BLS Outputs
+
+| Name | Shape | Type | Description |
+| :------------: | :---------------: | :-----------: | :--------: |
+| `text_output` | [-1] | `string` | text output |
+| `cum_log_probs` | [-1] | `float` | cumulative probabilities for each output |
+| `output_log_probs` | [beam_width, -1] | `float` | log probabilities for each output |
+| `context_logits` | [-1, vocab_size] | `float` |  context logits for input |
+| `generation_logtis` | [beam_width, seq_len, vocab_size] | `float` | generatiion logits for each output |
 
 To learn more about ensemble and BLS models, please see the
 [Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)

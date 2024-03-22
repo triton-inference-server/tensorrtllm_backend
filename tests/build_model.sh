@@ -181,6 +181,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --use_paged_context_fmha enable \
         --gemm_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --gather_generation_logits \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
@@ -207,6 +208,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --use_paged_context_fmha enable \
         --max_draft_len 5 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --gather_generation_logits \
         --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
