@@ -54,6 +54,7 @@ CASE_TO_MODEL = [
   "gpt-ib-streaming": "gpt2",
   "gpt-ib-ptuning": "gpt2",
   "gpt-speculative-decoding": "gpt2",
+  "gpt-ib-speculative-decoding-bls": "gpt2",
   "gpt-2b-ib-lora": "gpt-2b-ib-lora",
   "gpt-gather-logits": "gpt2"
 ]
@@ -368,9 +369,20 @@ def runTRTLLMBackendTest(caseName)
         sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
       }
     }
+    else if (caseName.contains("speculative-decoding-bls")) {
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
+      {
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib"
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib"
+        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-ib-speculative-decoding-bls ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
+      }
+    }
     else if (caseName.contains("gather-logits")){
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-gather-logits"
       sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-gather-logits/fp16/1-gpu/ ${modelPath} ${tokenizerType}"
+    }
+    else if (caseName.contains("python-bls-unit-tests")){
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*.py"
     }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
@@ -645,6 +657,11 @@ pipeline {
                   runCPPUnitTest()
                 }
               }
+              stage("Test BLS python unit tests") {
+                steps {
+                  runTRTLLMBackendTest("python-bls-unit-tests")
+                }
+              }
             }
           }
           stage("A100_80GB_PCIE CPP tester") {
@@ -675,6 +692,11 @@ pipeline {
               stage("Test gpt-speculative-decoding") {
                 steps {
                   runTRTLLMBackendTest("gpt-speculative-decoding")
+                }
+              }
+              stage("Test gpt-ib-speculative-decoding-bls") {
+                steps {
+                  runTRTLLMBackendTest("gpt-ib-speculative-decoding-bls")
                 }
               }
               stage("Test gpt-gather-logits") {

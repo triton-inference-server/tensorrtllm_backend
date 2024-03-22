@@ -125,6 +125,7 @@ input [
     name: "return_log_probs"
     data_type: TYPE_BOOL
     dims: [ 1 ]
+    reshape: { shape: [ ] }
     optional: true
   },
   {
@@ -176,6 +177,19 @@ input [
       data_type: TYPE_FP32
       dims: [ -1 ]
       optional: true
+  },
+  {
+      name: "num_draft_tokens",
+      data_type: TYPE_INT32,
+      dims: [ 1 ]
+      optional: true
+  },
+  {
+      name: "use_draft_logits",
+      data_type: TYPE_BOOL,
+      dims: [ 1 ]
+      reshape: { shape: [ ] }
+      optional: true
   }
 ]
 output [
@@ -210,6 +224,18 @@ parameters: {
   key: "accumulate_tokens"
   value: {
     string_value: "${accumulate_tokens}"
+  }
+}
+parameters: {
+  key: "tensorrt_llm_model_name"
+  value: {
+    string_value: "${tensorrt_llm_model_name}"
+  }
+}
+parameters: {
+  key: "tensorrt_llm_draft_model_name"
+  value: {
+    string_value: "${tensorrt_llm_draft_model_name}"
   }
 }
 

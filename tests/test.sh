@@ -3,6 +3,7 @@
 MODEL=$1
 TARGET_ENGINE_PATH=$2
 TOKENIZER_PATH=$3
+TOKENIZER_TYPE=$4
 DRAFT_ENGINE_PATH=$5
 
 set -ex
@@ -128,6 +129,8 @@ print_test_params () {
     echo "MAX_BEAM_WIDTH: ${MAX_BEAM_WIDTH}"
     echo "ENABLE_KV_CACHE_REUSE: ${ENABLE_KV_CACHE_REUSE}"
     echo "E2E_MODEL_NAME: ${E2E_MODEL_NAME}"
+    echo "TENSORRT_LLM_MODEL_NAME: ${TENSORRT_LLM_MODEL_NAME}"
+    echo "TENSORRT_LLM_DRAFT_MODEL_NAME: ${TENSORRT_LLM_DRAFT_MODEL_NAME}"
     echo "ACCUMULATE_TOKEN: ${ACCUMULATE_TOKEN}"
     echo "BLS_INSTANCE_COUNT: ${BLS_INSTANCE_COUNT}"
     echo "PREPROCESSING_INSTANCE_COUNT: ${PREPROCESSING_INSTANCE_COUNT}"
@@ -148,7 +151,13 @@ fill_triton_repo () {
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:${TENSORRT_LLM_MODEL_NAME},tensorrt_llm_draft_model_name:${TENSORRT_LLM_DRAFT_MODEL_NAME}
+
+    if [ "${DRAFT_ENGINE_PATH}" != "" ]; then
+        cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_draft
+        sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_draft"/g' ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    fi
 }
 
 launch_triton_server () {
@@ -341,6 +350,7 @@ run_cpp_e2e_backend_tests () {
         --concurrency 8 \
         -i http \
         --max-input-len 300 \
+        --test-bls \
         --dataset ../dataset/mini_cnn_eval.json
 
     if [[ "$run_all_tests" == "true" ]]; then
@@ -348,6 +358,7 @@ run_cpp_e2e_backend_tests () {
             --concurrency 8 \
             -i grpc \
             --max-input-len 300 \
+            --test-bls \
             --dataset ../dataset/mini_cnn_eval.json
     fi
 
@@ -436,6 +447,7 @@ MAX_QUEUE_DELAY_MICROSECONDS="0"
 MAX_BEAM_WIDTH="1"
 ENABLE_KV_CACHE_REUSE="false"
 E2E_MODEL_NAME="ensemble"
+TENSORRT_LLM_MODEL_NAME="tensorrt_llm"
 ACCUMULATE_TOKEN="false"
 EXCLUDE_INPUT_IN_OUTPUT="false"
 BLS_INSTANCE_COUNT="1"
@@ -623,6 +635,55 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     E2E_MODEL_NAME="ensemble"
     ACCUMULATE_TOKEN="false"
+fi
+
+if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
+    # --------------------
+    # Python BLS test
+    # --------------------
+    DECOUPLED_MODE="False"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+    TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"
+    USE_DRAFT_LOGITS_VALUES=( "true" "false" )
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for USE_DRAFT_LOGITS in "${USE_DRAFT_LOGITS_VALUES[@]}"; do
+
+        if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
+            continue
+        fi
+        draft_args="--num-draft-tokens=5"
+        if [[ "${USE_DRAFT_LOGITS}" == "true" ]]; then
+            # with draft logit compare the outputs are not deterministic so we just
+            draft_args="--num-draft-tokens=5 --return-generation-logits --use-draft-logits --disable-output-comparison"
+        fi
+        ENABLE_KV_CACHE_REUSE="true"
+        launch_triton_server
+
+        # Test client
+        pushd tools/inflight_batcher_llm
+
+        python3 speculative_decoding_test.py \
+            --max-input-len 200 \
+            --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
+            --url-target=localhost:8001 \
+            --url-draft=localhost:8001 \
+            --max-input-len=250 \
+            --draft-tensorrt-llm-model-name="${TENSORRT_LLM_DRAFT_MODEL_NAME}" \
+            --target-tensorrt-llm-model-name="${TENSORRT_LLM_MODEL_NAME}" \
+            --bls-speculative-tensorrt-llm-model-name="tensorrt_llm_bls" \
+            --execute-bls-speculative-decoding \
+            ${draft_args} \
+            --verbose
+
+        popd # inflight_batcher_llm/client
+
+        kill_triton_server
+    done
+    done
 fi
 
 if [ "$MODEL" = "gpt-ib-ptuning" ]; then
