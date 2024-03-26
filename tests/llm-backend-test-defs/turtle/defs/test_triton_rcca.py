@@ -13,10 +13,12 @@ from .conftest import venv_check_call, venv_check_output
 def stop_triton_server():
     # Make sure Triton server are killed before each test.
     call(f"pkill -9 tritonserver", shell=True)
+    call(f"pkill -9 triton_tensorrtllm_worker", shell=True)
     time.sleep(2)
     yield
     # Gracefully terminate Triton Server after each test.
     call(f"pkill tritonserver", shell=True)
+    call(f"pkill triton_tensorrtllm_worker", shell=True)
     time.sleep(8)
 
 
