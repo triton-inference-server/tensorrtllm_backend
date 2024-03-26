@@ -206,17 +206,6 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
 
 
 def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
-    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                            "gpt_175b")
-    convert_cmd = [
-        "python3",
-        f"{tensorrt_llm_gpt_example_root}/../generate_checkpoint_config.py",
-        f"--output_path={ckpt_dir}/config.json",
-        "--architecture=GPTForCausalLM", "--dtype=float16",
-        "--num_hidden_layers=96", "--num_attention_heads=96",
-        "--hidden_size=12288", "--vocab_size=51200", "--hidden_act=gelu",
-        "--tp_size=8"
-    ]
     # Build GPT
     if type == "python_backend":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
@@ -224,6 +213,16 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt_175b_ifb")
+
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_gpt_example_root}/../generate_checkpoint_config.py",
+        f"--output_path={engine_dir}/ckpt_config.json",
+        "--architecture=GPTForCausalLM", "--dtype=float16",
+        "--num_hidden_layers=96", "--num_attention_heads=96",
+        "--hidden_size=12288", "--vocab_size=51200", "--hidden_act=gelu",
+        "--tp_size=8"
+    ]
 
     build_cmd = [
         "trtllm-build",
