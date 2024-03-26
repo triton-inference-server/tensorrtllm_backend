@@ -436,6 +436,8 @@ def runLLMBackendTestTURTLE(platform, testList, perfMode=false, timeout=0)
           sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
           sh "mkdir /opt/tritonserver/backends/tensorrtllm"
           sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
+          sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm_common.so /opt/tritonserver/backends/tensorrtllm"
+          sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/triton_tensorrtllm_worker /opt/tritonserver/backends/tensorrtllm"
 
           sh "rm -rf ${platform}-${testList}.tar.gz ${platform}-${testList}/*"
           sh "ls -lah"
