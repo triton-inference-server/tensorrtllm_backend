@@ -349,6 +349,17 @@ ModelInstanceState::ModelInstanceState(
     {
         TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
     }
+    std::optional<std::vector<std::vector<int32_t>>> medusaChoices = std::nullopt;
+    try
+    {
+        medusaChoices = model_state_->GetParameter<std::vector<std::vector<int32_t>>>("medusa_choices");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(
+            "medusa_choices parameter is not specified. "
+            "Will be using default mc_sim_7b_63 choices instead");
+    }
 
     auto const gpuDeviceIds = model_state_->GetDeviceIds();
 
@@ -362,6 +373,7 @@ ModelInstanceState::ModelInstanceState(
     optionalParams.enableChunkedContext = enableChunkedContext;
     optionalParams.deviceIds = gpuDeviceIds;
     optionalParams.decodingMode = decodingMode;
+    optionalParams.medusaChoices = medusaChoices;
 
     optionalParams.peftCacheManagerConfig.maxAdapterSize = maxAdapterSize;
     optionalParams.peftCacheManagerConfig.optimalAdapterSize = optimalAdapterSize;

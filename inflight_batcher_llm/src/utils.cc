@@ -294,4 +294,55 @@ bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint
     return false;
 }
 
+std::vector<int32_t> csvStrToVecInt(std::string const& str)
+{
+    TLLM_CHECK_WITH_INFO(!str.empty(), "Cannot convert empty string to vector of vector of ints");
+
+    std::vector<int32_t> output;
+    std::stringstream ss(str);
+    while (ss.good())
+    {
+        std::string substr;
+        ss >> std::ws;
+        getline(ss, substr, ',');
+        if (substr.empty())
+        {
+            break;
+        }
+        output.push_back(std::stoi(substr));
+    }
+    TLLM_CHECK_WITH_INFO(!output.empty(), "Empty vector");
+    return output;
+}
+
+std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str)
+{
+    TLLM_CHECK_WITH_INFO(!str.empty(), "Cannot convert empty string to vector of vector of ints");
+
+    std::vector<std::vector<int32_t>> output;
+    std::stringstream ss(str);
+
+    while (true)
+    {
+        std::string substr;
+        getline(ss, substr, '}');
+        if (substr.empty() || ss.eof())
+        {
+            break;
+        }
+        if (substr[0] == '{')
+        {
+            // Remove the opening bracket from the content
+            substr = substr.substr(1);
+        }
+        output.push_back(csvStrToVecInt(substr));
+        // Ignore the comma and any whitespace
+        ss >> std::ws;
+        ss.ignore(std::numeric_limits<std::streamsize>::max(), ',');
+        ss >> std::ws;
+    }
+    TLLM_CHECK_WITH_INFO(!output.empty(), "Empty vector of vector");
+    return output;
+}
+
 } // namespace triton::backend::inflight_batcher_llm::utils

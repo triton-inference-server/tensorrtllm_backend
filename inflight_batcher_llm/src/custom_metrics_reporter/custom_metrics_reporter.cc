@@ -52,9 +52,9 @@ const std::vector<std::string> CustomMetricsReporter::v1_specific_labels_{
     "total_context_tokens", "total_generation_tokens", "empty_generation_slots"};
 
 const std::vector<std::string> CustomMetricsReporter::IFB_specific_keys_{
-    "Total Context Tokens", "Generation Requests", "MicroBatch ID", "Terminated Requests"};
+    "Total Context Tokens", "Generation Requests", "MicroBatch ID", "Paused Requests"};
 const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
-    "total_context_tokens", "generation_requests", "micro_batch_id", "terminated_requests"};
+    "total_context_tokens", "generation_requests", "micro_batch_id", "paused_requests"};
 
 const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
 const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
