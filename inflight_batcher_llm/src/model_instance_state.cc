@@ -413,9 +413,8 @@ ModelInstanceState::ModelInstanceState(
 
     if (rank != 0 || mLeaderOrchComm)
     {
-        while (!mModelUnloadRequest.load())
-        {
-        }
+        std::unique_lock lk(mModelUnloadMutex);
+        mModelUnloadRequest.wait(lk);
 
         if (mReceiverThread.joinable())
         {
@@ -454,7 +453,8 @@ void ModelInstanceState::RecvMpiThread()
             }
 
             mSenderCV.notify_all();
-            mModelUnloadRequest.store(true);
+            std::unique_lock<std::mutex> lk(mModelUnloadMutex);
+            mModelUnloadRequest.notify_one();
             TLLM_LOG_INFO("Leader recv thread exiting");
             break;
         }
