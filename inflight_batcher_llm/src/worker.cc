@@ -17,7 +17,7 @@ using namespace triton::backend::inflight_batcher_llm;
 // more information on MPI inter-communicators
 int main(int argc, char* argv[])
 {
-    MPI_Init(&argc, &argv);
+    tensorrt_llm::mpi::initialize(tensorrt_llm::mpi::MpiThreadSupport::THREAD_MULTIPLE);
 
     MPI_Comm parentComm;
     MPI_Comm_get_parent(&parentComm);
@@ -34,6 +34,12 @@ int main(int argc, char* argv[])
         TLLM_LOG_ERROR("Parent size is %d, must be 1", size);
         return -1;
     }
+
+    // TRT-LLM event synchronization takes extra time to complete
+    // after the kernel has finished to run when using the spin wait
+    // (default mode). Using a yield in the wait workarounds a large
+    // part of the performance issue.
+    TLLM_CUDA_CHECK(::cudaSetDeviceFlags(cudaDeviceScheduleYield));
 
     // Since parentComm is an intercommunicator, input root
     // is the rank of the parent process in his group

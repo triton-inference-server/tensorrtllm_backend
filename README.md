@@ -301,6 +301,10 @@ The following table shows the fields that may to be modified before deployment:
 | `gpu_device_ids` | Optional (default=unspecified). Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. |
 | `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. |
 | `medusa_choices` | Optional. To specify Medusa choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, mc_sim_7b_63 choices are used. |
+| `lora_cache_optimal_adapter_size` | Optional (default=8) Optimal adapter size used to size cache pages. Typically optimally sized adapters will fix exactly into 1 cache page. |
+| `lora_cache_max_adapter_size` | Optional (default=64) Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. |
+| `lora_cache_gpu_memory_fraction` | Optional (default=0.05) Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded |
+| `lora_cache_host_memory_bytes` | Optional (default=1G) Size of host LoRA cache in bytes |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 
