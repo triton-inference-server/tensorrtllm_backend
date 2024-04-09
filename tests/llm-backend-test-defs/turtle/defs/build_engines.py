@@ -37,6 +37,7 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         "--max_batch_size=64",
         "--max_input_len=924",
         "--max_output_len=100",
+        "--gather_generation_logits",
         f"--output_dir={engine_dir}",
     ]
 

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tempfile
 import time
 from difflib import SequenceMatcher
@@ -11,7 +12,7 @@ from .conftest import venv_check_call, venv_check_output
 
 
 def check_server_ready(http_port="8000"):
-    timeout = 600
+    timeout = 300
     timer = 0
     while True:
         if http_port == "8000":
@@ -35,6 +36,15 @@ def check_server_ready(http_port="8000"):
     )
 
 
+def search_and_replace(file_path, search_words, replace_words):
+    with open(file_path, 'r') as file:
+        original_contents = file.read()
+        updated_contents = re.sub(search_words, replace_words,
+                                  original_contents)
+    with open(file_path, 'w') as file:
+        file.write(updated_contents)
+
+
 def prepare_ib_model_repo(llm_backend_repo_root, new_model_repo):
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "inflight_batcher_llm")
@@ -42,32 +52,39 @@ def prepare_ib_model_repo(llm_backend_repo_root, new_model_repo):
     check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
 
 
-def modify_ib_config_pbtxt(
-    REPO_PATH,
-    ENGINE_PATH,
-    TOKENIZER_PATH,
-    llm_backend_repo_root,
-    DECOUPLED_MODE,
-    MAX_TOKENS_IN_KV_CACHE,
-    MAX_ATTENTION_WINDOW_SIZE,
-    BATCH_SCHEDULER_POLICY,
-    BATCHING_STRATEGY,
-    KV_CACHE_FREE_GPU_MEM_FRACTION,
-    EXCLUDE_INPUT_IN_OUTPUT,
-    ENABLE_TRT_OVERLAP,
-    TRITON_MAX_BATCH_SIZE,
-    MAX_QUEUE_DELAY_MICROSECONDS,
-    MAX_BEAM_WIDTH,
-    ENABLE_KV_CACHE_REUSE,
-    NORMALIZE_LOG_PROBS,
-    ENABLE_CHUNKED_CONTEXT,
-    GPU_DEVICE_IDS,
-    DECODING_MODE,
-    PREPROCESSING_INSTANCE_COUNT,
-    POSTPROCESSING_INSTANCE_COUNT,
-    ACCUMULATE_TOKEN,
-    BLS_INSTANCE_COUNT,
-):
+def prepare_bls_draft_model(llm_backend_repo_root, new_model_repo):
+    origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
+                                     "inflight_batcher_llm", "tensorrt_llm")
+    check_call(f"rm -rf {new_model_repo}", shell=True)
+    check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
+
+
+def modify_ib_config_pbtxt(REPO_PATH,
+                           ENGINE_PATH,
+                           TOKENIZER_PATH,
+                           llm_backend_repo_root,
+                           DECOUPLED_MODE,
+                           MAX_TOKENS_IN_KV_CACHE,
+                           MAX_ATTENTION_WINDOW_SIZE,
+                           BATCH_SCHEDULER_POLICY,
+                           BATCHING_STRATEGY,
+                           KV_CACHE_FREE_GPU_MEM_FRACTION,
+                           EXCLUDE_INPUT_IN_OUTPUT,
+                           ENABLE_TRT_OVERLAP,
+                           TRITON_MAX_BATCH_SIZE,
+                           MAX_QUEUE_DELAY_MICROSECONDS,
+                           MAX_BEAM_WIDTH,
+                           ENABLE_KV_CACHE_REUSE,
+                           NORMALIZE_LOG_PROBS,
+                           ENABLE_CHUNKED_CONTEXT,
+                           GPU_DEVICE_IDS,
+                           DECODING_MODE,
+                           PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT,
+                           ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT,
+                           TENSORRT_LLM_MODEL_NAME="tensorrt_llm",
+                           TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
@@ -80,6 +97,33 @@ def modify_ib_config_pbtxt(
                                    "ensemble", "config.pbtxt")
     tensorrt_llm_bls_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                            "tensorrt_llm_bls", "config.pbtxt")
+
+    if "tensorrt_llm_draft" in REPO_PATH:
+        llm_draft_config = os.path.join(llm_backend_repo_root, REPO_PATH,
+                                        "config.pbtxt")
+        llm_config = llm_draft_config
+
+        search_words = 'name: "tensorrt_llm"'
+        replace_words = 'name: "tensorrt_llm_draft"'
+        search_and_replace(llm_config, search_words, replace_words)
+    else:
+        check_call(
+            f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
+            f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:{PREPROCESSING_INSTANCE_COUNT}",
+            shell=True)
+        check_call(
+            f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
+            f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:{POSTPROCESSING_INSTANCE_COUNT}",
+            shell=True)
+        check_call(
+            f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
+            shell=True)
+        check_call(
+            f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
+            f"decoupled_mode:{DECOUPLED_MODE},accumulate_tokens:{ACCUMULATE_TOKEN},bls_instance_count:{BLS_INSTANCE_COUNT}," \
+            f"tensorrt_llm_model_name:{TENSORRT_LLM_MODEL_NAME},tensorrt_llm_draft_model_name:{TENSORRT_LLM_DRAFT_MODEL_NAME}",
+            shell=True)
+
     check_call(
         f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
         f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
@@ -89,21 +133,6 @@ def modify_ib_config_pbtxt(
         f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
         f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
         f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
-        f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:{PREPROCESSING_INSTANCE_COUNT}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
-        f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:{POSTPROCESSING_INSTANCE_COUNT}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
-        shell=True)
-    check_call(
-        f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
-        f"decoupled_mode:{DECOUPLED_MODE},accumulate_tokens:{ACCUMULATE_TOKEN},bls_instance_count:{BLS_INSTANCE_COUNT}",
         shell=True)
 
 
