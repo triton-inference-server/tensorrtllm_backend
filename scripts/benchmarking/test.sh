@@ -3,7 +3,6 @@
 MODEL=$1
 ENGINE_PATH=$2
 TOKENIZER_PATH=$3
-TOKENIZER_TYPE=$4
 BS=$5
 MAX_INPUT_SEQLEN=$6
 TP=$7
@@ -55,8 +54,8 @@ fi
 fill_triton_repo () {
     # Modify config.pbtxt
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:"False",batching_strategy:${BATCHING_STRATEGY},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${BS},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_trt_overlap:${ENABLE_TRT_OVERLAP}
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},preprocessing_instance_count:1
-    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},tokenizer_type:${TOKENIZER_TYPE},postprocessing_instance_count:1
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/preprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},preprocessing_instance_count:1
+    python3 tools/fill_template.py -i my_models/inflight_batcher_llm/postprocessing/config.pbtxt triton_max_batch_size:${BS},tokenizer_dir:${TOKENIZER_PATH},postprocessing_instance_count:1
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/ensemble/config.pbtxt triton_max_batch_size:${BS}
     python3 tools/fill_template.py -i my_models/inflight_batcher_llm/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${BS},decoupled_mode:"False",accumulate_tokens:"False",bls_instance_count:1
 }
@@ -142,7 +141,7 @@ if true; then
                             --num-requests 15000 \
                             dataset \
                             --dataset $dataset_path \
-                            --tokenizer-dir "$TOKENIZER_PATH" --tokenizer-type "$TOKENIZER_TYPE"
+                            --tokenizer-dir "$TOKENIZER_PATH"
 
                         sleep 5
 

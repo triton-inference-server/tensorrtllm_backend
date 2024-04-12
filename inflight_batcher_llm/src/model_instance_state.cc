@@ -23,11 +23,15 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "model_instance_state.h"
+#include "utils.h"
+
+#include "mpi_utils.h"
 
 #include "tensorrt_llm/common/mpiUtils.h"
+
+#include <nlohmann/json.hpp>
 
 namespace mpi = tensorrt_llm::mpi;
 
@@ -39,9 +43,9 @@ TRITONSERVER_Error* ModelInstanceState::Create(
 {
     try
     {
-        *state = new ModelInstanceState(model_state, triton_model_instance);
+        *state = new ModelInstanceState(model_state, triton_model_instance, MPI_COMM_NULL);
     }
-    catch (const std::exception& ex)
+    catch (std::exception const& ex)
     {
         std::string errStr = std::string("unexpected error when creating modelInstanceState: ") + ex.what();
         return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
@@ -50,7 +54,26 @@ TRITONSERVER_Error* ModelInstanceState::Create(
     return nullptr; // success
 }
 
-ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
+bool ModelInstanceState::Create(ModelState* model_state, MPI_Comm leaderOrchComm, ModelInstanceState** state)
+{
+    try
+    {
+        // No need for a triton model instance, since this worker will communicate its answers
+        // to the orchestrator which communicates with Triton
+        TRITONBACKEND_ModelInstance* triton_model_instance = nullptr;
+        *state = new ModelInstanceState(model_state, triton_model_instance, leaderOrchComm);
+    }
+    catch (std::exception const& ex)
+    {
+        TLLM_LOG_ERROR("unexpected error when creating modelInstanceState: %s", ex.what());
+        return false;
+    }
+
+    return true;
+}
+
+ModelInstanceState::ModelInstanceState(
+    ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, MPI_Comm leaderOrchComm)
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
     , mHasActiveRequests(false)
@@ -101,7 +124,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxBeamWidth = model_state_->GetParameter<int32_t>("max_beam_width");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("max_beam_width is not specified, will use default value of 1");
@@ -112,7 +135,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxTokensInPagedKvCache = model_state_->GetParameter<int32_t>("max_tokens_in_paged_kv_cache");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -139,7 +162,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
                 "(must be max_utilization or guaranteed_no_evict)");
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         TLLM_LOG_WARNING(e.what());
     }
@@ -155,7 +178,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
                 "(requires building the model with use_paged_context_fmha).");
         }
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_chunked_context is not specified, will be set to false.");
@@ -180,7 +203,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         kvCacheFreeGpuMemFraction = model_state_->GetParameter<float>("kv_cache_free_gpu_mem_fraction");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -193,7 +216,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         enableTrtOverlap = model_state_->GetParameter<bool>("enable_trt_overlap");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_trt_overlap is not specified, will be set to false");
@@ -204,7 +227,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         normalizeLogProbs = model_state_->GetParameter<bool>("normalize_log_probs");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("normalize_log_probs is not specified, will be set to true");
@@ -215,7 +238,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         excludeInputInOutput = model_state_->GetParameter<bool>("exclude_input_in_output");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("exclude_input_in_output is not specified, will be set to false");
@@ -226,7 +249,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING(
@@ -239,10 +262,103 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         enableKVCacheReuse = model_state_->GetParameter<bool>("enable_kv_cache_reuse");
     }
-    catch (const std::exception& e)
+    catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
+    }
+
+    std::optional<DecodingMode> decodingMode = std::nullopt;
+    try
+    {
+        std::string decodingModeStr = model_state_->GetParameter<std::string>("decoding_mode");
+        if (decodingModeStr == "top_k")
+        {
+            decodingMode = DecodingMode::TopK();
+        }
+        else if (decodingModeStr == "top_p")
+        {
+            decodingMode = DecodingMode::TopP();
+        }
+        else if (decodingModeStr == "top_k_top_p")
+        {
+            decodingMode = DecodingMode::TopKTopP();
+        }
+        else if (decodingModeStr == "beam_search")
+        {
+            decodingMode = DecodingMode::BeamSearch();
+        }
+        else
+        {
+            throw std::runtime_error("");
+        }
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(
+            "decoding_mode parameter is invalid or not specified"
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search})."
+            "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
+    }
+
+    // parse LoRA / Peft cache parameters
+    // lora_cache_max_adapter_size
+    // lora_cache_optimal_adapter_size
+    // lora_cache_gpu_memory_fraction
+    // lora_cache_host_memory_bytes
+
+    SizeType maxAdapterSize = 64;
+    SizeType optimalAdapterSize = 8;
+    std::optional<size_t> hostCacheSize = std::nullopt;
+    std::optional<float> deviceCachePercent = std::nullopt;
+
+    std::string fieldName = "lora_cache_max_adapter_size";
+    try
+    {
+        maxAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 64");
+    }
+
+    fieldName = "lora_cache_optimal_adapter_size";
+    try
+    {
+        optimalAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 8");
+    }
+    fieldName = "lora_cache_gpu_memory_fraction";
+    try
+    {
+        deviceCachePercent = model_state_->GetParameter<float>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 0.05");
+    }
+    fieldName = "lora_cache_host_memory_bytes";
+    try
+    {
+        hostCacheSize = model_state_->GetParameter<size_t>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
+    }
+    std::optional<std::vector<std::vector<int32_t>>> medusaChoices = std::nullopt;
+    try
+    {
+        medusaChoices = model_state_->GetParameter<std::vector<std::vector<int32_t>>>("medusa_choices");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(
+            "medusa_choices parameter is not specified. "
+            "Will be using default mc_sim_7b_63 choices instead");
     }
 
     auto const gpuDeviceIds = model_state_->GetDeviceIds();
@@ -256,21 +372,162 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     optionalParams.normalizeLogProbs = normalizeLogProbs;
     optionalParams.enableChunkedContext = enableChunkedContext;
     optionalParams.deviceIds = gpuDeviceIds;
+    optionalParams.decodingMode = decodingMode;
+    optionalParams.medusaChoices = medusaChoices;
+
+    optionalParams.peftCacheManagerConfig.maxAdapterSize = maxAdapterSize;
+    optionalParams.peftCacheManagerConfig.optimalAdapterSize = optimalAdapterSize;
+    optionalParams.peftCacheManagerConfig.deviceCachePercent = deviceCachePercent;
+    optionalParams.peftCacheManagerConfig.hostCacheSize = hostCacheSize;
+
+    // TODO (grclark) find better defaults for these
+    optionalParams.peftCacheManagerConfig.numEnsureWorkers = ModelInstanceState::kPeftCacheNumEnsureWorkers;
+    optionalParams.peftCacheManagerConfig.numCopyStreams = ModelInstanceState::kPeftCacheNumCopyStreams;
+    optionalParams.peftCacheManagerConfig.numPutWorkers = ModelInstanceState::kPeftCacheNumPutWorkers;
 
     mBatchManager = std::make_shared<GptManager>(
         mModelPath, mTrtGptModelType, maxBeamWidth, schedulerPolicy,
-        [this](int max_num_requests) { return get_inference_requests(max_num_requests); },
-        [this](uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response,
-            const std::string& errMsg) { return sendResponse(requestId, response_tensors, final_response, errMsg); },
-        [this]() { return pollStopSignals(); }, [this](const std::string& s) { return logStats(s); }, optionalParams,
+        [this](int max_num_requests)
+        {
+            return mLeaderOrchComm ? get_inference_requests_leader(max_num_requests)
+                                   : get_inference_requests(max_num_requests);
+        },
+        [this](
+            uint64_t requestId, std::list<NamedTensor> response_tensors, bool final_response, std::string const& errMsg)
+        {
+            return mLeaderOrchComm ? sendResponseLeader(requestId, response_tensors, final_response, errMsg)
+                                   : sendResponse(requestId, response_tensors, final_response, errMsg);
+        },
+        [this]() { return pollStopSignals(); }, [this](std::string const& s) { return logStats(s); }, optionalParams,
         std::nullopt, std::nullopt, excludeInputInOutput);
 
-    if (COMM_SESSION.getRank() != 0)
+    int const rank = COMM_SESSION.getRank();
+    // If orchestrator mode and leader rank, need to spawn threads to receive requests/ send responses from/to
+    // orchestrator
+    if (rank == 0 && leaderOrchComm != MPI_COMM_NULL)
     {
-        while (true)
+        mLeaderOrchComm = std::make_unique<MpiComm>(leaderOrchComm, true);
+        mReceiverThread = std::thread([this]() { return RecvMpiThread(); });
+        mSenderThread = std::thread([this]() { return AnsMpiThread(); });
+    }
+
+    if (rank != 0 || mLeaderOrchComm)
+    {
+        while (!mModelUnloadRequest.load())
         {
         }
+
+        if (mReceiverThread.joinable())
+        {
+            mReceiverThread.join();
+        }
+
+        if (mSenderThread.joinable())
+        {
+            mSenderThread.join();
+        }
     }
+}
+
+void ModelInstanceState::RecvMpiThread()
+{
+    MPI_Message msg;
+    MPI_Status status;
+    int32_t count;
+    MpiId mpiId;
+
+    while (true)
+    {
+        // Blocking is okay: terminate message is expected to arrive here
+        mLeaderOrchComm->mprobe(0, kMPI_ID_TAG, &msg, &status);
+        MPICHECK(MPI_Get_count(&status, MPI_UINT64_T, &count));
+        TLLM_CHECK(count == 1);
+        MPICHECK(MPI_Mrecv(&mpiId, count, MPI_UINT64_T, &msg, &status));
+
+        // EXIT condition from receiving TERMINATE msg
+        if (mpiId == MpiId::TERMINATION)
+        {
+            MpiMessage message(mpiId);
+            {
+                std::unique_lock lk(mSenderMutex);
+                mSenderQueue.push(message);
+            }
+
+            mSenderCV.notify_all();
+            mModelUnloadRequest.store(true);
+            TLLM_LOG_INFO("Leader recv thread exiting");
+            break;
+        }
+        else if (mpiId == MpiId::PENDING_REQUEST)
+        {
+            // Prepare receiving data
+            mLeaderOrchComm->mprobe(0, kMPI_DATA_TAG, &msg, &status);
+            MPICHECK(MPI_Get_count(&status, MPI_INT64_T, &count));
+            std::vector<int64_t> data(count);
+            MPICHECK(MPI_Mrecv(data.data(), count, MPI_INT64_T, &msg, &status));
+
+            auto ir = InferenceRequest::deserialize(data.data());
+            {
+                std::lock_guard<std::mutex> lk(mRecRequestsMutex);
+                mRecvRequests.push(ir);
+            }
+        }
+        else if (mpiId == MpiId::STOP_REQUEST || mpiId == MpiId::CANCEL_REQUEST)
+        {
+            // Prepare receiving data
+            mLeaderOrchComm->mprobe(0, kMPI_DATA_TAG, &msg, &status);
+            MPICHECK(MPI_Get_count(&status, MPI_UINT64_T, &count));
+            std::vector<uint64_t> data(count);
+            MPICHECK(MPI_Mrecv(data.data(), count, MPI_UINT64_T, &msg, &status));
+
+            std::unique_lock<std::mutex> lk(mStoppedReqIdsMutex);
+            mStoppedReqIds.insert(data.begin(), data.end());
+        }
+    }
+}
+
+void ModelInstanceState::AnsMpiThread()
+{
+    while (true)
+    {
+        std::unique_lock lk(mSenderMutex);
+        mSenderCV.wait(lk, [&]() { return (!mSenderQueue.empty()); });
+
+        auto message = mSenderQueue.front();
+        mSenderQueue.pop();
+
+        if (message.id == MpiId::TERMINATION)
+        {
+            mLeaderOrchComm->send(&message.id, 1, MpiType::kUINT64, 0, kMPI_ID_TAG);
+            TLLM_LOG_INFO("Leader answer thread exiting");
+            break;
+        }
+        else if (message.id == MpiId::REQUEST_ANSWER)
+        {
+            auto& data = std::get<RequestAnswerData>(message.data);
+            auto packed = data.answer->serialize();
+
+            mLeaderOrchComm->send(&message.id, 1, MpiType::kUINT64, 0, kMPI_ID_TAG);
+            mLeaderOrchComm->send(packed.data(), packed.size(), MpiType::kINT64, 0, kMPI_DATA_TAG);
+        }
+        else if (message.id == MpiId::REQUEST_IN_PROGRESS)
+        {
+            auto& data = std::get<RequestIdsData>(message.data);
+
+            mLeaderOrchComm->send(&message.id, 1, MpiType::kUINT64, 0, kMPI_ID_TAG);
+            mLeaderOrchComm->send(data.ids.data(), data.ids.size(), MpiType::kUINT64, 0, kMPI_DATA_TAG);
+        }
+    }
+}
+
+void ModelInstanceState::SendMessage(MpiMessage&& message)
+{
+    {
+        std::unique_lock<std::mutex> lk(mSenderMutex);
+        mSenderQueue.push(std::move(message));
+    }
+
+    mSenderCV.notify_all();
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count)
@@ -282,36 +539,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
     for (uint32_t r = 0; r < request_count; ++r)
     {
         TRITONBACKEND_Request* request = requests[r];
-        try
-        {
-            auto requestId = utils::getRequestId(request, mRequestIdStrMap);
-            bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
-
-            if (stopRequest)
-            {
-                if (requestId != 0)
-                {
-                    // Check if request is in progress or in queue, if not ignore
-                    mWorkItemsQueue->stopWorkItem(requestId);
-                    // Send a response back to client for stop request
-                    utils::sendEnqueueResponse(request);
-                }
-                else
-                {
-                    throw std::runtime_error("Cannot send stop request without specifying a request_id");
-                }
-            }
-            else
-            {
-                requestsToPush.emplace_back(requestId, request);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            // In case of error, no work item is added to queue, so response
-            // callback needs to be called
-            utils::sendEnqueueResponse(request, e.what());
-        }
+        utils::handleTritonRequest(request, mRequestIdStrMap, requestsToPush, *mWorkItemsQueue);
     }
 
     auto exceptions = mWorkItemsQueue->pushBatch(requestsToPush, exec_start_ns);
@@ -330,7 +558,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, const uint32_
 }
 
 // Return up to max_num_requests inference requests.
-std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_requests(const int max_num_requests)
+std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_requests(int const max_num_requests)
 {
     std::list<std::shared_ptr<InferenceRequest>> rval;
     if (max_num_requests <= 0)
@@ -340,7 +568,6 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
 
     auto const& commSession = COMM_SESSION;
 
-    auto world_size = commSession.getSize();
     auto rank = commSession.getRank();
     if (rank == 0)
     {
@@ -361,38 +588,18 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
                     std::string warnStr = std::string("request Id ") + std::to_string(workItem->requestId())
                         + std::string(" has been stopped. Request is ignored.");
                     TLLM_LOG_WARNING(warnStr);
-                    sendTritonResponse(workItem, {}, true, warnStr);
+                    sendTritonResponse(workItem, {}, true, warnStr, *mWorkItemsQueue, modelInstance_);
                 }
             }
         }
 
-        if (world_size > 1)
-        {
-            int64_t num_new_work_items = rval.size();
-            mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
-            if (mHasActiveRequests)
-            {
-                commSession.bcast(num_new_work_items, 0);
-            }
-
-            if (num_new_work_items > 0)
-            {
-                std::vector<int64_t> packed;
-                for (auto ir : rval)
-                {
-                    auto vpacked = ir->serialize();
-                    packed.push_back(static_cast<int64_t>(vpacked.size()));
-                    packed.insert(packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
-                }
-                commSession.bcast(packed, 0);
-            }
-        }
+        broadcast_inference_requests(rval);
     }
     else
     {
         // subordinate ranks hang until master rank sends work
         int64_t num_new_work_items;
-        commSession.bcast(num_new_work_items, 0);
+        commSession.bcastValue(num_new_work_items, 0);
         mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
         if (num_new_work_items > 0)
         {
@@ -411,8 +618,72 @@ std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_r
     return rval;
 }
 
+std::list<std::shared_ptr<InferenceRequest>> ModelInstanceState::get_inference_requests_leader(
+    int const max_num_requests)
+{
+    std::list<std::shared_ptr<InferenceRequest>> rval;
+    if (max_num_requests <= 0)
+    {
+        return rval;
+    }
+
+    std::lock_guard<std::mutex> lk(mRecRequestsMutex);
+    auto const num_requests_to_send = std::min(max_num_requests, (int) mRecvRequests.size());
+
+    std::vector<uint64_t> requests_ids(num_requests_to_send);
+
+    for (int i = 0; i < num_requests_to_send; ++i)
+    {
+        auto ir = mRecvRequests.front();
+        mRecvRequests.pop();
+
+        requests_ids[i] = ir->getRequestId();
+
+        rval.emplace_back(ir);
+    }
+
+    if (!requests_ids.empty())
+    {
+        MpiMessage message(MpiId::REQUEST_IN_PROGRESS);
+        message.data = RequestIdsData{std::move(requests_ids)};
+
+        SendMessage(std::move(message));
+    }
+
+    broadcast_inference_requests(rval);
+
+    return rval;
+}
+
+void ModelInstanceState::broadcast_inference_requests(std::list<std::shared_ptr<InferenceRequest>>& rval)
+{
+    auto const& commSession = COMM_SESSION;
+    auto world_size = commSession.getSize();
+    if (world_size > 1)
+    {
+        int64_t num_new_work_items = rval.size();
+        mHasActiveRequests = (num_new_work_items > 0 || mBatchManager->getNumActiveRequests() > 0);
+        if (mHasActiveRequests)
+        {
+            commSession.bcastValue(num_new_work_items, 0);
+        }
+
+        if (num_new_work_items > 0)
+        {
+            std::vector<int64_t> packed;
+            for (auto ir : rval)
+            {
+                auto vpacked = ir->serialize();
+                packed.push_back(static_cast<int64_t>(vpacked.size()));
+                packed.insert(packed.end(), std::move_iterator(vpacked.begin()), std::move_iterator(vpacked.end()));
+            }
+            commSession.bcast(packed, 0);
+        }
+    }
+}
+
 void ModelInstanceState::sendResponse(
-    uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
+    uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg)
 {
     if (COMM_SESSION.getRank() == 0)
     {
@@ -425,23 +696,45 @@ void ModelInstanceState::sendResponse(
         try
         {
             auto workItem = mWorkItemsQueue->getInProgressWorkItem(requestId);
-            auto tritonErr = sendTritonResponse(workItem, response_tensors, final_response, errMsg);
+            auto tritonErr = sendTritonResponse(
+                workItem, response_tensors, final_response, errMsg, *mWorkItemsQueue, modelInstance_);
             LOG_IF_ERROR(tritonErr, errStr);
         }
-        catch (const std::exception& e)
+        catch (std::exception const& e)
         {
             TLLM_LOG_ERROR(errStr);
         }
     }
 }
 
+void ModelInstanceState::sendResponseLeader(
+    uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg)
+{
+    // send answer to orchestator
+    MpiMessage message(MpiId::REQUEST_ANSWER);
+
+    auto answer = std::make_shared<InferenceAnswer>(requestId, response_tensors, final_response, errMsg);
+    message.data = RequestAnswerData{std::move(answer)};
+
+    SendMessage(std::move(message));
+}
+
 std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
 {
-    auto stoppedReqIds = mWorkItemsQueue->getStoppedReqIds();
+    std::unordered_set<uint64_t> stoppedReqIds;
+    if (mLeaderOrchComm)
+    {
+        std::unique_lock<std::mutex> lk(mStoppedReqIdsMutex);
+        stoppedReqIds = mStoppedReqIds;
+    }
+    else
+    {
+        stoppedReqIds = mWorkItemsQueue->getStoppedReqIds();
 
-    // Merge cancelled requests into stopped requests Ids
-    auto cancelledReqIds = mWorkItemsQueue->getCancelledInProgressReqIds();
-    stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
+        // Merge cancelled requests into stopped requests Ids
+        auto cancelledReqIds = mWorkItemsQueue->getCancelledInProgressReqIds();
+        stoppedReqIds.insert(cancelledReqIds.begin(), cancelledReqIds.end());
+    }
 
     int64_t nStoppedReqIds = static_cast<int64_t>(stoppedReqIds.size());
 
@@ -450,7 +743,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
     if (commSession.getSize() > 1 && mHasActiveRequests)
     {
         // Broadcast number of stopped requests
-        commSession.bcast(nStoppedReqIds, 0);
+        commSession.bcastValue(nStoppedReqIds, 0);
 
         if (nStoppedReqIds > 0)
         {
@@ -476,7 +769,7 @@ std::unordered_set<uint64_t> ModelInstanceState::pollStopSignals()
     return stoppedReqIds;
 }
 
-void ModelInstanceState::logStats(const std::string& s)
+void ModelInstanceState::logStats(std::string const& s)
 {
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, s.c_str());
 #ifdef TRITON_ENABLE_METRICS
@@ -485,7 +778,8 @@ void ModelInstanceState::logStats(const std::string& s)
 }
 
 TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkItem> workItem,
-    std::list<NamedTensor> const& response_tensors, bool final_response, const std::string& errMsg)
+    std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg,
+    WorkItemsQueue& workItemsQueue, TRITONBACKEND_ModelInstance* model_instance)
 {
     TRITONBACKEND_ResponseFactory* response_factory;
     response_factory = workItem->response_factory();
@@ -497,7 +791,7 @@ TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkI
     if (final_response)
     {
         SET_TIMESTAMP(workItem->getTimestamps().compute_end_ns);
-        mWorkItemsQueue->markFinished(requestId);
+        workItemsQueue.markFinished(requestId);
     }
 
     // Check if error
@@ -552,7 +846,7 @@ TRITONSERVER_Error* ModelInstanceState::sendTritonResponse(std::shared_ptr<WorkI
 
     if (final_response)
     {
-        LOG_IF_ERROR(workItem->reportBaseMetrics(modelInstance_, err), "Error reporting base metrics");
+        LOG_IF_ERROR(workItem->reportBaseMetrics(model_instance, err), "Error reporting base metrics");
         // Reporting Triton core metrics requires the use of the original TRITONBACKEND_Request.
         // Therefore we hold off releasing the request until this point.
         TRITONBACKEND_RequestRelease(workItem->getTritonInferenceRequest(), TRITONSERVER_REQUEST_RELEASE_ALL);

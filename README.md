@@ -62,35 +62,50 @@ Starting with Triton 23.10 release, you can follow steps described in the
 [Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
 guide and use the
 [build.py](https://github.com/triton-inference-server/server/blob/main/build.py)
-script.
+script to build the TRT-LLM backend.
 
-A sample command to build a Triton Server container with all options enabled is
-shown below, which will build the same TRT-LLM container as the one on the NGC.
+The below commands will build the same Triton TRT-LLM container as the one on the NGC.
 
 ```bash
-BASE_CONTAINER_IMAGE_NAME=nvcr.io/nvidia/tritonserver:23.10-py3-min
-TENSORRTLLM_BACKEND_REPO_TAG=release/0.5.0
-PYTHON_BACKEND_REPO_TAG=r23.10
+# Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
+cd tensorrtllm_backend
+# Specify the build args for the dockerfile.
+BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.01-py3-min
+TRT_VERSION=9.2.0.5
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
 
-# Run the build script. The flags for some features or endpoints can be removed if not needed.
+docker build -t trtllm_base \
+             --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+             --build-arg TRT_VER="${TRT_VERSION}" \
+             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}" \
+             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}" \
+             -f dockerfile/Dockerfile.triton.trt_llm_backend .
+
+# Run the build script from Triton Server repo. The flags for some features or
+# endpoints can be removed if not needed. Please refer to the support matrix to
+# see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
+TRTLLM_BASE_IMAGE=trtllm_base
+TENSORRTLLM_BACKEND_REPO_TAG=v0.7.2
+PYTHON_BACKEND_REPO_TAG=r24.01
+
+cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
               --enable-metrics --enable-gpu-metrics --enable-cpu-metrics \
               --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
               --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
               --backend=ensemble --enable-gpu --endpoint=http --endpoint=grpc \
-              --image=base,${BASE_CONTAINER_IMAGE_NAME} \
+              --no-container-pull \
+              --image=base,${TRTLLM_BASE_IMAGE} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
               --backend=python:${PYTHON_BACKEND_REPO_TAG}
 ```
 
-The `BASE_CONTAINER_IMAGE_NAME` is the base image that will be used to build the
-container. By default it is set to the most recent min image of Triton, on NGC,
-that matches the Triton release you are building for. You can change it to a
-different image if needed by setting the `--image` flag like the command below.
-The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are the tags of
-the TensorRT-LLM backend and Python backend repositories that will be used
-to build the container. You can also remove the features or endpoints that you
-don't need by removing the corresponding flags.
+The `TRTLLM_BASE_IMAGE` is the base image that will be used to build the
+container. The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are
+the tags of the TensorRT-LLM backend and Python backend repositories that will
+be used to build the container. You can also remove the features or endpoints
+that you don't need by removing the corresponding flags.
 
 #### Option 2. Build via Docker
 
@@ -144,40 +159,102 @@ cd tensorrt_llm/examples/gpt
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
 pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
 
-# Convert weights from HF Tranformers to FT format
-python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism 4 --storage-type float16
+# Convert weights from HF Tranformers to TensorRT-LLM checkpoint
+python3 convert_checkpoint.py --model_dir gpt2 \
+        --dtype float16 \
+        --tp_size 4 \
+        --output_dir ./c-model/gpt2/fp16/4-gpu
 
 # Build TensorRT engines
-python3 build.py --model_dir=./c-model/gpt2/4-gpu/ \
-                 --world_size=4 \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --hidden_act gelu \
-                 --parallel_build \
-                 --output_dir=engines/fp16/4-gpu
+trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --output_dir engines/fp16/4-gpu
 ```
 
 ### Create the model repository
 
 There are five models in the [`all_models/inflight_batcher_llm`](./all_models/inflight_batcher_llm/)
 directory that will be used in this example:
-- "preprocessing": This model is used for tokenizing, meaning the conversion from
+
+#### preprocessing
+
+This model is used for tokenizing, meaning the conversion from
 prompts(string) to input_ids(list of ints).
-- "tensorrt_llm": This model is a wrapper of your TensorRT-LLM model and is used
-for inferencing
-- "postprocessing": This model is used for de-tokenizing, meaning the conversion
+
+#### tensorrt_llm
+
+This model is a wrapper of your TensorRT-LLM model and is used
+for inferencing.
+Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/inference_request.md)
+
+#### postprocessing
+
+This model is used for de-tokenizing, meaning the conversion
 from output_ids(list of ints) to outputs(string).
-- "ensemble": This model can be used to chain the preprocessing, tensorrt_llm
+
+#### ensemble
+
+This model can be used to chain the preprocessing, tensorrt_llm
 and postprocessing models together.
-- "tensorrt_llm_bls": This model can also be used to chain the preprocessing,
-tensorrt_llm and postprocessing models together. The BLS model has an optional
+
+#### tensorrt_llm_bls
+
+This model can also be used to chain the preprocessing,
+tensorrt_llm and postprocessing models together.
+
+The BLS model has an optional
 parameter `accumulate_tokens` which can be used in streaming mode to call the
-preprocessing model with all accumulated tokens, instead of only one token.
+postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
+
+The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding.
+
+BLS Inputs
+
+| Name | Shape | Type | Description |
+| :------------: | :---------------: | :-----------: | :--------: |
+| `text_input` | [ -1 ] | `string` | Prompt text |
+| `max_tokens` | [ -1 ] | `int32` | number of tokens to generate |
+| `bad_words` | [2, num_bad_words] | `int32` | Bad words list |
+| `stop_words` | [2, num_stop_words] | `int32` | Stop words list |
+| `end_id` | [1] | `int32` | End token Id. If not specified, defaults to -1 |
+| `pad_id` | [1] | `int32` | Pad token Id |
+| `temperature` | [1] | `float32` | Sampling Config param: `temperature` |
+| `top_k` | [1] | `int32` | Sampling Config param: `topK` |
+| `top_p` | [1] | `float32` | Sampling Config param: `topP` |
+| `len_penalty` | [1] | `float32` | Sampling Config param: `lengthPenalty` |
+| `repetition_penalty` | [1] | `float` | Sampling Config param: `repetitionPenalty` |
+| `min_length` | [1] | `int32_t` | Sampling Config param: `minLength` |
+| `presence_penalty` | [1] | `float` | Sampling Config param: `presencePenalty` |
+| `frequency_penalty` | [1] | `float` | Sampling Config param: `frequencyPenalty` |
+| `random_seed` | [1] | `uint64_t` | Sampling Config param: `randomSeed` |
+| `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output |
+| `return_context_logits` | [1] | `bool` | When `true`, include context logits in the output |
+| `return_generation_logits` | [1] | `bool` | When `true`, include generation logits in the output |
+| `beam_width` | [1] | `int32_t` | (Default=1) Beam width for this request; set to 1 for greedy sampling |
+| `stream` | [1] | `bool` | (Default=`false`). When `true`, stream out tokens as they are generated. When `false` return only when the full generation has completed.  |
+| `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
+| `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
+| `lora_task_id` | [1] | `uint64` | Task ID for the given lora_weights.  This ID is expected to be globally unique.  To perform inference with a specific LoRA for the first time `lora_task_id` `lora_weights` and `lora_config` must all be given.  The LoRA will be cached, so that subsequent requests for the same task only require `lora_task_id`. If the cache is full the oldest LoRA will be evicted to make space for new ones.  An error is returned if `lora_task_id` is not cached |
+| `lora_weights` | [ num_lora_modules_layers, D x Hi + Ho x D ] | `float` (model data type) | weights for a lora adapter. see [lora docs](lora.md#lora-tensor-format-details) for more details. |
+| `lora_config` | [ num_lora_modules_layers, 3] | `int32t` | lora configuration tensor. `[ module_id, layer_idx, adapter_size (D aka R value) ]` see [lora docs](lora.md#lora-tensor-format-details) for more details. |
+| `embedding_bias_words` | [-1] | `string` | Embedding bias words |
+| `embedding_bias_weights` | [-1] | `float32` | Embedding bias weights |
+| `num_draft_tokens` | [1] | int32 | number of tokens to get from draft model during speculative decoding |
+| `use_draft_logits` | [1] | `bool` | use logit comparison during speculative decoding |
+
+BLS Outputs
+
+| Name | Shape | Type | Description |
+| :------------: | :---------------: | :-----------: | :--------: |
+| `text_output` | [-1] | `string` | text output |
+| `cum_log_probs` | [-1] | `float` | cumulative probabilities for each output |
+| `output_log_probs` | [beam_width, -1] | `float` | log probabilities for each output |
+| `context_logits` | [-1, vocab_size] | `float` |  context logits for input |
+| `generation_logtis` | [beam_width, seq_len, vocab_size] | `float` | generatiion logits for each output |
 
 To learn more about ensemble and BLS models, please see the
 [Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)
@@ -204,7 +281,6 @@ The following table shows the fields that may to be modified before deployment:
 | Name | Description
 | :----------------------: | :-----------------------------: |
 | `tokenizer_dir` | The path to the tokenizer for the model. In this example, the path should be set to `/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
-| `tokenizer_type` | The type of the tokenizer for the model, `t5`, `auto` and `llama` are supported. In this example, the type should be set to `auto` |
 
 *triton_model_repo/tensorrt_llm/config.pbtxt*
 
@@ -213,7 +289,7 @@ The following table shows the fields that may to be modified before deployment:
 | `gpt_model_type` | Mandatory. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
 | `gpt_model_path` | Mandatory. Path to the TensorRT-LLM engines for deployment. In this example, the path should be set to `/tensorrtllm_backend/triton_model_repo/tensorrt_llm/1` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
 | `batch_scheduler_policy` | Mandatory. Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused.|
-| `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `True` if using the streaming option from the client. |
+| `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `true` if using the streaming option from the client. |
 | `max_beam_width` | Optional (default=1). The maximum beam width that any request may ask for when using beam search.|
 | `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |
 | `max_attention_window_size` | Optional (default=max_sequence_length). When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults attends to all tokens in sequence. |
@@ -222,6 +298,9 @@ The following table shows the fields that may to be modified before deployment:
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 | `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
+| `gpu_device_ids` | Optional (default=unspecified). Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. |
+| `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. |
+| `medusa_choices` | Optional. To specify Medusa choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, mc_sim_7b_63 choices are used. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 
@@ -259,6 +338,15 @@ cd /tensorrtllm_backend
 # --world_size is the number of GPUs you want to use for serving
 python3 scripts/launch_triton_server.py --world_size=4 --model_repo=/tensorrtllm_backend/triton_model_repo
 ```
+
+In order to use multiple TensorRT-LLM models, use the `--multi-model` option. The `--world_size` must be 1 as the TensorRT-LLM backend will dynamically launch TensorRT-LLM workers as needed.
+
+```bash
+cd /tensorrtllm_backend
+python3 scripts/launch_triton_server.py --model_repo=/tensorrtllm_backend/triton_model_repo --multi-model
+```
+
+When using the `--multi-model` option, the Triton model repository can contain multiple TensorRT-LLM models. When running multiple TensorRT-LLM models, the `gpu_device_ids` parameter should be specified in the models `config.pbtxt` configuration files. It is up to you to ensure there is no overlap between allocated GPU IDs.
 
 When successfully deployed, the server produces logs similar to the following ones.
 ```
@@ -358,9 +446,9 @@ number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
 
 #### Return context logits and/or generation logits
-If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--enable gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/gpt/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
 
-After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts (`end_to_end_grpc_client.py` and `inflight_batcher_llm_client.py`). For example:
+After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash
 python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 20 --tokenizer-dir /path/to/tokenizer/ \
 --return-context-logits \

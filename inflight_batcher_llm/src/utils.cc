@@ -141,7 +141,7 @@ TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
 
 uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap)
 {
-    const char* charRequestId;
+    char const* charRequestId;
     TRITONBACKEND_RequestId(request, &charRequestId);
     uint64_t requestId = 0;
     if (charRequestId != nullptr)
@@ -153,7 +153,7 @@ uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_
             {
                 requestId = stoul(strRequestId);
             }
-            catch (const std::exception& e)
+            catch (std::exception const& e)
             {
                 std::hash<std::string> hasher;
                 requestId = hasher(strRequestId);
@@ -190,7 +190,7 @@ std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* req
     LOG_IF_ERROR(TRITONBACKEND_RequestOutputCount(request, &outputCount), "Error getting request output count");
     for (size_t i = 0; i < outputCount; ++i)
     {
-        const char* name;
+        char const* name;
         LOG_IF_ERROR(TRITONBACKEND_RequestOutputName(request, i, &name), "Error getting request output name");
         std::string name_s(name);
         outputNames.insert(std::move(name_s));
@@ -198,7 +198,7 @@ std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* req
     return outputNames;
 }
 
-bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName)
+bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string const& inputTensorName)
 {
     // Get stop signal from the request
     TRITONBACKEND_Input* input;
@@ -223,7 +223,7 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE,
         ("ModelInstanceState::getRequestStopSignal: buffer_count = " + std::to_string(buffer_count)).c_str());
 
-    const void* buffer = 0L;
+    void const* buffer = 0L;
     uint64_t buffer_byte_size = 0;
     TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
     int64_t memory_type_id = 0;
@@ -231,12 +231,12 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::str
 
     assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
 
-    bool boolean = *reinterpret_cast<const bool*>(buffer);
+    bool boolean = *reinterpret_cast<bool const*>(buffer);
 
     return boolean;
 }
 
-void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg)
+void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errMsg)
 {
     TRITONBACKEND_ResponseFactory* factory_ptr;
     // Create response factory for this request
@@ -253,6 +253,96 @@ void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errM
     LOG_IF_ERROR(
         TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
     LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
+}
+
+bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
+    std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue)
+{
+    try
+    {
+        auto requestId = utils::getRequestId(request, requestIdStrMap);
+        bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
+
+        if (stopRequest)
+        {
+            if (requestId != 0)
+            {
+                // Check if request is in progress or in queue, if not ignore
+                workItemsQueue.stopWorkItem(requestId);
+                // Send a response back to client for stop request
+                utils::sendEnqueueResponse(request);
+            }
+            else
+            {
+                throw std::runtime_error("Cannot send stop request without specifying a request_id");
+            }
+        }
+        else
+        {
+            requestsToPush.emplace_back(requestId, request);
+        }
+
+        return stopRequest;
+    }
+    catch (std::exception const& e)
+    {
+        // In case of error, no work item is added to queue, so response
+        // callback needs to be called
+        utils::sendEnqueueResponse(request, e.what());
+    }
+
+    return false;
+}
+
+std::vector<int32_t> csvStrToVecInt(std::string const& str)
+{
+    TLLM_CHECK_WITH_INFO(!str.empty(), "Cannot convert empty string to vector of vector of ints");
+
+    std::vector<int32_t> output;
+    std::stringstream ss(str);
+    while (ss.good())
+    {
+        std::string substr;
+        ss >> std::ws;
+        getline(ss, substr, ',');
+        if (substr.empty())
+        {
+            break;
+        }
+        output.push_back(std::stoi(substr));
+    }
+    TLLM_CHECK_WITH_INFO(!output.empty(), "Empty vector");
+    return output;
+}
+
+std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str)
+{
+    TLLM_CHECK_WITH_INFO(!str.empty(), "Cannot convert empty string to vector of vector of ints");
+
+    std::vector<std::vector<int32_t>> output;
+    std::stringstream ss(str);
+
+    while (true)
+    {
+        std::string substr;
+        getline(ss, substr, '}');
+        if (substr.empty() || ss.eof())
+        {
+            break;
+        }
+        if (substr[0] == '{')
+        {
+            // Remove the opening bracket from the content
+            substr = substr.substr(1);
+        }
+        output.push_back(csvStrToVecInt(substr));
+        // Ignore the comma and any whitespace
+        ss >> std::ws;
+        ss.ignore(std::numeric_limits<std::streamsize>::max(), ',');
+        ss >> std::ws;
+    }
+    TLLM_CHECK_WITH_INFO(!output.empty(), "Empty vector of vector");
+    return output;
 }
 
 } // namespace triton::backend::inflight_batcher_llm::utils

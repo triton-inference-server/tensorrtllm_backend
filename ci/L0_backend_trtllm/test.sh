@@ -160,7 +160,6 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
-    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
@@ -169,7 +168,6 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${max_queue_delay_microseconds}' "50000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
-    replace_config_tags '${tokenizer_type}' 'auto' "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
 
     # Copy the engine and place it into the model folder
@@ -340,6 +338,36 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
+    # Multi-model
+    SERVER_LOG="./${NUM_GPU}gpu_multi_model.log"
+    run_server "${SERVER_ARGS} --multi-model"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    set -e
+    python3 ${TOOLS_DIR}/inflight_batcher_llm/end_to_end_test.py \
+        --max-input-len=500 \
+        --dataset=${DATASET}
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_PID[@]}
+        RET=1
+    fi
+    set +e
+
+    curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
+    kill_server
+    wait_for_server_terminated ${SERVER_PID[@]}
 
 done
 

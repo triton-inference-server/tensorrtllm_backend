@@ -173,8 +173,8 @@ class TritonPythonModel:
                 ]
 
                 if sampling_config.output_log_probs:
-                    # [max_new_tokens, batch_size, num_beams] -> [batch_size, max_new_tokens, num_beams]
-                    log_probs = self.runner.session.log_probs.transpose(
+                    # [max_seq_len, batch_size, num_beams] -> [batch_size, max_seq_len, num_beams]
+                    log_probs = self.runner.session.log_probs_tiled.transpose(
                         0, 1).cpu().numpy()
                     output_tensors.append(
                         pb_utils.Tensor("log_probs", log_probs))

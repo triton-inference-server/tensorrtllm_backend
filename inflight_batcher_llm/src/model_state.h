@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/plugins/api/tllmPlugin.h"
@@ -52,10 +51,10 @@ class ModelState
 {
 public:
     static TRITONSERVER_Error* Create(
-        TRITONBACKEND_Model* triton_model, const std::string& name, const uint64_t version, ModelState** state);
+        TRITONBACKEND_Model* triton_model, std::string const& name, const uint64_t version, ModelState** state);
 
     template <typename T>
-    T GetParameter(const std::string& name)
+    T GetParameter(std::string const& name)
     {
         assert(false);
         auto dummy = T();
@@ -65,8 +64,9 @@ public:
     virtual ~ModelState() = default;
 
     common::TritonJson::Value& GetModelConfig();
-    const std::string& GetModelName() const;
+    std::string const& GetModelName() const;
     uint64_t GetModelVersion() const;
+    const std::string GetWorkerPath();
 
     std::optional<std::vector<int32_t>> GetDeviceIds()
     {
@@ -78,6 +78,12 @@ public:
         return is_decoupled_;
     }
 
+    [[nodiscard]] std::vector<int64_t> serialize() const;
+
+    static ModelState deserialize(int64_t const* packed_ptr);
+
+    static ModelState deserialize(std::vector<int64_t> const& packed);
+
 private:
     const std::string model_name_;
     uint64_t model_version_;
@@ -88,8 +94,11 @@ private:
     std::optional<std::vector<int32_t>> gpu_device_ids_;
     bool is_decoupled_ = false;
 
+    void LoadParameters();
+
+public:
     ModelState(
-        TRITONBACKEND_Model* triton_model, const std::string& name, uint64_t version, TritonJson::Value&& model_config)
+        TRITONBACKEND_Model* triton_model, std::string const& name, uint64_t version, TritonJson::Value&& model_config)
         : model_name_(name)
         , model_version_(version)
         , model_config_(std::move(model_config))
@@ -99,32 +108,33 @@ private:
 
         LoadParameters();
     }
-
-    void LoadParameters();
 };
 
 template <>
-std::string ModelState::GetParameter<std::string>(const std::string& name);
+std::string ModelState::GetParameter<std::string>(std::string const& name);
 
 template <>
-int32_t ModelState::GetParameter<int32_t>(const std::string& name);
+int32_t ModelState::GetParameter<int32_t>(std::string const& name);
 
 template <>
-uint32_t ModelState::GetParameter<uint32_t>(const std::string& name);
+uint32_t ModelState::GetParameter<uint32_t>(std::string const& name);
 
 template <>
-int64_t ModelState::GetParameter<int64_t>(const std::string& name);
+int64_t ModelState::GetParameter<int64_t>(std::string const& name);
 
 template <>
-uint64_t ModelState::GetParameter<uint64_t>(const std::string& name);
+uint64_t ModelState::GetParameter<uint64_t>(std::string const& name);
 
 template <>
-float ModelState::GetParameter<float>(const std::string& name);
+float ModelState::GetParameter<float>(std::string const& name);
 
 template <>
-bool ModelState::GetParameter<bool>(const std::string& name);
+bool ModelState::GetParameter<bool>(std::string const& name);
 
 template <>
-std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(const std::string& name);
+std::vector<int32_t> ModelState::GetParameter<std::vector<int32_t>>(std::string const& name);
+
+template <>
+std::vector<std::vector<int32_t>> ModelState::GetParameter<std::vector<std::vector<int32_t>>>(std::string const& name);
 
 } // namespace triton::backend::inflight_batcher_llm

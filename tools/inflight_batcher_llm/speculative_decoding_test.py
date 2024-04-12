@@ -12,6 +12,7 @@ import argparse
 import json
 import sys
 
+import numpy as np
 import tritonclient.grpc as grpcclient
 from client import e2e_grpc_speculative_decoding_client, end_to_end_grpc_client
 
@@ -66,7 +67,21 @@ if __name__ == '__main__':
         type=str,
         required=False,
         default="tensorrt_llm",
-        help='Name of the tensorrt_llm draft model (hosted at url-draft)')
+        help='Name of the tensorrt_llm target model (hosted at url-target)')
+
+    parser.add_argument(
+        '--bls-speculative-tensorrt-llm-model-name',
+        type=str,
+        required=False,
+        default="tensorrt_llm_bls",
+        help=
+        'Name of the tensorrt_llm bls  model (only supports the case of url-target == url-draft)'
+    )
+
+    parser.add_argument(
+        '--execute-bls-speculative-decoding',
+        action='store_true',
+        help='Executes the BLS speculative decoding model if set')
 
     parser.add_argument(
         "-b",
@@ -124,6 +139,23 @@ if __name__ == '__main__':
         help=
         'Specify the number of speculative tokens for the draft model to generate per lookahead.'
     )
+    parser.add_argument(
+        '--use-draft-logits',
+        default=False,
+        required=False,
+        action='store_true',
+        help='Use logits from draft model when performing speculative decoding'
+    )
+    parser.add_argument('--return-context-logits',
+                        default=False,
+                        required=False,
+                        action='store_true',
+                        help='Return context logits')
+    parser.add_argument('--return-generation-logits',
+                        default=False,
+                        required=False,
+                        action='store_true',
+                        help='Return generation logits')
 
     parser.add_argument('--end-id',
                         type=int,
@@ -151,6 +183,11 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='Dataset path used for the test.')
+
+    parser.add_argument('--disable-output-comparison',
+                        action='store_true',
+                        required=False,
+                        help='disable output check')
 
     FLAGS = parser.parse_args()
     if not FLAGS.url_target:
@@ -181,7 +218,7 @@ if __name__ == '__main__':
             prompt = req['input'] + ' ' + req['instruction']
             output = req['output']
             # 1.3 is a magic number that converts number of words to number of tokens
-            if int(len(prompt.split(' ')) / 1.3) > FLAGS.max_input_len:
+            if int(len(prompt.split(' ')) * 1.3) > FLAGS.max_input_len:
                 continue
             # 1.3 is a magic number that converts number of words to number of tokens
             output_len = int(len(output.split(' ')) * 1.3)
@@ -191,7 +228,7 @@ if __name__ == '__main__':
 
             # Calling target model only
             if FLAGS.verbose:
-                print(f"Calling target", flush=True)
+                print(f"Calling target model", flush=True)
             output_target = end_to_end_grpc_client.run_inference(
                 client_target, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
@@ -200,35 +237,63 @@ if __name__ == '__main__':
                 None, FLAGS.end_id, FLAGS.pad_id, FLAGS.verbose)
             if FLAGS.verbose:
                 print(f"output_target: {output_target}", flush=True)
+                print(f"flags: {FLAGS}")
+                print(f"prompt: {prompt}")
+                print(f"output_len: {output_len}")
 
-            if FLAGS.verbose:
-                print(f"Calling speculative", flush=True)
-            output_speculative = e2e_grpc_speculative_decoding_client.run_speculative_inference(
-                client_draft,
-                client_target, prompt, output_len, FLAGS.num_draft_tokens,
-                str(request_id), FLAGS.repetition_penalty,
-                FLAGS.presence_penalty, FLAGS.frequency_penalty,
-                FLAGS.temperature, FLAGS.stop_words, FLAGS.bad_words,
-                FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
-                FLAGS.preprocessor_model_name,
-                FLAGS.draft_tensorrt_llm_model_name,
-                FLAGS.target_tensorrt_llm_model_name,
-                FLAGS.postprocessor_model_name, FLAGS.verbose)
-            if FLAGS.verbose:
-                print(f"output_speculative: {output_speculative}", flush=True)
+            # Calling BLS speculative decoding
+            if FLAGS.execute_bls_speculative_decoding:
+                if FLAGS.verbose:
+                    print(f"Calling BLS speculative decoding model",
+                          flush=True)
+                output_speculative = end_to_end_grpc_client.run_inference(
+                    client_target, prompt, output_len, str(request_id),
+                    FLAGS.repetition_penalty, FLAGS.presence_penalty,
+                    FLAGS.frequency_penalty, FLAGS.temperature,
+                    FLAGS.stop_words, FLAGS.bad_words, [], [],
+                    "tensorrt_llm_bls", False, 1, False, None,
+                    np.array([[FLAGS.return_generation_logits]], dtype=bool),
+                    FLAGS.end_id, FLAGS.pad_id, FLAGS.verbose,
+                    FLAGS.num_draft_tokens, FLAGS.use_draft_logits)
+                if FLAGS.verbose:
+                    print(f"output_bls_speculative: {output_speculative}",
+                          flush=True)
+            else:
+                # Calling client-side coordination of speculative decoding
+                if FLAGS.verbose:
+                    print(f"Calling speculative client", flush=True)
+                output_speculative = e2e_grpc_speculative_decoding_client.run_speculative_inference(
+                    client_draft,
+                    client_target, prompt, output_len, FLAGS.num_draft_tokens,
+                    str(request_id), FLAGS.repetition_penalty,
+                    FLAGS.presence_penalty, FLAGS.frequency_penalty,
+                    FLAGS.temperature, FLAGS.stop_words, FLAGS.bad_words,
+                    FLAGS.end_id, FLAGS.pad_id, FLAGS.beam_width,
+                    FLAGS.preprocessor_model_name,
+                    FLAGS.draft_tensorrt_llm_model_name,
+                    FLAGS.target_tensorrt_llm_model_name,
+                    FLAGS.postprocessor_model_name, FLAGS.verbose)
+                if FLAGS.verbose:
+                    print(f"output_speculative: {output_speculative}",
+                          flush=True)
 
             total_count = total_count + 1
-            if (output_target != output_speculative):
-                failed_count = failed_count + 1
-                print(f"{total_count}: Outputs don't match")
-                print(f"Prompt:")
-                print(f"{prompt}")
-                print(f"Output target:")
-                print(f"{output_target}")
-                print(f"Output speculative:")
-                print(f"{output_speculative}")
+            if not FLAGS.disable_output_comparison:
+                if (output_target != output_speculative):
+                    failed_count = failed_count + 1
+                    print(f"{total_count}: Outputs don't match")
+                    print(f"Prompt:")
+                    print(f"{prompt}")
+                    print(f"Output target:")
+                    print(f"{output_target}")
+                    print(f"Output speculative:")
+                    print(f"{output_speculative}")
+                else:
+                    print(f"{total_count}: Outputs match")
             else:
-                print(f"{total_count}: Outputs match")
+                print("Not checking output")
+                if output_speculative == "":
+                    failed_count += 1
             request_id = request_id + 1
 
     print(f"failed/total: {failed_count}/{total_count}")

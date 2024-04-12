@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#define _GLIBCXX_USE_CXX11_ABI 0
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 #include <map>
@@ -45,9 +44,9 @@ namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter
 class TritonMetricGroup
 {
 public:
-    TritonMetricGroup(const std::string& metric_family_label, const std::string& metric_family_description,
-        const std::string& category_label, const std::vector<std::string>& json_keys,
-        const std::vector<std::string>& labels);
+    TritonMetricGroup(std::string const& metric_family_label, std::string const& metric_family_description,
+        std::string const& category_label, std::vector<std::string> const& json_keys,
+        std::vector<std::string> const& labels);
     ~TritonMetricGroup(){};
 
     /// Create a new Triton metric family with corresponding metric
@@ -58,7 +57,7 @@ public:
     /// \param version The version of the model to provide a metrics
     /// group for.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* CreateGroup(const std::string& model_name, const uint64_t version);
+    TRITONSERVER_Error* CreateGroup(std::string const& model_name, const uint64_t version);
 
     /// Update the Triton metrics associated with this group using
     /// the parsed TRT LLM backend statistics values.
@@ -73,7 +72,7 @@ public:
     ///
     /// \return A const reference to vector of strings corresponding
     /// to the JSON keys associated with this group.
-    const std::vector<std::string>& JsonKeys() const;
+    std::vector<std::string> const& JsonKeys() const;
 
     /// Custom deleter for a unique TRITONSERVER_MetricFamily pointer
     struct MetricFamilyDeleter
@@ -140,7 +139,7 @@ public:
     /// \param is_v1_model Whether the model type is v1 or an inflight
     /// batching model.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* InitializeReporter(const std::string& model, const uint64_t version, const bool is_v1_model);
+    TRITONSERVER_Error* InitializeReporter(std::string const& model, const uint64_t version, bool const is_v1_model);
 
     /// Updates the vector of TritonMetricGroup objects with a
     /// JSON-formatted statistics string.
@@ -148,7 +147,7 @@ public:
     /// \param statistics A JSON-formatted string of TRT LLM backend
     /// statistics.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* UpdateCustomMetrics(const std::string& custom_metrics);
+    TRITONSERVER_Error* UpdateCustomMetrics(std::string const& custom_metrics);
 
     static const std::vector<std::string> request_keys_;
     static const std::vector<std::string> request_labels_;

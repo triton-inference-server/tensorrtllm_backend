@@ -25,14 +25,12 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
 
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 #include <unordered_set>
-#include <utils.h>
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -57,7 +55,7 @@ public:
 
     std::shared_ptr<InferenceRequest> getInferenceRequest() const;
 
-    bool hasOutputName(const std::string& outputName);
+    bool hasOutputName(std::string const& outputName);
 
     /// timestamp storage for Triton base metrics
     struct Timestamps
