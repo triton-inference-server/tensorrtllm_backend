@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver
-ARG BASE_TAG=23.12-py3
+ARG BASE_TAG=24.02-py3
 
 FROM ${BASE_IMAGE}:${BASE_TAG} as base
 
@@ -34,7 +34,7 @@ ENV PATH="/usr/local/cmake/bin:${PATH}"
 COPY tensorrt_llm/docker/common/install_mpi4py.sh /tmp/
 RUN bash /tmp/install_mpi4py.sh && rm /tmp/install_mpi4py.sh
 
-# `pypi` for x86_64 arch and `src_cxx11_abi` for aarch64 arch
+# Use "pypi" (default) for x86_64 arch and "src_non_cxx11_abi" for aarch64 arch
 ARG TORCH_INSTALL_TYPE="pypi"
 COPY tensorrt_llm/docker/common/install_pytorch.sh install_pytorch.sh
 RUN bash ./install_pytorch.sh $TORCH_INSTALL_TYPE && rm install_pytorch.sh
@@ -61,4 +61,7 @@ RUN cd /app/tensorrt_llm/build && pip3 install *.whl
 
 # Install TensorRT-LLM backend
 RUN mkdir /opt/tritonserver/backends/tensorrtllm
+ENV LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorrtllm:${LD_LIBRARY_PATH}
 COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
+COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/libtriton_tensorrtllm_common.so /opt/tritonserver/backends/tensorrtllm
+COPY --from=trt_llm_backend_builder /app/inflight_batcher_llm/build/triton_tensorrtllm_worker /opt/tritonserver/backends/tensorrtllm

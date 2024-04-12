@@ -187,6 +187,52 @@ python3 tensorrt_llm/examples/hf_lora_convert.py -i Japanese-Alpaca-LoRA-7b-v0 -
 python3 tensorrt_llm/examples/hf_lora_convert.py -i luotuo-lora-7b-0.1 -o luotuo-lora-7b-0.1-weights --storage-type float16
 ```
 
+### LoRA Cache
+
+As LoRA weights are passed to the backend they will be cached in a host cache.  As requests are scheduled, those weights with be prefetched to a gpu cache.  After a LoRA is loaded into the cache, only `lora_task_id` is needed for inference.
+
+
+Optimal adapter size used to size cache pages (default: 8)
+```
+parameters: {
+  key: "lora_cache_optimal_adapter_size"
+  value: {
+    string_value: "${lora_cache_optimal_adapter_size}"
+  }
+}
+```
+
+
+Maximum supported adapter size (default: 64)
+```
+parameters: {
+  key: "lora_cache_max_adapter_size"
+  value: {
+    string_value: "${lora_cache_max_adapter_size}"
+  }
+}
+```
+
+Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded (default: 0.05)
+```
+parameters: {
+  key: "lora_cache_gpu_memory_fraction"
+  value: {
+    string_value: "${lora_cache_gpu_memory_fraction}"
+  }
+}
+```
+
+Size of host LoRA cache in bytes (default: 1G)
+```
+parameters: {
+  key: "lora_cache_host_memory_bytes"
+  value: {
+    string_value: "${lora_cache_host_memory_bytes}"
+  }
+}
+```
+
 Launch tritonserver as describe above
 
 Run Multi-LoRA example by issuing  multiple concurrent requests.
@@ -294,7 +340,7 @@ cd tools/inflight_batcher_llm
 ```
 Example: Run dataset with 10 req/sec requested rate with provided tokenizer.
 ```
-python3 benchmark_core_model.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --tokenizer_type <> --num_requests 5000
+python3 benchmark_core_model.py -i grpc --request_rate 10 dataset --dataset <dataset path> --tokenizer_dir <> --num_requests 5000
 ```
 Example: Generate I/O seqlen tokens with input normal distribution with mean_seqlen=128, stdev=10. Output normal distribution with mean_seqlen=20, stdev=2. Set stdev=0 to get constant seqlens.
 ```

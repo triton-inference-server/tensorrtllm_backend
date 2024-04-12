@@ -25,7 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#define _GLIBCXX_USE_CXX11_ABI 0
+
+#include "work_item.h"
+#include "work_items_queue.h"
 
 #include "NvInfer.h"
 #include "tensorrt_llm/common/logger.h"
@@ -62,11 +64,22 @@ std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request);
 
 /// @brief Get the value of a boolean tensor
-bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, const std::string& inputTensorName);
+bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string const& inputTensorName);
 
 /// @brief For stop requests, or in case of error during enqueue, we need to send a
 /// response to the client
-void sendEnqueueResponse(TRITONBACKEND_Request* request, const std::string& errMsg = "");
+void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errMsg = "");
+
+/// @brief Handle a Triton request and add it to the requests to push if applicable
+/// @return Is the request a stop request
+bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
+    std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue);
+
+/// Helper functions to parse a csv delimited string to a vector ints
+std::vector<int32_t> csvStrToVecInt(std::string const& str);
+
+/// Helper functions to parse a csv delimited string to a vector of vector ints
+std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str);
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm

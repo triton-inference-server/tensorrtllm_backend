@@ -126,16 +126,9 @@ parameters {
 }
 
 parameters {
-  key: "tokenizer_type"
-  value: {
-    string_value: "${tokenizer_type}"
-  }
-}
-
-parameters {
   key: "add_special_tokens"
   value: {
-    string_value: "False"
+    string_value: "${add_special_tokens}"
   }
 }
 

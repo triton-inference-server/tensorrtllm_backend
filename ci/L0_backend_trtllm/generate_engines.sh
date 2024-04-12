@@ -34,7 +34,7 @@ function build_base_model {
     cd ${GPT_DIR}
     rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
     pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
-    python3 hf_gpt_convert.py -p 8 -i gpt2 -o ./c-model/gpt2 --tensor-parallelism ${NUM_GPUS} --storage-type float16
+    python3 convert_checkpoint.py --model_dir gpt2 --dtype float16 --tp_size ${NUM_GPUS} --output_dir ./c-model/gpt2/${NUM_GPUS}-gpu/
     cd ${BASE_DIR}
 }
 
@@ -45,17 +45,13 @@ function build_tensorrt_engine_inflight_batcher {
     local OUTPUT_DIR=inflight_${NUM_GPUS}_gpu/
     # ./c-model/gpt2/ must already exist (it will if build_base_model
     # has already been run)
-    python3 build.py --model_dir="${GPT_MODEL_DIR}" \
-                 --world_size="${NUM_GPUS}" \
-                 --dtype float16 \
-                 --use_inflight_batching \
-                 --use_gpt_attention_plugin float16 \
-                 --paged_kv_cache \
-                 --use_gemm_plugin float16 \
-                 --remove_input_padding \
-                 --hidden_act gelu \
-                 --parallel_build \
-                 --output_dir="${OUTPUT_DIR}"
+    trtllm-build --checkpoint_dir "${GPT_MODEL_DIR}" \
+            --gpt_attention_plugin float16 \
+            --remove_input_padding enable \
+            --paged_kv_cache enable \
+            --gemm_plugin float16 \
+            --workers "${NUM_GPUS}" \
+            --output_dir "${OUTPUT_DIR}"
     cd ${BASE_DIR}
 }
 
