@@ -210,6 +210,25 @@ ModelInstanceState::ModelInstanceState(
             "kv_cache_free_gpu_mem_fraction is not specified, will use default value of 0.9 or "
             "max_tokens_in_paged_kv_cache");
     }
+    std::optional<size_t> kvCacheHostCacheSize = std::nullopt;
+    try
+    {
+        kvCacheHostCacheSize = model_state_->GetParameter<size_t>("kv_cache_host_memory_bytes");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING("kv_cache_host_memory_bytes not set, defaulting to 0");
+    }
+    bool kvCacheOnboardBlocks = true;
+    try
+    {
+        kvCacheOnboardBlocks = model_state_->GetParameter<bool>("kv_cache_onboard_blocks");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("kv_cache_onboard_blocks not set, defaulting to true");
+    }
 
     bool enableTrtOverlap = false;
     try
@@ -368,6 +387,8 @@ ModelInstanceState::ModelInstanceState(
     optionalParams.kvCacheConfig.freeGpuMemoryFraction = kvCacheFreeGpuMemFraction;
     optionalParams.kvCacheConfig.maxAttentionWindow = maxAttentionWindow;
     optionalParams.kvCacheConfig.enableBlockReuse = enableKVCacheReuse;
+    optionalParams.kvCacheConfig.hostCacheSize = kvCacheHostCacheSize;
+    optionalParams.kvCacheConfig.onboardBlocks = kvCacheOnboardBlocks;
     optionalParams.enableTrtOverlap = enableTrtOverlap;
     optionalParams.normalizeLogProbs = normalizeLogProbs;
     optionalParams.enableChunkedContext = enableChunkedContext;
