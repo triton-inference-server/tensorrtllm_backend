@@ -208,6 +208,12 @@ class TritonPythonModel:
                 seq_len = sequence_lengths[batch_idx][beam_idx]
                 output = self.tokenizer.decode(
                     tokens[:seq_len],
-                    skip_special_tokens=self.skip_special_tokens)
+                    skip_special_tokens=False)
+                
+                # for streamming mode, non-breaking if not streaming mode
+                token_id_string = self.tokenizer.convert_ids_to_tokens(tokens[:seq_len], skip_special_tokens=True)
+                if len(token_id_string) > 0 and len(token_id_string[0]) > 0 and token_id_string[0][0] == "▁":
+                    output = " " + output
+                
                 outputs.append(output.encode('utf8'))
-        return outputs
+        return output 
