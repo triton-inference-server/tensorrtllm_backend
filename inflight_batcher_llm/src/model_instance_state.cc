@@ -307,6 +307,10 @@ ModelInstanceState::ModelInstanceState(
         {
             decodingMode = DecodingMode::BeamSearch();
         }
+        else if (decodingModeStr == "medusa")
+        {
+            decodingMode = DecodingMode::Medusa();
+        }
         else
         {
             throw std::runtime_error("");
