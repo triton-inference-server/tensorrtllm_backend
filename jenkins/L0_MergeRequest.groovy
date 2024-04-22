@@ -39,7 +39,8 @@ CASE_TO_EXAMPLE = [
   "gpt-ib": "gpt-ib",
   "gpt-ib-streaming": "gpt-ib",
   "gpt-ib-ptuning": "gpt-ib",
-  "gpt-2b-ib-lora": "gpt-2b-ib-lora"
+  "gpt-2b-ib-lora": "gpt-2b-ib-lora",
+  "medusa": "medusa"
 ]
 
 CASE_TO_MODEL = [
@@ -56,7 +57,8 @@ CASE_TO_MODEL = [
   "gpt-speculative-decoding": "gpt2",
   "gpt-ib-speculative-decoding-bls": "gpt2",
   "gpt-2b-ib-lora": "gpt-2b-ib-lora",
-  "gpt-gather-logits": "gpt2"
+  "gpt-gather-logits": "gpt2",
+  "medusa": "vicuna-7b-v1.3"
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -70,7 +72,8 @@ CASE_TO_ENGINE_DIR = [
   "gpt-ib": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
   "gpt-ib-streaming": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
   "gpt-ib-ptuning": "gpt/trt_engine/email_composition/fp16/1-gpu/",
-  "gpt-2b-ib-lora": "gpt/trt_engine/gpt-2b-lora-ib/fp16/1-gpu/"
+  "gpt-2b-ib-lora": "gpt/trt_engine/gpt-2b-lora-ib/fp16/1-gpu/",
+  "medusa": "medusa/tmp/medusa/7B/trt_engines/fp16/1-gpu/"
 ]
 
 // Utilities
@@ -350,14 +353,14 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm_common.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/triton_tensorrtllm_worker /opt/tritonserver/backends/tensorrtllm"
     }
 
-    if (caseName.contains("llama")) {
+    if (caseName.contains("llama") || caseName.contains("medusa")) {
       tokenizerType = "llama"
     }
 
@@ -704,6 +707,11 @@ pipeline {
               stage("Test gpt-gather-logits") {
                 steps {
                   runTRTLLMBackendTest("gpt-gather-logits")
+                }
+              }
+              stage("Test medusa") {
+                steps {
+                  runTRTLLMBackendTest("medusa")
                 }
               }
             }

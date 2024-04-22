@@ -406,11 +406,11 @@ run_cpp_trtllm_streaming_backend_tests() {
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --streaming \
             --request-output-len=128 \
-            --end-id 268 \
+            --end-id $3 \
             --request-id 1 \
             --tokenizer-dir ${TOKENIZER_PATH} \
-            --input-tokens-csv='../../tools/dataset/short_input_end_id.csv' \
-            --output-tokens-csv='../../tools/dataset/short_output_end_id.csv' \
+            --input-tokens-csv=$1 \
+            --output-tokens-csv=$2 \
             --check-output
     fi
 
@@ -598,7 +598,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         fi
 
         launch_triton_server
-        run_cpp_trtllm_streaming_backend_tests
+        run_cpp_trtllm_streaming_backend_tests '../../tools/dataset/short_input_end_id.csv' '../../tools/dataset/short_output_end_id.csv' 268
         run_cpp_e2e_streaming_backend_tests
         kill_triton_server
 
@@ -860,4 +860,46 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
 
         kill_triton_server
     done
+fi
+
+if [ "$MODEL" = "medusa" ]; then
+    # To make sure that torch is not a dependency for C++ backend
+    # pip3 uninstall -y torch
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    run_all_tests="true"
+
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+    BATCHING_STRATEGY="${BATCHING_STRATEGIES[0]}"
+    DECODING_MODE="medusa"
+
+    END_ID_MEDUSA=1284
+    MEDUSA_INPUT_IDS_PATH='../../tools/dataset/short_input_end_id_medusa.csv'
+    MEDUSA_OUTPUT_IDS_PATH='../../tools/dataset/short_output_end_id_medusa.csv'
+
+    launch_triton_server
+    run_cpp_trtllm_streaming_backend_tests ${MEDUSA_INPUT_IDS_PATH} ${MEDUSA_OUTPUT_IDS_PATH} ${END_ID_MEDUSA}
+    kill_triton_server
+    # FIXME: grpc e2e test returns different result (because it is Medusa and not GPT) and has some problems with spaces
+
+    # Test non-streaming
+    DECOUPLED_MODE="False"
+    launch_triton_server
+    # Test client
+    pushd inflight_batcher_llm/client
+    python3 inflight_batcher_llm_client.py \
+            --request-output-len=128 \
+            --end-id ${END_ID_MEDUSA} \
+            --request-id 1 \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --input-tokens-csv ${MEDUSA_INPUT_IDS_PATH} \
+            --output-tokens-csv ${MEDUSA_OUTPUT_IDS_PATH} \
+            --check-output
+    popd # inflight_batcher_llm/client
+    kill_triton_server
 fi

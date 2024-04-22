@@ -11,6 +11,8 @@ GPTJ=/home/scratch.trt_llm_data/llm-models/gpt-j-6b
 MISTRAL=/home/scratch.trt_llm_data/llm-models/mistral-7b-v0.1
 GPT_2B=/home/scratch.trt_llm_data/llm-models/GPT-2B-001_bf16_tp1.nemo
 GPT_2B_LORA=/home/scratch.trt_llm_data/llm-models/lora/gpt-next-2b
+VICUNA=/home/scratch.trt_llm_data/llm-models/vicuna-7b-v1.3
+MEDUSA_VICUNA=/home/scratch.trt_llm_data/llm-models/medusa-vicuna-7b-v1.3/
 
 set -e
 
@@ -302,5 +304,29 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
         --max_num_tokens 38400
 
     popd # tensorrt_llm/examples/gpt
+
+fi
+
+if [ "$MODEL" = "medusa" ]; then
+
+    # Medusa
+    pushd tensorrt_llm/examples/medusa
+
+    pip3 install -r requirements.txt
+
+    echo "Convert Medusa from HF"
+    python convert_checkpoint.py --model_dir ${VICUNA} \
+                            --medusa_model_dir ${MEDUSA_VICUNA} \
+                            --output_dir ./tllm_checkpoint_1gpu_medusa \
+                            --dtype float16 \
+                            --fixed_num_medusa_heads 4
+
+    echo "Build Medusa: float16"
+    trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu_medusa \
+             --output_dir ./tmp/medusa/7B/trt_engines/fp16/1-gpu/ \
+             --gemm_plugin float16 \
+             --max_batch_size 8 --max_input_len 300 --max_output_len 300
+
+    popd # tensorrt_llm/examples/medusa
 
 fi
