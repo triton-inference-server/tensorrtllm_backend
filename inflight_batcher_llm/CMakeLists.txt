@@ -34,7 +34,15 @@ include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
 project(tritontensorrtllmbackend LANGUAGES C CXX)
 
-add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
+# https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html
+option(USE_CXX11_ABI "Using CXX11 ABI of libstdc++" OFF)
+message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
+if(USE_CXX11_ABI)
+  add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=1")
+else()
+  add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
+endif()
+
 #
 # Options
 #
