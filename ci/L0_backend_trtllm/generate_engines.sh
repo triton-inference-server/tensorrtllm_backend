@@ -55,26 +55,6 @@ function build_tensorrt_engine_inflight_batcher {
     cd ${BASE_DIR}
 }
 
-function install_trt_llm {
-    # Install CMake
-    bash /opt/tritonserver/tensorrtllm_backend/tensorrt_llm/docker/common/install_cmake.sh
-    export PATH="/usr/local/cmake/bin:${PATH}"
-
-    # PyTorch needs to be built from source for aarch64
-    ARCH="$(uname -i)"
-    if [ "${ARCH}" = "aarch64" ]; then TORCH_INSTALL_TYPE="src_non_cxx11_abi"; \
-    else TORCH_INSTALL_TYPE="pypi"; fi && \
-    (cd /opt/tritonserver/tensorrtllm_backend/tensorrt_llm &&
-        bash docker/common/install_pytorch.sh $TORCH_INSTALL_TYPE &&
-        python3 ./scripts/build_wheel.py --trt_root="${TRT_ROOT}" &&
-        pip3 install ./build/tensorrt_llm*.whl)
-}
-
-# Install TRT LLM
-install_trt_llm
-
-# Install dependencies
-pip3 install -r ${TRTLLM_DIR}/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 # Downgrade to legacy version to accommodate Triton CI runners
 pip install pynvml==11.4.0
 
@@ -97,8 +77,3 @@ mv ${GPT_DIR}/inflight_*_gpu/ engines/
 # Move the tokenizer into the CI directory
 mkdir tokenizer
 mv ${GPT_DIR}/gpt2/* tokenizer/
-
-# Now that the engines are generated, we should remove the
-# tensorrt_llm module to ensure the C++ backend tests are
-# not using it
-pip3 uninstall -y torch tensorrt_llm
