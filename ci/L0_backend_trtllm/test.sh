@@ -186,6 +186,8 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         exit 1
     fi
 
+    wait_for_server_terminated ${SERVER_PID[@]}
+
     # inflight batching OFF (V1)
     # streaming OFF
     SERVER_LOG="./${NUM_GPU}gpu_v1_no_streaming_server.log"
