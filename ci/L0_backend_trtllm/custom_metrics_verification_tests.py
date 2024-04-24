@@ -46,8 +46,7 @@ metric_to_stat_dict = {
     "inflight_batcher_specific_metric=micro_batch_id": "MicroBatch ID",
     "inflight_batcher_specific_metric=generation_requests":
     "Generation Requests",
-    "inflight_batcher_specific_metric=terminated_requests":
-    "Terminated Requests",
+    "inflight_batcher_specific_metric=paused_requests": "Paused Requests",
     "v1_specific_metric=total_context_tokens": "Total Context Tokens",
     "v1_specific_metric=total_generation_tokens": "Total Generation Tokens",
     "v1_specific_metric=empty_generation_slots": "Empty Generation Slots",
@@ -109,7 +108,7 @@ class CustomMetricsTest(unittest.TestCase):
                                  int(metrics[metric_key]))
             else:
                 dt_log = datetime.strptime(stats[metric_key],
-                                           "%m-%d-%Y %H:%M:%S")
+                                           '%m-%d-%Y %H:%M:%S.%f')
                 dt_curl = datetime.utcfromtimestamp(
                     int(metrics[metric_key]) // 1000000)
                 difference = dt_log - dt_curl

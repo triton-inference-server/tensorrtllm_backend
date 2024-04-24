@@ -351,6 +351,18 @@ parameters: {
   }
 }
 parameters: {
+  key: "kv_cache_host_memory_bytes"
+  value: {
+    string_value: "${kv_cache_host_memory_bytes}"
+  }
+}
+parameters: {
+  key: "kv_cache_onboard_blocks"
+  value: {
+    string_value: "${kv_cache_onboard_blocks}"
+  }
+}
+parameters: {
   key: "enable_trt_overlap"
   value: {
     string_value: "${enable_trt_overlap}"
