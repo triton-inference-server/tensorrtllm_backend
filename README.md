@@ -205,8 +205,11 @@ and postprocessing models together.
 This model can also be used to chain the preprocessing,
 tensorrt_llm and postprocessing models together.
 
-The BLS model has an optional
-parameter `accumulate_tokens` which can be used in streaming mode to call the
+When using the BLS model instead of the ensemble, you should set the number of model instances to
+the maximum batch size supported by the TRT engine to allow concurrent request execution. This
+can be done by modifying the `count` value in the `instance_group` section of the BLS model `config.pbtxt`.
+
+The BLS model has an optional parameter `accumulate_tokens` which can be used in streaming mode to call the
 postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
