@@ -34,7 +34,7 @@ include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
 project(tritontensorrtllmbackend LANGUAGES C CXX)
 
-add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
+add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0" "-DENABLE_MULTI_DEVICE=1")
 #
 # Options
 #
