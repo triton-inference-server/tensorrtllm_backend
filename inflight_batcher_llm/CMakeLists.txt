@@ -165,15 +165,15 @@ find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
 file(STRINGS "${TRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS
      REGEX "#define NV_TENSORRT_.*")
 foreach(TYPE MAJOR MINOR PATCH BUILD)
-  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]" TRT_TYPE_STRING
+  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
                ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]" TRT_${TYPE} ${TRT_TYPE_STRING})
+  string(REGEX MATCH "[0-9]+" TRT_${TYPE} ${TRT_TYPE_STRING})
 endforeach(TYPE)
 
 foreach(TYPE MAJOR MINOR PATCH)
-  string(REGEX MATCH "NV_TENSORRT_SONAME_${TYPE} [0-9]" TRT_TYPE_STRING
+  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
                ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]" TRT_SO_${TYPE} ${TRT_TYPE_STRING})
+  string(REGEX MATCH "[0-9]+" TRT_SO_${TYPE} ${TRT_TYPE_STRING})
 endforeach(TYPE)
 
 set(TRT_VERSION
@@ -186,6 +186,12 @@ message(
   STATUS
     "Building for TensorRT version: ${TRT_VERSION}, library version: ${TRT_SOVERSION}"
 )
+
+if(${TRT_MAJOR} GREATER_EQUAL 10)
+  add_definitions("-DTRT_LLM_USE_DIM64")
+  message(
+    STATUS "TensorRT version ${TRT_MAJOR} >= 10, int64 dimension is enabled")
+endif()
 
 list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
 include_directories(${COMMON_HEADER_DIRS})
