@@ -25,7 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "utils.h"
-#include <cassert>
+
+using namespace tensorrt_llm::batch_manager;
 
 namespace triton::backend::inflight_batcher_llm::utils
 {
@@ -99,44 +100,58 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
     return nvinfer1::DataType(0);
 }
 
-TRITONSERVER_DataType to_triton_datatype(nvinfer1::DataType data_type)
+std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Request* request)
 {
-    if (data_type == nvinfer1::DataType::kBOOL)
+    std::unordered_map<std::string, NamedTensor> inputsTensors;
+    uint32_t num_inputs;
+    LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
+    for (uint32_t idx = 0; idx < num_inputs; ++idx)
     {
-        return TRITONSERVER_TYPE_BOOL;
+        TRITONBACKEND_Input* input = nullptr;
+        LOG_IF_ERROR(TRITONBACKEND_RequestInputByIndex(request, idx, &input), "Error getting input index");
+
+        char const* input_name = nullptr;
+        TRITONSERVER_DataType data_type = TRITONSERVER_TYPE_INVALID;
+        int64_t const* shape = nullptr;
+        uint32_t dims_count = 0;
+        uint64_t byte_size = 0;
+        uint32_t buffer_count = 0;
+        LOG_IF_ERROR(TRITONBACKEND_InputProperties(
+                         input, &input_name, &data_type, &shape, &dims_count, &byte_size, &buffer_count),
+            "Error getting input properties");
+
+        if (std::string(input_name) == "START" || std::string(input_name) == "CORRID"
+            || std::string(input_name) == "END" || std::string(input_name) == kStopInputTensorName
+            || std::string(input_name) == kStreamingInputTensorName)
+        {
+            continue;
+        }
+
+        std::vector<int64_t> shapev;
+        for (uint32_t i = 0; i < dims_count; ++i)
+        {
+            shapev.push_back(shape[i]);
+        }
+
+        NamedTensor t(utils::to_trt_datatype(data_type), shapev, input_name);
+        uint64_t buffer_offset = 0;
+        for (int64_t buffer_id = 0; buffer_id < buffer_count; ++buffer_id)
+        {
+            void const* buffer = nullptr;
+            uint64_t buffer_byte_size = 0;
+            TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+            int64_t memory_type_id = 0;
+            LOG_IF_ERROR(
+                TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id),
+                "failed to get input buffer");
+            assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
+            std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
+            buffer_offset += buffer_byte_size;
+        }
+
+        inputsTensors.insert(make_pair(t.name, std::move(t)));
     }
-    else if (data_type == nvinfer1::DataType::kUINT8)
-    {
-        return TRITONSERVER_TYPE_UINT8;
-    }
-    else if (data_type == nvinfer1::DataType::kHALF)
-    {
-        return TRITONSERVER_TYPE_BF16;
-    }
-    else if (data_type == nvinfer1::DataType::kINT8)
-    {
-        return TRITONSERVER_TYPE_INT8;
-    }
-    else if (data_type == nvinfer1::DataType::kINT32)
-    {
-        return TRITONSERVER_TYPE_INT32;
-    }
-    else if (data_type == nvinfer1::DataType::kINT64)
-    {
-        return TRITONSERVER_TYPE_INT64;
-    }
-    else if (data_type == nvinfer1::DataType::kFLOAT)
-    {
-        return TRITONSERVER_TYPE_FP32;
-    }
-    else if (data_type == nvinfer1::DataType::kBF16)
-    {
-        return TRITONSERVER_TYPE_BF16;
-    }
-    else
-    {
-        return TRITONSERVER_TYPE_INVALID;
-    }
+    return inputsTensors;
 }
 
 uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap)
@@ -171,16 +186,6 @@ uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_
     }
 
     return requestId;
-}
-
-std::string getRequestIdStr(uint64_t requestId, std::unordered_map<uint64_t, std::string> const& requestIdStrMap)
-{
-    auto it = requestIdStrMap.find(requestId);
-    if (it != requestIdStrMap.end())
-    {
-        return it->second;
-    }
-    return std::to_string(requestId);
 }
 
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
@@ -236,62 +241,72 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string co
     return boolean;
 }
 
-void sendEnqueueResponse(TRITONBACKEND_Request* request, std::string const& errMsg)
+std::string sparseListToStr(executor::VecTokens const& sparseList)
 {
-    TRITONBACKEND_ResponseFactory* factory_ptr;
-    // Create response factory for this request
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryNew(&factory_ptr, request), "Cannot create response factory");
-
-    TRITONSERVER_Error* err = nullptr;
-    if (!errMsg.empty())
+    std::string buffer;
+    for (auto v : sparseList)
     {
-        TLLM_LOG_ERROR(errMsg);
-        err = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
+        buffer.append(std::to_string(v) + " ");
     }
-    TRITONBACKEND_Response* response;
-    LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&response, factory_ptr), "Cannot create response");
-    LOG_IF_ERROR(
-        TRITONBACKEND_ResponseSend(response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, err), "Cannot send response");
-    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory_ptr), "Cannot delete response factory");
+    return buffer;
 }
 
-bool handleTritonRequest(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap,
-    std::vector<WorkItemsQueue::RequestWrapper>& requestsToPush, WorkItemsQueue& workItemsQueue)
+std::list<executor::VecTokens> convertWordList(executor::VecTokens const& sparseList)
 {
-    try
+    std::list<executor::VecTokens> convertedList;
+    int32_t n = sparseList.size();
+    TLLM_CHECK_WITH_INFO(n % 2 == 0, "Sparse list must not have odd length: " + sparseListToStr(sparseList));
+    int32_t numTokens = n / 2;
+    int32_t currentIndex = 0;
+    for (auto i = numTokens; i < n; ++i)
     {
-        auto requestId = utils::getRequestId(request, requestIdStrMap);
-        bool stopRequest = utils::getRequestBooleanInputTensor(request, kStopInputTensorName);
-
-        if (stopRequest)
+        if (sparseList[i] == -1)
         {
-            if (requestId != 0)
+            for (auto j = i + 1; j < n; ++j)
             {
-                // Check if request is in progress or in queue, if not ignore
-                workItemsQueue.stopWorkItem(requestId);
-                // Send a response back to client for stop request
-                utils::sendEnqueueResponse(request);
+                TLLM_CHECK_WITH_INFO(
+                    sparseList[j] == -1, "Sparse list must not have additional -1s: " + sparseListToStr(sparseList));
             }
-            else
-            {
-                throw std::runtime_error("Cannot send stop request without specifying a request_id");
-            }
+            break;
         }
-        else
+        TLLM_CHECK_WITH_INFO(sparseList[i] <= numTokens,
+            "Sparse list must not have out-of-bound offsets: " + sparseListToStr(sparseList));
+        if (i != numTokens)
         {
-            requestsToPush.emplace_back(requestId, request);
+            TLLM_CHECK_WITH_INFO(sparseList[i] > sparseList[i - 1],
+                "Sparse list must not have non-increasing offsets: " + sparseListToStr(sparseList));
         }
-
-        return stopRequest;
+        executor::VecTokens currentWords;
+        while (currentIndex < sparseList[i])
+        {
+            currentWords.push_back(sparseList[currentIndex]);
+            ++currentIndex;
+        }
+        convertedList.push_back(currentWords);
     }
-    catch (std::exception const& e)
+    return convertedList;
+}
+
+void squeezeTensor(std::shared_ptr<runtime::ITensor> const& tensor, int32_t expectedNumDims)
+{
+    auto shape = tensor->getShape();
+    if (shape.nbDims == expectedNumDims)
     {
-        // In case of error, no work item is added to queue, so response
-        // callback needs to be called
-        utils::sendEnqueueResponse(request, e.what());
+        return;
     }
-
-    return false;
+    if (shape.nbDims == expectedNumDims + 1 && shape.d[0] == 1)
+    {
+        --shape.nbDims;
+        for (int32_t i = 0; i < expectedNumDims; ++i)
+        {
+            shape.d[i] = shape.d[i + 1];
+        }
+        tensor->reshape(shape);
+    }
+    else
+    {
+        TLLM_LOG_ERROR("Unexpected prompt tensor shape");
+    }
 }
 
 std::vector<int32_t> csvStrToVecInt(std::string const& str)
@@ -343,6 +358,229 @@ std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str)
     }
     TLLM_CHECK_WITH_INFO(!output.empty(), "Empty vector of vector");
     return output;
+}
+
+int64_t numElements(std::vector<int64_t> const& shape)
+{
+    int64_t n = 1;
+    for (auto d : shape)
+    {
+        n *= d;
+    }
+    return n;
+}
+
+executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputsTensors)
+{
+    int32_t beamWidth = 1;
+    // If beam_width is specified, set it from config.pbtxt
+    extractSingleton<int32_t>(inputsTensors, InputFieldsNames::beamWidth, beamWidth);
+
+    std::optional<executor::SizeType> topK{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::topK, topK);
+
+    std::optional<float> topP{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::topP, topP);
+    if (topP.has_value() && topP.value() <= 0.F)
+    {
+        topP.reset();
+    }
+
+    std::optional<float> topPMin{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::topPMin, topPMin);
+
+    std::optional<float> topPDecay{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::topPDecay, topPDecay);
+
+    std::optional<int32_t> topPResetIds{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::topPResetIds, topPResetIds);
+
+    std::optional<float> temperature{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::temperature, temperature);
+
+    std::optional<float> lengthPenalty{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::lengthPenalty, lengthPenalty);
+
+    std::optional<int32_t> earlyStopping{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::earlyStopping, earlyStopping);
+
+    std::optional<float> repetitionPenalty{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::repetitionPenalty, repetitionPenalty);
+
+    std::optional<int32_t> minLength{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::minLength, minLength);
+
+    std::optional<float> beamSearchDiversityRate{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::beamSearchDiversityRate, beamSearchDiversityRate);
+
+    std::optional<float> presencePenalty{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::presencePenalty, presencePenalty);
+
+    std::optional<float> frequencyPenalty{std::nullopt};
+    extractOptionalSingleton<float>(inputsTensors, InputFieldsNames::frequencyPenalty, frequencyPenalty);
+
+    std::optional<uint64_t> randomSeed{std::nullopt};
+    extractOptionalSingleton<uint64_t>(inputsTensors, InputFieldsNames::randomSeed, randomSeed);
+
+    return executor::SamplingConfig(beamWidth, topK, topP, topPMin, topPResetIds, topPDecay, randomSeed, temperature,
+        minLength, beamSearchDiversityRate, repetitionPenalty, presencePenalty, frequencyPenalty, lengthPenalty,
+        earlyStopping);
+}
+
+executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTensors)
+{
+    bool returnLogProbs{false};
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnLogProbs, returnLogProbs);
+
+    bool returnGenerationLogits{false};
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnGenerationLogits, returnGenerationLogits);
+
+    bool returnContextLogits{false};
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
+
+    // Note that currently excludeInputFromOutput is set from the backend parameters.
+    return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits);
+}
+
+std::optional<executor::SpeculativeDecodingConfig> getSpeculativeDecodingConfigFromTensors(
+    InputTensors const& inputsTensors)
+{
+    std::optional<executor::SpeculativeDecodingConfig> speculativeDecodingConfig = std::nullopt;
+
+    if (inputsTensors.count(InputFieldsNames::draftInputs))
+    {
+        executor::VecTokens draftInputs;
+        extractVector<int32_t>(inputsTensors, InputFieldsNames::draftInputs, draftInputs);
+
+        std::optional<executor::Tensor> draftLogits = std::nullopt;
+        if (inputsTensors.count(InputFieldsNames::draftLogits))
+        {
+            std::shared_ptr<runtime::ITensor> originaldraftLogitsTensor
+                = inputsTensors.at(InputFieldsNames::draftLogits).tensor;
+            utils::squeezeTensor(originaldraftLogitsTensor, 2);
+            draftLogits = executor::detail::ofITensor(originaldraftLogitsTensor);
+        }
+
+        speculativeDecodingConfig = executor::SpeculativeDecodingConfig(draftInputs, draftLogits);
+    }
+    return speculativeDecodingConfig;
+}
+
+std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(InputTensors const& inputsTensors)
+{
+    std::optional<executor::PromptTuningConfig> pTuningConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::promptEmbeddingTable))
+    {
+        std::shared_ptr<runtime::ITensor> originalTensor
+            = inputsTensors.at(InputFieldsNames::promptEmbeddingTable).tensor;
+        utils::squeezeTensor(originalTensor, 2);
+        auto const& executorTensor = executor::detail::ofITensor(originalTensor);
+        pTuningConfig = executor::PromptTuningConfig(executorTensor);
+    }
+    return pTuningConfig;
+}
+
+std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors)
+{
+    std::optional<executor::LoraConfig> loraConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::loraTaskId))
+    {
+        uint64_t taskId;
+        if (!utils::extractSingleton<uint64_t>(inputsTensors, InputFieldsNames::loraTaskId, taskId))
+        {
+            throw std::runtime_error("failed to extract lora task id");
+        }
+
+        std::optional<executor::Tensor> loraConfigTensor{std::nullopt};
+        if (inputsTensors.count(InputFieldsNames::loraConfig))
+        {
+            std::shared_ptr<runtime::ITensor> originalLoraConfigTensor
+                = inputsTensors.at(InputFieldsNames::loraConfig).tensor;
+            utils::squeezeTensor(originalLoraConfigTensor, 2);
+            loraConfigTensor = executor::detail::ofITensor(originalLoraConfigTensor);
+        }
+
+        std::optional<executor::Tensor> loraWeightsTensor{std::nullopt};
+        if (inputsTensors.count(InputFieldsNames::loraWeights))
+        {
+            std::shared_ptr<runtime::ITensor> originalLoraWeightsTensor
+                = inputsTensors.at(InputFieldsNames::loraWeights).tensor;
+            utils::squeezeTensor(originalLoraWeightsTensor, 2);
+            loraWeightsTensor = executor::detail::ofITensor(originalLoraWeightsTensor);
+        }
+
+        loraConfig = executor::LoraConfig(taskId, loraWeightsTensor, loraConfigTensor);
+    }
+    return loraConfig;
+}
+
+executor::Request createRequestFromInputTensors(std::unordered_map<std::string, NamedTensor> const& inputsTensors,
+    bool excludeInputFromOutput, bool isDecoupled, bool streaming)
+{
+    executor::OutputConfig outConfig = utils::getOutputConfigFromTensors(inputsTensors);
+    outConfig.excludeInputFromOutput = excludeInputFromOutput;
+
+    executor::VecTokens inputTokens;
+    if (!utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::inputTokens, inputTokens))
+    {
+        throw std::runtime_error("input_ids is not present in the request");
+    }
+
+    executor::SizeType maxNewTokens;
+    if (!utils::extractSingleton<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
+    {
+        throw std::runtime_error("request_output_len is not present in the request");
+    }
+
+    std::optional<executor::SizeType> endId{std::nullopt};
+    utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::endId, endId);
+
+    std::optional<executor::SizeType> padId{std::nullopt};
+    utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::padId, padId);
+
+    if (streaming && !isDecoupled)
+    {
+        throw std::runtime_error(
+            "Streaming is only supported if model is "
+            "deployed using decoupled mode.");
+    }
+
+    auto samplingConfig = utils::getSamplingConfigFromTensors(inputsTensors);
+
+    std::optional<std::list<executor::VecTokens>> badWords = std::nullopt;
+    executor::VecTokens badWordsRaw;
+    if (utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::badWords, badWordsRaw))
+    {
+        badWords = utils::convertWordList(badWordsRaw);
+    }
+
+    std::optional<std::list<executor::VecTokens>> stopWords = std::nullopt;
+    executor::VecTokens stopWordsRaw;
+    if (utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::stopWords, stopWordsRaw))
+    {
+        stopWords = utils::convertWordList(stopWordsRaw);
+    }
+
+    std::optional<executor::Tensor> embeddingBias{std::nullopt};
+    if (inputsTensors.count(InputFieldsNames::embeddingBias))
+    {
+        std::shared_ptr<runtime::ITensor> originalTensor = inputsTensors.at(InputFieldsNames::embeddingBias).tensor;
+        utils::squeezeTensor(originalTensor, 1);
+        auto newShape = originalTensor->getShape();
+        if (!(newShape.nbDims == 1 && newShape.d[0] == 0))
+        {
+            embeddingBias = executor::detail::ofITensor(originalTensor);
+        }
+    }
+
+    auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputsTensors);
+
+    auto loraConfig = utils::getLoraConfigFromTensors(inputsTensors);
+
+    auto speculativeDecodingConfig = utils::getSpeculativeDecodingConfigFromTensors(inputsTensors);
+
+    return executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
+        stopWords, embeddingBias, speculativeDecodingConfig, pTuningConfig, loraConfig, std::nullopt);
 }
 
 } // namespace triton::backend::inflight_batcher_llm::utils

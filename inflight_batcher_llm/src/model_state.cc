@@ -26,7 +26,6 @@
 
 #include "model_state.h"
 
-#include "tensorrt_llm/common/mpiUtils.h"
 #include "utils.h"
 
 #include <algorithm>

@@ -491,7 +491,7 @@ def runCPPUnitTest()
 {
   container("trt-llm-backend") {
       sh "nvidia-smi"
-      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm/build/tests && ./inferenceAnswerTest"
+      sh "cd ${BACKEND_ROOT}/inflight_batcher_llm/build/tests && ./utilsTest"
       sh "cd ${BACKEND_ROOT}/inflight_batcher_llm/build/tests && ./modelStateTest"
     }
 }

@@ -102,19 +102,13 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
-set(COMMON_SRCS
-    src/work_item.cc src/work_items_queue.cc src/model_instance_state.cc
-    src/model_state.cc src/utils.cc src/inference_answer.cc)
+set(COMMON_SRCS src/model_instance_state.cc src/model_state.cc src/utils.cc)
 
 add_library(triton-tensorrt-llm-common SHARED ${COMMON_SRCS})
 
-set(BACKEND_SRCS src/libtensorrtllm.cc src/orchestrator.cc)
+set(BACKEND_SRCS src/libtensorrtllm.cc)
 
 add_library(triton-tensorrt-llm-backend SHARED ${BACKEND_SRCS})
-
-set(WORKER_SRCS src/worker.cc)
-
-add_executable(triton-tensorrt-llm-worker ${WORKER_SRCS})
 
 enable_language(CUDA)
 
@@ -210,7 +204,6 @@ target_include_directories(
 
 target_compile_features(triton-tensorrt-llm-common PRIVATE cxx_std_17)
 target_compile_features(triton-tensorrt-llm-backend PRIVATE cxx_std_17)
-target_compile_features(triton-tensorrt-llm-worker PRIVATE cxx_std_17)
 
 set(COMPILE_OPTIONS
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
@@ -225,7 +218,6 @@ set(COMPILE_OPTIONS
 
 target_compile_options(triton-tensorrt-llm-common PRIVATE ${COMPILE_OPTIONS})
 target_compile_options(triton-tensorrt-llm-backend PRIVATE ${COMPILE_OPTIONS})
-target_compile_options(triton-tensorrt-llm-worker PRIVATE ${COMPILE_OPTIONS})
 
 add_library(tensorrt_llm SHARED IMPORTED)
 set_property(
@@ -314,8 +306,6 @@ target_link_libraries(
 
 target_link_libraries(triton-tensorrt-llm-backend
                       PRIVATE triton-tensorrt-llm-common)
-target_link_libraries(triton-tensorrt-llm-worker
-                      PRIVATE triton-tensorrt-llm-common)
 
 FetchContent_Declare(
   json
@@ -332,9 +322,6 @@ if(WIN32)
     triton-tensorrt-llm-backend PROPERTIES POSITION_INDEPENDENT_CODE ON
                                            OUTPUT_NAME triton_tensorrtllm)
   set_target_properties(
-    triton-tensorrt-llm-worker PROPERTIES POSITION_INDEPENDENT_CODE ON
-                                          OUTPUT_NAME triton_tensorrtllm_worker)
-  set_target_properties(
     triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
                                           OUTPUT_NAME triton_tensorrtllm_common)
 else()
@@ -347,8 +334,6 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
-  set_target_properties(triton-tensorrt-llm-worker
-                        PROPERTIES OUTPUT_NAME triton_tensorrtllm_worker)
   set_target_properties(
     triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
                                           OUTPUT_NAME triton_tensorrtllm_common)
@@ -358,3 +343,12 @@ if(BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+add_custom_command(
+  TARGET triton-tensorrt-llm-backend
+  POST_BUILD
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${TRTLLM_DIR}/cpp/build/tensorrt_llm/executor_worker/executorWorker
+    ${CMAKE_CURRENT_BINARY_DIR}/triton_tensorrtllm_worker
+  COMMENT "Copying executorWorker to the build directory")
