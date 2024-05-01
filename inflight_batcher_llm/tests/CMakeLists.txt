@@ -53,7 +53,6 @@ function(add_gtest test_name test_src)
   gtest_discover_tests(${test_name} DISCOVERY_TIMEOUT 30)
 endfunction()
 
-add_gtest(inferenceAnswerTest inferenceAnswer.cpp)
 add_gtest(modelStateTest modelState.cpp)
 add_gtest(utilsTest utilsTest.cpp)
 

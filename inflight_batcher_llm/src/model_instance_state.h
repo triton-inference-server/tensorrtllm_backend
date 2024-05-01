@@ -26,14 +26,12 @@
 
 #pragma once
 
+#include <map>
 #include <queue>
-#include <unordered_map>
 
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
-
-#include "tensorrt_llm/common/mpiUtils.h"
 
 #include "tensorrt_llm/batch_manager/BatchManager.h"
 #include "tensorrt_llm/batch_manager/GptManager.h"
@@ -44,22 +42,35 @@
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/runtime/decodingMode.h"
 
-#include "inference_answer.h"
 #include "model_state.h"
-#include "mpi_utils.h"
-#include "work_item.h"
-#include "work_items_queue.h"
 
 #ifdef TRITON_ENABLE_METRICS
 #include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
 
-using namespace tensorrt_llm::mpi;
+using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
 using namespace tensorrt_llm::batch_manager::batch_scheduler;
 
 namespace triton::backend::inflight_batcher_llm
 {
+
+/// @brief Struct to hold configs that is will be used later when creating the executor requests
+struct InstanceSpecificConfig
+{
+    bool excludeInputFromOutput;
+    int cancellationCheckPeriodMs;
+};
+
+/// @brief Per-request data stored for handling requests
+struct RequestData
+{
+    TRITONBACKEND_ResponseFactory* factory;
+    TRITONBACKEND_Request* tritonRequest;
+    std::string tritonRequestId;
+    int64_t inputTokensSize;
+    executor::SizeType beamWidth;
+};
 
 //
 // ModelInstanceState
@@ -67,7 +78,6 @@ namespace triton::backend::inflight_batcher_llm
 // created and associated with each
 // TRITONBACKEND_ModelInstance. ModelInstanceState is derived from
 //
-
 class ModelInstanceState
 {
     using DecodingMode = tensorrt_llm::runtime::DecodingMode;
@@ -83,26 +93,20 @@ public:
     // number of cpu workers used to load weight into host cache
     static constexpr SizeType kPeftCacheNumPutWorkers = 4;
 
-    /// @brief Create a ModelInstanceObject when running in non-orchestrator mode
+    /// @brief Create a ModelInstanceObject
     static TRITONSERVER_Error* Create(
         ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, ModelInstanceState** state);
 
-    /// @brief Create a ModelInstanceObject for workers when running in orchestrator mode
-    /// @param leaderOrchComm MPI inter-communicator containing MPI_COMM_WORLD and the parent process.
-    /// Is only used for the leader rank (0) and is ignored for other ranks.
-    static bool Create(ModelState* model_state, MPI_Comm leaderOrchComm, ModelInstanceState** state);
-
     virtual ~ModelInstanceState()
     {
-        // terminate decoupled execution loop
-        {
-            mWorkItemsQueue->clear();
-        }
+        mStopWaitForResponse = true;
+        mWaitForResponseThread.join();
 
-        // signal batch manager to stop processing the work items queue
-        {
-            mBatchManager->shutdown();
-        }
+        mStopWaitForStats = true;
+        mWaitForStatsThread.join();
+
+        mStopWaitForCancel = true;
+        mWaitForCancelThread.join();
     }
 
     // Get the state of the model that corresponds to this instance.
@@ -116,70 +120,83 @@ public:
         return model_state_->IsDecoupled();
     }
 
-    /// @brief Add the request to the WorkItemsQueue
+    /// @brief Add the request to the executor
     void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
 
-    /// @brief  Callback passed to GptManager to get new inference requests
-    /// @return Up to max_num_requests inference requests.
-    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests(int const max_num_requests);
-    std::list<std::shared_ptr<InferenceRequest>> get_inference_requests_leader(int const max_num_requests);
-
-    /// @brief  Callback passed to GptManager to send responses back to client
-    void sendResponse(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response,
-        std::string const& errMsg);
-    void sendResponseLeader(uint64_t requestId, std::list<NamedTensor> const& response_tensors, bool final_response,
-        std::string const& errMsg);
-    /// @brief Callback passed to GptManager to get ids of stopped requests
-    std::unordered_set<uint64_t> pollStopSignals();
-
-    /// @brief  Callback passed to GptManager to print stats
-    void logStats(std::string const& s);
-
-    /// @brief Method that sends Triton response back to client
-    static TRITONSERVER_Error* sendTritonResponse(std::shared_ptr<WorkItem> workItem,
-        std::list<NamedTensor> const& response_tensors, bool final_response, std::string const& errMsg,
-        WorkItemsQueue& workItemsQueue, TRITONBACKEND_ModelInstance* model_instance);
-
 private:
+    /// @brief Get batching type
+    executor::BatchingType getBatchingTypeFromParams();
+
+    /// @brief Get kv cache config
+    executor::KvCacheConfig getKvCacheConfigFromParams();
+
+    /// @brief Get scheduler config
+    executor::SchedulerConfig getSchedulerConfigFromParams(bool enableChunkedContext);
+
+    /// @brief Get peft config
+    executor::PeftCacheConfig getPeftCacheConfigFromParams();
+
+    /// @brief Get parallel config
+    executor::ParallelConfig getParallelConfigFromParams();
+
+    /// @brief Get executor config
+    executor::ExecutorConfig getExecutorConfigFromParams();
+
     /// @brief Constructor
-    ModelInstanceState(
-        ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance, MPI_Comm model_comm);
-
-    void RecvMpiThread();
-    void AnsMpiThread();
-    void SendMessage(MpiMessage&& message);
-
-    void broadcast_inference_requests(std::list<std::shared_ptr<InferenceRequest>>& rval);
+    ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance);
 
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;
 
-    TrtGptModelType mTrtGptModelType;
     std::string mModelPath;
 
-    // Only valid for leader-worker ranks
-    std::unique_ptr<MpiComm> mLeaderOrchComm;
-    std::thread mReceiverThread;
-    std::queue<std::shared_ptr<InferenceRequest>> mRecvRequests;
-    std::mutex mRecRequestsMutex;
-    std::thread mSenderThread;
-    std::queue<MpiMessage> mSenderQueue;
-    std::mutex mSenderMutex;
-    std::condition_variable mSenderCV;
-    std::unordered_set<uint64_t> mStoppedReqIds;
-    std::mutex mStoppedReqIdsMutex;
-    std::condition_variable mModelUnloadRequest;
-    std::mutex mModelUnloadMutex;
+    /// @brief Send a response during enqueue
+    void sendEnqueueResponse(TRITONBACKEND_Request* request, TRITONSERVER_Error* error);
 
-    std::shared_ptr<GptManager> mBatchManager;
-    std::unique_ptr<WorkItemsQueue> mWorkItemsQueue;
+    /// @brief Cancel a request
+    bool handleStopRequest(TRITONBACKEND_Request* request, std::string const& tritonRequestId);
 
-    std::unordered_map<uint64_t, std::string> mRequestIdStrMap;
+    /// @brief Create an executor::Request from input tensors
+    static executor::Request createExecutorRequest(
+        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled);
+
+    /// @brief Fill in a triton response based on executor response
+    std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
+        TRITONBACKEND_ResponseFactory* factory, executor::Response const& response, RequestData const& requestData);
+
+    /// @brief TRT-LLM Executor that handles requests
+    std::unique_ptr<executor::Executor> mExecutor;
+    /// @brief Config to be used when sending requests to executor
+    InstanceSpecificConfig mInstanceSpecificConfig;
+
+    /// @brief Retrieve responses from the executor
+    void WaitForResponse();
+    /// @brief The thread for WaitForResponse() to run
+    std::thread mWaitForResponseThread;
+    /// @brief Flag to stop the WaitForResponse thread when the model instance is being destroyed
+    bool mStopWaitForResponse;
+
+    /// @brief Retrieve stats from the executor
+    void WaitForStats();
+    /// @brief The thread for WaitForStats() to run
+    std::thread mWaitForStatsThread;
+    /// @brief Flag to stop the WaitForStats thread when the model instance is being destroyed
+    bool mStopWaitForStats;
+
+    /// @brief Cancel a request for executor if it is marked as cancelled by Triton backend
+    void WaitForCancel();
+    /// @brief The thread for WaitForCancel() to run
+    std::thread mWaitForCancelThread;
+    /// @brief Flag to stop the WaitForCancel thread when the model instance is being destroyed
+    bool mStopWaitForCancel;
+
+    std::unordered_map<executor::IdType, RequestData> mRequestIdToRequestData;
+    std::unordered_map<std::string, executor::IdType> mTritonRequestIdToRequestId;
+    std::mutex mRequestIdToRequestDataMutex;
+
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
 #endif
-
-    bool mHasActiveRequests;
 };
 
 } // namespace triton::backend::inflight_batcher_llm

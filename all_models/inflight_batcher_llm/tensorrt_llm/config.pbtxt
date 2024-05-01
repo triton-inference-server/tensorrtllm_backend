@@ -133,8 +133,36 @@ input [
     optional: true
   },
   {
+    name: "runtime_top_p_min"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p_decay"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p_reset_ids"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "len_penalty"
     data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "early_stopping"
+    data_type: TYPE_BOOL
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -149,6 +177,13 @@ input [
   {
     name: "min_length"
     data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "beam_search_diversity_rate"
+    data_type: TYPE_FP32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -372,6 +407,24 @@ parameters: {
   key: "exclude_input_in_output"
   value: {
     string_value: "${exclude_input_in_output}"
+  }
+}
+parameters: {
+  key: "cancellation_check_period_ms"
+  value: {
+    string_value: "${cancellation_check_period_ms}"
+  }
+}
+parameters: {
+  key: "iter_stats_max_iterations"
+  value: {
+    string_value: "${iter_stats_max_iterations}"
+  }
+}
+parameters: {
+  key: "request_stats_max_iterations"
+  value: {
+    string_value: "${request_stats_max_iterations}"
   }
 }
 parameters: {
