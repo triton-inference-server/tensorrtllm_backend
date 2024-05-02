@@ -170,6 +170,13 @@ def tensorrt_llm_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def tensorrt_llm_medusa_example_root(llm_backend_root):
+    llm_medusa_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                           "examples", "medusa")
+    return llm_medusa_example_root
+
+
+@pytest.fixture(scope="session")
 def tensorrt_llm_llama_example_root(llm_backend_root):
     llm_llama_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                           "examples", "llama")
@@ -324,6 +331,31 @@ def gpt_2b_lora_model_root():
         gpt_2b_lora_model_root
     ), f"{gpt_2b_lora_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_2b_lora_model_root
+
+
+@pytest.fixture(scope="session")
+def vicuna_7b_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    vicuna_7b_model_root = os.path.join(models_root, "vicuna-7b-v1.3")
+
+    assert os.path.exists(
+        vicuna_7b_model_root
+    ), f"{vicuna_7b_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return vicuna_7b_model_root
+
+
+@pytest.fixture(scope="session")
+def medusa_vicuna_7b_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    medusa_vicuna_7b_model_root = os.path.join(models_root,
+                                               "medusa-vicuna-7b-v1.3")
+
+    assert os.path.exists(
+        medusa_vicuna_7b_model_root
+    ), f"{medusa_vicuna_7b_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return medusa_vicuna_7b_model_root
 
 
 # Returns an array of total memory for each available device
