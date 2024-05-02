@@ -461,7 +461,12 @@ std::optional<executor::SpeculativeDecodingConfig> getSpeculativeDecodingConfigF
             draftLogits = executor::detail::ofITensor(originaldraftLogitsTensor);
         }
 
-        speculativeDecodingConfig = executor::SpeculativeDecodingConfig(draftInputs, draftLogits);
+        std::optional<float> draftAcceptanceThreshold{std::nullopt};
+        utils::extractOptionalSingleton<float>(
+            inputsTensors, InputFieldsNames::draftAcceptanceThreshold, draftAcceptanceThreshold);
+
+        speculativeDecodingConfig
+            = executor::SpeculativeDecodingConfig(draftInputs, draftLogits, draftAcceptanceThreshold);
     }
     return speculativeDecodingConfig;
 }
