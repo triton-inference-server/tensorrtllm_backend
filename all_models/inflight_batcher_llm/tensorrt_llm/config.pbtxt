@@ -381,6 +381,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "sink_token_length"
+  value: {
+    string_value: "${sink_token_length}"
+  }
+}
+parameters: {
   key: "batch_scheduler_policy"
   value: {
     string_value: "${batch_scheduler_policy}"
