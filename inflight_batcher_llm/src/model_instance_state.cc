@@ -132,6 +132,19 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
             "use default value (i.e. max_sequence_length)");
     }
 
+    std::optional<int32_t> sinkTokenLength = std::nullopt;
+    try
+    {
+        sinkTokenLength = model_state_->GetParameter<int32_t>("sink_token_length");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING(
+            "sink_token_length is not specified, will "
+            "use default value");
+    }
+
     bool enableKVCacheReuse = false;
     try
     {
@@ -149,8 +162,8 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         maxAttentionWindowSizeType = static_cast<SizeType>(maxAttentionWindow.value());
     }
 
-    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType, {},
-        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
+        sinkTokenLength, kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
 }
 
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
