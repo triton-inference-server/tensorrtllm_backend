@@ -166,7 +166,7 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     if (str && std::atoi(str) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
-        auto workerExecutablePath = model_state_->GetWorkerPath();
+        auto workerExecutablePath = model_state_->GetExecutorWorkerPath();
         auto orchestratorConfig = executor::OrchestratorConfig(true, workerExecutablePath);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
     }

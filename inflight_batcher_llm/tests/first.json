@@ -12,8 +12,8 @@
         "batch_scheduler_policy": {
             "string_value": "guaranteed_no_evict"
         },
-        "worker_path": {
-            "string_value": "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker"
+        "executor_worker_path": {
+            "string_value": "/opt/tritonserver/backends/tensorrtllm/trtllmExecutorWorker"
         },
         "normalize_log_probs": {
             "string_value": "true"

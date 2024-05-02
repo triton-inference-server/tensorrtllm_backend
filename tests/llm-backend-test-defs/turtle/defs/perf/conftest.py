@@ -15,7 +15,7 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
 
     # Make sure Triton server are killed before each test.
     call(f"pkill -9 tritonserver", shell=True)
-    call(f"pkill -9 triton_tensorrtllm_worker", shell=True)
+    call(f"pkill -9 trtllmExecutorWorker", shell=True)
     time.sleep(2)
 
     # Build engine
@@ -61,7 +61,7 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
     yield
     # Gracefully terminate Triton Server after each test.
     call(f"pkill tritonserver", shell=True)
-    call(f"pkill triton_tensorrtllm_worker", shell=True)
+    call(f"pkill trtllmExecutorWorker", shell=True)
     time.sleep(8)
 
 
@@ -92,7 +92,7 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
 
     # Make sure Triton server are killed before each test.
     call(f"pkill -9 tritonserver", shell=True)
-    call(f"pkill -9 triton_tensorrtllm_worker", shell=True)
+    call(f"pkill -9 trtllmExecutorWorker", shell=True)
     time.sleep(2)
 
     # Build engine
@@ -143,5 +143,5 @@ def setup_llama_ifb_perf_test_env(tensorrt_llm_llama_example_root,
     yield
     # Gracefully terminate Triton Server after each test.
     call(f"pkill tritonserver", shell=True)
-    call(f"pkill triton_tensorrtllm_worker", shell=True)
+    call(f"pkill trtllmExecutorWorker", shell=True)
     time.sleep(8)
