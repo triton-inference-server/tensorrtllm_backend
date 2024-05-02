@@ -391,6 +391,8 @@ tensorrt_llm::executor::Request getRequest()
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::draftInputs, nvinfer1::DataType::kINT32, {4}, {1, 2, 3, 3});
     pushTensor<float>(
         inputsTensors, InputFieldsNames::draftLogits, nvinfer1::DataType::kFLOAT, {1, 4, 1}, {1.1, 2.1, 3.1, 3.1});
+    pushTensor<float>(
+        inputsTensors, InputFieldsNames::draftAcceptanceThreshold, nvinfer1::DataType::kFLOAT, {1}, {0.222F});
 
     auto request = createRequestFromInputTensors(inputsTensors, true, true, true);
     return request;
@@ -439,6 +441,8 @@ void checkRequest(tensorrt_llm::executor::Request const& request)
     auto speculativeDecodingConfig = request.getSpeculativeDecodingConfig().value();
     EXPECT_THAT(speculativeDecodingConfig.getTokens(), testing::ElementsAre(1, 2, 3, 3));
     checkTensor<float>(speculativeDecodingConfig.getLogits().value(), {1.1, 2.1, 3.1, 3.1});
+    EXPECT_TRUE(speculativeDecodingConfig.getAcceptanceThreshold().has_value());
+    EXPECT_FLOAT_EQ(speculativeDecodingConfig.getAcceptanceThreshold().value(), 0.222F);
 
     // PromptTuningConfig
     auto promptTuningConfig = request.getPromptTuningConfig().value();
