@@ -86,6 +86,7 @@ struct InputFieldsNames
     // SpeculativeDecodingConfig
     static constexpr char const* draftInputs = "draft_input_ids";
     static constexpr char const* draftLogits = "draft_logits";
+    static constexpr char const* draftAcceptanceThreshold = "draft_acceptance_threshold";
 };
 
 /// @brief Names of output fields
@@ -99,8 +100,8 @@ struct OutputFieldsNames
     static constexpr char const* cumLogProbs = "cum_log_probs";
 };
 
-inline static const std::string kStopInputTensorName = "stop";
-inline static const std::string kStreamingInputTensorName = "streaming";
+inline static std::string const kStopInputTensorName = "stop";
+inline static std::string const kStreamingInputTensorName = "streaming";
 
 namespace utils
 {

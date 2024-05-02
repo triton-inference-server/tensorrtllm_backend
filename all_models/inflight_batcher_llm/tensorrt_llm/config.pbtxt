@@ -70,6 +70,13 @@ input [
     allow_ragged_batch: true
   },
   {
+    name: "draft_acceptance_threshold"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "end_id"
     data_type: TYPE_INT32
     dims: [ 1 ]
