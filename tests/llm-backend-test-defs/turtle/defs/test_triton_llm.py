@@ -571,6 +571,131 @@ def test_llama_v2_70b_ifb(
     venv_check_call(llm_backend_venv, run_cmd)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
+                         ["max_utilization", "guaranteed_no_evict"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
+                         ids=["disableTrtOverlap"])
+@pytest.mark.parametrize("BATCHING_STRATEGY",
+                         ["inflight_fused_batching", "V1"])
+@pytest.mark.parametrize("DECOUPLED_MODE", ["True", "False"],
+                         ids=["enableDecoupleMode", "disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
+@pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
+@pytest.mark.parametrize("DECODING_MODE", ["medusa"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+def test_medusa_vicuna_7b_ifb(
+    E2E_MODEL_NAME,
+    MAX_TOKENS_IN_KV_CACHE,
+    MAX_ATTENTION_WINDOW_SIZE,
+    BATCH_SCHEDULER_POLICY,
+    KV_CACHE_FREE_GPU_MEM_FRACTION,
+    ENABLE_TRT_OVERLAP,
+    BATCHING_STRATEGY,
+    DECOUPLED_MODE,
+    TRITON_MAX_BATCH_SIZE,
+    MAX_QUEUE_DELAY_MICROSECONDS,
+    MAX_BEAM_WIDTH,
+    ENABLE_KV_CACHE_REUSE,
+    NORMALIZE_LOG_PROBS,
+    ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
+    DECODING_MODE,
+    PREPROCESSING_INSTANCE_COUNT,
+    POSTPROCESSING_INSTANCE_COUNT,
+    ACCUMULATE_TOKEN,
+    BLS_INSTANCE_COUNT,
+    EXCLUDE_INPUT_IN_OUTPUT,
+    inflight_batcher_llm_client_root,
+    tensorrt_llm_medusa_example_root,
+    vicuna_7b_model_root,
+    medusa_vicuna_7b_model_root,
+    llama_v2_tokenizer_model_root,
+    llm_backend_dataset_root,
+    llm_backend_venv,
+):
+    if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
+
+    llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build Engine
+    ENGINE_PATH = prepare_medusa_vicuna_7b_engine(
+        tensorrt_llm_medusa_example_root, vicuna_7b_model_root,
+        medusa_vicuna_7b_model_root)
+    # Prepare model repo
+    new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+
+    # Modify config.pbtxt
+    TOKENIZER_PATH = llama_v2_tokenizer_model_root
+    modify_ib_config_pbtxt(
+        new_model_repo,
+        ENGINE_PATH,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+    )
+
+    # Launch Triton Server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
+        shell=True)
+    check_server_ready()
+    # Run Test
+    run_cmd = [
+        f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
+        "--request-output-len=128",
+        "--end-id=1284",
+        "--request-id=1",
+        f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
+        f"--input-tokens-csv={llm_backend_dataset_root}/short_input_end_id_medusa.csv",
+        f"--output-tokens-csv={llm_backend_dataset_root}/short_output_end_id_medusa.csv",
+        "--check-output",
+    ]
+    if DECOUPLED_MODE == "True":
+        run_cmd += [
+            "--streaming",
+        ]
+
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "accuracy"])
 def test_gpt_350m_python_backend(
     TEST_TYPE,
