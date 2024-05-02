@@ -350,5 +350,5 @@ add_custom_command(
   COMMAND
     ${CMAKE_COMMAND} -E copy
     ${TRTLLM_DIR}/cpp/build/tensorrt_llm/executor_worker/executorWorker
-    ${CMAKE_CURRENT_BINARY_DIR}/triton_tensorrtllm_worker
+    ${CMAKE_CURRENT_BINARY_DIR}/trtllmExecutorWorker
   COMMENT "Copying executorWorker to the build directory")

@@ -489,9 +489,9 @@ parameters: {
   }
 }
 parameters: {
-  key: "worker_path"
+  key: "executor_worker_path"
   value: {
-    string_value: "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker"
+    string_value: "/opt/tritonserver/backends/tensorrtllm/trtllmExecutorWorker"
   }
 }
 parameters: {

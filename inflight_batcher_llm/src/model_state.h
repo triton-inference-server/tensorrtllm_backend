@@ -51,7 +51,7 @@ class ModelState
 {
 public:
     static TRITONSERVER_Error* Create(
-        TRITONBACKEND_Model* triton_model, std::string const& name, const uint64_t version, ModelState** state);
+        TRITONBACKEND_Model* triton_model, std::string const& name, uint64_t const version, ModelState** state);
 
     template <typename T>
     T GetParameter(std::string const& name)
@@ -66,7 +66,7 @@ public:
     common::TritonJson::Value& GetModelConfig();
     std::string const& GetModelName() const;
     uint64_t GetModelVersion() const;
-    const std::string GetWorkerPath();
+    std::string const GetExecutorWorkerPath();
 
     std::optional<std::vector<int32_t>> GetDeviceIds()
     {
@@ -85,7 +85,7 @@ public:
     static ModelState deserialize(std::vector<int64_t> const& packed);
 
 private:
-    const std::string model_name_;
+    std::string const model_name_;
     uint64_t model_version_;
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};

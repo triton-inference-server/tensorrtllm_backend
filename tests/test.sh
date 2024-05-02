@@ -12,7 +12,7 @@ nvidia-smi
 source tools/utils.sh
 
 kill_triton_server () {
-    pkill -9 -f triton_tensorrtllm_worker || true
+    pkill -9 -f trtllmExecutorWorker || true
     pkill -9 -f tritonserver
 }
 
