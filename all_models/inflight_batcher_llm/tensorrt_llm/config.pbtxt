@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 name: "tensorrt_llm"
-backend: "tensorrtllm"
+backend: "${triton_backend}"
 max_batch_size: ${triton_max_batch_size}
 
 model_transaction_policy {
