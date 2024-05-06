@@ -117,12 +117,12 @@ print_test_params () {
     echo "----------------------------------"
     echo " Test parameters:"
     echo "----------------------------------"
+    echo "BACKEND: ${BACKEND}"
     echo "BATCHING_STRATEGY: ${BATCHING_STRATEGY}"
     echo "MAX_TOKENS_IN_KV_CACHE: ${MAX_TOKENS_IN_KV_CACHE}"
     echo "MAX_ATTENTION_WINDOW_SIZE: ${MAX_ATTENTION_WINDOW_SIZE}"
     echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
     echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
-    echo "ENABLE_TRT_OVERLAP: ${ENABLE_TRT_OVERLAP}"
     echo "EXCLUDE_INPUT_IN_OUTPUT: ${EXCLUDE_INPUT_IN_OUTPUT}"
     echo "TRITON_MAX_BATCH_SIZE: ${TRITON_MAX_BATCH_SIZE}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
@@ -147,7 +147,7 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -156,7 +156,7 @@ fill_triton_repo () {
     if [ "${DRAFT_ENGINE_PATH}" != "" ]; then
         cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_draft
         sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_draft"/g' ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt
-        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:${ENABLE_TRT_OVERLAP},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
     fi
 }
 
@@ -183,6 +183,9 @@ run_cpp_trtllm_backend_tests () {
     EXCL_INPUT_IN_OUTPUT_FLAG=""
     [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
 
+    STREAMING_FLAG=""
+    [ "${STREAMING}" = "true" ] && STREAMING_FLAG="--streaming"
+
     # Test client
     pushd inflight_batcher_llm/client
 
@@ -190,6 +193,7 @@ run_cpp_trtllm_backend_tests () {
         # test using a longer input
         # TODO: Once we switch to using real weights, add `--check-output` arg
         python3 inflight_batcher_llm_client.py \
+            ${STREAMING_FLAG} \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --input-tokens-csv='../../tools/dataset/long_input.csv' \
             --output-tokens-csv='../../tools/dataset/long_output.csv' \
@@ -211,6 +215,7 @@ run_cpp_trtllm_backend_tests () {
     fi
 
     python3 inflight_batcher_llm_client.py \
+        ${STREAMING_FLAG} \
         ${CHECK_OUTPUT_FLAG} \
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
         --tokenizer-dir ${TOKENIZER_PATH}
@@ -225,26 +230,27 @@ run_cpp_trtllm_backend_tests () {
                 PROMPT="The only thing we have to fear is"
                 OUTLEN=10
 
-                ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" 2>&1)
+                ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" 2>&1)
                 # should be something like "[...] that the government will [...]"
 
                 # examples of stop words that won't affect generation
                 # "government" isn't tokenized like " government"
                 # " that the public" doesn't match entirely the generated string
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
                 [[ "${ORIGINAL_OUTPUT}" == "${TEST_OUTPUT}" ]]
 
                 # check that output finishes at "government"
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
                 [[ "${TEST_OUTPUT}" == *"government']" ]]
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
                 [[ "${TEST_OUTPUT}" == *"government']" ]]
             }
             test_stop_words
         fi
 
-        # test with request cancellation
+        # Stop request
         python3 inflight_batcher_llm_client.py \
+            ${STREAMING_FLAG} \
             --request-output-len=128 \
             --stop-after-ms 100 \
             --tokenizer-dir ${TOKENIZER_PATH} \
@@ -252,8 +258,36 @@ run_cpp_trtllm_backend_tests () {
             2>&1 | tee output_w_stop
         grep "Got cancellation response" output_w_stop
 
+        if [[ "${STREAMING}" == "true" ]]; then
+            # Request cancellation
+            python3 inflight_batcher_llm_client.py \
+                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+                --streaming \
+                --request-output-len=128 \
+                --stop-after-ms 100 \
+                --request-id 1 \
+                --stop-via-request-cancel \
+                --tokenizer-dir ${TOKENIZER_PATH} 2>&1 | tee output_w_stop
+
+            grep "Request is cancelled" output_w_stop
+        fi
+
+        if [[ -n "${1}" && -n "${2}" && -n "${3}" ]]; then
+            python3 inflight_batcher_llm_client.py \
+                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+                ${STREAMING_FLAG} \
+                --request-output-len=128 \
+                --end-id $3 \
+                --request-id 1 \
+                --tokenizer-dir ${TOKENIZER_PATH} \
+                --input-tokens-csv=$1 \
+                --output-tokens-csv=$2 \
+                --check-output
+        fi
+
         #test with return log probs
         python3 inflight_batcher_llm_client.py \
+            ${STREAMING_FLAG} \
             --request-output-len=10 \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --return-log-probs --top-k 2 \
@@ -261,6 +295,7 @@ run_cpp_trtllm_backend_tests () {
 
         #test with string request id
         python3 inflight_batcher_llm_client.py \
+            ${STREAMING_FLAG} \
             ${CHECK_OUTPUT_FLAG} \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --request-id my_request 2>&1 | tee output_str_request
@@ -271,47 +306,50 @@ run_cpp_trtllm_backend_tests () {
     # End to end test
     pushd tools/inflight_batcher_llm
 
-    python3 benchmark_core_model.py \
-        ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-        ${CHECK_PERF_FLAG} \
-        --concurrency 8 \
-        -i http \
-        --max-input-len 300 \
-        dataset \
-        --dataset ../dataset/mini_cnn_eval.json \
-        --tokenizer-dir ${TOKENIZER_PATH} \
-
-    if [[ "$run_all_tests" == "true" ]]; then
+    # benchmark_core_model.py doesn't support streaming.
+    if [[ "${STREAMING}" == "false" ]]; then
         python3 benchmark_core_model.py \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+            ${CHECK_PERF_FLAG} \
             --concurrency 8 \
-            -i grpc \
+            -i http \
             --max-input-len 300 \
-            --num-requests 80 \
             dataset \
             --dataset ../dataset/mini_cnn_eval.json \
             --tokenizer-dir ${TOKENIZER_PATH} \
 
-        # Performance check.
-        python3 benchmark_core_model.py \
-            --check-perf-json ../../tests/ref_results.json \
-            --check-perf-key ${MODEL} \
-            --check-perf-rtol 0.05 \
-            --check-perf-atol 50 \
-            --concurrency 8 \
-            -i grpc \
-            --max-input-len 300 \
-            --request-rate -1 \
-            --num-requests 1000 \
-            token-norm-dist \
-            --input-mean 128 --input-stdev 0 \
-            --output-mean 20 --output-stdev 0
+        if [[ "$run_all_tests" == "true" ]]; then
+            python3 benchmark_core_model.py \
+                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+                --concurrency 8 \
+                -i grpc \
+                --max-input-len 300 \
+                --num-requests 80 \
+                dataset \
+                --dataset ../dataset/mini_cnn_eval.json \
+                --tokenizer-dir ${TOKENIZER_PATH} \
 
-        python3 benchmark_core_model.py \
-            -i grpc --max-input-len 1000 \
-            --request-rate -1 \
-            token-from-histogram --histogram-key example
+            # Performance check.
+            python3 benchmark_core_model.py \
+                --check-perf-json ../../tests/ref_results.json \
+                --check-perf-key ${MODEL} \
+                --check-perf-rtol 0.05 \
+                --check-perf-atol 50 \
+                --concurrency 8 \
+                -i grpc \
+                --max-input-len 300 \
+                --request-rate -1 \
+                --num-requests 1000 \
+                token-norm-dist \
+                --input-mean 128 --input-stdev 0 \
+                --output-mean 20 --output-stdev 0
 
+            python3 benchmark_core_model.py \
+                -i grpc --max-input-len 1000 \
+                --request-rate -1 \
+                token-from-histogram --histogram-key example
+
+        fi
     fi
 
     popd # tools/inflight_batcher_llm
@@ -319,12 +357,16 @@ run_cpp_trtllm_backend_tests () {
 
 run_cpp_e2e_backend_tests () {
 
+    STREAMING_FLAG=""
+    [ "${STREAMING}" = "true" ] && STREAMING_FLAG="--streaming"
+
     pushd inflight_batcher_llm/client
 
     # testing output accuracy for real weights only
-    if [[ $MODEL = "gpt-ib" ]]; then
+    if [[ $MODEL = "gpt-ib" || $MODEL = "gpt-ib-streaming" ]]; then
 
         python3 end_to_end_grpc_client.py \
+            ${STREAMING_FLAG} \
             --output-len 10 --prompt "The only thing we have to fear is" \
             --model-name "$E2E_MODEL_NAME" | tee output_e2e
         grep "that the government will" output_e2e
@@ -332,6 +374,7 @@ run_cpp_e2e_backend_tests () {
         if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
             # test with embedding bias
             python3 end_to_end_grpc_client.py \
+                ${STREAMING_FLAG} \
                 -o 10 \
                 -p "The only thing we have to fear is"  \
                 --embedding-bias-words " government" \
@@ -345,103 +388,36 @@ run_cpp_e2e_backend_tests () {
 
     # End to end test
     pushd tools/inflight_batcher_llm
-
-    python3 end_to_end_test.py \
-        --concurrency 8 \
-        -i http \
-        --max-input-len 300 \
-        --test-bls \
-        --dataset ../dataset/mini_cnn_eval.json
-
-    if [[ "$run_all_tests" == "true" ]]; then
+    # end_to_end_test.py doesn't support streaming
+    if [[ "${STREAMING}" == "false" ]]; then
         python3 end_to_end_test.py \
             --concurrency 8 \
-            -i grpc \
+            -i http \
             --max-input-len 300 \
             --test-bls \
             --dataset ../dataset/mini_cnn_eval.json
+
+        if [[ "$run_all_tests" == "true" ]]; then
+            python3 end_to_end_test.py \
+                --concurrency 8 \
+                -i grpc \
+                --max-input-len 300 \
+                --test-bls \
+                --dataset ../dataset/mini_cnn_eval.json
+        fi
     fi
 
     popd # tools/inflight_batcher_llm
 }
 
-run_cpp_trtllm_streaming_backend_tests() {
-
-    EXCL_INPUT_IN_OUTPUT_FLAG=""
-    [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
-
-    # Test client
-    pushd inflight_batcher_llm/client
-    python3 inflight_batcher_llm_client.py \
-        ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-        --streaming \
-        --tokenizer-dir ${TOKENIZER_PATH}
-#        --check-output \
-
-    if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
-        # Stop request
-        python3 inflight_batcher_llm_client.py \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --streaming \
-            --request-output-len=128 \
-            --stop-after-ms 100 \
-            --request-id 1 \
-            --tokenizer-dir ${TOKENIZER_PATH} 2>&1 | tee output_w_stop
-
-        grep "Got cancellation response" output_w_stop
-
-        # Request cancellation
-        python3 inflight_batcher_llm_client.py \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --streaming \
-            --request-output-len=128 \
-            --stop-after-ms 100 \
-            --request-id 1 \
-            --stop-via-request-cancel \
-            --tokenizer-dir ${TOKENIZER_PATH} 2>&1 | tee output_w_stop
-
-        grep "Request is cancelled" output_w_stop
-
-        python3 inflight_batcher_llm_client.py \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --streaming \
-            --request-output-len=128 \
-            --end-id $3 \
-            --request-id 1 \
-            --tokenizer-dir ${TOKENIZER_PATH} \
-            --input-tokens-csv=$1 \
-            --output-tokens-csv=$2 \
-            --check-output
-    fi
-
-    popd
-}
-
-run_cpp_e2e_streaming_backend_tests() {
-
-    OVERWRITE_OUTPUT_TEXT_FLAG=""
-    [ "${ACCUMULATE_TOKEN}" = "true" ] && OVERWRITE_OUTPUT_TEXT_FLAG="--overwrite-output-text"
-
-    pushd inflight_batcher_llm/client
-    # End to end test
-    python3 end_to_end_grpc_client.py \
-        --streaming --output-len 10 \
-        --prompt "The only thing we have to fear is" \
-        --model-name "$E2E_MODEL_NAME" | tee output_e2e
-    grep "that the government will" output_e2e
-
-    popd
-
-    kill -9 ${SERVER_PID}
-}
-
+BACKENDS=( "tensorrtllm" "python" )
 BATCHING_STRATEGIES=( "inflight_fused_batching" "v1" )
 MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
 BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
-ENABLE_TRT_OVERLAPS=( "false" "true" )
 ENABLE_CHUNKED_CONTEXTS=( "false" "true" )
 
+BACKEND="tensorrtllm"
 TRITON_MAX_BATCH_SIZE="128"
 MAX_QUEUE_DELAY_MICROSECONDS="0"
 MAX_BEAM_WIDTH="1"
@@ -464,21 +440,19 @@ DECODING_MODE="top_k_top_p"
 
 if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistral-ib-mm" ]; then
 
-    # To make sure that torch is not a dependency for C++ backend
-    pip3 uninstall -y torch
-
     # Non-streaming tests, decoupled is false
     DECOUPLED_MODE="False"
+    STREAMING="false"
 
     # -------------------------------
     # Param sweep test
     # -------------------------------
     run_all_tests="true"
+    for BACKEND in "${BACKENDS[@]}"; do
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
-    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
     for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
@@ -500,6 +474,10 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
         if [[ "$MODEL" = "mistral-ib-mm" && "${ENABLE_CHUNKED_CONTEXT}" == "true" ]]; then
             continue
         fi
+        # The python backend currently requires decoupled mode.
+        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
+           continue
+        fi
 
         if [[ "$MODEL" = "mistral-ib-mm" ]]; then
             export TRTLLM_ORCHESTRATOR=1
@@ -516,10 +494,10 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
     done
     done
     done
+    BACKEND="${BACKENDS[0]}"
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
     ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
 
     # -------------------------------
@@ -571,17 +549,16 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
 fi
 
 if [ "$MODEL" = "gpt-ib-streaming" ]; then
-    # To make sure that torch is not a dependency for C++ backend
-    pip3 uninstall -y torch
 
     DECOUPLED_MODE="True"
+    STREAMING="true"
     run_all_tests="true"
 
+    for BACKEND in "${BACKENDS[@]}"; do
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
-    for ENABLE_TRT_OVERLAP in "${ENABLE_TRT_OVERLAPS[@]}"; do
     for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
 
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
@@ -596,10 +573,14 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
             continue
         fi
+        # The python backend currently requires decoupled mode.
+        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
+           continue
+        fi
 
         launch_triton_server
-        run_cpp_trtllm_streaming_backend_tests '../../tools/dataset/short_input_end_id.csv' '../../tools/dataset/short_output_end_id.csv' 268
-        run_cpp_e2e_streaming_backend_tests
+        run_cpp_trtllm_backend_tests '../../tools/dataset/short_input_end_id.csv' '../../tools/dataset/short_output_end_id.csv' 268
+        run_cpp_e2e_backend_tests
         kill_triton_server
 
         run_all_tests="false"
@@ -609,10 +590,10 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     done
     done
+    BACKEND="${BACKENDS[0]}"
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
     ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
 
     # --------------------
@@ -628,7 +609,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
             continue
         fi
         launch_triton_server
-        run_cpp_e2e_streaming_backend_tests
+        run_cpp_e2e_backend_tests
         kill_triton_server
     done
     done
@@ -645,7 +626,6 @@ if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
     TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"
     USE_DRAFT_LOGITS_VALUES=( "true" "false" )
 
@@ -704,7 +684,6 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
@@ -741,7 +720,6 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
@@ -780,7 +758,6 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
@@ -825,7 +802,6 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
@@ -868,13 +844,13 @@ if [ "$MODEL" = "medusa" ]; then
 
     # Test streaming
     DECOUPLED_MODE="True"
+    STREAMING="true"
     run_all_tests="true"
 
     MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
     BATCHING_STRATEGY="${BATCHING_STRATEGIES[0]}"
     DECODING_MODE="medusa"
 
@@ -883,7 +859,7 @@ if [ "$MODEL" = "medusa" ]; then
     MEDUSA_OUTPUT_IDS_PATH='../../tools/dataset/short_output_end_id_medusa.csv'
 
     launch_triton_server
-    run_cpp_trtllm_streaming_backend_tests ${MEDUSA_INPUT_IDS_PATH} ${MEDUSA_OUTPUT_IDS_PATH} ${END_ID_MEDUSA}
+    run_cpp_trtllm_backend_tests ${MEDUSA_INPUT_IDS_PATH} ${MEDUSA_OUTPUT_IDS_PATH} ${END_ID_MEDUSA}
     kill_triton_server
     # FIXME: grpc e2e test returns different result (because it is Medusa and not GPT) and has some problems with spaces
 

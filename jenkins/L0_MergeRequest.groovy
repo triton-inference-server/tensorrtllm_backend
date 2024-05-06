@@ -388,7 +388,8 @@ def runTRTLLMBackendTest(caseName)
       sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-gather-logits/fp16/1-gpu/ ${modelPath} ${tokenizerType}"
     }
     else if (caseName.contains("python-bls-unit-tests")){
-      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*.py"
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*decode*.py"
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm/1 python3 -m pytest all_models/tests/test_python_backend.py"
     }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]

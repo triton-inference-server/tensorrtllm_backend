@@ -84,7 +84,8 @@ def modify_ib_config_pbtxt(REPO_PATH,
                            ACCUMULATE_TOKEN,
                            BLS_INSTANCE_COUNT,
                            TENSORRT_LLM_MODEL_NAME="tensorrt_llm",
-                           TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"):
+                           TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft",
+                           BACKEND="tensorrtllm"):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
@@ -125,7 +126,7 @@ def modify_ib_config_pbtxt(REPO_PATH,
             shell=True)
 
     check_call(
-        f"python3 {fill_template_py} -i {llm_config} engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
+        f"python3 {fill_template_py} -i {llm_config} triton_backend:{BACKEND},engine_dir:{ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
         f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
         f"batching_strategy:{BATCHING_STRATEGY}," \
         f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
