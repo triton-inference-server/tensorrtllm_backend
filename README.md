@@ -70,10 +70,10 @@ The below commands will build the same Triton TRT-LLM container as the one on th
 # Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
 cd tensorrtllm_backend
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.01-py3-min
-TRT_VERSION=9.2.0.5
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
+BASE_IMAGE=nvcr.io/nvidia/pytorch:24.02-py3
+TRT_VERSION=9.3.0.1
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.3.0/tensorrt-9.3.0.1.linux.x86_64-gnu.cuda-12.2.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.3.0/tensorrt-9.3.0.1.ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
 
 docker build -t trtllm_base \
              --build-arg BASE_IMAGE="${BASE_IMAGE}" \
@@ -86,8 +86,8 @@ docker build -t trtllm_base \
 # endpoints can be removed if not needed. Please refer to the support matrix to
 # see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
 TRTLLM_BASE_IMAGE=trtllm_base
-TENSORRTLLM_BACKEND_REPO_TAG=v0.7.2
-PYTHON_BACKEND_REPO_TAG=r24.01
+TENSORRTLLM_BACKEND_REPO_TAG=rel
+PYTHON_BACKEND_REPO_TAG=r24.04
 
 cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
@@ -299,6 +299,9 @@ The following table shows the fields that may to be modified before deployment:
 | `kv_cache_free_gpu_mem_fraction` | Optional (default=0.9). Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache.|
 | `enable_trt_overlap` | Optional (default=`false`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
+| `cancellation_check_period_ms` | Optional (default=100). The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. |
+| `iter_stats_max_iterations` | Optional (default=executor::kDefaultIterStatsMaxIterations). The numbers of iteration stats to be kept. |
+| `request_stats_max_iterations` | Optional (default=executor::kDefaultRequestStatsMaxIterations). The numbers of request stats to be kept. |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 | `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
 | `gpu_device_ids` | Optional (default=unspecified). Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. |
