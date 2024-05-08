@@ -55,9 +55,17 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        self.skip_special_tokens = model_config['parameters'].get(
+
+        self.skip_special_tokens = False
+        skip_special_tokens_str = model_config['parameters'].get(
             'skip_special_tokens',
-            {'string_value': "true"})['string_value'].lower() in [
+            {'string_value': "true"})['string_value'].lower()
+        # if user set skip_special_tokens, use it.
+        if skip_special_tokens_str != '${skip_special_tokens}':
+            assert skip_special_tokens_str.lower() in [
+                'true', 'false', '1', '0', 't', 'f', 'y', 'n', 'yes', 'no'
+            ], "skip_special_tokens must be a boolean string"
+            self.skip_special_tokens = skip_special_tokens_str.lower() in [
                 'true', '1', 't', 'y', 'yes'
             ]
 

@@ -56,9 +56,17 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        self.add_special_tokens = model_config['parameters'].get(
+
+        self.add_special_tokens = True
+        add_special_tokens_str = model_config['parameters'].get(
             'add_special_tokens',
-            {'string_value': "false"})['string_value'].lower() in [
+            {'string_value': "true"})['string_value'].lower()
+        # if user set add_special_tokens, use it.
+        if add_special_tokens_str != '${add_special_tokens}':
+            assert add_special_tokens_str.lower() in [
+                'true', 'false', '1', '0', 't', 'f', 'y', 'n', 'yes', 'no'
+            ], "add_special_tokens must be a boolean string"
+            self.add_special_tokens = add_special_tokens_str.lower() in [
                 'true', '1', 't', 'y', 'yes'
             ]
 
