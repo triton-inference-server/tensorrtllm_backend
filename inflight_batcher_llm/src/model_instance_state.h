@@ -38,7 +38,6 @@
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
-#include "tensorrt_llm/batch_manager/schedulerPolicy.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/runtime/decodingMode.h"
 
@@ -50,7 +49,6 @@
 
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
-using namespace tensorrt_llm::batch_manager::batch_scheduler;
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -69,7 +67,7 @@ struct RequestData
     TRITONBACKEND_Request* tritonRequest;
     std::string tritonRequestId;
     int64_t inputTokensSize;
-    executor::SizeType beamWidth;
+    executor::SizeType32 beamWidth;
 };
 
 //
@@ -87,11 +85,11 @@ class ModelInstanceState
 
 public:
     // number of cpu workers used to move weights host cache to gpu cache
-    static constexpr SizeType kPeftCacheNumEnsureWorkers = 4;
+    static constexpr SizeType32 kPeftCacheNumEnsureWorkers = 4;
     // number of cuda streams used for H2D copies of peft cache pages
-    static constexpr SizeType kPeftCacheNumCopyStreams = 4;
+    static constexpr SizeType32 kPeftCacheNumCopyStreams = 4;
     // number of cpu workers used to load weight into host cache
-    static constexpr SizeType kPeftCacheNumPutWorkers = 4;
+    static constexpr SizeType32 kPeftCacheNumPutWorkers = 4;
 
     /// @brief Create a ModelInstanceObject
     static TRITONSERVER_Error* Create(

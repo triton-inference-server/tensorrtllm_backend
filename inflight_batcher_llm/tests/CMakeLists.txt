@@ -50,7 +50,8 @@ function(add_gtest test_name test_src)
                              PUBLIC TOP_LEVEL_DIR="${TOP_LEVEL_DIR}")
   target_compile_options(${test_name} PRIVATE -Wno-deprecated-declarations)
 
-  gtest_discover_tests(${test_name} DISCOVERY_TIMEOUT 30)
+  gtest_discover_tests(${test_name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE
+                       PRE_TEST)
 endfunction()
 
 add_gtest(modelStateTest modelState.cpp)

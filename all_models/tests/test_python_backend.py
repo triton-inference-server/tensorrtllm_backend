@@ -444,9 +444,10 @@ def test_convert_response_error(trtllm_response_error: trtllm.Response):
 
 def test_convert_scheduler_policy():
     assert convert_scheduler_policy(
-        "max_utilization") == trtllm.SchedulerPolicy.MAX_UTILIZATION
+        "max_utilization") == trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
     assert convert_scheduler_policy(
-        "guaranteed_no_evict") == trtllm.SchedulerPolicy.GUARANTEED_NO_EVICT
+        "guaranteed_no_evict"
+    ) == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     with pytest.raises(
             Exception,
             match="batch_scheduler_policy value of 'other' is not supported"):
@@ -517,7 +518,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
     assert config.medusa_choices == [[1, 2, 3, 4], [5, 6, 7]]
     assert config.decoding_mode == trtllm.DecodingMode.TOP_K_TOP_P
-    assert config.scheduler_config.policy == trtllm.SchedulerPolicy.MAX_UTILIZATION
+    assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
     assert config.kv_cache_config.enable_block_reuse == True
     assert config.kv_cache_config.max_tokens == 1
     assert config.kv_cache_config.max_attention_window == 2
@@ -557,7 +558,7 @@ def test_get_executor_config_minimal():
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
     assert config.medusa_choices is None
     assert config.decoding_mode is None
-    assert config.scheduler_config.policy == trtllm.SchedulerPolicy.GUARANTEED_NO_EVICT
+    assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     assert config.kv_cache_config.enable_block_reuse == False
     assert config.kv_cache_config.max_tokens is None
     assert config.kv_cache_config.max_attention_window is None
