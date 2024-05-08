@@ -209,6 +209,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --context_fmha enable \
         --use_paged_context_fmha enable \
         --max_draft_len 5 \
+        --speculative_decoding_mode draft_tokens_external \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
         --gather_generation_logits \
         --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
@@ -325,6 +326,7 @@ if [ "$MODEL" = "medusa" ]; then
     trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu_medusa \
              --output_dir ./tmp/medusa/7B/trt_engines/fp16/1-gpu/ \
              --gemm_plugin float16 \
+             --speculative_decoding_mode medusa \
              --max_batch_size 8 --max_input_len 300 --max_output_len 300
 
     popd # tensorrt_llm/examples/medusa

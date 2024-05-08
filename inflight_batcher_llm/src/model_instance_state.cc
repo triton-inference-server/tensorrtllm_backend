@@ -156,10 +156,10 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<SizeType> maxAttentionWindowSizeType = std::nullopt;
+    std::optional<SizeType32> maxAttentionWindowSizeType = std::nullopt;
     if (maxAttentionWindow.has_value())
     {
-        maxAttentionWindowSizeType = static_cast<SizeType>(maxAttentionWindow.value());
+        maxAttentionWindowSizeType = static_cast<SizeType32>(maxAttentionWindow.value());
     }
 
     return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
@@ -194,15 +194,15 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     // lora_cache_gpu_memory_fraction
     // lora_cache_host_memory_bytes
 
-    SizeType maxAdapterSize = 64;
-    SizeType optimalAdapterSize = 8;
+    SizeType32 maxAdapterSize = 64;
+    SizeType32 optimalAdapterSize = 8;
     std::optional<size_t> hostCacheSize = std::nullopt;
     std::optional<float> deviceCachePercent = std::nullopt;
 
     std::string fieldName = "lora_cache_max_adapter_size";
     try
     {
-        maxAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+        maxAdapterSize = model_state_->GetParameter<SizeType32>(fieldName);
     }
     catch (std::exception const& e)
     {
@@ -212,7 +212,7 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     fieldName = "lora_cache_optimal_adapter_size";
     try
     {
-        optimalAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+        optimalAdapterSize = model_state_->GetParameter<SizeType32>(fieldName);
     }
     catch (std::exception const& e)
     {
@@ -244,17 +244,18 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
 
 executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool enableChunkedContext)
 {
-    auto schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+    using executor::CapacitySchedulerPolicy;
+    auto schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
     try
     {
         std::string schedulerPolicyStr = model_state_->GetParameter<std::string>("batch_scheduler_policy");
         if (schedulerPolicyStr == "max_utilization")
         {
-            schedulerPolicy = executor::SchedulerPolicy::kMAX_UTILIZATION;
+            schedulerPolicy = CapacitySchedulerPolicy::kMAX_UTILIZATION;
         }
         else if (schedulerPolicyStr == "guaranteed_no_evict")
         {
-            schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
         }
         else
         {
@@ -268,7 +269,7 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
         TLLM_LOG_WARNING(e.what());
     }
 
-    if (isDecoupled() && schedulerPolicy != executor::SchedulerPolicy::kGUARANTEED_NO_EVICT)
+    if (isDecoupled() && schedulerPolicy != CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT)
     {
         if (!enableChunkedContext)
         {
@@ -278,7 +279,7 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
                 "enable_chunked_context to true. "
                 "The batch scheduler policy will be set to guaranteed_no_evict "
                 "since enable_chunked_context is false.");
-            schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
         }
     }
     return executor::SchedulerConfig(schedulerPolicy);
@@ -559,7 +560,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 = createExecutorRequest(request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled());
 
             int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
-            executor::SizeType beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
+            executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             auto requestId = mExecutor->enqueueRequest(executorRequest);
             if (mRequestIdToRequestData.count(requestId))

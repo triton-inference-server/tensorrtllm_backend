@@ -271,9 +271,9 @@ def convert_response(response):
 
 def convert_scheduler_policy(batch_scheduler_policy: str):
     if batch_scheduler_policy.lower() == "max_utilization":
-        return trtllm.SchedulerPolicy.MAX_UTILIZATION
+        return trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
     elif batch_scheduler_policy.lower() == "guaranteed_no_evict":
-        return trtllm.SchedulerPolicy.GUARANTEED_NO_EVICT
+        return trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     raise pb_utils.TritonModelException(
         f"batch_scheduler_policy value of '{batch_scheduler_policy}' is not supported."
     )

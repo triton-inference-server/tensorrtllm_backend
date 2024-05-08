@@ -376,7 +376,7 @@ executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputs
     // If beam_width is specified, set it from config.pbtxt
     extractSingleton<int32_t>(inputsTensors, InputFieldsNames::beamWidth, beamWidth);
 
-    std::optional<executor::SizeType> topK{std::nullopt};
+    std::optional<executor::SizeType32> topK{std::nullopt};
     extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::topK, topK);
 
     std::optional<float> topP{std::nullopt};
@@ -531,16 +531,16 @@ executor::Request createRequestFromInputTensors(std::unordered_map<std::string, 
         throw std::runtime_error("input_ids is not present in the request");
     }
 
-    executor::SizeType maxNewTokens;
+    executor::SizeType32 maxNewTokens;
     if (!utils::extractSingleton<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
     {
         throw std::runtime_error("request_output_len is not present in the request");
     }
 
-    std::optional<executor::SizeType> endId{std::nullopt};
+    std::optional<executor::SizeType32> endId{std::nullopt};
     utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::endId, endId);
 
-    std::optional<executor::SizeType> padId{std::nullopt};
+    std::optional<executor::SizeType32> padId{std::nullopt};
     utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::padId, padId);
 
     if (streaming && !isDecoupled)

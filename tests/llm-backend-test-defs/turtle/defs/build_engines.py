@@ -31,6 +31,7 @@ def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
         "--max_batch_size=8",
         "--max_input_len=300",
         "--max_output_len=300",
+        "--speculative_decoding_mode=medusa",
     ]
 
     convert_cmd = " ".join(convert_cmd)
@@ -90,6 +91,7 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     if type == "medium_ifb":
         build_cmd += [
             "--max_draft_len=5",
+            "--speculative_decoding_mode=draft_tokens_external",
         ]
 
     if type == "ifb" or type == "medium_ifb":

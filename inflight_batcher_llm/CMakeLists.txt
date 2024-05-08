@@ -143,7 +143,11 @@ find_library(
   CUDA_DRV_LIB cuda
   HINTS ${CUDA_TOOLKIT_ROOT_DIR}
   PATH_SUFFIXES lib lib64 lib/stubs lib64/stubs)
-set(CUDA_LIBRARIES ${CUDART_LIB})
+find_library(
+  NVIDIA_ML_LIB nvidia-ml
+  HINTS ${CUDA_TOOLKIT_ROOT_DIR}
+  PATH_SUFFIXES lib lib64 lib/stubs lib64/stubs)
+set(CUDA_LIBRARIES ${CUDART_LIB} ${NVIDIA_ML_LIB})
 
 find_package(MPI REQUIRED)
 message(STATUS "Using MPI_INCLUDE_PATH: ${MPI_INCLUDE_PATH}")
