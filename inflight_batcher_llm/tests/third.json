@@ -6,9 +6,6 @@
         "max_beam_width": {
             "string_value": "4"
         },
-        "enable_trt_overlap": {
-            "string_value": "false"
-        },
         "batch_scheduler_policy": {
             "string_value": "guaranteed_no_evict"
         },
