@@ -358,7 +358,7 @@ class TritonPythonModel:
             worker_path = get_parameter(model_config, "worker_path")
             if worker_path is not None:
                 raise pb_utils.TritonModelException(
-                    "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path instead to specify the location of the trtllmExecuutorWorker executable."
+                    "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path instead to specify the location of the trtllmExecutorWorker executable."
                 )
             executor_worker_path = get_parameter(model_config,
                                                  "executor_worker_path")
