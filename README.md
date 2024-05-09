@@ -45,7 +45,7 @@ repo. If you don't find your answer there you can ask questions on the
 
 There are several ways to access the TensorRT-LLM Backend.
 
-**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker).**
+**Before Triton 23.10 release, please use [Option 2 to build TensorRT-LLM backend via Docker](#option-2-build-via-docker).**
 
 ### Run the Pre-built Docker Container
 
