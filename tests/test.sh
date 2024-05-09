@@ -220,6 +220,14 @@ run_cpp_trtllm_backend_tests () {
         ${EXCL_INPUT_IN_OUTPUT_FLAG} \
         --tokenizer-dir ${TOKENIZER_PATH}
 
+    #Check that metrics work as expected by looking at number of successful requests for tensorrt_llm
+    num_success=$(curl localhost:${TRITON_METRICS_PORT}/metrics 2>&1 |  grep nv_inference_request_success\{model=\"tensorrt_llm\" | cut -d " " -f 2)
+    if (( num_success <= 0 )); then
+      exit 1
+    else
+      echo "Number of successful requests: $num_success"
+    fi
+
     if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
 
         # testing output accuracy for real weights only
