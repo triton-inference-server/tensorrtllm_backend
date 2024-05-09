@@ -60,6 +60,23 @@ struct InstanceSpecificConfig
     int cancellationCheckPeriodMs;
 };
 
+/// @brief Timestamps for each request, used to report Triton metrics
+struct Timestamps
+{
+    uint64_t exec_start_ns = 0;
+    uint64_t compute_start_ns = 0;
+    uint64_t compute_end_ns = 0;
+    uint64_t exec_end_ns = 0;
+
+    void Reset()
+    {
+        exec_start_ns = 0;
+        compute_start_ns = 0;
+        compute_end_ns = 0;
+        exec_end_ns = 0;
+    }
+};
+
 /// @brief Per-request data stored for handling requests
 struct RequestData
 {
@@ -68,6 +85,7 @@ struct RequestData
     std::string tritonRequestId;
     int64_t inputTokensSize;
     executor::SizeType32 beamWidth;
+    Timestamps timestamps;
 };
 
 //
@@ -119,7 +137,10 @@ public:
     }
 
     /// @brief Add the request to the executor
-    void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
+    void enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count);
+
+    /// @bried Report Triton base metrics for a given request
+    TRITONSERVER_Error* reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error);
 
 private:
     /// @brief Get batching type

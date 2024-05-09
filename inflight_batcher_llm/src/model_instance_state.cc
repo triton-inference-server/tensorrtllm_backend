@@ -573,8 +573,13 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             TRITONBACKEND_ResponseFactory* factory;
             LOG_IF_ERROR(
                 TRITONBACKEND_ResponseFactoryNew(&factory, request), "failed to create triton response factory");
-            mRequestIdToRequestData.emplace(
-                requestId, RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy});
+
+            uint64_t exec_start_ns, compute_start_ns;
+            SET_TIMESTAMP(exec_start_ns);
+            SET_TIMESTAMP(compute_start_ns);
+            mRequestIdToRequestData.emplace(requestId,
+                RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
+                    {exec_start_ns, compute_start_ns, 0, 0}});
             if (tritonRequestId != "")
             {
                 mTritonRequestIdToRequestId[tritonRequestId] = requestId;
@@ -586,6 +591,24 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
         }
     }
     return;
+}
+
+TRITONSERVER_Error* ModelInstanceState::reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error)
+{
+    auto& timestamps = requestData.timestamps;
+    SET_TIMESTAMP(timestamps.exec_end_ns);
+    SET_TIMESTAMP(timestamps.compute_end_ns);
+    RETURN_IF_ERROR(
+        TRITONBACKEND_ModelInstanceReportStatistics(modelInstance_, requestData.tritonRequest, (error == nullptr),
+            timestamps.exec_start_ns, timestamps.compute_start_ns, timestamps.compute_end_ns, timestamps.exec_end_ns));
+
+    // For now we will assume a batch size of 1 for each request. This may change in the future but for
+    // now it seems that even when requests are dynamically batched together each workItem is associated
+    // with its own request object and is handled independently due to the nature of IFB.
+    RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceReportBatchStatistics(modelInstance_, 1 /* batch size */,
+        timestamps.exec_start_ns, timestamps.compute_start_ns, timestamps.compute_end_ns, timestamps.exec_end_ns));
+
+    return nullptr; // success
 }
 
 std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceState::fillTritonResponse(
@@ -750,6 +773,9 @@ void ModelInstanceState::WaitForResponse()
                 {
                     mTritonRequestIdToRequestId.erase(requestData.tritonRequestId);
                 }
+
+                LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
+
                 LOG_IF_ERROR(TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
                     "Cannot release request");
                 LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory), "Cannot delete response factory");
