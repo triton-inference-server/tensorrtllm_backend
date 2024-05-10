@@ -58,6 +58,7 @@ struct InstanceSpecificConfig
 {
     bool excludeInputFromOutput;
     int cancellationCheckPeriodMs;
+    int statsCheckPeriodMs;
 };
 
 /// @brief Timestamps for each request, used to report Triton metrics
@@ -139,9 +140,6 @@ public:
     /// @brief Add the request to the executor
     void enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count);
 
-    /// @bried Report Triton base metrics for a given request
-    TRITONSERVER_Error* reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error);
-
 private:
     /// @brief Get batching type
     executor::BatchingType getBatchingTypeFromParams();
@@ -187,6 +185,9 @@ private:
     std::unique_ptr<executor::Executor> mExecutor;
     /// @brief Config to be used when sending requests to executor
     InstanceSpecificConfig mInstanceSpecificConfig;
+
+    /// @brief Report Triton base metrics for a given request
+    TRITONSERVER_Error* reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error);
 
     /// @brief Retrieve responses from the executor
     void WaitForResponse();

@@ -299,6 +299,7 @@ The following table shows the fields that may to be modified before deployment:
 | `kv_cache_free_gpu_mem_fraction` | Optional (default=0.9). Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache.|
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `cancellation_check_period_ms` | Optional (default=100). The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. |
+| `stats_check_period_ms` | Optional (default=100). The time for the statistics reporting thread to sleep before doing the next check. |
 | `iter_stats_max_iterations` | Optional (default=executor::kDefaultIterStatsMaxIterations). The numbers of iteration stats to be kept. |
 | `request_stats_max_iterations` | Optional (default=executor::kDefaultRequestStatsMaxIterations). The numbers of request stats to be kept. |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
