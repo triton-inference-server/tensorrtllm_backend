@@ -1,5 +1,8 @@
 {
-"gpt-ib": { "Avg. latency (ms)": 1765.00, "OP tokens/sec": 5427.00},
-"mistral-ib": { "Avg. latency (ms)": 17368.00, "OP tokens/sec": 574.00},
-"mistral-ib-mm": { "Avg. latency (ms)": 18284.85, "OP tokens/sec": 544.23}
+"gpt-ib-tensorrtllm": { "Avg. latency (ms)": 1765.00, "OP tokens/sec": 5427.00},
+"gpt-ib-streaming-tensorrtllm": { "Avg. latency (ms)": 2097.85, "OP tokens/sec": 4782.26},
+"gpt-ib-streaming-python": { "Avg. latency (ms)": 2097.85, "OP tokens/sec":  4782.26},
+"mistral-ib-tensorrtllm": { "Avg. latency (ms)": 17368.00, "OP tokens/sec": 574.00},
+"mistral-ib-mm-tensorrtllm": { "Avg. latency (ms)": 18284.85, "OP tokens/sec": 544.23},
+"medusa-tensorrtllm": { "Avg. latency (ms)": 53283.01, "OP tokens/sec": 188.38}
 }

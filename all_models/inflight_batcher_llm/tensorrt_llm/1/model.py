@@ -544,11 +544,12 @@ class TritonPythonModel:
                         req_id]
 
                 triton_response, is_final = convert_response(response)
-                response_sender.send(triton_response)
+                response_sender.send(
+                    triton_response,
+                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL
+                    if is_final else 0)
 
                 if is_final:
-                    response_sender.send(
-                        flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                     with self.lock:
                         del self.triton_id_to_req_id[triton_id]
                         del self.req_id_to_response_sender[req_id]
