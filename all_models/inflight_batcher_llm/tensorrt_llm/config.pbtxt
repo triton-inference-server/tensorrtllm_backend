@@ -430,6 +430,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "stats_check_period_ms"
+  value: {
+    string_value: "${stats_check_period_ms}"
+  }
+}
+parameters: {
   key: "iter_stats_max_iterations"
   value: {
     string_value: "${iter_stats_max_iterations}"

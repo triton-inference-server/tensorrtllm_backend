@@ -465,6 +465,18 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
     mInstanceSpecificConfig.cancellationCheckPeriodMs = cancellationCheckPeriodMs;
 
+    int statsCheckPeriodMs = 100;
+    try
+    {
+        statsCheckPeriodMs = model_state_->GetParameter<int>("stats_check_period_ms");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("stats_check_period_ms is not specified, will be set to 100 (ms)");
+    }
+    mInstanceSpecificConfig.statsCheckPeriodMs = statsCheckPeriodMs;
+
     if (mExecutor->canEnqueueRequests())
     {
         mStopWaitForResponse = false;
@@ -510,6 +522,7 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
         {
             throw std::runtime_error("Trying to stop a request but request ID is not provided");
         }
+        std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
         if (mTritonRequestIdToRequestId.count(tritonRequestId))
         {
             auto requestId = mTritonRequestIdToRequestId[tritonRequestId];
@@ -537,6 +550,10 @@ executor::Request ModelInstanceState::createExecutorRequest(
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
 {
+
+    uint64_t exec_start_ns{0};
+    SET_TIMESTAMP(exec_start_ns);
+
     for (uint32_t i = 0; i < request_count; ++i)
     {
         TRITONBACKEND_Request* request = requests[i];
@@ -562,6 +579,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
             executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
+            uint64_t compute_start_ns{0};
+            SET_TIMESTAMP(compute_start_ns);
             auto requestId = mExecutor->enqueueRequest(executorRequest);
             if (mRequestIdToRequestData.count(requestId))
             {
@@ -574,9 +593,6 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             LOG_IF_ERROR(
                 TRITONBACKEND_ResponseFactoryNew(&factory, request), "failed to create triton response factory");
 
-            uint64_t exec_start_ns, compute_start_ns;
-            SET_TIMESTAMP(exec_start_ns);
-            SET_TIMESTAMP(compute_start_ns);
             mRequestIdToRequestData.emplace(requestId,
                 RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                     {exec_start_ns, compute_start_ns, 0, 0}});
@@ -597,7 +613,7 @@ TRITONSERVER_Error* ModelInstanceState::reportBaseMetrics(RequestData& requestDa
 {
     auto& timestamps = requestData.timestamps;
     SET_TIMESTAMP(timestamps.exec_end_ns);
-    SET_TIMESTAMP(timestamps.compute_end_ns);
+
     RETURN_IF_ERROR(
         TRITONBACKEND_ModelInstanceReportStatistics(modelInstance_, requestData.tritonRequest, (error == nullptr),
             timestamps.exec_start_ns, timestamps.compute_start_ns, timestamps.compute_end_ns, timestamps.exec_end_ns));
@@ -743,6 +759,8 @@ void ModelInstanceState::WaitForResponse()
     {
         std::chrono::milliseconds waitTime(1);
         auto responses = mExecutor->awaitResponses(waitTime);
+        uint64_t compute_end_ns{0};
+        SET_TIMESTAMP(compute_end_ns);
 
         for (auto const& response : responses)
         {
@@ -774,6 +792,7 @@ void ModelInstanceState::WaitForResponse()
                     mTritonRequestIdToRequestId.erase(requestData.tritonRequestId);
                 }
 
+                requestData.timestamps.compute_end_ns = compute_end_ns;
                 LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
 
                 LOG_IF_ERROR(TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
@@ -789,6 +808,7 @@ void ModelInstanceState::WaitForStats()
 {
     while (!mStopWaitForStats)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(mInstanceSpecificConfig.statsCheckPeriodMs));
         auto stats = mExecutor->getLatestIterationStats();
         for (auto const& stat : stats)
         {
