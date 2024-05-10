@@ -314,50 +314,57 @@ run_cpp_trtllm_backend_tests () {
     # End to end test
     pushd tools/inflight_batcher_llm
 
-    # benchmark_core_model.py doesn't support streaming.
-    if [[ "${STREAMING}" == "false" ]]; then
+    # HTTP client cannot be used with decoupled mode.
+    if [[ "${DECOUPLED_MODE}" == "False" ]]; then
         python3 benchmark_core_model.py \
             ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            ${CHECK_PERF_FLAG} \
             --concurrency 8 \
             -i http \
             --max-input-len 300 \
             dataset \
             --dataset ../dataset/mini_cnn_eval.json \
-            --tokenizer-dir ${TOKENIZER_PATH} \
+            --tokenizer-dir ${TOKENIZER_PATH}
+    fi
 
-        if [[ "$run_all_tests" == "true" ]]; then
-            python3 benchmark_core_model.py \
-                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-                --concurrency 8 \
-                -i grpc \
-                --max-input-len 300 \
-                --num-requests 80 \
-                dataset \
-                --dataset ../dataset/mini_cnn_eval.json \
-                --tokenizer-dir ${TOKENIZER_PATH} \
+    if [[ "$run_all_tests" == "true" ]]; then
+        # Note: streaming flag is not set to 1 for these benchmarks regardless
+        # of the value of $STREAMING.
+        DECOUPLED_FLAG=""
+        [ "${DECOUPLED_MODE}" = "True" ] && DECOUPLED_FLAG="--decoupled"
 
-            # Performance check.
-            python3 benchmark_core_model.py \
-                --check-perf-json ../../tests/ref_results.json \
-                --check-perf-key ${MODEL} \
-                --check-perf-rtol 0.05 \
-                --check-perf-atol 50 \
-                --concurrency 8 \
-                -i grpc \
-                --max-input-len 300 \
-                --request-rate -1 \
-                --num-requests 1000 \
-                token-norm-dist \
-                --input-mean 128 --input-stdev 0 \
-                --output-mean 20 --output-stdev 0
+        python3 benchmark_core_model.py \
+            ${DECOUPLED_FLAG} \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+            --concurrency 8 \
+            -i grpc \
+            --max-input-len 300 \
+            --num-requests 80 \
+            dataset \
+            --dataset ../dataset/mini_cnn_eval.json \
+            --tokenizer-dir ${TOKENIZER_PATH}
 
-            python3 benchmark_core_model.py \
-                -i grpc --max-input-len 1000 \
-                --request-rate -1 \
-                token-from-histogram --histogram-key example
+        # Performance check.
+        python3 benchmark_core_model.py \
+            ${DECOUPLED_FLAG} \
+            --check-perf-json ../../tests/ref_results.json \
+            --check-perf-key ${MODEL}-${BACKEND} \
+            --check-perf-rtol 0.05 \
+            --check-perf-atol 50 \
+            --concurrency 8 \
+            -i grpc \
+            --max-input-len 300 \
+            --request-rate -1 \
+            --num-requests 1000 \
+            token-norm-dist \
+            --input-mean 128 --input-stdev 0 \
+            --output-mean 20 --output-stdev 0
 
-        fi
+        python3 benchmark_core_model.py \
+            ${DECOUPLED_FLAG} \
+            -i grpc --max-input-len 1000 \
+            --request-rate -1 \
+            token-from-histogram --histogram-key example
+
     fi
 
     popd # tools/inflight_batcher_llm
@@ -563,6 +570,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     run_all_tests="true"
 
     for BACKEND in "${BACKENDS[@]}"; do
+        run_all_tests="true"
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do

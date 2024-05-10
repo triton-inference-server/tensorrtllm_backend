@@ -17,14 +17,23 @@ from transformers import AutoTokenizer
 from utils import utils
 
 
-def callback(user_data, start_time, req_id, result, error):
+def callback(user_data, result, error):
     user_data._completed_requests.put((result, error))
+    if result is None:
+        # There was an error.
+        return
+    try:
+        # GRPC
+        req_id = result.get_response().id
+    except:
+        # HTTP
+        req_id = result.get_response()["id"]
+    start_time = user_data._start_time_dict[req_id]
     stop_time = datetime.now()
     latency = (stop_time - start_time).total_seconds() * 1000.0
     latency = round(latency, 3)
     user_data._latencies.append(latency)
     user_data._latency_dict[req_id] = latency
-    user_data._start_time_dict[req_id] = start_time
     user_data._stop_time_dict[req_id] = stop_time
 
 
@@ -33,6 +42,9 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
     model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
+    if FLAGS.decoupled:
+        client.start_stream(callback=lambda result, error: None,
+                            stream_timeout=FLAGS.stream_timeout)
     for i in range(10):
         output0_len = np.ones_like([[1]]).astype(np.int32) * 100
         inputs = [
@@ -43,13 +55,22 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
         ]
-        client.infer(model_name, inputs, request_id=str(i))
+        if FLAGS.decoupled:
+            client.async_stream_infer(model_name, inputs, request_id=str(i))
+        else:
+            client.infer(model_name, inputs, request_id=str(i))
+    if FLAGS.decoupled:
+        client.stop_stream()
 
     print(f"[INFO] Start benchmarking on {len(input_start_ids)} prompts.")
     latency = 0
     async_requests = []
     start_time = datetime.now()
     user_data = utils.UserData()
+
+    if FLAGS.decoupled:
+        client.start_stream(callback=partial(callback, user_data),
+                            stream_timeout=FLAGS.stream_timeout)
     for i, ids in enumerate(input_start_ids):
         output0_len = np.ones_like([[1]]).astype(np.int32) * output_lens[i]
         end_id = np.ones_like([[1]]).astype(np.int32) * -1
@@ -64,17 +85,23 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
 
         time.sleep(delays[i])
 
+        user_data._start_time_dict[str(i)] = datetime.now()
         if FLAGS.protocol == "http":
             async_requests.append(
                 client.async_infer(model_name, inputs, request_id=str(i)))
         elif FLAGS.protocol == "grpc":
-            async_requests.append(
-                client.async_infer(model_name,
-                                   inputs,
-                                   callback=partial(callback, user_data,
-                                                    datetime.now(), i),
-                                   request_id=str(i)))
-
+            if FLAGS.decoupled:
+                client.async_stream_infer(model_name,
+                                          inputs,
+                                          request_id=str(i))
+            else:
+                async_requests.append(
+                    client.async_infer(model_name,
+                                       inputs,
+                                       callback=partial(callback, user_data),
+                                       request_id=str(i)))
+    if FLAGS.decoupled:
+        client.stop_stream()
     try:
         if FLAGS.protocol == "http":
             utils.get_http_results(async_requests)
@@ -213,6 +240,22 @@ if __name__ == '__main__':
         choices=['http', 'grpc'],
         help='Protocol ("http"/"grpc") used to ' +
         'communicate with inference service. Default is "http".')
+    parser.add_argument(
+        '--decoupled',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'Uses async_stream_infer which allows decoupled backends (must use grpc protocol)'
+    ),
+    parser.add_argument(
+        "-t",
+        "--stream-timeout",
+        type=float,
+        required=False,
+        default=None,
+        help="Stream timeout in seconds. Default is None.",
+    )
     parser.add_argument('-c',
                         '--concurrency',
                         type=int,
@@ -289,6 +332,9 @@ if __name__ == '__main__':
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8000" if FLAGS.protocol == "http" else "localhost:8001"
+    if FLAGS.decoupled and FLAGS.protocol != 'grpc':
+        print("Protocol must be set to 'grpc' when using '--decoupled'.")
+        sys.exit(1)
 
     try:
         client = utils.create_inference_server_client(
