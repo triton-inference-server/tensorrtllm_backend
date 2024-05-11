@@ -55,11 +55,28 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        self.skip_special_tokens = model_config['parameters'].get(
-            'skip_special_tokens',
-            {'string_value': "true"})['string_value'].lower() in [
-                'true', '1', 't', 'y', 'yes'
-            ]
+
+        skip_special_tokens = model_config['parameters'].get(
+            'skip_special_tokens')
+        if skip_special_tokens is not None:
+            skip_special_tokens_str = skip_special_tokens[
+                'string_value'].lower()
+            if skip_special_tokens_str in [
+                    'true', 'false', '1', '0', 't', 'f', 'y', 'n', 'yes', 'no'
+            ]:
+                self.skip_special_tokens = skip_special_tokens_str in [
+                    'true', '1', 't', 'y', 'yes'
+                ]
+            else:
+                print(
+                    f"[TensorRT-LLM][WARNING] Don't setup 'skip_special_tokens' correctly (set value is {skip_special_tokens['string_value']}). Set it as True by default."
+                )
+                self.skip_special_tokens = True
+        else:
+            print(
+                f"[TensorRT-LLM][WARNING] Don't setup 'skip_special_tokens'. Set it as True by default."
+            )
+            self.skip_special_tokens = True
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
                                                        legacy=False,
