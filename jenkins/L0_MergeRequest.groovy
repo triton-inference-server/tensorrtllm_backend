@@ -214,6 +214,13 @@ def createKubernetesPodConfig(image, type)
             kind: Pod
             spec:
                 qosClass: Guaranteed
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                      - matchExpressions:
+                        - key: "tensorrt/taints"
+                          operator: DoesNotExist
                 nodeSelector: ${selectors}
                 containers:
                   ${containerConfig}
