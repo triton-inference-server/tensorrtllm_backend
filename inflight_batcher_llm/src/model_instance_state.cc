@@ -156,10 +156,10 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<SizeType> maxAttentionWindowSizeType = std::nullopt;
+    std::optional<SizeType32> maxAttentionWindowSizeType = std::nullopt;
     if (maxAttentionWindow.has_value())
     {
-        maxAttentionWindowSizeType = static_cast<SizeType>(maxAttentionWindow.value());
+        maxAttentionWindowSizeType = static_cast<SizeType32>(maxAttentionWindow.value());
     }
 
     return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
@@ -194,15 +194,15 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     // lora_cache_gpu_memory_fraction
     // lora_cache_host_memory_bytes
 
-    SizeType maxAdapterSize = 64;
-    SizeType optimalAdapterSize = 8;
+    SizeType32 maxAdapterSize = 64;
+    SizeType32 optimalAdapterSize = 8;
     std::optional<size_t> hostCacheSize = std::nullopt;
     std::optional<float> deviceCachePercent = std::nullopt;
 
     std::string fieldName = "lora_cache_max_adapter_size";
     try
     {
-        maxAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+        maxAdapterSize = model_state_->GetParameter<SizeType32>(fieldName);
     }
     catch (std::exception const& e)
     {
@@ -212,7 +212,7 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     fieldName = "lora_cache_optimal_adapter_size";
     try
     {
-        optimalAdapterSize = model_state_->GetParameter<SizeType>(fieldName);
+        optimalAdapterSize = model_state_->GetParameter<SizeType32>(fieldName);
     }
     catch (std::exception const& e)
     {
@@ -244,17 +244,18 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
 
 executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool enableChunkedContext)
 {
-    auto schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+    using executor::CapacitySchedulerPolicy;
+    auto schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
     try
     {
         std::string schedulerPolicyStr = model_state_->GetParameter<std::string>("batch_scheduler_policy");
         if (schedulerPolicyStr == "max_utilization")
         {
-            schedulerPolicy = executor::SchedulerPolicy::kMAX_UTILIZATION;
+            schedulerPolicy = CapacitySchedulerPolicy::kMAX_UTILIZATION;
         }
         else if (schedulerPolicyStr == "guaranteed_no_evict")
         {
-            schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
         }
         else
         {
@@ -268,7 +269,7 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
         TLLM_LOG_WARNING(e.what());
     }
 
-    if (isDecoupled() && schedulerPolicy != executor::SchedulerPolicy::kGUARANTEED_NO_EVICT)
+    if (isDecoupled() && schedulerPolicy != CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT)
     {
         if (!enableChunkedContext)
         {
@@ -278,7 +279,7 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
                 "enable_chunked_context to true. "
                 "The batch scheduler policy will be set to guaranteed_no_evict "
                 "since enable_chunked_context is false.");
-            schedulerPolicy = executor::SchedulerPolicy::kGUARANTEED_NO_EVICT;
+            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
         }
     }
     return executor::SchedulerConfig(schedulerPolicy);
@@ -464,6 +465,18 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
     mInstanceSpecificConfig.cancellationCheckPeriodMs = cancellationCheckPeriodMs;
 
+    int statsCheckPeriodMs = 100;
+    try
+    {
+        statsCheckPeriodMs = model_state_->GetParameter<int>("stats_check_period_ms");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("stats_check_period_ms is not specified, will be set to 100 (ms)");
+    }
+    mInstanceSpecificConfig.statsCheckPeriodMs = statsCheckPeriodMs;
+
     if (mExecutor->canEnqueueRequests())
     {
         mStopWaitForResponse = false;
@@ -509,6 +522,7 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
         {
             throw std::runtime_error("Trying to stop a request but request ID is not provided");
         }
+        std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
         if (mTritonRequestIdToRequestId.count(tritonRequestId))
         {
             auto requestId = mTritonRequestIdToRequestId[tritonRequestId];
@@ -536,6 +550,10 @@ executor::Request ModelInstanceState::createExecutorRequest(
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
 {
+
+    uint64_t exec_start_ns{0};
+    SET_TIMESTAMP(exec_start_ns);
+
     for (uint32_t i = 0; i < request_count; ++i)
     {
         TRITONBACKEND_Request* request = requests[i];
@@ -559,8 +577,10 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 = createExecutorRequest(request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled());
 
             int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
-            executor::SizeType beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
+            executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
+            uint64_t compute_start_ns{0};
+            SET_TIMESTAMP(compute_start_ns);
             auto requestId = mExecutor->enqueueRequest(executorRequest);
             if (mRequestIdToRequestData.count(requestId))
             {
@@ -572,8 +592,10 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             TRITONBACKEND_ResponseFactory* factory;
             LOG_IF_ERROR(
                 TRITONBACKEND_ResponseFactoryNew(&factory, request), "failed to create triton response factory");
-            mRequestIdToRequestData.emplace(
-                requestId, RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy});
+
+            mRequestIdToRequestData.emplace(requestId,
+                RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
+                    {exec_start_ns, compute_start_ns, 0, 0}});
             if (tritonRequestId != "")
             {
                 mTritonRequestIdToRequestId[tritonRequestId] = requestId;
@@ -585,6 +607,24 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
         }
     }
     return;
+}
+
+TRITONSERVER_Error* ModelInstanceState::reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error)
+{
+    auto& timestamps = requestData.timestamps;
+    SET_TIMESTAMP(timestamps.exec_end_ns);
+
+    RETURN_IF_ERROR(
+        TRITONBACKEND_ModelInstanceReportStatistics(modelInstance_, requestData.tritonRequest, (error == nullptr),
+            timestamps.exec_start_ns, timestamps.compute_start_ns, timestamps.compute_end_ns, timestamps.exec_end_ns));
+
+    // For now we will assume a batch size of 1 for each request. This may change in the future but for
+    // now it seems that even when requests are dynamically batched together each workItem is associated
+    // with its own request object and is handled independently due to the nature of IFB.
+    RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceReportBatchStatistics(modelInstance_, 1 /* batch size */,
+        timestamps.exec_start_ns, timestamps.compute_start_ns, timestamps.compute_end_ns, timestamps.exec_end_ns));
+
+    return nullptr; // success
 }
 
 std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceState::fillTritonResponse(
@@ -719,6 +759,8 @@ void ModelInstanceState::WaitForResponse()
     {
         std::chrono::milliseconds waitTime(1);
         auto responses = mExecutor->awaitResponses(waitTime);
+        uint64_t compute_end_ns{0};
+        SET_TIMESTAMP(compute_end_ns);
 
         for (auto const& response : responses)
         {
@@ -749,6 +791,10 @@ void ModelInstanceState::WaitForResponse()
                 {
                     mTritonRequestIdToRequestId.erase(requestData.tritonRequestId);
                 }
+
+                requestData.timestamps.compute_end_ns = compute_end_ns;
+                LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
+
                 LOG_IF_ERROR(TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
                     "Cannot release request");
                 LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory), "Cannot delete response factory");
@@ -762,6 +808,7 @@ void ModelInstanceState::WaitForStats()
 {
     while (!mStopWaitForStats)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(mInstanceSpecificConfig.statsCheckPeriodMs));
         auto stats = mExecutor->getLatestIterationStats();
         for (auto const& stat : stats)
         {

@@ -70,10 +70,10 @@ The below commands will build the same Triton TRT-LLM container as the one on th
 # Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
 cd tensorrtllm_backend
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/pytorch:24.02-py3
-TRT_VERSION=9.3.0.1
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.3.0/tensorrt-9.3.0.1.linux.x86_64-gnu.cuda-12.2.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.3.0/tensorrt-9.3.0.1.ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
+BASE_IMAGE=nvcr.io/nvidia/pytorch:24.03-py3
+TRT_VERSION=10.0.1.6
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.Linux.x86_64-gnu.cuda-12.4.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
 
 docker build -t trtllm_base \
              --build-arg BASE_IMAGE="${BASE_IMAGE}" \
@@ -297,9 +297,9 @@ The following table shows the fields that may to be modified before deployment:
 | `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |
 | `max_attention_window_size` | Optional (default=max_sequence_length). When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults attends to all tokens in sequence. |
 | `kv_cache_free_gpu_mem_fraction` | Optional (default=0.9). Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache.|
-| `enable_trt_overlap` | Optional (default=`false`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
 | `cancellation_check_period_ms` | Optional (default=100). The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. |
+| `stats_check_period_ms` | Optional (default=100). The time for the statistics reporting thread to sleep before doing the next check. |
 | `iter_stats_max_iterations` | Optional (default=executor::kDefaultIterStatsMaxIterations). The numbers of iteration stats to be kept. |
 | `request_stats_max_iterations` | Optional (default=executor::kDefaultRequestStatsMaxIterations). The numbers of request stats to be kept. |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |

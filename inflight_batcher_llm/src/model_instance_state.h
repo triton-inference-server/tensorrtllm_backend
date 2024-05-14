@@ -38,7 +38,6 @@
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
-#include "tensorrt_llm/batch_manager/schedulerPolicy.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/runtime/decodingMode.h"
 
@@ -50,7 +49,6 @@
 
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
-using namespace tensorrt_llm::batch_manager::batch_scheduler;
 
 namespace triton::backend::inflight_batcher_llm
 {
@@ -60,6 +58,24 @@ struct InstanceSpecificConfig
 {
     bool excludeInputFromOutput;
     int cancellationCheckPeriodMs;
+    int statsCheckPeriodMs;
+};
+
+/// @brief Timestamps for each request, used to report Triton metrics
+struct Timestamps
+{
+    uint64_t exec_start_ns = 0;
+    uint64_t compute_start_ns = 0;
+    uint64_t compute_end_ns = 0;
+    uint64_t exec_end_ns = 0;
+
+    void Reset()
+    {
+        exec_start_ns = 0;
+        compute_start_ns = 0;
+        compute_end_ns = 0;
+        exec_end_ns = 0;
+    }
 };
 
 /// @brief Per-request data stored for handling requests
@@ -69,7 +85,8 @@ struct RequestData
     TRITONBACKEND_Request* tritonRequest;
     std::string tritonRequestId;
     int64_t inputTokensSize;
-    executor::SizeType beamWidth;
+    executor::SizeType32 beamWidth;
+    Timestamps timestamps;
 };
 
 //
@@ -87,11 +104,11 @@ class ModelInstanceState
 
 public:
     // number of cpu workers used to move weights host cache to gpu cache
-    static constexpr SizeType kPeftCacheNumEnsureWorkers = 4;
+    static constexpr SizeType32 kPeftCacheNumEnsureWorkers = 4;
     // number of cuda streams used for H2D copies of peft cache pages
-    static constexpr SizeType kPeftCacheNumCopyStreams = 4;
+    static constexpr SizeType32 kPeftCacheNumCopyStreams = 4;
     // number of cpu workers used to load weight into host cache
-    static constexpr SizeType kPeftCacheNumPutWorkers = 4;
+    static constexpr SizeType32 kPeftCacheNumPutWorkers = 4;
 
     /// @brief Create a ModelInstanceObject
     static TRITONSERVER_Error* Create(
@@ -121,7 +138,7 @@ public:
     }
 
     /// @brief Add the request to the executor
-    void enqueue(TRITONBACKEND_Request** requests, const uint32_t request_count);
+    void enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count);
 
 private:
     /// @brief Get batching type
@@ -168,6 +185,9 @@ private:
     std::unique_ptr<executor::Executor> mExecutor;
     /// @brief Config to be used when sending requests to executor
     InstanceSpecificConfig mInstanceSpecificConfig;
+
+    /// @brief Report Triton base metrics for a given request
+    TRITONSERVER_Error* reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error);
 
     /// @brief Retrieve responses from the executor
     void WaitForResponse();

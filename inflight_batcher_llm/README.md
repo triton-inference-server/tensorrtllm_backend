@@ -87,26 +87,8 @@ parameters: {
 }
 ```
 
-In-flight batching is able to overlap the execution of batches of
-requests. It may have a negative impact on performance when the number of
-requests is too small. To enable that feature, set the `enable_trt_overlap`
-parameter to `True` in the `config.pbtxt` file:
-
-```
-parameters: {
-  key: "enable_trt_overlap"
-  value: {
-    string_value: "True"
-  }
-}
-```
-
-Or, equivalently, add `enable_trt_overlap:True` to the invocation of the
-`fill_template.py` tool:
-
-```bash
-python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:True"
-```
+Note that the parameter `enable_trt_overlap` has been removed from the `config.pbtxt`. This option allowed to overlap execution of two micro-batches to hide CPU overhead.
+Optimization work has been done to reduce the CPU overhead and it was found that the overlapping of micro-batches did not provide additional benefits.
 
 To reuse previously computed KV cache values (e.g. for system prompt), set `enable_kv_cache_reuse`
 parameter to `True` in the `config.pbtxt` file:

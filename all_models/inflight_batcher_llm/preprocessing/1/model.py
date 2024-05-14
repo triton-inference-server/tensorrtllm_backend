@@ -56,11 +56,27 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = model_config['parameters']['tokenizer_dir'][
             'string_value']
-        self.add_special_tokens = model_config['parameters'].get(
-            'add_special_tokens',
-            {'string_value': "false"})['string_value'].lower() in [
-                'true', '1', 't', 'y', 'yes'
-            ]
+
+        add_special_tokens = model_config['parameters'].get(
+            'add_special_tokens')
+        if add_special_tokens is not None:
+            add_special_tokens_str = add_special_tokens['string_value'].lower()
+            if add_special_tokens_str in [
+                    'true', 'false', '1', '0', 't', 'f', 'y', 'n', 'yes', 'no'
+            ]:
+                self.add_special_tokens = add_special_tokens_str in [
+                    'true', '1', 't', 'y', 'yes'
+                ]
+            else:
+                print(
+                    f"[TensorRT-LLM][WARNING] Don't setup 'add_special_tokens' correctly (set value is {add_special_tokens['string_value']}). Set it as True by default."
+                )
+                self.add_special_tokens = True
+        else:
+            print(
+                f"[TensorRT-LLM][WARNING] Don't setup 'add_special_tokens'. Set it as True by default."
+            )
+            self.add_special_tokens = True
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir,
                                                        legacy=False,
