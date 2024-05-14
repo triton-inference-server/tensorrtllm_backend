@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 name: "tensorrt_llm"
-backend: "tensorrtllm"
+backend: "${triton_backend}"
 max_batch_size: ${triton_max_batch_size}
 
 model_transaction_policy {
@@ -410,12 +410,13 @@ parameters: {
     string_value: "${kv_cache_onboard_blocks}"
   }
 }
-parameters: {
-  key: "enable_trt_overlap"
-  value: {
-    string_value: "${enable_trt_overlap}"
-  }
-}
+# enable_trt_overlap is deprecated and doesn't have any effect on the runtime
+# parameters: {
+#   key: "enable_trt_overlap"
+#   value: {
+#     string_value: "${enable_trt_overlap}"
+#   }
+# }
 parameters: {
   key: "exclude_input_in_output"
   value: {
@@ -426,6 +427,12 @@ parameters: {
   key: "cancellation_check_period_ms"
   value: {
     string_value: "${cancellation_check_period_ms}"
+  }
+}
+parameters: {
+  key: "stats_check_period_ms"
+  value: {
+    string_value: "${stats_check_period_ms}"
   }
 }
 parameters: {
