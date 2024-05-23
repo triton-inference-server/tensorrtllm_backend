@@ -92,8 +92,7 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
     return cmd
 
 
-if __name__ == '__main__':
-    args = parse_arguments()
+def main(args):
     res = subprocess.run(['pgrep', '-r', 'R', 'tritonserver'],
                          capture_output=True,
                          encoding='utf-8')
@@ -107,8 +106,23 @@ if __name__ == '__main__':
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
                   args.log_file, args.tensorrt_llm_model_name)
+    
     env = os.environ.copy()
     if args.multi_model:
         assert args.world_size == 1, 'World size must be 1 when using multi-model. Processes will be spawned automatically to run the multi-GPU models'
         env['TRTLLM_ORCHESTRATOR'] = '1'
-    subprocess.Popen(cmd, env=env)
+    
+    # Start the subprocess and wait for signal
+    with subprocess.Popen(cmd, env=env) as proc:
+        try:
+            retcode = proc.wait()
+        except KeyboardInterrupt:
+            proc.kill()
+            return 0
+        
+    return retcode
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    main(args)
