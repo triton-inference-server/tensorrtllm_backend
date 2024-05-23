@@ -86,6 +86,7 @@ struct RequestData
     std::string tritonRequestId;
     int64_t inputTokensSize;
     executor::SizeType32 beamWidth;
+    std::unordered_set<std::string> outputNames;
     Timestamps timestamps;
 };
 

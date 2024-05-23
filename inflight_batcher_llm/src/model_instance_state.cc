@@ -420,9 +420,19 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             "Will be using default mc_sim_7b_63 choices instead");
     }
 
+    float gpuWeightsPercent = 1.0f;
+    try
+    {
+        gpuWeightsPercent = model_state_->GetParameter<float>("gpu_weights_percent");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING("gpu_weights_percent parameter is not specified, will use default value of 1.0");
+    }
+
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, parallelConfig,
-        peftCacheConfig, std::nullopt, medusaChoices, decodingMode);
+        peftCacheConfig, std::nullopt, medusaChoices, decodingMode, gpuWeightsPercent);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -593,9 +603,10 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             LOG_IF_ERROR(
                 TRITONBACKEND_ResponseFactoryNew(&factory, request), "failed to create triton response factory");
 
+            auto requestOutputNames = utils::getRequestOutputNames(request);
             mRequestIdToRequestData.emplace(requestId,
                 RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
-                    {exec_start_ns, compute_start_ns, 0, 0}});
+                    std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}});
             if (tritonRequestId != "")
             {
                 mTritonRequestIdToRequestId[tritonRequestId] = requestId;
@@ -633,120 +644,159 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
     TRITONBACKEND_Response* tritonResponse;
     LOG_IF_ERROR(TRITONBACKEND_ResponseNewFromFactory(&tritonResponse, factory), "Failed to create response");
 
-    bool isFinal = false;
     TRITONSERVER_Error* error = nullptr;
-    if (!response.hasError())
+    bool isFinal = false;
+    try
     {
-        auto const& result = response.getResult();
-        isFinal = result.isFinal;
-        error = nullptr;
-        auto outputIds = result.outputTokenIds;
-        std::vector<int32_t> beamLength(outputIds.size());
-        int32_t maxBeamLength = -1;
-        for (size_t i = 0; i < outputIds.size(); ++i)
+        if (!response.hasError())
         {
-            beamLength[i] = outputIds[i].size();
-            maxBeamLength = std::max(beamLength[i], maxBeamLength);
-        }
-        if (maxBeamLength == -1)
-        {
-            TLLM_LOG_ERROR("Output ids is empty");
-            maxBeamLength = 0;
-        }
-        for (auto& vec : outputIds)
-        {
-            vec.resize(maxBeamLength, -1);
-        }
-        std::vector<int64_t> outputIdsShape{1, static_cast<int64_t>(outputIds.size()), maxBeamLength};
-        auto outputIdsType = TRITONSERVER_TYPE_INT32;
-        auto outputIdsBuffer = utils::getResponseBuffer<int32_t>(
-            tritonResponse, outputIdsShape, outputIdsType, OutputFieldsNames::outputIds);
-        utils::flatten<int32_t>(outputIds, outputIdsBuffer, outputIdsShape);
+            auto const& result = response.getResult();
+            isFinal = result.isFinal;
+            error = nullptr;
+            auto outputIds = result.outputTokenIds;
+            std::vector<int32_t> beamLength(outputIds.size());
+            int32_t maxBeamLength = -1;
+            for (size_t i = 0; i < outputIds.size(); ++i)
+            {
+                beamLength[i] = outputIds[i].size();
+                maxBeamLength = std::max(beamLength[i], maxBeamLength);
+            }
+            if (maxBeamLength == -1)
+            {
+                TLLM_LOG_ERROR("Output ids is empty");
+                maxBeamLength = 0;
+            }
+            for (auto& vec : outputIds)
+            {
+                vec.resize(maxBeamLength, -1);
+            }
 
-        std::vector<int64_t> sequenceLengthShape{1, static_cast<int64_t>(outputIds.size())};
-        auto sequenceLengthType = TRITONSERVER_TYPE_INT32;
-        auto sequenceLengthBuffer = utils::getResponseBuffer<int32_t>(
-            tritonResponse, sequenceLengthShape, sequenceLengthType, OutputFieldsNames::sequenceLength);
-        utils::flatten<int32_t>(beamLength, sequenceLengthBuffer, sequenceLengthShape);
+            if (requestData.outputNames.count(OutputFieldsNames::outputIds) > 0)
+            {
+                std::vector<int64_t> outputIdsShape{1, static_cast<int64_t>(outputIds.size()), maxBeamLength};
+                auto outputIdsType = TRITONSERVER_TYPE_INT32;
+                auto outputIdsBuffer = utils::getResponseBuffer<int32_t>(
+                    tritonResponse, outputIdsShape, outputIdsType, OutputFieldsNames::outputIds);
+                utils::flatten<int32_t>(outputIds, outputIdsBuffer, outputIdsShape);
+            }
+            else
+            {
+                TLLM_THROW("%s tensor must be present in list of output tensors", OutputFieldsNames::outputIds);
+            }
 
-        if (result.contextLogits.has_value())
-        {
-            auto contextLogitsShapeOriginal = result.contextLogits.value().getShape();
-            std::vector<int64_t> contextLogitsShape{1, contextLogitsShapeOriginal[0], contextLogitsShapeOriginal[1]};
-            auto contextLogitsType = TRITONSERVER_TYPE_FP32;
-            auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-            utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+            if (requestData.outputNames.count(OutputFieldsNames::sequenceLength) > 0)
+            {
+                std::vector<int64_t> sequenceLengthShape{1, static_cast<int64_t>(outputIds.size())};
+                auto sequenceLengthType = TRITONSERVER_TYPE_INT32;
+                auto sequenceLengthBuffer = utils::getResponseBuffer<int32_t>(
+                    tritonResponse, sequenceLengthShape, sequenceLengthType, OutputFieldsNames::sequenceLength);
+                utils::flatten<int32_t>(beamLength, sequenceLengthBuffer, sequenceLengthShape);
+            }
+            else
+            {
+                TLLM_THROW("%s tensor must be present in list of output tensors", OutputFieldsNames::sequenceLength);
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::contextLogits) > 0)
+            {
+                if (result.contextLogits.has_value())
+                {
+                    auto contextLogitsShapeOriginal = result.contextLogits.value().getShape();
+                    std::vector<int64_t> contextLogitsShape{
+                        1, contextLogitsShapeOriginal[0], contextLogitsShapeOriginal[1]};
+                    auto contextLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                    utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                }
+                else
+                {
+                    std::vector<int64_t> contextLogitsShape{1, 1, 1};
+                    auto contextLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                    utils::flatten<float>(std::vector<float>{0}, contextLogitsBuffer, contextLogitsShape);
+                }
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::generationLogits) > 0)
+            {
+                if (result.generationLogits.has_value())
+                {
+                    auto generationLogitsShapeOriginal = result.generationLogits.value().getShape();
+                    std::vector<int64_t> generationLogitsShape{1, generationLogitsShapeOriginal[0],
+                        generationLogitsShapeOriginal[1], generationLogitsShapeOriginal[2]};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(
+                        result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                }
+                else
+                {
+                    std::vector<int64_t> generationLogitsShape{1, 1, 1, 1};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(std::vector<float>{0}, generationLogitsBuffer, generationLogitsShape);
+                }
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::outputLogProbs) > 0)
+            {
+                if (result.logProbs.has_value())
+                {
+                    std::vector<int64_t> outputLogProbsShape{1, static_cast<int64_t>(result.logProbs.value().size()),
+                        static_cast<int64_t>(result.logProbs.value()[0].size())};
+                    auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
+                    auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
+                    utils::flatten<float>(result.logProbs.value(), outputLogProbsBuffer, outputLogProbsShape);
+                }
+                else
+                {
+                    std::vector<int64_t> outputLogProbsShape{1, 1, requestData.inputTokensSize};
+                    auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
+                    auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
+                    utils::flatten<float>(
+                        std::vector<float>(requestData.inputTokensSize), outputLogProbsBuffer, outputLogProbsShape);
+                }
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::cumLogProbs) > 0)
+            {
+                if (result.cumLogProbs.has_value())
+                {
+                    std::vector<int64_t> cumLogProbsShape{1, static_cast<int64_t>(result.cumLogProbs.value().size())};
+                    auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
+                    auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
+                    utils::flatten<float>(result.cumLogProbs.value(), cumLogProbsBuffer, cumLogProbsShape);
+                }
+                else
+                {
+                    std::vector<int64_t> cumLogProbsShape{1, 1};
+                    auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
+                    auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
+                        tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
+                    utils::flatten<float>(std::vector<float>{0}, cumLogProbsBuffer, cumLogProbsShape);
+                }
+            }
         }
         else
         {
-            std::vector<int64_t> contextLogitsShape{1, 1, 1};
-            auto contextLogitsType = TRITONSERVER_TYPE_FP32;
-            auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-            utils::flatten<float>(std::vector<float>{0}, contextLogitsBuffer, contextLogitsShape);
-        }
-
-        if (result.generationLogits.has_value())
-        {
-            auto generationLogitsShapeOriginal = result.generationLogits.value().getShape();
-            std::vector<int64_t> generationLogitsShape{1, generationLogitsShapeOriginal[0],
-                generationLogitsShapeOriginal[1], generationLogitsShapeOriginal[2]};
-            auto generationLogitsType = TRITONSERVER_TYPE_FP32;
-            auto generationLogitsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
-            utils::flatten<float>(result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
-        }
-        else
-        {
-            std::vector<int64_t> generationLogitsShape{1, 1, 1, 1};
-            auto generationLogitsType = TRITONSERVER_TYPE_FP32;
-            auto generationLogitsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
-            utils::flatten<float>(std::vector<float>{0}, generationLogitsBuffer, generationLogitsShape);
-        }
-
-        if (result.logProbs.has_value())
-        {
-            std::vector<int64_t> outputLogProbsShape{1, static_cast<int64_t>(result.logProbs.value().size()),
-                static_cast<int64_t>(result.logProbs.value()[0].size())};
-            auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
-            auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-            utils::flatten<float>(result.logProbs.value(), outputLogProbsBuffer, outputLogProbsShape);
-        }
-        else
-        {
-            std::vector<int64_t> outputLogProbsShape{1, 1, requestData.inputTokensSize};
-            auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
-            auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-            utils::flatten<float>(
-                std::vector<float>(requestData.inputTokensSize), outputLogProbsBuffer, outputLogProbsShape);
-        }
-
-        if (result.cumLogProbs.has_value())
-        {
-            std::vector<int64_t> cumLogProbsShape{1, static_cast<int64_t>(result.cumLogProbs.value().size())};
-            auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
-            auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
-            utils::flatten<float>(result.cumLogProbs.value(), cumLogProbsBuffer, cumLogProbsShape);
-        }
-        else
-        {
-            std::vector<int64_t> cumLogProbsShape{1, 1};
-            auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
-            auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
-                tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
-            utils::flatten<float>(std::vector<float>{0}, cumLogProbsBuffer, cumLogProbsShape);
+            isFinal = true;
+            std::string errMsg = "Executor failed process requestId " + std::to_string(response.getRequestId())
+                + " due to the following error: " + response.getErrorMsg();
+            error = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
         }
     }
-    else
+    catch (std::exception const& e)
     {
+        // In case of error while processing response, return response with error
         isFinal = true;
-        std::string errMsg = "Executor failed process requestId " + std::to_string(response.getRequestId())
-            + " due to the following error: " + response.getErrorMsg();
+        std::string errMsg = "Error encountered while populating response: " + std::string(e.what());
         error = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
     }
 

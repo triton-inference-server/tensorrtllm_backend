@@ -311,6 +311,7 @@ The following table shows the fields that may to be modified before deployment:
 | `lora_cache_max_adapter_size` | Optional (default=64) Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. |
 | `lora_cache_gpu_memory_fraction` | Optional (default=0.05) Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded |
 | `lora_cache_host_memory_bytes` | Optional (default=1G) Size of host LoRA cache in bytes |
+| `gpu_weights_percent` | Optional (default=1.0). Set to a number between 0.0 and 1.0 to specify the percentage of weights that reside on GPU instead of CPU and streaming load during runtime. Values less than 1.0 are only supported for an engine built with `weight_streaming` on. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 

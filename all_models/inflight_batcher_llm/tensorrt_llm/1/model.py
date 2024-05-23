@@ -553,6 +553,8 @@ class TritonPythonModel:
                     with self.lock:
                         del self.triton_id_to_req_id[triton_id]
                         del self.req_id_to_response_sender[req_id]
+                # Remove local reference so response_sender can be cleaned properly.
+                del response_sender
             # TODO: Read stats: https://jirasw.nvidia.com/browse/TRTLLM-563
 
     def cancellation_loop(self):
@@ -560,15 +562,12 @@ class TritonPythonModel:
         while self.running:
             time.sleep(self.cancellation_check_period_ms / 1000.0)
             with self.lock:
-                cancelled_ids = []
                 for req_id, (triton_id, response_sender
                              ) in self.req_id_to_response_sender.items():
                     if response_sender.is_cancelled():
                         self.executor.cancel_request(req_id)
-                        cancelled_ids.append((req_id, triton_id))
-                for req_id, triton_id in cancelled_ids:
-                    del self.triton_id_to_req_id[triton_id]
-                    del self.req_id_to_response_sender[req_id]
+                    # Remove local reference so response_sender can be cleaned properly.
+                    del response_sender
 
     def finalize(self):
         """`finalize` is called only once when the model is being unloaded.

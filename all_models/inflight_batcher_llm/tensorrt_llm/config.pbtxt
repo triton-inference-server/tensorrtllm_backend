@@ -513,3 +513,9 @@ parameters: {
       string_value: "${medusa_choices}"
   }
 }
+parameters: {
+  key: "gpu_weights_percent"
+    value: {
+      string_value: "${gpu_weights_percent}"
+  }
+}
