@@ -244,8 +244,14 @@ void* getResponseBuffer(TRITONBACKEND_Response* tritonResponse, std::vector<int6
     TRITONSERVER_DataType dtype, std::string const& name)
 {
     TRITONBACKEND_Output* output;
-    LOG_IF_ERROR(TRITONBACKEND_ResponseOutput(tritonResponse, &output, name.c_str(), dtype, shape.data(), shape.size()),
-        "Failed to create response output");
+    TRITONSERVER_Error* err{nullptr};
+    err = TRITONBACKEND_ResponseOutput(tritonResponse, &output, name.c_str(), dtype, shape.data(), shape.size());
+    if (err != nullptr)
+    {
+        auto errMsg = TRITONSERVER_ErrorMessage(err);
+        TLLM_THROW("Could not get response output for output tensor %s: %s", name.c_str(), errMsg);
+    }
+
     TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
     int64_t memory_type_id = 0;
     uint64_t size = 1;
@@ -255,8 +261,12 @@ void* getResponseBuffer(TRITONBACKEND_Response* tritonResponse, std::vector<int6
     }
     auto buffersize = size * sizeof(T);
     void* tritonBuffer = 0L;
-    LOG_IF_ERROR(TRITONBACKEND_OutputBuffer(output, &tritonBuffer, buffersize, &memory_type, &memory_type_id),
-        "Failed to create output buffer");
+    err = TRITONBACKEND_OutputBuffer(output, &tritonBuffer, buffersize, &memory_type, &memory_type_id);
+    if (err != nullptr)
+    {
+        auto errMsg = TRITONSERVER_ErrorMessage(err);
+        TLLM_THROW("Could not get output buffer for output tensor %s: %s", name.c_str(), errMsg);
+    }
     return tritonBuffer;
 }
 

@@ -1656,6 +1656,7 @@ def test_gpt_next_ptuning_ifb(
 @pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+@pytest.mark.parametrize("GPU_WEIGHTS_PERCENT", ["0.5", "1.0"])
 def test_gpt_2b_lora_ifb(
     E2E_MODEL_NAME,
     MAX_TOKENS_IN_KV_CACHE,
@@ -1678,6 +1679,7 @@ def test_gpt_2b_lora_ifb(
     ACCUMULATE_TOKEN,
     BLS_INSTANCE_COUNT,
     EXCLUDE_INPUT_IN_OUTPUT,
+    GPU_WEIGHTS_PERCENT,
     inflight_batcher_llm_client_root,
     tensorrt_llm_example_root,
     tensorrt_llm_gpt_example_root,
@@ -1693,10 +1695,11 @@ def test_gpt_2b_lora_ifb(
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
+    weight_streaming = float(GPU_WEIGHTS_PERCENT) < 1.0
     ENGINE_PATH = prepare_gpt_2b_lora_engine("ifb",
                                              tensorrt_llm_gpt_example_root,
                                              gpt_2b_lora_model_root,
-                                             models_root)
+                                             models_root, weight_streaming)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
@@ -1704,32 +1707,31 @@ def test_gpt_2b_lora_ifb(
     # Modify config.pbtxt
     TOKENIZER_PATH = os.path.join(models_root, "gpt-next",
                                   "gpt-next-tokenizer-hf-v2")
-    modify_ib_config_pbtxt(
-        new_model_repo,
-        ENGINE_PATH,
-        TOKENIZER_PATH,
-        llm_backend_repo_root,
-        DECOUPLED_MODE,
-        MAX_TOKENS_IN_KV_CACHE,
-        MAX_ATTENTION_WINDOW_SIZE,
-        BATCH_SCHEDULER_POLICY,
-        BATCHING_STRATEGY,
-        KV_CACHE_FREE_GPU_MEM_FRACTION,
-        EXCLUDE_INPUT_IN_OUTPUT,
-        ENABLE_TRT_OVERLAP,
-        TRITON_MAX_BATCH_SIZE,
-        MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH,
-        ENABLE_KV_CACHE_REUSE,
-        NORMALIZE_LOG_PROBS,
-        ENABLE_CHUNKED_CONTEXT,
-        GPU_DEVICE_IDS,
-        DECODING_MODE,
-        PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN,
-        BLS_INSTANCE_COUNT,
-    )
+    modify_ib_config_pbtxt(new_model_repo,
+                           ENGINE_PATH,
+                           TOKENIZER_PATH,
+                           llm_backend_repo_root,
+                           DECOUPLED_MODE,
+                           MAX_TOKENS_IN_KV_CACHE,
+                           MAX_ATTENTION_WINDOW_SIZE,
+                           BATCH_SCHEDULER_POLICY,
+                           BATCHING_STRATEGY,
+                           KV_CACHE_FREE_GPU_MEM_FRACTION,
+                           EXCLUDE_INPUT_IN_OUTPUT,
+                           ENABLE_TRT_OVERLAP,
+                           TRITON_MAX_BATCH_SIZE,
+                           MAX_QUEUE_DELAY_MICROSECONDS,
+                           MAX_BEAM_WIDTH,
+                           ENABLE_KV_CACHE_REUSE,
+                           NORMALIZE_LOG_PROBS,
+                           ENABLE_CHUNKED_CONTEXT,
+                           GPU_DEVICE_IDS,
+                           DECODING_MODE,
+                           PREPROCESSING_INSTANCE_COUNT,
+                           POSTPROCESSING_INSTANCE_COUNT,
+                           ACCUMULATE_TOKEN,
+                           BLS_INSTANCE_COUNT,
+                           GPU_WEIGHTS_PERCENT=GPU_WEIGHTS_PERCENT)
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")
@@ -1741,15 +1743,11 @@ def test_gpt_2b_lora_ifb(
     lora_nemo_path = os.path.join(tensorrt_llm_gpt_example_root,
                                   "gpt2b_lora-900.nemo")
     run_cmd = [
-        f"{run_py_path}",
-        "--max_output_len=8",
-        f"--lora_dir={lora_nemo_path}",
-        "--lora_ckpt_source=nemo",
-        "--lora_task_uids=0",
-        f"--input_file={input_tokens}",
-        f"--output_csv={output_tokens}",
-        f"--engine_dir={ENGINE_PATH}",
-        "--use_py_session",
+        f"{run_py_path}", "--max_output_len=8", f"--lora_dir={lora_nemo_path}",
+        "--lora_ckpt_source=nemo", "--lora_task_uids=0",
+        f"--input_file={input_tokens}", f"--output_csv={output_tokens}",
+        f"--engine_dir={ENGINE_PATH}", "--use_py_session",
+        f"--gpu_weights_percent={GPU_WEIGHTS_PERCENT}"
     ]
     venv_check_call(llm_backend_venv, run_cmd)
 

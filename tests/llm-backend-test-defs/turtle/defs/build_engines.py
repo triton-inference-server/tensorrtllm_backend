@@ -169,7 +169,8 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
 
 
 def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
-                               gpt_2b_lora_model_root, models_root):
+                               gpt_2b_lora_model_root, models_root,
+                               weight_streaming):
     # Convert GPT from NeMo
     ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
                             "gpt_2b_lora")
@@ -221,6 +222,15 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
         "--max_output_len=128",
         f"--output_dir={engine_dir}",
     ]
+
+    if weight_streaming:
+        build_cmd += [
+            "--gemm_plugin=disable", "--strongly_typed ", "--weight_streaming"
+        ]
+    else:
+        build_cmd += [
+            "--gemm_plugin=float16",
+        ]
 
     if type == "ifb":
         build_cmd += [
