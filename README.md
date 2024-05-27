@@ -188,7 +188,7 @@ prompts(string) to input_ids(list of ints).
 
 This model is a wrapper of your TensorRT-LLM model and is used
 for inferencing.
-Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/inference_request.md)
+Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/inference-request.md)
 
 #### postprocessing
 
