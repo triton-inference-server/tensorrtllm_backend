@@ -667,7 +667,6 @@ if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
             --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
             --url-target=localhost:8001 \
             --url-draft=localhost:8001 \
-            --max-input-len=250 \
             --draft-tensorrt-llm-model-name="${TENSORRT_LLM_DRAFT_MODEL_NAME}" \
             --target-tensorrt-llm-model-name="${TENSORRT_LLM_MODEL_NAME}" \
             --bls-speculative-tensorrt-llm-model-name="tensorrt_llm_bls" \

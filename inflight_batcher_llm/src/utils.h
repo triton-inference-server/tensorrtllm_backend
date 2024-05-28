@@ -83,7 +83,7 @@ struct InputFieldsNames
     static constexpr char const* loraWeights = "lora_weights";
     static constexpr char const* loraConfig = "lora_config";
 
-    // SpeculativeDecodingConfig
+    // ExternalDraftTokensConfig
     static constexpr char const* draftInputs = "draft_input_ids";
     static constexpr char const* draftLogits = "draft_logits";
     static constexpr char const* draftAcceptanceThreshold = "draft_acceptance_threshold";
@@ -121,8 +121,8 @@ executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputs
 /// @brief Construct executor::OutputConfig from input tensors
 executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTensors);
 
-/// @brief Construct executor::SpeculativeDecodingConfig from input tensors
-std::optional<executor::SpeculativeDecodingConfig> getSpeculativeDecodingConfigFromTensors(
+/// @brief Construct executor::ExternalDraftTokensConfig from input tensors
+std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
     InputTensors const& inputsTensors);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
