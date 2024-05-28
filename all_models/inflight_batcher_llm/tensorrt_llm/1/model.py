@@ -134,7 +134,7 @@ def get_output_config_from_request(request, exclude_input_from_output):
     return trtllm.OutputConfig(**kwargs)
 
 
-def get_speculative_decoding_config_from_request(request):
+def get_external_draft_tokens_config_from_request(request):
     kwargs = {}
     draft_input_ids = get_input_tensor_by_name(request, 'draft_input_ids')
     if draft_input_ids is not None:
@@ -146,7 +146,7 @@ def get_speculative_decoding_config_from_request(request):
         request, 'draft_acceptance_threshold')
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
-        return trtllm.SpeculativeDecodingConfig(**kwargs)
+        return trtllm.ExternalDraftTokensConfig(**kwargs)
     return None
 
 
@@ -211,7 +211,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
     sampling_config = get_sampling_config_from_request(request)
     output_config = get_output_config_from_request(request,
                                                    exclude_input_from_output)
-    speculative_decoding_config = get_speculative_decoding_config_from_request(
+    external_draft_tokens_config = get_external_draft_tokens_config_from_request(
         request)
     prompt_tuning_config = get_prompt_tuning_config_from_request(request)
     lora_config = get_lora_config_from_request(request)
@@ -220,7 +220,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         **inputs,
         sampling_config=sampling_config,
         output_config=output_config,
-        speculative_decoding_config=speculative_decoding_config,
+        external_draft_tokens_config=external_draft_tokens_config,
         prompt_tuning_config=prompt_tuning_config,
         lora_config=lora_config,
     )
@@ -295,18 +295,18 @@ def convert_batching_type(gpt_model_type: str):
 def convert_decoding_mode(decoding_mode: str):
     if decoding_mode is None:
         return None
-    elif decoding_mode == "none":
-        return trtllm.DecodingMode.NONE
+    elif decoding_mode == "auto":
+        return trtllm.DecodingMode.Auto()
     elif decoding_mode == "top_k":
-        return trtllm.DecodingMode.TOP_K
+        return trtllm.DecodingMode.TopK()
     elif decoding_mode == "top_p":
-        return trtllm.DecodingMode.TOP_P
+        return trtllm.DecodingMode.TopP()
     elif decoding_mode == "top_k_top_p":
-        return trtllm.DecodingMode.TOP_K_TOP_P
+        return trtllm.DecodingMode.TopKTopP()
     elif decoding_mode == "beam_search":
-        return trtllm.DecodingMode.BEAM_SEARCH
+        return trtllm.DecodingMode.BeamSearch()
     elif decoding_mode == "medusa":
-        return trtllm.DecodingMode.MEDUSA
+        return trtllm.DecodingMode.Medusa()
     raise pb_utils.TritonModelException(
         f"decoding_mode value of '{decoding_mode}' is not supported.")
 
@@ -384,6 +384,19 @@ class TritonPythonModel:
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.PeftCacheConfig(**kwargs)
 
+    def get_decoding_config(self, model_config):
+        kwargs = {
+            "medusa_choices":
+            parse_medusa_choices(get_parameter(model_config,
+                                               "medusa_choices")),
+            "decoding_mode":
+            convert_decoding_mode(get_parameter(model_config,
+                                                "decoding_mode")),
+        }
+        print(kwargs)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        return trtllm.DecodingConfig(**kwargs)
+
     def get_executor_config(self, model_config):
         kwargs = {
             "max_beam_width":
@@ -403,12 +416,8 @@ class TritonPythonModel:
             self.get_parallel_config(model_config),
             "peft_cache_config":
             self.get_peft_cache_config(model_config),
-            "medusa_choices":
-            parse_medusa_choices(get_parameter(model_config,
-                                               "medusa_choices")),
-            "decoding_mode":
-            convert_decoding_mode(get_parameter(model_config,
-                                                "decoding_mode")),
+            "decoding_config":
+            self.get_decoding_config(model_config),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)

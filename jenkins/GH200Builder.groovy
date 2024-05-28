@@ -8,7 +8,7 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // Available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.03-py3-aarch64-ubuntu22.04-trt10.0.1.6-src_non_cxx11_abi-devel-202404242130-529"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.04-py3-aarch64-ubuntu22.04-trt10.0.1.6-src_non_cxx11_abi-devel-202405151830-550"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"

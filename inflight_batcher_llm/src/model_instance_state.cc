@@ -377,23 +377,23 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         std::string decodingModeStr = model_state_->GetParameter<std::string>("decoding_mode");
         if (decodingModeStr == "top_k")
         {
-            decodingMode = executor::DecodingMode::kTOP_K;
+            decodingMode = executor::DecodingMode::TopK();
         }
         else if (decodingModeStr == "top_p")
         {
-            decodingMode = executor::DecodingMode::kTOP_P;
+            decodingMode = executor::DecodingMode::TopP();
         }
         else if (decodingModeStr == "top_k_top_p")
         {
-            decodingMode = executor::DecodingMode::kTOP_K_TOP_P;
+            decodingMode = executor::DecodingMode::TopKTopP();
         }
         else if (decodingModeStr == "beam_search")
         {
-            decodingMode = executor::DecodingMode::kBEAM_SEARCH;
+            decodingMode = executor::DecodingMode::BeamSearch();
         }
         else if (decodingModeStr == "medusa")
         {
-            decodingMode = executor::DecodingMode::kMEDUSA;
+            decodingMode = executor::DecodingMode::Medusa();
         }
         else
         {
@@ -404,20 +404,25 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     {
         TLLM_LOG_WARNING(
             "decoding_mode parameter is invalid or not specified"
-            "(must be one of the {top_k, top_p, top_k_top_p, beam_search})."
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search, medusa})."
             "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
     }
 
-    std::optional<executor::MedusaChoices> medusaChoices = std::nullopt;
+    executor::DecodingConfig decodingConfig(decodingMode);
+
     try
     {
-        medusaChoices = model_state_->GetParameter<executor::MedusaChoices>("medusa_choices");
+        auto medusaChoices = model_state_->GetParameter<executor::MedusaChoices>("medusa_choices");
+        decodingConfig.setMedusaChoices(medusaChoices);
     }
     catch (std::exception const& e)
     {
-        TLLM_LOG_WARNING(
-            "medusa_choices parameter is not specified. "
-            "Will be using default mc_sim_7b_63 choices instead");
+        if (decodingMode && decodingMode->isMedusa())
+        {
+            TLLM_LOG_WARNING(
+                "medusa_choices parameter is not specified. "
+                "Will be using default mc_sim_7b_63 choices instead.");
+        }
     }
 
     float gpuWeightsPercent = 1.0f;
@@ -432,7 +437,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, parallelConfig,
-        peftCacheConfig, std::nullopt, medusaChoices, decodingMode, gpuWeightsPercent);
+        peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)

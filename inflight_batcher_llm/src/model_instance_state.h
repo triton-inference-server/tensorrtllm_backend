@@ -39,7 +39,7 @@
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
 #include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
-#include "tensorrt_llm/runtime/decodingMode.h"
+#include "tensorrt_llm/executor/types.h"
 
 #include "model_state.h"
 
@@ -98,7 +98,6 @@ struct RequestData
 //
 class ModelInstanceState
 {
-    using DecodingMode = tensorrt_llm::runtime::DecodingMode;
     using InferenceRequest = tensorrt_llm::batch_manager::InferenceRequest;
     using NamedTensor = tensorrt_llm::batch_manager::NamedTensor;
     using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
