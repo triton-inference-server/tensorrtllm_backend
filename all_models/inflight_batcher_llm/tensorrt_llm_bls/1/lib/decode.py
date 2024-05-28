@@ -91,17 +91,13 @@ class Request:
 
         num_draft_tokens = _single_value(self.num_draft_tokens)
         stream = _single_value(self.stream)
-        gen_logits = _single_value(self.return_generation_logits)
+        _single_value(self.return_generation_logits)
         context_logits = _single_value(self.return_context_logits)
 
         if num_draft_tokens:
             _validate_that(
                 not stream,
                 "streaming is not supported with speculative decoding")
-            _validate_that(
-                not gen_logits,
-                "generation logits are not supported with speculative decoding"
-            )
             _validate_that(
                 not context_logits,
                 "context logits are not supported with speculative decoding")
