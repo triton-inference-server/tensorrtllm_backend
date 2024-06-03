@@ -554,7 +554,7 @@ pkill tritonserver
 
 ## Triton Metrics
 Starting with the 23.11 release of Triton, users can now obtain TRT LLM Batch
-Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/batch_manager.md#statistics)
+Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/batch-manager.md#statistics)
 by querying the Triton metrics endpoint. This can be accomplished by launching
 a Triton server in any of the ways described above (ensuring the build code /
 container is 23.11 or later) and querying the server. Upon receiving a
