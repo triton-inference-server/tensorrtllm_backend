@@ -224,9 +224,7 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
     ]
 
     if weight_streaming:
-        build_cmd += [
-            "--gemm_plugin=disable", "--strongly_typed ", "--weight_streaming"
-        ]
+        build_cmd += ["--gemm_plugin=disable", "--weight_streaming"]
     else:
         build_cmd += [
             "--gemm_plugin=float16",
