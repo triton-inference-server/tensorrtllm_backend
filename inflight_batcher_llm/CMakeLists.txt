@@ -24,11 +24,9 @@
 cmake_minimum_required(VERSION 3.17)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/set_ifndef.cmake)
 
-set(TRITON_BUILD
-    OFF
-    CACHE STRING "Using Triton build process")
-
 set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm)
+
+include_directories(${TRTLLM_DIR} ${TRTLLM_DIR}/cpp/include)
 
 include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
@@ -122,6 +120,32 @@ add_library(triton-tensorrt-llm-backend SHARED ${BACKEND_SRCS})
 enable_language(CUDA)
 
 find_package(CUDA ${CUDA_REQUIRED_VERSION} REQUIRED)
+find_package(Python3 COMPONENTS Interpreter Development)
+
+find_library(
+  tensorrt_llm libtensorrt_llm.so REQUIRED
+  PATHS ${Python3_SITEARCH}/tensorrt_llm/libs
+        ${TRTLLM_DIR}/cpp/build/tensorrt_llm
+        ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm)
+
+find_library(
+  nvinfer_plugin_tensorrt_llm libnvinfer_plugin_tensorrt_llm.so REQUIRED
+  PATHS
+    ${Python3_SITEARCH}/tensorrt_llm/libs
+    ${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm/plugins)
+
+find_program(
+  TRTLLM_EXECUTOR_WORKER executorWorker REQUIRED
+  PATHS
+    ${Python3_SITEARCH}/tensorrt_llm/bin
+    ${TRTLLM_DIR}/cpp/build/tensorrt_llm/executor_worker
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm/cpp/build/tensorrt_llm/executor_worker
+)
+install(
+  PROGRAMS ${TRTLLM_EXECUTOR_WORKER}
+  DESTINATION ${CMAKE_BINARY_DIR}
+  RENAME trtllmExecutorWorker)
 
 find_library(
   CUDNN_LIB cudnn
@@ -232,20 +256,6 @@ set(COMPILE_OPTIONS
 target_compile_options(triton-tensorrt-llm-common PRIVATE ${COMPILE_OPTIONS})
 target_compile_options(triton-tensorrt-llm-backend PRIVATE ${COMPILE_OPTIONS})
 
-add_library(tensorrt_llm SHARED IMPORTED)
-set_property(
-  TARGET tensorrt_llm
-  PROPERTY IMPORTED_LOCATION
-           "${TRTLLM_DIR}/cpp/build/tensorrt_llm/libtensorrt_llm.so")
-
-add_library(nvinfer_plugin_tensorrt_llm SHARED IMPORTED)
-set_property(
-  TARGET nvinfer_plugin_tensorrt_llm
-  PROPERTY
-    IMPORTED_LOCATION
-    "${TRTLLM_DIR}/cpp/build/tensorrt_llm/plugins/libnvinfer_plugin_tensorrt_llm.so"
-)
-
 if(TRITON_ENABLE_METRICS)
   list(APPEND REPORTER_SRCS
        src/custom_metrics_reporter/custom_metrics_reporter.cc)
@@ -276,7 +286,7 @@ if(TRITON_ENABLE_METRICS)
            triton-core-serverapi # from repo-core
            triton-core-serverstub # from repo-core
            triton-backend-utils # from repo-backend
-           tensorrt_llm)
+           ${tensorrt_llm})
 
   target_compile_definitions(triton-tensorrt-llm-common
                              PRIVATE TRITON_ENABLE_METRICS=1)
@@ -284,30 +294,9 @@ if(TRITON_ENABLE_METRICS)
                         PRIVATE triton-custom-metrics-reporter-library)
 endif()
 
-if(TRITON_BUILD)
-
-  if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    execute_process(
-      WORKING_DIRECTORY ${TRTLLM_DIR}
-      COMMAND bash -x docker/common/install_pytorch.sh pypi COMMAND_ECHO STDOUT
-              COMMAND_ERROR_IS_FATAL ANY)
-  else()
-    execute_process(
-      WORKING_DIRECTORY ${TRTLLM_DIR}
-      COMMAND bash -x docker/common/install_pytorch.sh src_non_cxx11_abi
-              COMMAND_ECHO STDOUT COMMAND_ERROR_IS_FATAL ANY)
-  endif() # CMAKE_HOST_SYSTEM_PROCESSOR
-
-  execute_process(
-    WORKING_DIRECTORY ${TRTLLM_DIR}
-    COMMAND python3 scripts/build_wheel.py --trt_root /usr/local/tensorrt
-            COMMAND_ECHO STDOUT COMMAND_ERROR_IS_FATAL ANY)
-
-endif() # TRITON_BUILD
-
 target_link_libraries(
   triton-tensorrt-llm-common
-  PUBLIC tensorrt_llm
+  PUBLIC ${tensorrt_llm}
          triton-core-serverapi # from repo-core
          triton-core-backendapi # from repo-core
          triton-core-serverstub # from repo-core
@@ -315,7 +304,7 @@ target_link_libraries(
          ${MPI_LIBRARIES}
          ${CUDA_LIBRARIES}
          nvinfer
-         nvinfer_plugin_tensorrt_llm)
+         ${nvinfer_plugin_tensorrt_llm})
 
 target_link_libraries(triton-tensorrt-llm-backend
                       PRIVATE triton-tensorrt-llm-common)
@@ -356,12 +345,3 @@ if(BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
-
-add_custom_command(
-  TARGET triton-tensorrt-llm-backend
-  POST_BUILD
-  COMMAND
-    ${CMAKE_COMMAND} -E copy
-    ${TRTLLM_DIR}/cpp/build/tensorrt_llm/executor_worker/executorWorker
-    ${CMAKE_CURRENT_BINARY_DIR}/trtllmExecutorWorker
-  COMMENT "Copying executorWorker to the build directory")
