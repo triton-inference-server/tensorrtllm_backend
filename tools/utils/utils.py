@@ -267,19 +267,6 @@ def get_norm_dist_tokens(mean, stdev, num_reqs):
     return [max(1, math.ceil(x)) for x in numbers_list]
 
 
-def gen_random_start_ids(ip_lens):
-    input_start_ids = []
-    for ip_len in ip_lens:
-        start_ids = list(
-            np.random.randint(low=0,
-                              high=np.iinfo(np.int32).max,
-                              size=ip_len,
-                              dtype=np.int32))
-        input_start_ids.append(np.array([start_ids]))
-
-    return input_start_ids
-
-
 def get_inflight_reqs_profile(start_times, end_times, requests_per_sec):
     """
     Receives start and end times of all requests,
