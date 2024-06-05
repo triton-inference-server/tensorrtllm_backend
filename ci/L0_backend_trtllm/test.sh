@@ -104,6 +104,9 @@ function reset_model_repo {
 
 function kill_server {
     pgrep tritonserver | xargs kill -SIGINT
+    if pgrep -x "trtllmExecutorWorker" > /dev/null; then
+        pkill -SIGINT -f "trtllmExecutorWorker"
+    fi
 }
 
 function wait_for_server_terminated {
@@ -142,13 +145,14 @@ python3 -m pip install --upgrade pip && \
     pip3 install pandas && \
     pip3 install tabulate
 
+export AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
+
 RET=0
 
 NUM_GPUS_TO_TEST=("1" "2" "4")
 for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
-    AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
     if [ "$AVAILABLE_GPUS" -lt "$NUM_GPU" ]; then
-        exit $RET
+        break
     fi
 
     SERVER_ARGS="--world_size=${NUM_GPU} --model_repo=${MODEL_DIR}"
@@ -166,6 +170,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${batching_strategy}' 'INVALID' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_${NUM_GPU}_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${max_queue_delay_microseconds}' "50000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${triton_backend}' "tensorrtllm" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
@@ -301,6 +306,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
     if [ $? -ne 0 ]; then
         cat ${BASE_METRICS_VERIFICATION_LOG}
+        echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         RET=1
     fi
     set +e

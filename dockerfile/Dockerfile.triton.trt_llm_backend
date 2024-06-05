@@ -3,9 +3,9 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE} as base
 
 RUN apt-get update -q=2 && apt-get install -y --no-install-recommends python3-pip ccache git-lfs
+
 # Remove previous TRT installation
-# We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
-RUN apt-get remove -y tensorrt*
+RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip3 uninstall -y tensorrt
 
 ARG TRT_VER
@@ -39,3 +39,12 @@ RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import s
 
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
+
+# Align with the pre-installed CUDA / NVCC / NVRTC versions from
+# https://docs.nvidia.com/cuda/archive/12.4.0/cuda-toolkit-release-notes/index.html
+# NVRTC static library doesn't exist in NGC PyTorch container.
+ENV NVRTC_VER="12.4.99-1"
+RUN apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev*
+RUN CUDA_VER_SHORT=$(echo $CUDA_VER | awk -F. '{print $1"."$2}') \
+    && NVRTC_CUDA_VERSION=$(echo $CUDA_VER_SHORT | sed 's/\./-/g') \
+    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER}

@@ -87,26 +87,8 @@ parameters: {
 }
 ```
 
-In-flight batching is able to overlap the execution of batches of
-requests. It may have a negative impact on performance when the number of
-requests is too small. To enable that feature, set the `enable_trt_overlap`
-parameter to `True` in the `config.pbtxt` file:
-
-```
-parameters: {
-  key: "enable_trt_overlap"
-  value: {
-    string_value: "True"
-  }
-}
-```
-
-Or, equivalently, add `enable_trt_overlap:True` to the invocation of the
-`fill_template.py` tool:
-
-```bash
-python3 tools/fill_template.py -i all_models/inflight_batcher_llm/tensorrt_llm/config.pbtxt "enable_trt_overlap:True"
-```
+Note that the parameter `enable_trt_overlap` has been removed from the `config.pbtxt`. This option allowed to overlap execution of two micro-batches to hide CPU overhead.
+Optimization work has been done to reduce the CPU overhead and it was found that the overlapping of micro-batches did not provide additional benefits.
 
 To reuse previously computed KV cache values (e.g. for system prompt), set `enable_kv_cache_reuse`
 parameter to `True` in the `config.pbtxt` file:
@@ -154,25 +136,28 @@ You can have a look at the client code to see how early stopping is achieved.
 
 Build a model with LoRA enable
 
-```
-BASE_MODEL=llama-7b-hf
 
-python3 tensorrt_llm/examples/llama/build.py --model_dir ${BASE_MODEL} \
-                --dtype float16 \
-                --remove_input_padding \
-                --use_gpt_attention_plugin float16 \
-                --enable_context_fmha \
-                --use_gemm_plugin float16 \
-                --output_dir "/tmp/llama_7b_with_lora_qkv/trt_engines/fp16/1-gpu/" \
-                --max_batch_size 128 \
-                --max_input_len 512 \
-                --max_output_len 50 \
-                --use_lora_plugin float16 \
-                --lora_target_modules "attn_q" "attn_k" "attn_v" \
-                --use_inflight_batching \
-		        --paged_kv_cache \
-                --max_lora_rank 8 \
-                --world_size 1 --tp_size 1
+```
+BASE_LLAMA_MODEL=llama-7b-hf/
+
+python convert_checkpoint.py --model_dir ${BASE_LLAMA_MODEL} \
+                            --output_dir ./tllm_checkpoint_1gpu \
+                            --dtype float16
+
+trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu \
+            --output_dir /tmp/llama_7b_with_lora_qkv/trt_engines/fp16/1-gpu/ \
+            --gemm_plugin float16 \
+            --max_batch_size 8 \
+            --max_input_len 512 \
+            --max_output_len 50 \
+            --gpt_attention_plugin float16 \
+            --paged_kv_cache enable \
+            --remove_input_padding enable \
+            --use_paged_context_fmha enable \
+            --use_custom_all_reduce disable
+            --lora_plugin float16 \
+            --lora_target_modules attn_q attn_k attn_v \
+            --max_lora_rank 8
 ```
 
 Create a Triton model repository and launch the Triton server as described above.
@@ -192,7 +177,7 @@ python3 tensorrt_llm/examples/hf_lora_convert.py -i luotuo-lora-7b-0.1 -o luotuo
 As LoRA weights are passed to the backend they will be cached in a host cache.  As requests are scheduled, those weights with be prefetched to a gpu cache.  After a LoRA is loaded into the cache, only `lora_task_id` is needed for inference.
 
 
-Optimal adapter size used to size cache pages (default: 8)
+Optimal adapter size used to size cache pages. Typically optimally sized adapters will fix exactly into 1 cache page. (default: 8)
 ```
 parameters: {
   key: "lora_cache_optimal_adapter_size"
@@ -203,7 +188,7 @@ parameters: {
 ```
 
 
-Maximum supported adapter size (default: 64)
+Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. (default: 64)
 ```
 parameters: {
   key: "lora_cache_max_adapter_size"
@@ -238,16 +223,40 @@ Launch tritonserver as describe above
 Run Multi-LoRA example by issuing  multiple concurrent requests.
 The inflight batcher will execute mixed batches with multiple LoRAs in the same batch.
 
+First we cache the LoRAs by sending dummy requests for each adapter.  The TASK_IDS are uniq to the adapter
+
+```
+TASK_IDS=("1" "2")
+LORA_PATHS=("luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights")
+
+for index in ${!TASK_IDS[@]}; do
+    text="dummy"
+    lora_path=${LORA_PATHS[$index]}
+    task_id=${TASK_IDS[$index]}
+    lora_arg="--lora-path ${lora_path} --lora-task-id ${task_id}"
+
+    python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py \
+        --top-k 0 \
+        --top-p 0.5 \
+        --request-output-len 10 \
+        --text "${text}" \
+        --tokenizer-dir /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf \
+        ${lora_arg} &
+done
+```
+
+Now perform inference with just `--lora-task-id`
+
 ```
 INPUT_TEXT=("美国的首都在哪里? \n答案:" "美国的首都在哪里? \n答案:" "美国的首都在哪里? \n答案:" "アメリカ合衆国の首都はどこですか? \n答え:" "アメリカ合衆国の首都はどこですか? \n答え:" "アメリカ合衆国の首都はどこですか? \n答え:")
-LORA_PATHS=("" "luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights" "" "luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights")
+TASK_IDS=("" "1" "2" "" "1" "2")
 
 for index in ${!INPUT_TEXT[@]}; do
     text=${INPUT_TEXT[$index]}
-    lora_path=${LORA_PATHS[$index]}
+    task_id=${TASK_IDS[$index]}
     lora_arg=""
-    if [ "${lora_path}" != "" ]; then
-        lora_arg="--lora-path ${lora_path}"
+    if [ "${task_id}" != "" ]; then
+        lora_arg="--lora-task-id ${task_id}"
     fi
 
     python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py \

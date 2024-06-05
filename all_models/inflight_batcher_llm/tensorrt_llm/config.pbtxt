@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 name: "tensorrt_llm"
-backend: "tensorrtllm"
+backend: "${triton_backend}"
 max_batch_size: ${triton_max_batch_size}
 
 model_transaction_policy {
@@ -68,6 +68,13 @@ input [
     dims: [ -1, -1 ]
     optional: true
     allow_ragged_batch: true
+  },
+  {
+    name: "draft_acceptance_threshold"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
   },
   {
     name: "end_id"
@@ -133,8 +140,36 @@ input [
     optional: true
   },
   {
+    name: "runtime_top_p_min"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p_decay"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p_reset_ids"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "len_penalty"
     data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "early_stopping"
+    data_type: TYPE_BOOL
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -149,6 +184,13 @@ input [
   {
     name: "min_length"
     data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "beam_search_diversity_rate"
+    data_type: TYPE_FP32
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
@@ -339,6 +381,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "sink_token_length"
+  value: {
+    string_value: "${sink_token_length}"
+  }
+}
+parameters: {
   key: "batch_scheduler_policy"
   value: {
     string_value: "${batch_scheduler_policy}"
@@ -351,15 +399,52 @@ parameters: {
   }
 }
 parameters: {
-  key: "enable_trt_overlap"
+  key: "kv_cache_host_memory_bytes"
   value: {
-    string_value: "${enable_trt_overlap}"
+    string_value: "${kv_cache_host_memory_bytes}"
   }
 }
+parameters: {
+  key: "kv_cache_onboard_blocks"
+  value: {
+    string_value: "${kv_cache_onboard_blocks}"
+  }
+}
+# enable_trt_overlap is deprecated and doesn't have any effect on the runtime
+# parameters: {
+#   key: "enable_trt_overlap"
+#   value: {
+#     string_value: "${enable_trt_overlap}"
+#   }
+# }
 parameters: {
   key: "exclude_input_in_output"
   value: {
     string_value: "${exclude_input_in_output}"
+  }
+}
+parameters: {
+  key: "cancellation_check_period_ms"
+  value: {
+    string_value: "${cancellation_check_period_ms}"
+  }
+}
+parameters: {
+  key: "stats_check_period_ms"
+  value: {
+    string_value: "${stats_check_period_ms}"
+  }
+}
+parameters: {
+  key: "iter_stats_max_iterations"
+  value: {
+    string_value: "${iter_stats_max_iterations}"
+  }
+}
+parameters: {
+  key: "request_stats_max_iterations"
+  value: {
+    string_value: "${request_stats_max_iterations}"
   }
 }
 parameters: {
@@ -417,14 +502,20 @@ parameters: {
   }
 }
 parameters: {
-  key: "worker_path"
+  key: "executor_worker_path"
   value: {
-    string_value: "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker"
+    string_value: "/opt/tritonserver/backends/tensorrtllm/trtllmExecutorWorker"
   }
 }
 parameters: {
   key: "medusa_choices"
     value: {
       string_value: "${medusa_choices}"
+  }
+}
+parameters: {
+  key: "gpu_weights_percent"
+    value: {
+      string_value: "${gpu_weights_percent}"
   }
 }
