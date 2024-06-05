@@ -26,7 +26,6 @@
 
 #include "model_state.h"
 
-#include "tensorrt_llm/common/mpiUtils.h"
 #include "utils.h"
 
 #include <algorithm>
@@ -35,7 +34,7 @@ namespace triton::backend::inflight_batcher_llm
 {
 
 TRITONSERVER_Error* ModelState::Create(
-    TRITONBACKEND_Model* triton_model, std::string const& name, const uint64_t version, ModelState** state)
+    TRITONBACKEND_Model* triton_model, std::string const& name, uint64_t const version, ModelState** state)
 {
     TRITONSERVER_Message* config_message;
     RETURN_IF_ERROR(TRITONBACKEND_ModelConfig(triton_model, 1 /* config_version */, &config_message));
@@ -111,19 +110,32 @@ uint64_t ModelState::GetModelVersion() const
     return model_version_;
 }
 
-const std::string ModelState::GetWorkerPath()
+std::string const ModelState::GetExecutorWorkerPath()
 {
-    std::string workerPath = "/opt/tritonserver/backends/tensorrtllm/triton_tensorrtllm_worker";
+
+    // Check if worker_path is specified, if so throw an error
     try
     {
-        workerPath = GetParameter<std::string>("worker_path");
+        auto workerPath = GetParameter<std::string>("worker_path");
+        TLLM_THROW(
+            "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path "
+            "instead to specify the location of the trtllmExecuutorWorker executable.");
     }
     catch (std::exception const& e)
     {
-        TLLM_LOG_WARNING("worker_path is not specified, will use default value");
     }
 
-    return workerPath;
+    std::string executorWorkerPath = "/opt/tritonserver/backends/tensorrtllm/trtllmExecutorWorker";
+    try
+    {
+        executorWorkerPath = GetParameter<std::string>("executor_worker_path");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING("executor_worker_path is not specified, will use default value");
+    }
+
+    return executorWorkerPath;
 }
 
 std::vector<int64_t> ModelState::serialize() const
@@ -161,7 +173,7 @@ ModelState ModelState::deserialize(int64_t const* packed_ptr)
     char const* cname = reinterpret_cast<char const*>(packed_ptr);
     packed_ptr += (nameSize + sizeof(int64_t)) / sizeof(int64_t);
 
-    const uint64_t version = *packed_ptr++;
+    uint64_t const version = *packed_ptr++;
 
     auto const jsonSize = *packed_ptr++;
     char const* jsonBuffer = reinterpret_cast<char const*>(packed_ptr);

@@ -34,6 +34,7 @@ include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
 
 project(tritontensorrtllmbackend LANGUAGES C CXX)
 
+add_compile_options("-DENABLE_MULTI_DEVICE=1")
 # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html
 option(USE_CXX11_ABI "Using CXX11 ABI of libstdc++" OFF)
 message(STATUS "USE_CXX11_ABI: ${USE_CXX11_ABI}")
@@ -110,19 +111,13 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
-set(COMMON_SRCS
-    src/work_item.cc src/work_items_queue.cc src/model_instance_state.cc
-    src/model_state.cc src/utils.cc src/inference_answer.cc)
+set(COMMON_SRCS src/model_instance_state.cc src/model_state.cc src/utils.cc)
 
 add_library(triton-tensorrt-llm-common SHARED ${COMMON_SRCS})
 
-set(BACKEND_SRCS src/libtensorrtllm.cc src/orchestrator.cc)
+set(BACKEND_SRCS src/libtensorrtllm.cc)
 
 add_library(triton-tensorrt-llm-backend SHARED ${BACKEND_SRCS})
-
-set(WORKER_SRCS src/worker.cc)
-
-add_executable(triton-tensorrt-llm-worker ${WORKER_SRCS})
 
 enable_language(CUDA)
 
@@ -148,7 +143,11 @@ find_library(
   CUDA_DRV_LIB cuda
   HINTS ${CUDA_TOOLKIT_ROOT_DIR}
   PATH_SUFFIXES lib lib64 lib/stubs lib64/stubs)
-set(CUDA_LIBRARIES ${CUDART_LIB})
+find_library(
+  NVIDIA_ML_LIB nvidia-ml
+  HINTS ${CUDA_TOOLKIT_ROOT_DIR}
+  PATH_SUFFIXES lib lib64 lib/stubs lib64/stubs)
+set(CUDA_LIBRARIES ${CUDART_LIB} ${NVIDIA_ML_LIB})
 
 find_package(MPI REQUIRED)
 message(STATUS "Using MPI_INCLUDE_PATH: ${MPI_INCLUDE_PATH}")
@@ -173,15 +172,15 @@ find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
 file(STRINGS "${TRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS
      REGEX "#define NV_TENSORRT_.*")
 foreach(TYPE MAJOR MINOR PATCH BUILD)
-  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]" TRT_TYPE_STRING
+  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
                ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]" TRT_${TYPE} ${TRT_TYPE_STRING})
+  string(REGEX MATCH "[0-9]+" TRT_${TYPE} ${TRT_TYPE_STRING})
 endforeach(TYPE)
 
 foreach(TYPE MAJOR MINOR PATCH)
-  string(REGEX MATCH "NV_TENSORRT_SONAME_${TYPE} [0-9]" TRT_TYPE_STRING
+  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
                ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]" TRT_SO_${TYPE} ${TRT_TYPE_STRING})
+  string(REGEX MATCH "[0-9]+" TRT_SO_${TYPE} ${TRT_TYPE_STRING})
 endforeach(TYPE)
 
 set(TRT_VERSION
@@ -194,6 +193,12 @@ message(
   STATUS
     "Building for TensorRT version: ${TRT_VERSION}, library version: ${TRT_SOVERSION}"
 )
+
+if(${TRT_MAJOR} GREATER_EQUAL 10)
+  add_definitions("-DTRT_LLM_USE_DIM64")
+  message(
+    STATUS "TensorRT version ${TRT_MAJOR} >= 10, int64 dimension is enabled")
+endif()
 
 list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
 include_directories(${COMMON_HEADER_DIRS})
@@ -212,7 +217,6 @@ target_include_directories(
 
 target_compile_features(triton-tensorrt-llm-common PRIVATE cxx_std_17)
 target_compile_features(triton-tensorrt-llm-backend PRIVATE cxx_std_17)
-target_compile_features(triton-tensorrt-llm-worker PRIVATE cxx_std_17)
 
 set(COMPILE_OPTIONS
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
@@ -227,7 +231,6 @@ set(COMPILE_OPTIONS
 
 target_compile_options(triton-tensorrt-llm-common PRIVATE ${COMPILE_OPTIONS})
 target_compile_options(triton-tensorrt-llm-backend PRIVATE ${COMPILE_OPTIONS})
-target_compile_options(triton-tensorrt-llm-worker PRIVATE ${COMPILE_OPTIONS})
 
 add_library(tensorrt_llm SHARED IMPORTED)
 set_property(
@@ -316,8 +319,6 @@ target_link_libraries(
 
 target_link_libraries(triton-tensorrt-llm-backend
                       PRIVATE triton-tensorrt-llm-common)
-target_link_libraries(triton-tensorrt-llm-worker
-                      PRIVATE triton-tensorrt-llm-common)
 
 FetchContent_Declare(
   json
@@ -334,9 +335,6 @@ if(WIN32)
     triton-tensorrt-llm-backend PROPERTIES POSITION_INDEPENDENT_CODE ON
                                            OUTPUT_NAME triton_tensorrtllm)
   set_target_properties(
-    triton-tensorrt-llm-worker PROPERTIES POSITION_INDEPENDENT_CODE ON
-                                          OUTPUT_NAME triton_tensorrtllm_worker)
-  set_target_properties(
     triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
                                           OUTPUT_NAME triton_tensorrtllm_common)
 else()
@@ -349,8 +347,6 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
-  set_target_properties(triton-tensorrt-llm-worker
-                        PROPERTIES OUTPUT_NAME triton_tensorrtllm_worker)
   set_target_properties(
     triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
                                           OUTPUT_NAME triton_tensorrtllm_common)
@@ -360,3 +356,12 @@ if(BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+add_custom_command(
+  TARGET triton-tensorrt-llm-backend
+  POST_BUILD
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${TRTLLM_DIR}/cpp/build/tensorrt_llm/executor_worker/executorWorker
+    ${CMAKE_CURRENT_BINARY_DIR}/trtllmExecutorWorker
+  COMMENT "Copying executorWorker to the build directory")

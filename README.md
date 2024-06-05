@@ -70,10 +70,10 @@ The below commands will build the same Triton TRT-LLM container as the one on th
 # Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
 cd tensorrtllm_backend
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.01-py3-min
-TRT_VERSION=9.2.0.5
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.linux.x86_64-gnu.cuda-12.2.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/9.2.0/tensorrt-9.2.0.5.Ubuntu-22.04.aarch64-gnu.cuda-12.2.tar.gz
+BASE_IMAGE=nvcr.io/nvidia/pytorch:24.03-py3
+TRT_VERSION=10.0.1.6
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.Linux.x86_64-gnu.cuda-12.4.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
 
 docker build -t trtllm_base \
              --build-arg BASE_IMAGE="${BASE_IMAGE}" \
@@ -86,8 +86,8 @@ docker build -t trtllm_base \
 # endpoints can be removed if not needed. Please refer to the support matrix to
 # see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
 TRTLLM_BASE_IMAGE=trtllm_base
-TENSORRTLLM_BACKEND_REPO_TAG=v0.7.2
-PYTHON_BACKEND_REPO_TAG=r24.01
+TENSORRTLLM_BACKEND_REPO_TAG=rel
+PYTHON_BACKEND_REPO_TAG=r24.04
 
 cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
@@ -205,8 +205,11 @@ and postprocessing models together.
 This model can also be used to chain the preprocessing,
 tensorrt_llm and postprocessing models together.
 
-The BLS model has an optional
-parameter `accumulate_tokens` which can be used in streaming mode to call the
+When using the BLS model instead of the ensemble, you should set the number of model instances to
+the maximum batch size supported by the TRT engine to allow concurrent request execution. This
+can be done by modifying the `count` value in the `instance_group` section of the BLS model `config.pbtxt`.
+
+The BLS model has an optional parameter `accumulate_tokens` which can be used in streaming mode to call the
 postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
@@ -294,13 +297,21 @@ The following table shows the fields that may to be modified before deployment:
 | `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |
 | `max_attention_window_size` | Optional (default=max_sequence_length). When using techniques like sliding window attention, the maximum number of tokens that are attended to generate one token. Defaults attends to all tokens in sequence. |
 | `kv_cache_free_gpu_mem_fraction` | Optional (default=0.9). Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache.|
-| `enable_trt_overlap` | Optional (default=`false`). Set to `true` to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime |
 | `exclude_input_in_output` | Optional (default=`false`). Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens  |
+| `cancellation_check_period_ms` | Optional (default=100). The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. |
+| `stats_check_period_ms` | Optional (default=100). The time for the statistics reporting thread to sleep before doing the next check. |
+| `iter_stats_max_iterations` | Optional (default=executor::kDefaultIterStatsMaxIterations). The numbers of iteration stats to be kept. |
+| `request_stats_max_iterations` | Optional (default=executor::kDefaultRequestStatsMaxIterations). The numbers of request stats to be kept. |
 | `normalize_log_probs` | Optional (default=`true`). Set to `false` to skip normalization of `output_log_probs`  |
 | `enable_chunked_context` | Optional (default=`false`). Set to `true` to enable context chunking. |
 | `gpu_device_ids` | Optional (default=unspecified). Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. |
-| `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. |
+| `decoding_mode` | Optional. Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search, medusa}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. When Medusa model is used, `medusa` decoding mode should be set. However, TensorRT-LLM detects loaded Medusa model and overwrites decoding mode to `medusa` with warning. |
 | `medusa_choices` | Optional. To specify Medusa choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, mc_sim_7b_63 choices are used. |
+| `lora_cache_optimal_adapter_size` | Optional (default=8) Optimal adapter size used to size cache pages. Typically optimally sized adapters will fix exactly into 1 cache page. |
+| `lora_cache_max_adapter_size` | Optional (default=64) Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. |
+| `lora_cache_gpu_memory_fraction` | Optional (default=0.05) Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded |
+| `lora_cache_host_memory_bytes` | Optional (default=1G) Size of host LoRA cache in bytes |
+| `gpu_weights_percent` | Optional (default=1.0). Set to a number between 0.0 and 1.0 to specify the percentage of weights that reside on GPU instead of CPU and streaming load during runtime. Values less than 1.0 are only supported for an engine built with `weight_streaming` on. |
 
 *triton_model_repo/postprocessing/config.pbtxt*
 

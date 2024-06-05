@@ -25,9 +25,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import json
+import os
 import re
 import unittest
 from datetime import datetime, timedelta
+
+AVAILABLE_GPUS = int(os.environ.get("AVAILABLE_GPUS", "1"))
 
 metric_to_stat_dict = {
     "request_type=context": "Context Requests",
@@ -108,7 +111,7 @@ class CustomMetricsTest(unittest.TestCase):
                                  int(metrics[metric_key]))
             else:
                 dt_log = datetime.strptime(stats[metric_key],
-                                           '%m-%d-%Y %H:%M:%S.%f')
+                                           '%m-%d-%Y %H:%M:%S')
                 dt_curl = datetime.utcfromtimestamp(
                     int(metrics[metric_key]) // 1000000)
                 difference = dt_log - dt_curl
@@ -128,29 +131,33 @@ class CustomMetricsTest(unittest.TestCase):
         self._base_test("1gpu_IFB_streaming_server.log",
                         "1gpu_IFB_stream_metrics.out", False)
 
-    def test_2_gpu_v1(self):
-        self._base_test("2gpu_v1_no_streaming_server.log",
-                        "2gpu_v1_no_stream_metrics.out", True)
+    if AVAILABLE_GPUS >= 2:
 
-    def test_2_gpu_IFB_no_stream(self):
-        self._base_test("2gpu_IFB_no_streaming_server.log",
-                        "2gpu_IFB_no_stream_metrics.out", False)
+        def test_2_gpu_v1(self):
+            self._base_test("2gpu_v1_no_streaming_server.log",
+                            "2gpu_v1_no_stream_metrics.out", True)
 
-    def test_2_gpu_IFB_stream(self):
-        self._base_test("2gpu_IFB_streaming_server.log",
-                        "2gpu_IFB_stream_metrics.out", False)
+        def test_2_gpu_IFB_no_stream(self):
+            self._base_test("2gpu_IFB_no_streaming_server.log",
+                            "2gpu_IFB_no_stream_metrics.out", False)
 
-    def test_4_gpu_v1(self):
-        self._base_test("4gpu_v1_no_streaming_server.log",
-                        "4gpu_v1_no_stream_metrics.out", True)
+        def test_2_gpu_IFB_stream(self):
+            self._base_test("2gpu_IFB_streaming_server.log",
+                            "2gpu_IFB_stream_metrics.out", False)
 
-    def test_4_gpu_IFB_no_stream(self):
-        self._base_test("4gpu_IFB_no_streaming_server.log",
-                        "4gpu_IFB_no_stream_metrics.out", False)
+    if AVAILABLE_GPUS >= 4:
 
-    def test_4_gpu_IFB_stream(self):
-        self._base_test("4gpu_IFB_streaming_server.log",
-                        "4gpu_IFB_stream_metrics.out", False)
+        def test_4_gpu_v1(self):
+            self._base_test("4gpu_v1_no_streaming_server.log",
+                            "4gpu_v1_no_stream_metrics.out", True)
+
+        def test_4_gpu_IFB_no_stream(self):
+            self._base_test("4gpu_IFB_no_streaming_server.log",
+                            "4gpu_IFB_no_stream_metrics.out", False)
+
+        def test_4_gpu_IFB_stream(self):
+            self._base_test("4gpu_IFB_streaming_server.log",
+                            "4gpu_IFB_stream_metrics.out", False)
 
 
 if __name__ == "__main__":
