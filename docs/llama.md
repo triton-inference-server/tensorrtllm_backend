@@ -1,13 +1,42 @@
+## End to end workflow to run llama 7b
 
-## End to end workflow to run llama
-
-* Build engine
+0. Make sure that you have initialized the TRT-LLM submodule:
 
 ```bash
-export HF_LLAMA_MODEL=llama-7b-hf/
+git lfs install
+git submodule update --init --recursive
+```
+
+1. (Optional) Download the LLaMa model from HuggingFace:
+
+```bash
+huggingface-cli login
+
+huggingface-cli download meta-llama/Llama-2-7b-hf
+```
+
+> **NOTE**
+>
+> Make sure that you have access to https://huggingface.co/meta-llama/Llama-2-7b-hf.
+
+2. Start the Triton Server Docker container:
+
+```bash
+# Replace <yy.mm> with the version of Triton you want to use.
+# The command below assumes the the current directory is the
+# TRT-LLM backend root git repository.
+
+docker run --rm -ti -v `pwd`:/mnt -w /mnt -v ~/.cache/huggingface:~/.cache/huggingface --gpus all nvcr.io/nvidia/tritonserver:\<yy.mm\>-trtllm-python-py3 bash
+```
+
+3. Build the engine:
+```bash
+# Replace 'HF_LLAMA_MODE' with another path if you didn't download the model from step 1
+# or you're not using HuggingFace.
+export HF_LLAMA_MODEL=`python3 -c "from pathlib import Path; from huggingface_hub import hf_hub_download; print(Path(hf_hub_download('meta-llama/Llama-2-7b-hf', filename='config.json')).parent)"`
 export UNIFIED_CKPT_PATH=/tmp/ckpt/llama/7b/
 export ENGINE_PATH=/tmp/engines/llama/7b/
-python convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
+python tensorrt_llm/examples/llama/convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
                              --output_dir ${UNIFIED_CKPT_PATH} \
                              --dtype float16
 
