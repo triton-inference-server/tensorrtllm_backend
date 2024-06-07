@@ -26,19 +26,13 @@
 
 #pragma once
 
-#include <map>
-#include <queue>
-
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#include "tensorrt_llm/batch_manager/BatchManager.h"
-#include "tensorrt_llm/batch_manager/GptManager.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
-#include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
 #include "tensorrt_llm/executor/types.h"
 
 #include "model_state.h"
@@ -46,6 +40,10 @@
 #ifdef TRITON_ENABLE_METRICS
 #include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
+
+#include <map>
+#include <queue>
+#include <thread>
 
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
@@ -100,15 +98,14 @@ class ModelInstanceState
 {
     using InferenceRequest = tensorrt_llm::batch_manager::InferenceRequest;
     using NamedTensor = tensorrt_llm::batch_manager::NamedTensor;
-    using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
 
 public:
     // number of cpu workers used to move weights host cache to gpu cache
-    static constexpr SizeType32 kPeftCacheNumEnsureWorkers = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumEnsureWorkers = 4;
     // number of cuda streams used for H2D copies of peft cache pages
-    static constexpr SizeType32 kPeftCacheNumCopyStreams = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumCopyStreams = 4;
     // number of cpu workers used to load weight into host cache
-    static constexpr SizeType32 kPeftCacheNumPutWorkers = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumPutWorkers = 4;
 
     /// @brief Create a ModelInstanceObject
     static TRITONSERVER_Error* Create(
