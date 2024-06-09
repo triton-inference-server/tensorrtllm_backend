@@ -38,6 +38,7 @@ if [ "$MODEL" = "gpt" ]; then
         --context_fmha enable \
         --remove_input_padding enable \
         --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
+        --max_num_tokens 7392 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/
 
     python3 ../run.py --max_output_len 10 --engine_dir=trt_engine/gpt2/fp16/1-gpu/ --tokenizer_dir ${GPT2}
@@ -63,6 +64,7 @@ if [ "$MODEL" = "opt" ]; then
                 --max_batch_size 8 \
                 --max_input_len 924 \
                 --max_output_len 100 \
+                --max_num_tokens 7392 \
                 --output_dir trt_engine/opt-125m/fp16/1-gpu/
 
 
@@ -109,6 +111,7 @@ if [ "$MODEL" = "mistral" ]; then
         --gemm_plugin float16 \
         --max_input_len 8192 \
         --max_batch_size 8 \
+        --max_num_tokens 8192 \
         --output_dir mistral_7b_outputs
 
     # Equivalent to LLaMA at this stage except the tokenizer
@@ -134,6 +137,7 @@ if [ "$MODEL" = "mistral-ib" ]; then
         --paged_kv_cache=enable \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
+        --max_batch_size 1 \
         --max_input_len 8192 \
         --output_dir ib_mistral_7b_outputs
 
@@ -183,6 +187,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --use_paged_context_fmha enable \
         --gemm_plugin float16 \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_num_tokens 7392 \
         --gather_generation_logits \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/
 
@@ -211,6 +216,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --max_draft_len 5 \
         --speculative_decoding_mode draft_tokens_external \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_num_tokens 7392 \
         --gather_generation_logits \
         --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
 
@@ -241,6 +247,7 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         --gemm_plugin float16 \
         --context_fmha enable \
         --max_batch_size 4 --max_input_len 128 --max_output_len 128 --max_beam_width 1 \
+        --max_num_tokens 512 \
         --output_dir trt_engine/email_composition/fp16/1-gpu/ \
         --max_prompt_embedding_table_size 300
 
@@ -269,6 +276,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
         --lora_ckpt_source nemo \
         --lora_target_modules attn_qkv \
         --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_num_tokens 7392 \
         --output_dir trt_engine/gpt-2b-lora-ib/fp16/1-gpu/
 
     python3 nemo_lora_convert.py -i ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
@@ -327,7 +335,8 @@ if [ "$MODEL" = "medusa" ]; then
              --output_dir ./tmp/medusa/7B/trt_engines/fp16/1-gpu/ \
              --gemm_plugin float16 \
              --speculative_decoding_mode medusa \
-             --max_batch_size 8 --max_input_len 300 --max_output_len 300
+             --max_batch_size 8 --max_input_len 300 --max_output_len 300 \
+             --max_num_tokens 2400
 
     popd # tensorrt_llm/examples/medusa
 
