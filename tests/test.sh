@@ -812,45 +812,104 @@ fi
 
 if [ "$MODEL" = "gpt-gather-logits" ]; then
 
-    DECOUPLED_MODE="False"
-    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
-    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
-    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
-    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    if [ "${DRAFT_ENGINE_PATH}" == "" ]; then
+        # normal gather logits test
+        DECOUPLED_MODE="False"
+        MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+        MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+        BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+        KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+        ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
 
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
-        launch_triton_server
+            launch_triton_server
 
-        # Test client
-        pushd inflight_batcher_llm/client
+            # Test client
+            pushd inflight_batcher_llm/client
 
-        python3 inflight_batcher_llm_client.py \
-            --tokenizer-dir ${TOKENIZER_PATH} \
-            --return-context-logits \
-            --return-generation-logits
+            python3 inflight_batcher_llm_client.py \
+                --tokenizer-dir ${TOKENIZER_PATH} \
+                --return-context-logits \
+                --return-generation-logits
 
-        python3 inflight_batcher_llm_client.py \
-            --tokenizer-dir ${TOKENIZER_PATH}
-        popd # inflight_batcher_llm/client
+            python3 inflight_batcher_llm_client.py \
+                --tokenizer-dir ${TOKENIZER_PATH}
+            popd # inflight_batcher_llm/client
 
-        pushd tools/inflight_batcher_llm
-        python3 end_to_end_test.py \
-            -i http \
-            --max-input-len 192 \
-            --return-context-logits \
-            --return-generation-logits \
-            --dataset ../dataset/mini_cnn_eval.json
+            pushd tools/inflight_batcher_llm
+            python3 end_to_end_test.py \
+                -i http \
+                --max-input-len 192 \
+                --return-context-logits \
+                --return-generation-logits \
+                --dataset ../dataset/mini_cnn_eval.json
 
-        python3 end_to_end_test.py \
-            -i http \
-            --max-input-len 192 \
-            --dataset ../dataset/mini_cnn_eval.json
+            python3 end_to_end_test.py \
+                -i http \
+                --max-input-len 192 \
+                --dataset ../dataset/mini_cnn_eval.json
 
-        popd # tools/inflight_batcher_llm
+            popd # tools/inflight_batcher_llm
 
-        kill_triton_server
-    done
+            kill_triton_server
+        done
+
+    else
+        # test with speculative decoding
+        # speculative decoding return draft model draft token logits
+        # and target model accepted token logits
+
+        DECOUPLED_MODE="False"
+        MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+        BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+        KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+        ENABLE_TRT_OVERLAP="${ENABLE_TRT_OVERLAPS[0]}"
+
+        for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+            # Speculative decoding is not supported in V1
+            if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
+                continue
+            fi
+
+            TRITON_REPO="triton_repo"
+            ENGINE_PATH=${TARGET_ENGINE_PATH}
+            TRITON_HTTP_PORT="8000"
+            TRITON_GRPC_PORT="8001"
+            TRITON_METRICS_PORT="8002"
+            ENABLE_KV_CACHE_REUSE="true"
+            launch_triton_server
+
+            TRITON_REPO="triton_repo_draft"
+            ENGINE_PATH=${DRAFT_ENGINE_PATH}
+            TRITON_HTTP_PORT="8003"
+            TRITON_GRPC_PORT="8004"
+            TRITON_METRICS_PORT="8005"
+            # TODO(nkorobov): Draft model can benefit from enable KV cache.
+            # Add --enable_context_fmha --use_paged_context_fmha to its build command
+            ENABLE_KV_CACHE_REUSE="false"
+            launch_triton_server
+
+            # Test client
+            pushd tools/inflight_batcher_llm
+
+            python3 speculative_decoding_test.py \
+                --max-input-len 128 \
+                --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
+                --url-draft localhost:8004 \
+                --url-target localhost:8001 \
+                --num-draft-tokens=5 \
+                --return-target-model-accepted-token-logits \
+                --return-draft-model-draft-logits \
+                --verbose
+
+            popd # inflight_batcher_llm/client
+
+            kill_triton_server
+        done
+    fi
+
 fi
 
 if [ "$MODEL" = "medusa" ]; then

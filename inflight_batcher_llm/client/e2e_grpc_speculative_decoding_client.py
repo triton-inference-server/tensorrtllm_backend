@@ -82,10 +82,26 @@ def extract_preprocessor_outputs(result):
     return input_ids, bad_words_ids, stop_words_ids, end_id, pad_id
 
 
-def get_trtllm_inputs(input_ids, input_length, request_output_len,
-                      draft_tokens, beam_width, temperature,
-                      repetition_penalty, presence_penalty, frequency_penalty,
-                      bad_words_ids, stop_words_ids, end_id, pad_id):
+def get_trtllm_inputs(input_ids,
+                      input_length,
+                      request_output_len,
+                      draft_tokens,
+                      beam_width,
+                      temperature,
+                      repetition_penalty,
+                      presence_penalty,
+                      frequency_penalty,
+                      bad_words_ids,
+                      stop_words_ids,
+                      end_id,
+                      pad_id,
+                      return_draft_model_draft_logits=False,
+                      return_target_model_accepted_token_logits=False):
+
+    # These two flags correspond to the settings of draft model and target model respectively,
+    # and only one of them can be true at a time.
+    assert not (return_draft_model_draft_logits
+                and return_target_model_accepted_token_logits)
 
     # input_ids is expected to have shape [input_length]
     # Add batch dimension of 1
@@ -132,6 +148,20 @@ def get_trtllm_inputs(input_ids, input_length, request_output_len,
     if pad_id is not None:
         pad_id_data = np.array([[pad_id]], dtype=np.int32)
         inputs.append(prepare_tensor("pad_id", pad_id_data))
+
+    if return_draft_model_draft_logits:
+        return_draft_model_draft_logits_data = np.array(
+            [[return_draft_model_draft_logits]], dtype=bool)
+        inputs.append(
+            prepare_tensor("return_generation_logits",
+                           return_draft_model_draft_logits_data))
+
+    if return_target_model_accepted_token_logits:
+        return_target_model_accepted_token_logits_data = np.array(
+            [[return_target_model_accepted_token_logits]], dtype=bool)
+        inputs.append(
+            prepare_tensor("return_generation_logits",
+                           return_target_model_accepted_token_logits_data))
 
     return inputs
 
@@ -186,7 +216,9 @@ def run_speculative_inference(
         request_id, repetition_penalty, presence_penalty, frequency_penalty,
         temperature, stop_words, bad_words, end_id, pad_id, beam_width,
         preprocessor_model_name, draft_tensorrt_llm_model_name,
-        target_tensorrt_llm_model_name, postprocessor_model_name, verbose):
+        target_tensorrt_llm_model_name, postprocessor_model_name,
+        return_draft_model_draft_logits,
+        return_target_model_accepted_token_logits, verbose):
 
     # Call the preprocessor
     preprocessor_inputs = get_preprocessor_inputs(prompt, output_len,
@@ -217,10 +249,21 @@ def run_speculative_inference(
 
             #Generate up to num_draft_tokens with draft model
             draft_inputs = get_trtllm_inputs(
-                input_ids, len(input_ids), num_draft_tokens, None, beam_width,
-                temperature, repetition_penalty, presence_penalty,
-                frequency_penalty, bad_words_ids, stop_words_ids, end_id,
-                pad_id)
+                input_ids,
+                len(input_ids),
+                num_draft_tokens,
+                None,
+                beam_width,
+                temperature,
+                repetition_penalty,
+                presence_penalty,
+                frequency_penalty,
+                bad_words_ids,
+                stop_words_ids,
+                end_id,
+                pad_id,
+                return_draft_model_draft_logits=return_draft_model_draft_logits
+            )
 
             draft_result = client_draft.infer(draft_tensorrt_llm_model_name,
                                               draft_inputs,
@@ -241,6 +284,12 @@ def run_speculative_inference(
             if verbose:
                 print("draft_tokens")
                 print(draft_tokens.tolist())
+                if return_draft_model_draft_logits:
+                    draft_model_draft_token_logits = generation_logits.squeeze(
+                        0)  # [beam_width, num_draft_tokens, vocab_size]
+                    print(
+                        f"draft model draft tokens' logits: shape: {draft_model_draft_token_logits.shape}, value: {draft_model_draft_token_logits}"
+                    )
 
         if verbose:
             print("Target model input ids")
@@ -248,11 +297,21 @@ def run_speculative_inference(
 
         # Generate up to len(draft_tokens) + 1 with target model
         target_inputs = get_trtllm_inputs(
-            input_ids, len(input_ids),
+            input_ids,
+            len(input_ids),
             len(draft_tokens) + 1 if num_draft_tokens > 0 else 1,
-            draft_tokens if num_draft_tokens > 0 else None, beam_width,
-            temperature, repetition_penalty, presence_penalty,
-            frequency_penalty, bad_words_ids, stop_words_ids, end_id, pad_id)
+            draft_tokens if num_draft_tokens > 0 else None,
+            beam_width,
+            temperature,
+            repetition_penalty,
+            presence_penalty,
+            frequency_penalty,
+            bad_words_ids,
+            stop_words_ids,
+            end_id,
+            pad_id,
+            return_target_model_accepted_token_logits=
+            return_target_model_accepted_token_logits)
 
         target_result = client_target.infer(target_tensorrt_llm_model_name,
                                             target_inputs,
@@ -266,6 +325,12 @@ def run_speculative_inference(
             print(target_output_ids.tolist())
             print("target seq_length")
             print(seq_length)
+            if return_target_model_accepted_token_logits:
+                target_model_accept_token_logits = generation_logits.squeeze(
+                    0).squeeze(0)  # [num_accepted_tokens, vocab_size]
+                print(
+                    f"target model accepted tokens' logits: shape: {target_model_accept_token_logits.shape}, value: {target_model_accept_token_logits}"
+                )
 
         # Store the last iteration input_ids to check if EOS was encountered
         last_input_ids = input_ids
@@ -446,6 +511,24 @@ if __name__ == '__main__':
                         default=[],
                         help='The bad words')
 
+    parser.add_argument(
+        "--return-draft-model-draft-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return draft model's draft tokens' logits, require to enable `gather_generation_logits` when build engine"
+    )
+
+    parser.add_argument(
+        "--return-target-model-accepted-token-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return target model's accepted token logits, require to enable `gather_generation_logits` when build engine",
+    )
+
     FLAGS = parser.parse_args()
     if not FLAGS.url_target:
         FLAGS.url_target = "localhost:8001"
@@ -474,7 +557,8 @@ if __name__ == '__main__':
         FLAGS.beam_width, FLAGS.preprocessor_model_name,
         FLAGS.draft_tensorrt_llm_model_name,
         FLAGS.target_tensorrt_llm_model_name, FLAGS.postprocessor_model_name,
-        FLAGS.verbose)
+        FLAGS.return_draft_model_draft_logits,
+        FLAGS.return_target_model_accepted_token_logits, FLAGS.verbose)
 
     # Print the final text
     print("Final text:\n", output_text)

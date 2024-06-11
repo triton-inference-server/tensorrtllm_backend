@@ -393,6 +393,13 @@ def runTRTLLMBackendTest(caseName)
     else if (caseName.contains("gather-logits")){
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-gather-logits"
       sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-gather-logits/fp16/1-gpu/ ${modelPath} ${tokenizerType}"
+
+      // speculative decoding return draft model draft token logits
+      // and target model accepted token logits
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-gather-generation-logits" // draft model
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // target model
+      sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-draft-gather-generation-logits/fp16/1-gpu/"
+
     }
     else if (caseName.contains("python-bls-unit-tests")){
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*decode*.py"

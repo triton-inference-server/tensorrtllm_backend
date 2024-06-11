@@ -341,3 +341,32 @@ if [ "$MODEL" = "medusa" ]; then
     popd # tensorrt_llm/examples/medusa
 
 fi
+
+if [ "$MODEL" = "gpt-gather-generation-logits" ]; then
+
+    # GPT2
+    pushd tensorrt_llm/examples/gpt
+
+    pip3 install -r requirements.txt
+
+    echo "Convert GPT from HF"
+    python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
+
+    # draft model, only gather_generation_logits
+    echo "Build GPT: float16 | gather_all_token_logits"
+    trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
+        --max_batch_size 4 \
+        --max_input_len 512 \
+        --max_output_len 128 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --context_fmha enable \
+        --max_num_tokens 38400 \
+        --use_paged_context_fmha enable \
+        --gather_generation_logits \
+        --output_dir trt_engine/gpt2-draft-gather-generation-logits/fp16/1-gpu/
+
+    popd # tensorrt_llm/examples/gpt
+
+fi
