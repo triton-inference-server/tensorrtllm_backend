@@ -637,6 +637,49 @@ nv_inference_compute_output_duration_us{model="tensorrt_llm",version="1"} 0
 nv_inference_pending_request_count{model="tensorrt_llm",version="1"} 0
 ```
 
+## Multi-instance Support
+
+TensorRT-LLM backend relies on MPI to coordinate the execution of a model across multiple GPUs
+and nodes. Currently, there are two different modes supported to run a model across multiple GPUs:
+
+1. [Leader mode](#leader-mode)
+2. [Orchestrator mode](#orchestrator-mode)
+
+### Leader Mode
+
+In leader mode, TensorRT-LLM backend spawns one Triton Server process for every
+GPU. The process with rank 0 is the leader process. Other Triton Server processes,
+do not return from the `TRITONBACKEND_ModelInstanceInitialize` call to avoid
+port collision and allowing the other processes to receive requests.
+
+The overview of this mode is described in the diagram below:
+
+![Leader Mode Overview](./images/leader-mode.png)
+
+This mode is friendly with [slurm](https://slurm.schedmd.com) deployments since
+it doesn't use
+[MPI_Comm_spawn](https://www.open-mpi.org/doc/v4.1/man3/MPI_Comm_spawn.3.php).
+
+### Orchestrator Mode
+
+In orchestrator mode, the TensorRT-LLM backend spawns a single Triton Server process
+that acts as an orchestrator and spawns one Triton Server process for every
+GPU that each model requires. This mode is mainly used when serving multiple models
+with TensorRT-LLM backend.  In this mode, the `MPI` world size must be one as
+TRT-LLM backend will automatically create new workers as needed. The overview
+of this mode is described in the diagram below:
+
+![Orchestrator Mode Overview](./images/orchestrator-mode.png)
+
+Since this mode uses [MPI_Comm_spawn](https://www.open-mpi.org/doc/v4.1/man3/MPI_Comm_spawn.3.php),
+it might not work properly with [slurm](https://slurm.schedmd.com) deployments.
+Additionally, this currently only works for single node deployments.
+
+### Running Multiple Instances of LLaMa Model
+
+Please refer to [Running Multiple Instances of the LLaMa Model](docs/llama_multi_instance.md)
+for more information on running multiple instances of LLaMa model in different configurations.
+
 ## Testing the TensorRT-LLM Backend
 Please follow the guide in [`ci/README.md`](ci/README.md) to see how to run
 the testing for TensorRT-LLM backend.

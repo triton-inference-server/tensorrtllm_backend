@@ -39,13 +39,14 @@ def callback(user_data, result, error):
 
 def test_performance(client, input_start_ids, input_lens, output_lens, delays,
                      FLAGS):
-    model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
     if FLAGS.decoupled:
         client.start_stream(callback=lambda result, error: None,
                             stream_timeout=FLAGS.stream_timeout)
     for i in range(10):
+        model_name = FLAGS.tensorrt_llm_model_name[i % len(
+            FLAGS.tensorrt_llm_model_name)]
         output0_len = np.ones_like([[1]]).astype(np.int32) * 100
         inputs = [
             utils.prepare_tensor("input_ids", input_start_ids[0],
@@ -72,6 +73,8 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
         client.start_stream(callback=partial(callback, user_data),
                             stream_timeout=FLAGS.stream_timeout)
     for i, ids in enumerate(input_start_ids):
+        model_name = FLAGS.tensorrt_llm_model_name[i % len(
+            FLAGS.tensorrt_llm_model_name)]
         output0_len = np.ones_like([[1]]).astype(np.int32) * output_lens[i]
         end_id = np.ones_like([[1]]).astype(np.int32) * -1
         inputs = [
@@ -255,6 +258,15 @@ if __name__ == '__main__':
         required=False,
         default=None,
         help="Stream timeout in seconds. Default is None.",
+    )
+    parser.add_argument(
+        "--tensorrt-llm-model-name",
+        type=str,
+        required=False,
+        default=["tensorrt_llm"],
+        action="append",
+        help=
+        "Specify the name of the TensorRT-LLM model. Can be specified multiple times to use multiple models."
     )
     parser.add_argument('-c',
                         '--concurrency',
