@@ -54,6 +54,7 @@ def test_functionality(client,
         output0 = result.as_numpy("INPUT_ID")
         output1 = result.as_numpy("REQUEST_INPUT_LEN")
         output2 = result.as_numpy("REQUEST_OUTPUT_LEN")
+        decoder_input_id = result.as_numpy("DECODER_INPUT_ID")
         output_end_id = result.as_numpy("OUT_END_ID")
         output_pad_id = result.as_numpy("OUT_PAD_ID")
         inputIds = output0  # Use to check context logits shape
@@ -61,6 +62,8 @@ def test_functionality(client,
         model_name = "tensorrt_llm"
         inputs = [
             utils.prepare_tensor("input_ids", output0, FLAGS.protocol),
+            utils.prepare_tensor("decoder_input_ids", decoder_input_id,
+                                 FLAGS.protocol),
             utils.prepare_tensor("input_lengths", output1, FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output2,
                                  FLAGS.protocol),

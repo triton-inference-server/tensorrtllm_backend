@@ -37,8 +37,33 @@ def callback(user_data, result, error):
     user_data._stop_time_dict[req_id] = stop_time
 
 
-def test_performance(client, input_start_ids, input_lens, output_lens, delays,
-                     FLAGS):
+def append_pad_id_to_tensors(pad_id, inputs):
+    if pad_id is not None:
+        pad_id_data = np.array([[pad_id]], dtype=np.int32)
+    else:
+        pad_id_data = np.ones_like([[1]]).astype(np.int32) * 0
+
+    inputs += [utils.prepare_tensor("pad_id", pad_id_data, FLAGS.protocol)]
+
+
+def append_end_id_to_tensors(end_id, inputs):
+    if end_id is not None:
+        end_id_data = np.array([[end_id]], dtype=np.int32)
+    else:
+        end_id_data = np.ones_like([[1]]).astype(np.int32) * 1
+
+    inputs += [utils.prepare_tensor("end_id", end_id_data, FLAGS.protocol)]
+
+
+def test_performance(client,
+                     input_start_ids,
+                     input_lens,
+                     output_lens,
+                     delays,
+                     FLAGS,
+                     pad_id=None,
+                     end_id=None):
+    model_name = "tensorrt_llm"
 
     print(f"[INFO] Warm up for benchmarking.")
     if FLAGS.decoupled:
@@ -56,6 +81,9 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
         ]
+
+        append_pad_id_to_tensors(pad_id, inputs)
+        append_end_id_to_tensors(end_id, inputs)
         if FLAGS.decoupled:
             client.async_stream_infer(model_name, inputs, request_id=str(i))
         else:
@@ -76,15 +104,16 @@ def test_performance(client, input_start_ids, input_lens, output_lens, delays,
         model_name = FLAGS.tensorrt_llm_model_name[i % len(
             FLAGS.tensorrt_llm_model_name)]
         output0_len = np.ones_like([[1]]).astype(np.int32) * output_lens[i]
-        end_id = np.ones_like([[1]]).astype(np.int32) * -1
         inputs = [
             utils.prepare_tensor("input_ids", ids, FLAGS.protocol),
             utils.prepare_tensor("input_lengths", input_lens[i],
                                  FLAGS.protocol),
             utils.prepare_tensor("request_output_len", output0_len,
                                  FLAGS.protocol),
-            utils.prepare_tensor("end_id", end_id, FLAGS.protocol),
         ]
+
+        append_pad_id_to_tensors(pad_id, inputs)
+        append_end_id_to_tensors(end_id, inputs)
 
         time.sleep(delays[i])
 
@@ -373,7 +402,14 @@ if __name__ == '__main__':
         tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
                                                   legacy=False,
                                                   padding_side='left')
-        tokenizer.pad_token = tokenizer.eos_token
+        if not tokenizer.pad_token:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        pad_id = tokenizer.encode(tokenizer.pad_token,
+                                  add_special_tokens=False)[0]
+        end_id = tokenizer.encode(tokenizer.eos_token,
+                                  add_special_tokens=False)[0]
+
         prompt_cnt = 0
 
         with open(FLAGS.dataset, 'r') as f:
@@ -402,7 +438,7 @@ if __name__ == '__main__':
         delays = utils.get_list_of_delays(FLAGS.time_delay_dist,
                                           mean_time_bet_reqs, num_reqs)
         test_performance(client, input_start_ids, input_lens, output_lens,
-                         delays, FLAGS)
+                         delays, FLAGS, pad_id, end_id)
 
     elif FLAGS.workload == "token-norm-dist":
         input_lens = utils.get_norm_dist_tokens(FLAGS.input_mean,

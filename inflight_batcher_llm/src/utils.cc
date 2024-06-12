@@ -520,7 +520,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 }
 
 executor::Request createRequestFromInputTensors(std::unordered_map<std::string, NamedTensor> const& inputsTensors,
-    bool excludeInputFromOutput, bool isDecoupled, bool streaming)
+    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType)
 {
     executor::OutputConfig outConfig = utils::getOutputConfigFromTensors(inputsTensors);
     outConfig.excludeInputFromOutput = excludeInputFromOutput;
@@ -528,9 +528,8 @@ executor::Request createRequestFromInputTensors(std::unordered_map<std::string, 
     executor::VecTokens inputTokens;
     if (!utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::inputTokens, inputTokens))
     {
-        throw std::runtime_error("input_ids is not present in the request");
+        TLLM_THROW("%s is not present in the request.", InputFieldsNames::inputTokens);
     }
-
     executor::SizeType32 maxNewTokens;
     if (!utils::extractSingleton<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
     {
@@ -542,6 +541,35 @@ executor::Request createRequestFromInputTensors(std::unordered_map<std::string, 
 
     std::optional<executor::SizeType32> padId{std::nullopt};
     utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::padId, padId);
+
+    std::optional<executor::VecTokens> encoderInputTokens{std::nullopt};
+    if (modelType == executor::ModelType::kENCODER_ONLY || modelType == executor::ModelType::kENCODER_DECODER)
+    {
+        encoderInputTokens = inputTokens;
+
+        // If encoder-decoder, check if decoder tokens are specified
+        if (modelType == executor::ModelType::kENCODER_DECODER)
+        {
+            if (!utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::decoderInputTokens, inputTokens))
+            {
+                if (padId)
+                {
+                    TLLM_LOG_WARNING(
+                        "%s is not present in the request for encoder-decoder model. The decoder input tokens will be "
+                        "set to "
+                        "[padId]",
+                        InputFieldsNames::decoderInputTokens);
+                    inputTokens = {padId.value()};
+                }
+                else
+                {
+                    TLLM_LOG_WARNING("%s is not present in the request for encoder-decoder model",
+                        InputFieldsNames::decoderInputTokens);
+                    inputTokens.clear();
+                }
+            }
+        }
+    }
 
     if (streaming && !isDecoupled)
     {
@@ -585,7 +613,8 @@ executor::Request createRequestFromInputTensors(std::unordered_map<std::string, 
     auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputsTensors);
 
     return executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
-        stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt);
+        stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt,
+        encoderInputTokens);
 }
 
 } // namespace triton::backend::inflight_batcher_llm::utils

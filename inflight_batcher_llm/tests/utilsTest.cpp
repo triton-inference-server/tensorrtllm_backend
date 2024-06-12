@@ -25,9 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "tensorrt_llm/common/tllmException.h"
+#include "tensorrt_llm/executor/types.h"
 #include <gmock/gmock-matchers.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <optional>
 
 #include "utils.h"
 
@@ -338,14 +340,25 @@ TEST(UtilsTest, convertWordList)
     }
 }
 
-tensorrt_llm::executor::Request getRequest()
+std::optional<tensorrt_llm::executor::Request> getRequest(
+    executor::ModelType modelType = executor::ModelType::kDECODER_ONLY, std::optional<int32_t> padId = std::nullopt,
+    std::vector<int32_t> const& inputTokens = {1, 2, 3, 4, 5}, std::vector<int32_t> const& decoderInputTokens = {})
 {
     std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> inputsTensors;
 
-    pushTensor<int32_t>(inputsTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32, {5}, {1, 2, 3, 4, 5});
+    pushTensor<int32_t>(inputsTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32,
+        {static_cast<int64_t>(inputTokens.size())}, inputTokens);
+    if (!decoderInputTokens.empty())
+    {
+        pushTensor<int32_t>(inputsTensors, InputFieldsNames::decoderInputTokens, nvinfer1::DataType::kINT32,
+            {static_cast<int64_t>(decoderInputTokens.size())}, decoderInputTokens);
+    }
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::endId, nvinfer1::DataType::kINT32, {1}, {11});
-    pushTensor<int32_t>(inputsTensors, InputFieldsNames::padId, nvinfer1::DataType::kINT32, {1}, {13});
+    if (padId)
+    {
+        pushTensor<int32_t>(inputsTensors, InputFieldsNames::padId, nvinfer1::DataType::kINT32, {1}, {padId.value()});
+    }
     pushTensor<int32_t>(
         inputsTensors, InputFieldsNames::badWords, nvinfer1::DataType::kINT32, {6}, {1, 2, 3, 2, 3, -1});
     pushTensor<int32_t>(
@@ -394,7 +407,28 @@ tensorrt_llm::executor::Request getRequest()
     pushTensor<float>(
         inputsTensors, InputFieldsNames::draftAcceptanceThreshold, nvinfer1::DataType::kFLOAT, {1}, {0.222F});
 
-    auto request = createRequestFromInputTensors(inputsTensors, true, true, true);
+    std::optional<executor::Request> request;
+    try
+    {
+        request = createRequestFromInputTensors(inputsTensors, true, true, true, modelType);
+        if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
+        {
+            EXPECT_TRUE(false) << "Should have failed";
+        }
+        return request;
+    }
+    catch (std::exception const& e)
+    {
+        if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
+        {
+            EXPECT_THAT(e.what(), testing::HasSubstr("Assertion failed: !mInputTokenIds.empty"));
+            return std::nullopt;
+        }
+        else
+        {
+            EXPECT_TRUE(false) << "Should not fail";
+        }
+    }
     return request;
 }
 
@@ -420,12 +454,39 @@ void checkTensor(tensorrt_llm::executor::Tensor const& tensor, std::vector<T> re
     }
 }
 
-void checkRequest(tensorrt_llm::executor::Request const& request)
+void checkRequest(tensorrt_llm::executor::Request const& request,
+    executor::ModelType modelType = executor::ModelType::kDECODER_ONLY, std::optional<int32_t> padId = std::nullopt,
+    std::vector<int32_t> const& inputTokens = {1, 2, 3, 4, 5}, std::vector<int32_t> const& decoderInputTokens = {})
 {
-    EXPECT_THAT(request.getInputTokenIds(), testing::ElementsAre(1, 2, 3, 4, 5));
+    if (modelType == executor::ModelType::kENCODER_ONLY)
+    {
+        EXPECT_EQ(request.getEncoderInputTokenIds(), inputTokens);
+    }
+    else if (modelType == executor::ModelType::kENCODER_DECODER)
+    {
+        EXPECT_EQ(request.getEncoderInputTokenIds(), inputTokens);
+        if (!decoderInputTokens.empty())
+        {
+            EXPECT_EQ(request.getInputTokenIds(), decoderInputTokens);
+        }
+        else
+        {
+            if (padId)
+            {
+                EXPECT_EQ(request.getInputTokenIds(), std::vector<int32_t>{padId.value()});
+            }
+            else
+            {
+                FAIL() << "Should have failed already";
+            }
+        }
+    }
     EXPECT_EQ(request.getMaxNewTokens(), 8);
     EXPECT_EQ(request.getEndId().value(), 11);
-    EXPECT_EQ(request.getPadId().value(), 13);
+    if (padId)
+    {
+        EXPECT_EQ(request.getPadId().value(), padId.value());
+    }
     checkWords(request.getBadWords().value(), {{1, 2}, {3}});
     checkWords(request.getStopWords().value(), {{1, 2, 3}});
     checkTensor<float>(request.getEmbeddingBias().value(), {0.5, 0.6, 0.7});
@@ -475,6 +536,43 @@ void checkRequest(tensorrt_llm::executor::Request const& request)
 
 TEST(UtilsTest, createRequestFromInputTensors)
 {
-    auto request = getRequest();
-    checkRequest(request);
+    auto request = getRequest(executor::ModelType::kDECODER_ONLY, 2);
+    checkRequest(request.value(), executor::ModelType::kDECODER_ONLY, 2);
+}
+
+TEST(UtilsTest, createRequestFromInputTensorsEncoderOnly)
+{
+    auto modelType = executor::ModelType::kENCODER_ONLY;
+    int32_t padId = 2;
+    auto request = getRequest(modelType, padId);
+    checkRequest(request.value(), modelType, padId);
+}
+
+TEST(UtilsTest, createRequestFromInputTensorsEncoderDecoder)
+{
+    auto modelType = executor::ModelType::kENCODER_DECODER;
+    auto inputTokensVec = std::vector<std::vector<int32_t>>{{1, 2, 3, 4, 5}};
+    auto decoderInputTokensVec = std::vector<std::vector<int32_t>>{{1, 2, 3, 4, 5}, {}};
+    auto padIds = std::vector<std::optional<int32_t>>{2, std::nullopt};
+
+    for (auto const& inputTokens : inputTokensVec)
+    {
+        for (auto const& decoderInputTokens : decoderInputTokensVec)
+        {
+            for (auto padId : padIds)
+            {
+                auto request = getRequest(modelType, padId, inputTokens, decoderInputTokens);
+                // If not request returned, means we were expecting failure during request creation
+                // Just continue in this case.
+                if (!request)
+                {
+                    continue;
+                }
+                else
+                {
+                    checkRequest(request.value(), modelType, padId, inputTokens, decoderInputTokens);
+                }
+            }
+        }
+    }
 }

@@ -13,6 +13,8 @@ GPT_2B=/home/scratch.trt_llm_data/llm-models/GPT-2B-001_bf16_tp1.nemo
 GPT_2B_LORA=/home/scratch.trt_llm_data/llm-models/lora/gpt-next-2b
 VICUNA=/home/scratch.trt_llm_data/llm-models/vicuna-7b-v1.3
 MEDUSA_VICUNA=/home/scratch.trt_llm_data/llm-models/medusa-vicuna-7b-v1.3/
+BART=/home/scratch.trt_llm_data/llm-models/bart-large-cnn/
+T5=/home/scratch.trt_llm_data/llm-models/t5-small/
 
 set -e
 
@@ -194,6 +196,51 @@ if [ "$MODEL" = "gpt-ib" ]; then
     popd # tensorrt_llm/examples/gpt
 
 fi
+
+if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
+
+    pushd tensorrt_llm/examples/enc_dec
+
+    if [ "$MODEL" = "bart-ib" ]; then
+      MODEL_DIR=${BART}
+      MODEL_TYPE="bart"
+    elif [ "$MODEL" = "t5-ib" ]; then
+      MODEL_DIR=${T5}
+      MODEL_TYPE="t5"
+    fi
+    echo "Convert ${MODEL_TYPE} from HF"
+    python3 convert_checkpoint.py --model_type ${MODEL_TYPE} --model_dir ${MODEL_DIR} --dtype float16 --output_dir ./c-model/${MODEL}/fp16
+
+    echo "Build Encoder: "
+    trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/encoder \
+    --output_dir trt_engine/${MODEL}/fp16/1-gpu/encoder \
+    --paged_kv_cache enable --moe_plugin disable \
+    --enable_xqa disable --max_beam_width 1 \
+    --max_batch_size 8 --max_output_len 1024 \
+    --gemm_plugin float16 \
+    --bert_attention_plugin float16 \
+    --gpt_attention_plugin float16 \
+    --remove_input_padding enable --context_fmha disable \
+    --use_custom_all_reduce disable
+
+
+    echo "Build Decoder:"
+    trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/decoder \
+    --output_dir trt_engine/${MODEL}/fp16/1-gpu/decoder \
+    --paged_kv_cache enable --moe_plugin disable \
+    --enable_xqa disable --max_beam_width 1 \
+    --max_batch_size 8 --max_output_len 1024 \
+    --gemm_plugin float16 \
+    --max_encoder_input_len 1024 \
+    --bert_attention_plugin float16 \
+    --gpt_attention_plugin float16 \
+    --remove_input_padding enable --context_fmha disable \
+    --max_input_len 1 --use_custom_all_reduce disable
+
+    popd # tensorrt_llm/examples/bart
+
+fi
+
 
 if [ "$MODEL" = "gpt-medium-ib" ]; then
 

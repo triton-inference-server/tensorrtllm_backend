@@ -5,6 +5,7 @@ TARGET_ENGINE_PATH=$2
 TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
 DRAFT_ENGINE_PATH=$5
+ENCODER_ENGINE_PATH=$6
 
 set -ex
 set -o pipefail
@@ -147,13 +148,13 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},encoder_engine_dir:${ENCODER_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:${TENSORRT_LLM_MODEL_NAME},tensorrt_llm_draft_model_name:${TENSORRT_LLM_DRAFT_MODEL_NAME}
 
-    if [ "${DRAFT_ENGINE_PATH}" != "" ]; then
+    if [ "${DRAFT_ENGINE_PATH}" != "" ] && [ "${DRAFT_ENGINE_PATH}" != "skip" ]; then
         cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_draft
         sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_draft"/g' ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt
         python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
@@ -346,7 +347,7 @@ run_cpp_trtllm_backend_tests () {
         # Performance check.
         python3 benchmark_core_model.py \
             ${DECOUPLED_FLAG} \
-            --check-perf-json ../../tests/ref_results.json \
+            ${CHECK_PERF_JSON_ARGS} \
             --check-perf-key ${MODEL}-${BACKEND} \
             --check-perf-rtol 0.05 \
             --check-perf-atol 50 \
@@ -952,4 +953,106 @@ if [ "$MODEL" = "medusa" ]; then
             --check-output
     popd # inflight_batcher_llm/client
     kill_triton_server
+fi
+
+if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
+
+    # Non-streaming tests, decoupled is false
+    DECOUPLED_MODE="False"
+    STREAMING="false"
+
+    # enc-dec models only support inflight_fused_batching, with chunked context disabled
+    CHECK_PERF_JSON_ARGS=""
+    BATCHING_STRATEGIES=( "inflight_fused_batching" )
+    ENABLE_CHUNKED_CONTEXTS=( "false" )
+
+    # -------------------------------
+    # Param sweep test
+    # -------------------------------
+    run_all_tests="true"
+    for BACKEND in "${BACKENDS[@]}"; do
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
+    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
+    for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
+    for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
+
+        # Because the runners are shared, the default value of 0.9 doesn't work, so skip
+        # if max_tokens_in_kv_cache is also empty
+        if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
+            continue
+        fi
+        if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
+            continue
+        fi
+        # For V1, batchScheduler currently cannot properly estimate kvCache usage
+        if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
+            continue
+        fi
+        # The python backend currently requires decoupled mode.
+        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
+           continue
+        fi
+
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        kill_triton_server
+        run_all_tests="false"
+    done
+    done
+    done
+    done
+    done
+    done
+    BACKEND="${BACKENDS[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
+
+    # -------------------------------
+    # Exclude input in output test
+    # -------------------------------
+    EXCLUDE_INPUT_IN_OUTPUT="true"
+    run_all_tests="false"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        kill_triton_server
+    done
+    EXCLUDE_INPUT_IN_OUTPUT="false"
+
+    # -------------------------------
+    #  Max queue delay microseconds
+    # -------------------------------
+    run_all_tests="false"
+    MAX_QUEUE_DELAY_MICROSECONDS="1000000"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        run_cpp_trtllm_backend_tests
+        kill_triton_server
+    done
+    MAX_QUEUE_DELAY_MICROSECONDS="0"
+
+    # -------------------------------
+    #  Python BLS
+    # -------------------------------
+
+    ACCUMULATE_TOKENS=( "false" "true" )
+    E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
+    for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
+
+        if [[ "${E2E_MODEL_NAME}" == "ensemble" && "${ACCUMULATE_TOKEN}" == "true" ]]; then
+            continue
+        fi
+        launch_triton_server
+        # run_cpp_e2e_backend_tests
+        kill_triton_server
+    done
+    done
+    done
+    E2E_MODEL_NAME="ensemble"
+    ACCUMULATE_TOKEN="false"
 fi

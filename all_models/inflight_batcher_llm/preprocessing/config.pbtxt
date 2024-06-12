@@ -34,6 +34,12 @@ input [
         dims: [ -1 ]
     },
     {
+        name: "DECODER_QUERY"
+        data_type: TYPE_STRING
+        dims: [ -1 ]
+        optional: true
+    },
+    {
         name: "REQUEST_OUTPUT_LEN"
         data_type: TYPE_INT32
         dims: [ -1 ]
@@ -83,6 +89,16 @@ output [
     },
     {
         name: "REQUEST_INPUT_LEN"
+        data_type: TYPE_INT32
+        dims: [ 1 ]
+    },
+    {
+        name: "DECODER_INPUT_ID"
+        data_type: TYPE_INT32
+        dims: [ -1 ]
+    },
+    {
+        name: "REQUEST_DECODER_INPUT_LEN"
         data_type: TYPE_INT32
         dims: [ 1 ]
     },
