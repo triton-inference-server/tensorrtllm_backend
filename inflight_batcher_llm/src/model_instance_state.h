@@ -165,8 +165,6 @@ private:
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;
 
-    std::string mModelPath;
-
     /// @brief Send a response during enqueue
     void sendEnqueueResponse(TRITONBACKEND_Request* request, TRITONSERVER_Error* error);
 
@@ -175,7 +173,7 @@ private:
 
     /// @brief Create an executor::Request from input tensors
     static executor::Request createExecutorRequest(
-        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled);
+        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
@@ -213,6 +211,9 @@ private:
     std::unordered_map<executor::IdType, RequestData> mRequestIdToRequestData;
     std::unordered_map<std::string, executor::IdType> mTritonRequestIdToRequestId;
     std::mutex mRequestIdToRequestDataMutex;
+
+    // The type of model (encoder-only, decoder-only, encoder-decoder)
+    executor::ModelType mModelType;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

@@ -444,7 +444,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
 {
-    mModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
 
     auto executorConfig = getExecutorConfigFromParams();
 
@@ -454,7 +453,59 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         (executorConfig.getBatchingType() == executor::BatchingType::kSTATIC));
 #endif
 
-    mExecutor.reset(new executor::Executor(mModelPath, executor::ModelType::kDECODER_ONLY, executorConfig));
+    std::string decoderModelPath;
+    try
+    {
+        decoderModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
+        TLLM_CHECK_WITH_INFO(std::filesystem::exists(decoderModelPath),
+            "Decoder (GPT) model path at %s does not exist.", decoderModelPath.c_str());
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("gpt_model_path is not specified, will be left empty");
+        decoderModelPath = "";
+    }
+
+    std::string encoderModelPath;
+    try
+    {
+        encoderModelPath = model_state_->GetParameter<std::string>("encoder_model_path");
+        TLLM_CHECK_WITH_INFO(std::filesystem::exists(encoderModelPath), "Encoder model path at %s does not exist.",
+            encoderModelPath.c_str());
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("encoder_model_path is not specified, will be left empty");
+        encoderModelPath = "";
+    }
+
+    TLLM_CHECK_WITH_INFO(
+        !decoderModelPath.empty() || !encoderModelPath.empty(), "Both encoder and decoder model paths are empty");
+
+    if (!decoderModelPath.empty())
+    {
+        // Encoder-decoder model
+        if (!encoderModelPath.empty())
+        {
+            mModelType = executor::ModelType::kENCODER_DECODER;
+            mExecutor
+                = std::make_unique<executor::Executor>(encoderModelPath, decoderModelPath, mModelType, executorConfig);
+        }
+        // Decoder only model
+        else
+        {
+            mModelType = executor::ModelType::kDECODER_ONLY;
+            mExecutor = std::make_unique<executor::Executor>(decoderModelPath, mModelType, executorConfig);
+        }
+    }
+    // Encoder only
+    else
+    {
+        mModelType = executor::ModelType::kENCODER_ONLY;
+        mExecutor = std::make_unique<executor::Executor>(encoderModelPath, mModelType, executorConfig);
+    }
 
     bool excludeInputInOutput = false;
     try
@@ -556,11 +607,12 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 }
 
 executor::Request ModelInstanceState::createExecutorRequest(
-    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled)
+    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
-    return utils::createRequestFromInputTensors(inputsTensors, excludeInputFromOutput, isDecoupled, streaming);
+    return utils::createRequestFromInputTensors(
+        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -588,8 +640,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequest
-                = createExecutorRequest(request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled());
+            auto executorRequest = createExecutorRequest(
+                request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(), mModelType);
 
             int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
             executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();

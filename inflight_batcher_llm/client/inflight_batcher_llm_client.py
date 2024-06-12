@@ -122,7 +122,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    prompt_vocab_size_data, lora_task_id_data,
                    lora_weights_data, lora_config_data, return_log_probs_data,
                    top_k_data, top_p_data, draft_ids_data,
-                   return_context_logits_data, return_generation_logits_data):
+                   return_context_logits_data, return_generation_logits_data,
+                   decoder_input_ids_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -174,6 +175,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("return_generation_logits",
                            return_generation_logits_data),
+        ]
+    if decoder_input_ids_data is not None:
+        inputs += [
+            prepare_tensor("decoder_input_ids", decoder_input_ids_data),
         ]
     return inputs
 
@@ -505,6 +510,7 @@ if __name__ == "__main__":
 
     tokenizer = None
     draft_ids = None
+    decoder_input_ids = None
     if FLAGS.input_tokens_csv != "":
         with open(FLAGS.input_tokens_csv) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=",")
@@ -536,11 +542,15 @@ if __name__ == "__main__":
                                                   legacy=False,
                                                   padding_side='left',
                                                   trust_remote_code=True)
-        tokenizer.pad_token = tokenizer.eos_token
+        if not tokenizer.pad_token:
+            tokenizer.pad_token = tokenizer.eos_token
+
         pad_id = tokenizer.encode(tokenizer.pad_token,
                                   add_special_tokens=False)[0]
         end_id = tokenizer.encode(tokenizer.eos_token,
                                   add_special_tokens=False)[0]
+        print("Using pad_id: ", pad_id)
+        print("Using end_id: ", end_id)
 
         input_ids = [tokenizer.encode(FLAGS.text)]
         curate_log_output(input_ids[0], "Input")
@@ -625,6 +635,10 @@ if __name__ == "__main__":
     if draft_ids is not None:
         draft_ids_data = np.array(draft_ids, dtype=np.int32)
 
+    decoder_input_ids_data = None
+    if decoder_input_ids is not None:
+        decoder_input_ids_data = np.array(decoder_input_ids, dtype=np.int32)
+
     inputs = prepare_inputs(
         input_ids_data, input_lengths_data, request_output_len_data,
         beam_width_data, temperature_data, repetition_penalty_data,
@@ -633,7 +647,7 @@ if __name__ == "__main__":
         prompt_vocab_size_data, lora_task_id_data, lora_weights_data,
         lora_config_data, return_log_probs_data, top_k_data, top_p_data,
         draft_ids_data, return_context_logits_data,
-        return_generation_logits_data)
+        return_generation_logits_data, decoder_input_ids_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -788,7 +802,6 @@ if __name__ == "__main__":
                     else:
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
-                        sequence_lengths = result.as_numpy('sequence_length')
                         if FLAGS.return_log_probs:
                             cum_log_probs = result.as_numpy('cum_log_probs')
                             output_log_probs = result.as_numpy(
@@ -799,6 +812,8 @@ if __name__ == "__main__":
                             generation_logits = result.as_numpy(
                                 'generation_logits')
                         if output_ids is not None:
+                            sequence_lengths = result.as_numpy(
+                                'sequence_length')
                             for beam_output_ids in output_ids[0]:
                                 tokens = list(beam_output_ids)
                                 actual_output_ids.append(tokens)

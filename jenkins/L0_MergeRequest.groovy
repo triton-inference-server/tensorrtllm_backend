@@ -61,7 +61,9 @@ CASE_TO_MODEL = [
   "gpt-ib-speculative-decoding-bls": "gpt2",
   "gpt-2b-ib-lora": "gpt-2b-ib-lora",
   "gpt-gather-logits": "gpt2",
-  "medusa": "vicuna-7b-v1.3"
+  "medusa": "vicuna-7b-v1.3",
+  "bart-ib": "bart-large-cnn",
+  "t5-ib": "t5-small",
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -76,7 +78,9 @@ CASE_TO_ENGINE_DIR = [
   "gpt-ib-streaming": "gpt/trt_engine/gpt2-ib/fp16/1-gpu/",
   "gpt-ib-ptuning": "gpt/trt_engine/email_composition/fp16/1-gpu/",
   "gpt-2b-ib-lora": "gpt/trt_engine/gpt-2b-lora-ib/fp16/1-gpu/",
-  "medusa": "medusa/tmp/medusa/7B/trt_engines/fp16/1-gpu/"
+  "medusa": "medusa/tmp/medusa/7B/trt_engines/fp16/1-gpu/",
+  "bart-ib": "enc_dec/trt_engine/bart-ib/fp16/1-gpu/",
+  "t5-ib": "enc_dec/trt_engine/t5-ib/fp16/1-gpu/",
 ]
 
 // Utilities
@@ -405,6 +409,12 @@ def runTRTLLMBackendTest(caseName)
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*decode*.py"
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm/1 python3 -m pytest all_models/tests/test_python_backend.py"
     }
+    else if (caseName.contains("bart-ib") || caseName.contains("t5-ib")){
+      def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath}/decoder ${modelPath} ${tokenizerType} skip ${enginePath}/encoder"
+    }
+
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
       def testExample = CASE_TO_EXAMPLE[caseName]
@@ -658,6 +668,11 @@ pipeline {
               stage("Setup tester") {
                 steps {
                   installDependency()
+                }
+              }
+              stage("Test t5-ib") {
+                steps {
+                  runTRTLLMBackendTest("t5-ib")
                 }
               }
               stage("Test mistral-ib") {

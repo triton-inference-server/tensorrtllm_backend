@@ -84,7 +84,9 @@ class TritonPythonModel:
                                                        trust_remote_code=True)
         if isinstance(self.tokenizer, T5Tokenizer):
             self.tokenizer_bos_id = self.tokenizer.sp_model.bos_id()
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        if not self.tokenizer.pad_token:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.tokenizer_end_id = self.tokenizer.encode(
             self.tokenizer.eos_token, add_special_tokens=False)[0]
@@ -93,7 +95,8 @@ class TritonPythonModel:
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
-            "INPUT_ID", "REQUEST_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
+            "INPUT_ID", "DECODER_INPUT_ID", "REQUEST_INPUT_LEN",
+            "REQUEST_DECODER_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
             "OUT_END_ID", "OUT_PAD_ID"
         ]
         input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
@@ -142,6 +145,11 @@ class TritonPythonModel:
             # Get input tensors
             query = pb_utils.get_input_tensor_by_name(request,
                                                       'QUERY').as_numpy()
+            decoder_query = pb_utils.get_input_tensor_by_name(
+                request, 'DECODER_QUERY')
+            if decoder_query is not None:
+                decoder_query = decoder_query.as_numpy()
+
             batch_dim = query.shape[0]
             if batch_dim != 1:
 
@@ -194,6 +202,15 @@ class TritonPythonModel:
 
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
+            print(input_id)
+            print(request_input_len)
+            if decoder_query is not None:
+                decoder_input_id, request_decoder_input_len = self._create_request(
+                    decoder_query)
+            else:
+                decoder_input_id = pad_id * np.ones((1, 1), np.int32)
+                request_decoder_input_len = 1 * np.ones((1, 1), np.int32)
+
             bad_words = self._to_word_list_format(bad_words_dict)
             stop_words = self._to_word_list_format(stop_words_dict)
 
@@ -208,6 +225,13 @@ class TritonPythonModel:
             request_input_len_tensor = pb_utils.Tensor(
                 'REQUEST_INPUT_LEN',
                 request_input_len.astype(self.request_input_len_dtype))
+            decoder_input_id_tensor = pb_utils.Tensor(
+                'DECODER_INPUT_ID',
+                decoder_input_id.astype(self.decoder_input_id_dtype))
+            request_decoder_input_len_tensor = pb_utils.Tensor(
+                'REQUEST_DECODER_INPUT_LEN',
+                request_decoder_input_len.astype(
+                    self.request_decoder_input_len_dtype))
             request_output_len_tensor = pb_utils.Tensor(
                 'REQUEST_OUTPUT_LEN', request_output_len)
             bad_words_ids_tensor = pb_utils.Tensor('BAD_WORDS_IDS', bad_words)
@@ -221,8 +245,9 @@ class TritonPythonModel:
                                             np.array(pad_id, dtype=np.int32))
 
             inference_response = pb_utils.InferenceResponse(output_tensors=[
-                input_id_tensor, bad_words_ids_tensor, stop_words_ids_tensor,
-                request_input_len_tensor, request_output_len_tensor,
+                input_id_tensor, decoder_input_id_tensor, bad_words_ids_tensor,
+                stop_words_ids_tensor, request_input_len_tensor,
+                request_decoder_input_len_tensor, request_output_len_tensor,
                 embedding_bias_tensor, end_id_tensor, pad_id_tensor
             ])
             responses.append(inference_response)
