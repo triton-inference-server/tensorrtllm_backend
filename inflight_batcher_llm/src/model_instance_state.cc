@@ -29,6 +29,8 @@
 
 #include <nlohmann/json.hpp>
 
+using executor::SizeType32;
+
 namespace triton::backend::inflight_batcher_llm
 {
 
