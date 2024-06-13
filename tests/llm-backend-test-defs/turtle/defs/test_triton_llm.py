@@ -1174,7 +1174,7 @@ def test_gpt_350m_speculative_decoding(
     run_cmd = [
         f"{llm_backend_inflight_batcher_llm_root}/speculative_decoding_test.py",
         "--max-input-len=200",
-        f"--dataset={llm_backend_dataset_root}/mini_cnn_eval.json",
+        f"--dataset={llm_backend_dataset_root}/mini_cnn_eval_spec_decoding.json",
         "--url-draft=0.0.0.0:8004",
         "--url-target=0.0.0.0:8001",
     ]
