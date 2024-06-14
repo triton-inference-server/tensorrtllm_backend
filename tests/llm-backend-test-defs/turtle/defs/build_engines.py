@@ -168,6 +168,58 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
     return engine_dir
 
 
+def prepare_gpt_return_logits_engine(type, tensorrt_llm_gpt_example_root,
+                                     gpt_tokenizer_model_root):
+    # Convert GPT weights from HF
+    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                            "gpt_return_logits")
+    convert_cmd = [
+        "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
+        f"--model_dir={gpt_tokenizer_model_root}", "--dtype=float16",
+        f"--output_dir={ckpt_dir}"
+    ]
+
+    # Build GPT
+    engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                              "gpt_return_logits")
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--max_batch_size=4",
+        "--max_input_len=512",
+        "--max_output_len=28",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
+        "--max_num_tokens=38400",
+        "--use_paged_context_fmha=enable",
+        "--gather_generation_logits",
+        f"--output_dir={engine_dir}",
+    ]
+
+    if type == "ifb":
+        build_cmd += [
+            "--paged_kv_cache=enable",
+        ]
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gpt_example_root)
+        check_call(convert_cmd, shell=True)
+        check_call(build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
                                gpt_2b_lora_model_root, models_root,
                                weight_streaming):
