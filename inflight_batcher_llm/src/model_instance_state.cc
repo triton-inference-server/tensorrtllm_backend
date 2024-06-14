@@ -439,7 +439,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, parallelConfig,
-        peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent);
+        peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)

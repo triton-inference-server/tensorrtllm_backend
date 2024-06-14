@@ -140,7 +140,7 @@ if [ "$MODEL" = "mistral-ib" ]; then
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
         --max_batch_size 1 \
-        --max_input_len 8192 \
+        --max_seq_len 9216 \
         --output_dir ib_mistral_7b_outputs
 
     popd # tensorrt_llm/examples/llama
