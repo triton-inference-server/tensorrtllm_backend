@@ -559,3 +559,7 @@ test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-
 test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-128-disableDecoupleMode-V1-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
 test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-128-enableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_350m_speculative_decoding_return_logits[False-1-False-True-True-0-128-disableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_350m_speculative_decoding_return_logits[False-1-False-True-True-0-128-disableDecoupleMode-V1-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_350m_speculative_decoding_return_logits[False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_350m_speculative_decoding_return_logits[False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]

@@ -1182,6 +1182,175 @@ def test_gpt_350m_speculative_decoding(
     venv_check_call(llm_backend_venv, run_cmd)
 
 
+@pytest.mark.skip_less_device_memory(80000)
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
+                         ["max_utilization", "guaranteed_no_evict"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
+                         ids=["disableTrtOverlap"])
+@pytest.mark.parametrize("BATCHING_STRATEGY",
+                         ["inflight_fused_batching", "V1"])
+@pytest.mark.parametrize("DECOUPLED_MODE", ["False"],
+                         ids=["disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["True"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
+@pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
+@pytest.mark.parametrize("DECODING_MODE", [""])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+def test_gpt_350m_speculative_decoding_return_logits(
+    E2E_MODEL_NAME,
+    MAX_TOKENS_IN_KV_CACHE,
+    MAX_ATTENTION_WINDOW_SIZE,
+    BATCH_SCHEDULER_POLICY,
+    KV_CACHE_FREE_GPU_MEM_FRACTION,
+    ENABLE_TRT_OVERLAP,
+    BATCHING_STRATEGY,
+    DECOUPLED_MODE,
+    TRITON_MAX_BATCH_SIZE,
+    MAX_QUEUE_DELAY_MICROSECONDS,
+    MAX_BEAM_WIDTH,
+    ENABLE_KV_CACHE_REUSE,
+    NORMALIZE_LOG_PROBS,
+    ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
+    DECODING_MODE,
+    PREPROCESSING_INSTANCE_COUNT,
+    POSTPROCESSING_INSTANCE_COUNT,
+    ACCUMULATE_TOKEN,
+    BLS_INSTANCE_COUNT,
+    EXCLUDE_INPUT_IN_OUTPUT,
+    tensorrt_llm_gpt_example_root,
+    gpt_tokenizer_model_root,
+    gpt2_medium_tokenizer_model_root,
+    llm_backend_inflight_batcher_llm_root,
+    llm_backend_dataset_root,
+    llm_backend_venv,
+):
+    if BATCHING_STRATEGY == "V1":
+        pytest.skip("Skipping. Speculative decoding is not supported in V1.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
+
+    llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENGINE_PATH = prepare_gpt_350m_engine(
+        "medium_ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt2_medium_tokenizer_model_root,
+    )
+    DRAFT_ENGINE_PATH = prepare_gpt_return_logits_engine(
+        "ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt_tokenizer_model_root,
+    )
+    # Prepare two model repos
+    ## first repo
+    new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+    ## second repo
+    new_model_repo_draft = os.path.join(llm_backend_repo_root,
+                                        "triton_repo_draft")
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo_draft)
+
+    # Modify two suits of config.pbtxt
+    ## first suit
+    TOKENIZER_PATH = gpt2_medium_tokenizer_model_root
+    modify_ib_config_pbtxt(
+        new_model_repo,
+        ENGINE_PATH,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+    )
+    ## second suit
+    TOKENIZER_PATH = gpt_tokenizer_model_root
+    ENABLE_KV_CACHE_REUSE = "False"
+    modify_ib_config_pbtxt(
+        new_model_repo_draft,
+        DRAFT_ENGINE_PATH,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+    )
+    # Launch two Triton Servers
+    ## first server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
+        shell=True)
+    check_server_ready(http_port="8000")
+    ## second server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo} " \
+        f"--grpc_port=8004 --http_port=8003 --metrics_port=8005",
+        shell=True)
+    check_server_ready(http_port="8003")
+    # Run Test
+    run_cmd = [
+        f"{llm_backend_inflight_batcher_llm_root}/speculative_decoding_test.py",
+        "--max-input-len=128",
+        f"--dataset={llm_backend_dataset_root}/mini_cnn_eval_spec_decoding.json",
+        "--url-draft=0.0.0.0:8004", "--url-target=0.0.0.0:8001",
+        "--num-draft-tokens=5", "--return-target-model-accepted-token-logits",
+        "--return-draft-model-draft-logits", "--verbose"
+    ]
+
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])

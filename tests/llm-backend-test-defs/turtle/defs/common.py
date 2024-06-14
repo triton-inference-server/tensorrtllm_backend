@@ -29,7 +29,9 @@ def check_server_ready(http_port="8000"):
             time.sleep(5)
             timer += 5
         elif timer > timeout:
-            raise TimeoutError("Error: Launch Triton server timed out.")
+            raise TimeoutError(
+                f"Error: Launch Triton server timed out, timer is {timeout} seconds."
+            )
 
     print_info(
         f"Trion server launched successfully! Cost {timer} seconds to launch server."
