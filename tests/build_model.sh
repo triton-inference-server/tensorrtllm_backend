@@ -214,9 +214,9 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     echo "Build Encoder: "
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/encoder \
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/encoder \
-    --paged_kv_cache enable --moe_plugin disable \
+    --paged_kv_cache disable --moe_plugin disable \
     --enable_xqa disable --max_beam_width 1 \
-    --max_batch_size 8 --max_output_len 1024 \
+    --max_batch_size 8 --max_seq_len 300 \
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
@@ -227,11 +227,10 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     echo "Build Decoder:"
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/decoder \
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/decoder \
-    --paged_kv_cache enable --moe_plugin disable \
+    --moe_plugin disable \
     --enable_xqa disable --max_beam_width 1 \
-    --max_batch_size 8 --max_output_len 1024 \
+    --max_batch_size 8 --max_seq_len 300 \
     --gemm_plugin float16 \
-    --max_encoder_input_len 1024 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
     --remove_input_padding enable --context_fmha disable \
