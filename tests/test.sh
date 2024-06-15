@@ -23,6 +23,9 @@ kill_triton_server || true
 if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistral-ib-mm" ]; then
     MAX_ATTENTION_WINDOW_SIZE="2048"
     MAX_SEQUENCE_LEN="8704" # max_input_len + max_output_len
+elif [ "$MODEL" = "t5-ib" ] || [ "$MODEL" = "bart-ib" ]; then
+    MAX_ATTENTION_WINDOW_SIZE=""
+    MAX_SEQUENCE_LEN="4096" # for enc-dec, choose a sufficient size of max token in kv cache to avoid no free block error
 else
     MAX_ATTENTION_WINDOW_SIZE=""
     MAX_SEQUENCE_LEN="2048"
@@ -963,30 +966,20 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
 
     # enc-dec models only support inflight_fused_batching, with chunked context disabled
     CHECK_PERF_JSON_ARGS=""
-    BATCHING_STRATEGIES=( "inflight_fused_batching" )
-    ENABLE_CHUNKED_CONTEXTS=( "false" )
+    BATCHING_STRATEGY="inflight_fused_batching"
+    ENABLE_CHUNKED_CONTEXT="false"
 
     # -------------------------------
     # Param sweep test
     # -------------------------------
     run_all_tests="true"
     for BACKEND in "${BACKENDS[@]}"; do
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
     for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
-    for ENABLE_CHUNKED_CONTEXT in "${ENABLE_CHUNKED_CONTEXTS[@]}"; do
-
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
         if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
-            continue
-        fi
-        if [[ "${BATCHING_STRATEGY}" == "v1" && "${BATCH_SCHEDULER_POLICY}" == "max_utilization" ]]; then
-            continue
-        fi
-        # For V1, batchScheduler currently cannot properly estimate kvCache usage
-        if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
             continue
         fi
         # The python backend currently requires decoupled mode.
@@ -996,30 +989,26 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
 
         launch_triton_server
         run_cpp_trtllm_backend_tests
+        run_cpp_e2e_backend_tests
         kill_triton_server
         run_all_tests="false"
     done
     done
     done
     done
-    done
-    done
     BACKEND="${BACKENDS[0]}"
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
-    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    ENABLE_CHUNKED_CONTEXT="${ENABLE_CHUNKED_CONTEXTS[0]}"
 
     # -------------------------------
     # Exclude input in output test
     # -------------------------------
     EXCLUDE_INPUT_IN_OUTPUT="true"
     run_all_tests="false"
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
-        launch_triton_server
-        run_cpp_trtllm_backend_tests
-        kill_triton_server
-    done
+    launch_triton_server
+    run_cpp_trtllm_backend_tests
+    run_cpp_e2e_backend_tests
+    kill_triton_server
     EXCLUDE_INPUT_IN_OUTPUT="false"
 
     # -------------------------------
@@ -1027,11 +1016,10 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     # -------------------------------
     run_all_tests="false"
     MAX_QUEUE_DELAY_MICROSECONDS="1000000"
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
-        launch_triton_server
-        run_cpp_trtllm_backend_tests
-        kill_triton_server
-    done
+    launch_triton_server
+    run_cpp_trtllm_backend_tests
+    run_cpp_e2e_backend_tests
+    kill_triton_server
     MAX_QUEUE_DELAY_MICROSECONDS="0"
 
     # -------------------------------
@@ -1040,7 +1028,6 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
 
     ACCUMULATE_TOKENS=( "false" "true" )
     E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
-    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
     for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
 
@@ -1048,9 +1035,8 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
             continue
         fi
         launch_triton_server
-        # run_cpp_e2e_backend_tests
+        run_cpp_e2e_backend_tests
         kill_triton_server
-    done
     done
     done
     E2E_MODEL_NAME="ensemble"
