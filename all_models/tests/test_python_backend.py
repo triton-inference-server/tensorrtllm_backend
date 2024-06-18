@@ -572,3 +572,8 @@ def test_get_executor_config_minimal():
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+
+
+def test_convert_timestamp_to_seconds():
+    assert convert_timestamp_to_seconds("01-01-1970 00:00:00") == 0
+    assert convert_timestamp_to_seconds("05-17-2024 23:28:39") == 1715988519
