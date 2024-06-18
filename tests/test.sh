@@ -311,6 +311,34 @@ run_cpp_trtllm_backend_tests () {
             ${CHECK_OUTPUT_FLAG} \
             --tokenizer-dir ${TOKENIZER_PATH} \
             --request-id my_request 2>&1 | tee output_str_request
+
+        # Test triton metrics are present and have non-zero values (when applicable).
+        TRITON_METRICS_LOG="triton_metrics.out"
+        curl localhost:${TRITON_METRICS_PORT}/metrics -o ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_request_metrics\{model="tensorrt_llm",request_type="context",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_request_metrics\{model="tensorrt_llm",request_type="scheduled",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_request_metrics\{model="tensorrt_llm",request_type="max",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_request_metrics\{model="tensorrt_llm",request_type="active",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_runtime_memory_metrics\{memory_type="pinned",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_runtime_memory_metrics\{memory_type="gpu",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_runtime_memory_metrics\{memory_type="cpu",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="tokens_per",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="used",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="free",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="max",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{model="tensorrt_llm",v1_specific_metric="num_ctx_tokens",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{model="tensorrt_llm",v1_specific_metric="num_gen_tokens",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{model="tensorrt_llm",v1_specific_metric="empty_gen_slots",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+        else
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{inflight_batcher_specific_metric="paused_requests",model="tensorrt_llm",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{inflight_batcher_specific_metric="micro_batch_id",model="tensorrt_llm",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{inflight_batcher_specific_metric="generation_requests",model="tensorrt_llm",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+          grep -E 'nv_trt_llm_inflight_batcher_metrics\{inflight_batcher_specific_metric="total_context_tokens",model="tensorrt_llm",version="1"\} [0-9]+$' ${TRITON_METRICS_LOG}
+        fi
+        grep -E 'nv_trt_llm_general_metrics\{general_type="iteration_counter",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_general_metrics\{general_type="timestamp",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        rm ${TRITON_METRICS_LOG}
     fi
 
     popd # inflight_batcher_llm/client
