@@ -64,8 +64,18 @@ class CustomMetricsTest(unittest.TestCase):
         with open(filename) as log_file:
             for line in reversed(list(log_file)):
                 if "Active Request Count" in line:
-                    json_format = re.sub(r"^.*?{", "{", line)
-                    return json.loads(json_format)
+                    match = re.search(r'({.*})', line)
+                    if match:
+                        json_string = match.group(1)
+                        try:
+                            json_string = json_string.replace('\\"', '"')
+                        except json.JSONDecodeError as e:
+                            raise Exception("Error parsing the JSON string: ",
+                                            e)
+                    else:
+                        raise Exception("No JSON found in the log file")
+
+                    return json.loads(json_string)
 
     def _parse_triton_metrics(self, filename, is_v1):
         curl_counts = {}
