@@ -7,6 +7,10 @@ python3 e2e_grpc_speculative_decoding_client.py -p "The only thing we have to fe
               --url-draft ${DRAFT_MODEL_URL} \
               --url-target ${TARGET_MODEL_URL}
 ```
+To get draft model draft tokens's logits, you need to enable `gather_generation_logits` when building then engine, and add `--return-draft-model-draft-logits` when running `e2e_grpc_speculative_decoding_client.py`.
+
+To get the target model accepted tokens's logits, you need to enable `gather_generation_logits` when building the engine, and add `--return-target-model-accepted-token-logits` when running `e2e_grpc_speculative_decoding_client.py`.
+
 
 * `end_to_end_grpc_client.py`: Demonstrates sending a single request to a tritonserver running an ensemble including preprocessor (tokenizer), TRT-LLM model and postprocessor (detokenizer) and getting back a completion from it.
 Example command:
