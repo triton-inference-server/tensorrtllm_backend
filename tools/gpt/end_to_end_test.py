@@ -79,7 +79,9 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
                                               legacy=False,
                                               padding_side='left')
-    tokenizer.pad_token = tokenizer.eos_token
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
+
     pad_id = tokenizer.encode(tokenizer.pad_token, add_special_tokens=False)[0]
     end_id = tokenizer.encode(tokenizer.eos_token, add_special_tokens=False)[0]
 
