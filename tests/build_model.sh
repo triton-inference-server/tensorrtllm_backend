@@ -374,7 +374,7 @@ if [ "$MODEL" = "medusa" ]; then
                             --medusa_model_dir ${MEDUSA_VICUNA} \
                             --output_dir ./tllm_checkpoint_1gpu_medusa \
                             --dtype float16 \
-                            --fixed_num_medusa_heads 4
+                            --num_medusa_heads 4
 
     echo "Build Medusa: float16"
     trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu_medusa \
