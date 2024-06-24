@@ -177,6 +177,13 @@ def tensorrt_llm_medusa_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def tensorrt_llm_enc_dec_example_root(llm_backend_root):
+    llm_enc_dec_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                            "examples", "enc_dec")
+    return llm_enc_dec_example_root
+
+
+@pytest.fixture(scope="session")
 def tensorrt_llm_llama_example_root(llm_backend_root):
     llm_llama_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                           "examples", "llama")
@@ -356,6 +363,18 @@ def medusa_vicuna_7b_model_root():
         medusa_vicuna_7b_model_root
     ), f"{medusa_vicuna_7b_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return medusa_vicuna_7b_model_root
+
+
+@pytest.fixture(scope="session")
+def t5_small_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    t5_small_model_root = os.path.join(models_root, "t5-small")
+
+    assert os.path.exists(
+        t5_small_model_root
+    ), f"{t5_small_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return t5_small_model_root
 
 
 # Returns an array of total memory for each available device
