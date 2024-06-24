@@ -15,8 +15,7 @@ def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
         "python3", f"{tensorrt_llm_medusa_example_root}/convert_checkpoint.py",
         f"--model_dir={vicuna_7b_model_root}",
         f"--medusa_model_dir={medusa_vicuna_7b_model_root}",
-        f"--output_dir={ckpt_dir}", "--dtype=float16",
-        "--fixed_num_medusa_heads=4"
+        f"--output_dir={ckpt_dir}", "--dtype=float16", "--num_medusa_heads=4"
     ]
 
     # Build Medusa: float16
