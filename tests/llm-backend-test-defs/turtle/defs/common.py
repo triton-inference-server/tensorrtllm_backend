@@ -88,7 +88,8 @@ def modify_ib_config_pbtxt(REPO_PATH,
                            TENSORRT_LLM_MODEL_NAME="tensorrt_llm",
                            TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft",
                            BACKEND="tensorrtllm",
-                           GPU_WEIGHTS_PERCENT="1.0"):
+                           GPU_WEIGHTS_PERCENT="1.0",
+                           ENCODER_ENGINE_PATH=""):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
@@ -137,7 +138,7 @@ def modify_ib_config_pbtxt(REPO_PATH,
         f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
         f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
         f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
-        f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT}",
+        f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH}",
         shell=True)
 
 

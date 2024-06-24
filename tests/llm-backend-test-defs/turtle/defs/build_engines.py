@@ -52,6 +52,83 @@ def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
     return engine_dir
 
 
+def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
+                            t5_small_model_root):
+    # Convert T5 from HF
+    ckpt_dir = os.path.join(tensorrt_llm_enc_dec_example_root, "model_dir",
+                            "t5_small")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_enc_dec_example_root}/convert_checkpoint.py",
+        "--model_type=t5",
+        f"--model_dir={t5_small_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
+    ]
+
+    # Build encoder and decoder
+    encoder_engine_dir = os.path.join(tensorrt_llm_enc_dec_example_root,
+                                      "engine_dir", "t5_small_encoder")
+    decoder_engine_dir = os.path.join(tensorrt_llm_enc_dec_example_root,
+                                      "engine_dir", "t5_small_decoder")
+
+    encoder_build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}/encoder",
+        f"--output_dir={encoder_engine_dir}",
+        "--paged_kv_cache=disable",
+        "--moe_plugin=disable",
+        "--enable_xqa=disable",
+        "--max_beam_width=1",
+        "--max_batch_size=8",
+        "--max_seq_len=300",
+        "--gemm_plugin=float16",
+        "--bert_attention_plugin=float16",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--context_fmha=disable",
+        "--use_custom_all_reduce=disable",
+    ]
+    decoder_build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}/decoder",
+        f"--output_dir={decoder_engine_dir}",
+        "--moe_plugin=disable",
+        "--enable_xqa=disable",
+        "--max_beam_width=1",
+        "--max_batch_size=8",
+        "--max_seq_len=300",
+        "--gemm_plugin=float16",
+        "--bert_attention_plugin=float16",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--context_fmha=disable",
+        "--max_input_len=1",
+        "--use_custom_all_reduce=disable",
+    ]
+
+    convert_cmd = " ".join(convert_cmd)
+    encoder_build_cmd = " ".join(encoder_build_cmd)
+    decoder_build_cmd = " ".join(decoder_build_cmd)
+    if not os.path.exists(encoder_build_cmd):
+        check_call(convert_cmd, shell=True)
+        check_call(encoder_build_cmd, shell=True)
+        check_call(decoder_build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {encoder_engine_dirr}")
+        print_info(f"Reusing engine: {decoder_engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {encoder_build_cmd}")
+        print_info(f"Skipped: {decoder_build_cmd}")
+
+    assert os.path.exists(
+        encoder_engine_dir), f"{encoder_engine_dir} does not exists."
+    assert os.path.exists(
+        decoder_engine_dir), f"{decoder_engine_dir} does not exists."
+    return encoder_engine_dir, decoder_engine_dir
+
+
 def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
                             gpt_tokenizer_model_root):
     # Convert GPT weights from HF
