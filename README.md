@@ -67,8 +67,11 @@ The below commands will build the same Triton TRT-LLM container as the one on th
 ```bash
 # Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
 cd tensorrtllm_backend
+git lfs install
+git submodule update --init --recursive
+
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/pytorch:24.03-py3
+BASE_IMAGE=nvcr.io/nvidia/pytorch:24.04-py3
 TRT_VERSION=10.0.1.6
 TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.Linux.x86_64-gnu.cuda-12.4.tar.gz
 TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
