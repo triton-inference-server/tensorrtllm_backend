@@ -57,24 +57,19 @@ ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
 
 FROM install_dependencies as tensorrt_llm_build
-
-ARG TENSORRT_LLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRT_LLM_REPO_TAG=main
-
 RUN pip3 install --no-cache-dir \
       cmake \
       polygraphy==0.49.0 \
       mpi4py==3.1.5
 
-WORKDIR /workspace/
-RUN git clone --recurse-submodules --branch ${TENSORRT_LLM_REPO_TAG} ${TENSORRT_LLM_REPO} tenosrrt_llm
-
-WORKDIR /workspace/tenosrrt_llm
-RUN python3 scripts/build_wheel.py --trt_root /usr/local/tensorrt
+WORKDIR /workspace
+COPY scripts scripts
+COPY tensorrt_llm tensorrt_llm
+RUN cd tensorrt_llm && python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --job_count 18 && cd ..
 
 FROM install_dependencies as base
 
 WORKDIR /tmp
-COPY --from=tensorrt_llm_build /workspace/tenosrrt_llm/build/tensorrt_llm*whl .
+COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
 
 RUN pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm*.whl
