@@ -764,6 +764,8 @@ def test_gpt_350m_python_backend(
                                    run_cmd).strip().split("\n")[-1]
 
         print_info(output)
+        check_server_metrics()
+
         # Validate Accuracy -ToDo
 
 
@@ -891,6 +893,9 @@ def test_gpt_350m_ifb(
         run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
                                         inflight_batcher_llm_client_root,
                                         tokenizer_dir)
+
+    if feature_name == "test_basic":
+        check_server_metrics()
 
 
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble", "tensorrt_llm_bls"])
