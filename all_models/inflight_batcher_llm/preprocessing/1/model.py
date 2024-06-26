@@ -202,8 +202,6 @@ class TritonPythonModel:
 
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
-            print(input_id)
-            print(request_input_len)
             if decoder_query is not None:
                 decoder_input_id, request_decoder_input_len = self._create_request(
                     decoder_query)
