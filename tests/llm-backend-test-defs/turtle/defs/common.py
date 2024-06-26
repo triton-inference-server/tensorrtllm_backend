@@ -38,6 +38,26 @@ def check_server_ready(http_port="8000"):
     )
 
 
+def assert_pattern_match_target(pattern, content, target_value):
+    match = re.search(pattern, content)
+    assert match is not None, f"'{pattern}' has no matches."
+    num_match = int(match.group(1))
+    assert num_match == target_value, f"'{pattern}' check failed, {num_match} does not equal to target {target_value}"
+
+
+def check_server_metrics(metrics_port="8002", target_value=1):
+    metrics = check_output(f"curl 0.0.0.0:{metrics_port}/metrics 2>&1",
+                           shell=True).strip()
+    print_info(metrics)
+
+    pattern_request_success = r'nv_inference_request_success\{model="tensorrt_llm",version="1"\} (\d)'
+    assert_pattern_match_target(pattern_request_success, metrics, target_value)
+    pattern_inference_count = r'nv_inference_count\{model="tensorrt_llm",version="1"\} (\d)'
+    assert_pattern_match_target(pattern_inference_count, metrics, target_value)
+    pattern_exec_count = r'nv_inference_exec_count\{model="tensorrt_llm",version="1"\} (\d)'
+    assert_pattern_match_target(pattern_exec_count, metrics, target_value)
+
+
 def search_and_replace(file_path, search_words, replace_words):
     with open(file_path, 'r') as file:
         original_contents = file.read()
