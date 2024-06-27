@@ -444,6 +444,60 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
     return engine_dir
 
 
+def prepare_gpt_multi_node_engine(type, tensorrt_llm_gpt_example_root):
+    # Build GPT
+    if type == "python_backend":
+        engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                                  "gpt_multi_node_python_backend")
+    elif type == "ifb":
+        engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                                  "gpt_multi_node_ifb")
+
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_gpt_example_root}/../generate_checkpoint_config.py",
+        f"--output_path={engine_dir}/ckpt_config.json",
+        "--architecture=GPTForCausalLM", "--dtype=float16",
+        "--num_hidden_layers=96", "--num_attention_heads=96",
+        "--hidden_size=12288", "--vocab_size=51200", "--hidden_act=gelu",
+        "--tp_size=16"
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--model_config={engine_dir}/ckpt_config.json",
+        "--gpt_attention_plugin=float16",
+        "--remove_input_padding=enable",
+        "--gemm_plugin=float16",
+        "--max_batch_size=32",
+        "--max_input_len=512",
+        "--max_output_len=32",
+        f"--output_dir={engine_dir}",
+    ]
+
+    if type == "ifb":
+        build_cmd += [
+            "--paged_kv_cache=enable",
+        ]
+
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gpt_example_root)
+        check_call(convert_cmd, shell=True, cwd=tensorrt_llm_gpt_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_gpt_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
                                llama_v2_tokenizer_model_root):
     if type == "python_backend":
