@@ -80,7 +80,8 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "--enable_xqa=disable",
         "--max_beam_width=1",
         "--max_batch_size=8",
-        "--max_seq_len=300",
+        "--max_input_len=512",
+        "--max_seq_len=512",
         "--gemm_plugin=float16",
         "--bert_attention_plugin=float16",
         "--gpt_attention_plugin=float16",
@@ -96,13 +97,14 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "--enable_xqa=disable",
         "--max_beam_width=1",
         "--max_batch_size=8",
-        "--max_seq_len=300",
+        "--max_input_len=1",
+        "--max_seq_len=512",
+        "--max_encoder_input_len=512",
         "--gemm_plugin=float16",
         "--bert_attention_plugin=float16",
         "--gpt_attention_plugin=float16",
         "--remove_input_padding=enable",
         "--context_fmha=disable",
-        "--max_input_len=1",
         "--use_custom_all_reduce=disable",
     ]
 
@@ -115,7 +117,7 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         check_call(decoder_build_cmd, shell=True)
 
     else:
-        print_info(f"Reusing engine: {encoder_engine_dirr}")
+        print_info(f"Reusing engine: {encoder_engine_dir}")
         print_info(f"Reusing engine: {decoder_engine_dir}")
         print_info(f"Skipped: {convert_cmd}")
         print_info(f"Skipped: {encoder_build_cmd}")
