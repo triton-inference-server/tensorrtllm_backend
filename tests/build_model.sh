@@ -104,7 +104,9 @@ if [ "$MODEL" = "mistral" ]; then
     pip install -r requirements.txt
 
     echo "Convert Mistral from HF"
-    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/mistral-7b/fp16
+    python3 convert_checkpoint.py --dtype float16 \
+        --n_layer 2 --n_positions 32768 \
+        --output_dir ./c-model/mistral-7b/fp16
 
     echo "Build Mistral"
     trtllm-build --model_config ./c-model/mistral-7b/fp16/config.json  \
@@ -130,7 +132,9 @@ if [ "$MODEL" = "mistral-ib" ]; then
     pip install -r requirements.txt
 
     echo "Convert Mistral from HF"
-    python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/mistral-7b/fp16
+    python3 convert_checkpoint.py --dtype float16 \
+        --n_layer 2 --n_positions 32768 \
+        --output_dir ./c-model/mistral-7b/fp16
 
     echo "Build Mistral with inflight batching"
     trtllm-build --model_config ./c-model/mistral-7b/fp16/config.json  \
@@ -188,7 +192,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --context_fmha_fp32_acc enable \
         --use_paged_context_fmha enable \
         --gemm_plugin float16 \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_batch_size 8 \
         --max_num_tokens 7392 \
         --gather_generation_logits \
         --output_dir trt_engine/gpt2-ib/fp16/1-gpu/
@@ -216,7 +220,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/encoder \
     --paged_kv_cache disable --moe_plugin disable \
     --enable_xqa disable --max_beam_width 1 \
-    --max_batch_size 8 --max_seq_len 300 \
+    --max_batch_size 8 --max_input_len 512 --max_seq_len 512 \
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
@@ -229,12 +233,12 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/decoder \
     --moe_plugin disable \
     --enable_xqa disable --max_beam_width 1 \
-    --max_batch_size 8 --max_seq_len 300 \
+    --max_batch_size 8 --max_input_len 1 --max_seq_len 512 --max_encoder_input_len 512 \
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
     --remove_input_padding enable --context_fmha disable \
-    --max_input_len 1 --use_custom_all_reduce disable
+    --use_custom_all_reduce disable
 
     popd # tensorrt_llm/examples/bart
 
@@ -261,7 +265,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --use_paged_context_fmha enable \
         --max_draft_len 5 \
         --speculative_decoding_mode draft_tokens_external \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_batch_size 8 \
         --max_num_tokens 7392 \
         --gather_generation_logits \
         --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
@@ -321,7 +325,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
         --lora_dir ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
         --lora_ckpt_source nemo \
         --lora_target_modules attn_qkv \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 128 \
+        --max_batch_size 8 \
         --max_num_tokens 7392 \
         --output_dir trt_engine/gpt-2b-lora-ib/fp16/1-gpu/
 

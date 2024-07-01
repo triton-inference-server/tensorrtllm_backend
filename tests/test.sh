@@ -440,7 +440,7 @@ run_cpp_e2e_backend_tests () {
         python3 end_to_end_test.py \
             --concurrency 8 \
             -i http \
-            --max-input-len 300 \
+            --max-input-len 200 \
             --test-bls \
             --dataset ../dataset/mini_cnn_eval.json
 
@@ -448,7 +448,7 @@ run_cpp_e2e_backend_tests () {
             python3 end_to_end_test.py \
                 --concurrency 8 \
                 -i grpc \
-                --max-input-len 300 \
+                --max-input-len 200 \
                 --test-bls \
                 --dataset ../dataset/mini_cnn_eval.json
         fi
