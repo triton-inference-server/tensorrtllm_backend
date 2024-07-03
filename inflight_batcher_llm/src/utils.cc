@@ -135,6 +135,8 @@ std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Req
 
         NamedTensor t(utils::to_trt_datatype(data_type), shapev, input_name);
         uint64_t buffer_offset = 0;
+        auto stream = std::make_shared<tensorrt_llm::runtime::CudaStream>();
+        auto manager = tensorrt_llm::runtime::BufferManager{std::move(stream)};
         for (int64_t buffer_id = 0; buffer_id < buffer_count; ++buffer_id)
         {
             void const* buffer = nullptr;
@@ -144,11 +146,22 @@ std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Req
             LOG_IF_ERROR(
                 TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id),
                 "failed to get input buffer");
-            assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
-            std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
+            if (memory_type == TRITONSERVER_MEMORY_GPU)
+            {
+                if (buffer_id == 0)
+                {
+                    t.tensor = manager.gpu(t.tensor->getShape(), utils::to_trt_datatype(data_type));
+                }
+                TLLM_CUDA_CHECK(cudaMemcpyAsync(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer,
+                    buffer_byte_size, cudaMemcpyDeviceToDevice, manager.getStream().get()));
+            }
+            else
+            {
+                std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
+            }
             buffer_offset += buffer_byte_size;
         }
-
+        manager.getStream().synchronize();
         inputsTensors.insert(make_pair(t.name, std::move(t)));
     }
     return inputsTensors;
