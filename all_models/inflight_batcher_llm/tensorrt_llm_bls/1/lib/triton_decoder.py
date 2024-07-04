@@ -339,6 +339,7 @@ class TritonDecoder(Decoder):
             "stream": "streaming",
             "prompt_embedding_table": "prompt_embedding_table",
             "prompt_vocab_size": "prompt_vocab_size",
+            "temperature": "temperature",
         }
         tensors = self.create_triton_tensors(request, name_map)
 
