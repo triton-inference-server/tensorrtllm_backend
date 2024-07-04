@@ -9,8 +9,8 @@ from ..common import *
 
 
 @pytest.fixture(scope="class")
-def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
-                                           gpt_tokenizer_model_root):
+def setup_gptj_python_backend_perf_test_env(tensorrt_llm_gptj_example_root,
+                                            gptj_tokenizer_model_root):
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
 
     # Make sure Triton server are killed before each test.
@@ -19,10 +19,10 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
     time.sleep(2)
 
     # Build engine
-    ENGINE_PATH = prepare_gpt_350m_engine(
+    ENGINE_PATH = prepare_gptj_6b_engine(
         "python_backend",
-        tensorrt_llm_gpt_example_root,
-        gpt_tokenizer_model_root,
+        tensorrt_llm_gptj_example_root,
+        gptj_tokenizer_model_root,
     )
 
     # Prepare model repo
@@ -33,7 +33,7 @@ def setup_gpt_python_backend_perf_test_env(tensorrt_llm_gpt_example_root,
     check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
 
     # Modify config.pbtxt
-    TOKENIZER_PATH = gpt_tokenizer_model_root
+    TOKENIZER_PATH = gptj_tokenizer_model_root
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, "triton_repo",

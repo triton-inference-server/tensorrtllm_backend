@@ -170,6 +170,13 @@ def tensorrt_llm_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def tensorrt_llm_gptj_example_root(llm_backend_root):
+    llm_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                        "examples", "gptj")
+    return llm_gpt_example_root
+
+
+@pytest.fixture(scope="session")
 def tensorrt_llm_medusa_example_root(llm_backend_root):
     llm_medusa_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                            "examples", "medusa")
@@ -301,6 +308,18 @@ def gpt_tokenizer_model_root(llm_backend_venv):
         gpt_tokenizer_model_root
     ), f"{gpt_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_tokenizer_model_root
+
+
+@pytest.fixture(scope="session")
+def gptj_tokenizer_model_root(llm_backend_venv):
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    gptj_tokenizer_model_root = os.path.join(models_root, "gpt-j-6b")
+
+    assert os.path.exists(
+        gptj_tokenizer_model_root
+    ), f"{gptj_tokenizer_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return gptj_tokenizer_model_root
 
 
 @pytest.fixture(scope="session")

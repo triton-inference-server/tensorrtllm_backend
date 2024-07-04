@@ -194,6 +194,58 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     return engine_dir
 
 
+def prepare_gptj_6b_engine(type, tensorrt_llm_gptj_example_root,
+                           gptj_tokenizer_model_root):
+    # Convert GPT weights from HF
+    ckpt_dir = os.path.join(tensorrt_llm_gptj_example_root, "model_dir",
+                            "gptj_6b")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_gptj_example_root}/convert_checkpoint.py",
+        f"--model_dir={gptj_tokenizer_model_root}",
+        "--dtype=float16",
+        f"--output_dir={ckpt_dir}",
+    ]
+
+    # Build GPT
+    if type == "python_backend":
+        engine_dir = os.path.join(tensorrt_llm_gptj_example_root, "engine_dir",
+                                  "gptj_6b_python_backend")
+    elif type == "ifb":
+        engine_dir = os.path.join(tensorrt_llm_gptj_example_root, "engine_dir",
+                                  "gptj_6b_ifb")
+
+    build_cmd = [
+        "trtllm-build",
+        f"--model_config={ckpt_dir}/config.json",
+        "--context_fmha=enable",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        f"--output_dir={engine_dir}",
+    ]
+
+    if type == "ifb":
+        build_cmd += [
+            "--paged_kv_cache=enable",
+        ]
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_gptj_example_root)
+        check_call(convert_cmd, shell=True)
+        check_call(build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
                                      gpt_tokenizer_model_root):
     # Convert GPT weights from HF
