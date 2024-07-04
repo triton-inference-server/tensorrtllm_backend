@@ -128,7 +128,7 @@ IN_OUT_SEQ = [(128, 8), (512, 32)]
 
 def generate_llm_perf_config():
     configs = []
-    model = "gpt_350m"
+    model = "gptj_6b"
     for bs in BATCH_SIZE:
         for input_len, output_len in IN_OUT_SEQ:
             configs.append(
@@ -155,7 +155,7 @@ class TestPythonBackendPerf:
     @pytest.mark.parametrize("case",
                              LLM_TESTS,
                              ids=lambda c: c.get_test_name())
-    def test_perf(self, setup_gpt_python_backend_perf_test_env,
+    def test_perf(self, setup_gptj_python_backend_perf_test_env,
                   turtle_case_name, trt_performance_cache_fpath,
                   trt_gpu_clock_lock, llm_session_data_writer, output_dir,
                   llm_backend_venv, llm_backend_root, case):

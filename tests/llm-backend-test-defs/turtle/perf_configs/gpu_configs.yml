@@ -34,6 +34,9 @@ GPUs:
     H20:
         sm_clk: 1980
         mem_clk: 2619
+    H200:
+        sm_clk: 1980
+        mem_clk: 3201
     GH200 120GB:
         sm_clk: 1980
         mem_clk: 2619
