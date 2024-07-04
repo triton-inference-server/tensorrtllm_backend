@@ -438,7 +438,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     }
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
-        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt,
+        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
         parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent);
 }
 
