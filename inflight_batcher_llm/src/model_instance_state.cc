@@ -271,19 +271,6 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
         TLLM_LOG_WARNING(e.what());
     }
 
-    if (isDecoupled() && schedulerPolicy != CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT)
-    {
-        if (!enableChunkedContext)
-        {
-            TLLM_LOG_WARNING(
-                "Decoupled mode with a batch scheduler policy other than guaranteed_no_evict "
-                "requires building the model with use_paged_context_fmha and setting "
-                "enable_chunked_context to true. "
-                "The batch scheduler policy will be set to guaranteed_no_evict "
-                "since enable_chunked_context is false.");
-            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
-        }
-    }
     return executor::SchedulerConfig(schedulerPolicy);
 }
 
