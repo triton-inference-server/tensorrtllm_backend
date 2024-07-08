@@ -253,9 +253,9 @@ run_cpp_trtllm_backend_tests () {
 
                 # check that output finishes at "government"
                 TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
-                [[ "${TEST_OUTPUT}" == *"government']" ]]
+                [[ "${TEST_OUTPUT}" == *"government" ]]
                 TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
-                [[ "${TEST_OUTPUT}" == *"government']" ]]
+                [[ "${TEST_OUTPUT}" == *"government" ]]
             }
             test_stop_words
         fi

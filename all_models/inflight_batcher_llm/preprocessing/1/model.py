@@ -140,26 +140,16 @@ class TritonPythonModel:
 
         # Every Python backend must iterate over everyone of the requests
         # and create a pb_utils.InferenceResponse for each of them.
-        logger = pb_utils.Logger
         for idx, request in enumerate(requests):
             # Get input tensors
             query = pb_utils.get_input_tensor_by_name(request,
                                                       'QUERY').as_numpy()
+            batch_size = query.shape[0]
+
             decoder_query = pb_utils.get_input_tensor_by_name(
                 request, 'DECODER_QUERY')
             if decoder_query is not None:
                 decoder_query = decoder_query.as_numpy()
-
-            batch_dim = query.shape[0]
-            if batch_dim != 1:
-
-                err_str = "Inflight batching backend expects requests with batch size of 1."
-                logger.log_error(err_str)
-                responses.append(
-                    pb_utils.InferenceResponse(
-                        output_tensors=[],
-                        error=pb_utils.TritonError(err_str)))
-                continue
 
             request_output_len = pb_utils.get_input_tensor_by_name(
                 request, 'REQUEST_OUTPUT_LEN').as_numpy()
@@ -190,7 +180,7 @@ class TritonPythonModel:
             if end_id is not None:
                 end_id = end_id.as_numpy()
             else:
-                end_id = [[self.tokenizer_end_id]]
+                end_id = [[self.tokenizer_end_id]] * batch_size
 
             # Take the pad_id from the input tensors
             # If not specified, use tokenizer to get pad_id
@@ -198,23 +188,25 @@ class TritonPythonModel:
             if pad_id is not None:
                 pad_id = pad_id.as_numpy()
             else:
-                pad_id = [[self.tokenizer_pad_id]]
+                pad_id = [[self.tokenizer_pad_id]] * batch_size
 
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
+
             if decoder_query is not None:
                 decoder_input_id, request_decoder_input_len = self._create_request(
                     decoder_query)
             else:
-                decoder_input_id = pad_id * np.ones((1, 1), np.int32)
-                request_decoder_input_len = 1 * np.ones((1, 1), np.int32)
+                decoder_input_id = pad_id * np.ones((batch_size, 1), np.int32)
+                request_decoder_input_len = 1 * np.ones(
+                    (batch_size, 1), np.int32)
 
-            bad_words = self._to_word_list_format(bad_words_dict)
-            stop_words = self._to_word_list_format(stop_words_dict)
+            bad_words = self._to_word_list_format(bad_words_dict, batch_size)
+            stop_words = self._to_word_list_format(stop_words_dict, batch_size)
 
             embedding_bias = self._get_embedding_bias(
                 embedding_bias_words, embedding_bias_weights,
-                self.embedding_bias_weights_dtype)
+                self.embedding_bias_weights_dtype, batch_size)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -293,7 +285,8 @@ class TritonPythonModel:
 
         return start_ids, start_lengths
 
-    def _to_word_list_format(self, word_lists: List[List[str | bytes]]):
+    def _to_word_list_format(self, word_lists: List[List[str | bytes]],
+                             batch_size):
         '''
         word_lists format:
             len(word_lists) == batch_size
@@ -303,7 +296,7 @@ class TritonPythonModel:
 
         if word_lists is None:
             # Return an empty array of shape (1,2,0)
-            return np.empty([1, 2, 0], dtype="int32")
+            return np.empty([batch_size, 2, 0], dtype="int32")
 
         flat_ids = []
         offsets = []
@@ -337,12 +330,13 @@ class TritonPythonModel:
             (1, 0, 2))
 
     def _get_embedding_bias(self, embedding_bias_words, embedding_bias_weights,
-                            bias_dtype):
+                            bias_dtype, batch_size):
 
         assert self.tokenizer != None, "need to set tokenizer"
 
         if embedding_bias_words is None or embedding_bias_weights is None:
-            return np.empty([1, 0], dtype=self.embedding_bias_weights_dtype)
+            return np.empty([batch_size, 0],
+                            dtype=self.embedding_bias_weights_dtype)
 
         batch_embedding_bias = []
         for words, weights in zip(embedding_bias_words,

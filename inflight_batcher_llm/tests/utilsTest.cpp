@@ -410,7 +410,7 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
     std::optional<executor::Request> request;
     try
     {
-        request = createRequestFromInputTensors(inputsTensors, true, true, true, modelType);
+        request = createRequestsFromInputTensors({inputsTensors}, true, true, true, modelType).at(0);
         if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
         {
             EXPECT_TRUE(false) << "Should have failed";
@@ -573,6 +573,130 @@ TEST(UtilsTest, createRequestFromInputTensorsEncoderDecoder)
                     checkRequest(request.value(), modelType, padId, inputTokens, decoderInputTokens);
                 }
             }
+        }
+    }
+}
+
+TEST(UtilsTest, splitBatchInputsTensorsBS1)
+{
+    // Batch size 1
+    auto modelType = executor::ModelType::kDECODER_ONLY;
+    {
+        std::vector<int32_t> const& inputTokens = {1, 2, 3, 4, 5};
+        InputTensors inputTensors;
+        pushTensor<int32_t>(inputTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32,
+            {1, static_cast<int64_t>(inputTokens.size())}, inputTokens);
+        pushTensor<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
+
+        auto inputsTensors = splitBatchInputsTensors(inputTensors);
+
+        // No length specified should work ok with batch size 1
+        {
+            EXPECT_EQ(inputsTensors.size(), 1);
+            for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
+            {
+                auto& inputTensors = inputsTensors.at(batchId);
+                EXPECT_EQ(inputTensors.size(), 2);
+                EXPECT_EQ(inputTensors.count(InputFieldsNames::inputTokens), 1);
+                auto inputTokensTensor = inputTensors.at(InputFieldsNames::inputTokens).tensor;
+                EXPECT_EQ(inputTokensTensor->getShape().nbDims, 2);
+                EXPECT_EQ(inputTokensTensor->getShape().d[0], 1);
+                EXPECT_EQ(inputTokensTensor->getShape().d[1], inputTokens.size());
+                auto inputTokensData = reinterpret_cast<int32_t*>(inputTokensTensor->data());
+                EXPECT_EQ(inputTokensData[0], 1);
+                EXPECT_EQ(inputTokensData[1], 2);
+                EXPECT_EQ(inputTokensData[2], 3);
+                EXPECT_EQ(inputTokensData[3], 4);
+                EXPECT_EQ(inputTokensData[4], 5);
+
+                EXPECT_EQ(inputTensors.count(InputFieldsNames::maxNewTokens), 1);
+                auto maxTokensTensor = inputTensors.at(InputFieldsNames::maxNewTokens).tensor;
+                EXPECT_EQ(maxTokensTensor->getShape().nbDims, 1);
+                EXPECT_EQ(maxTokensTensor->getShape().d[0], 1);
+                auto maxTokensData = reinterpret_cast<int32_t*>(maxTokensTensor->data());
+                EXPECT_EQ(maxTokensData[0], 8);
+            }
+        }
+
+        // Create requests from batch size 1 tensor
+        {
+            auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType);
+
+            EXPECT_EQ(requests.size(), 1);
+            EXPECT_EQ(requests.at(0).getInputTokenIds(), inputTokens);
+            EXPECT_EQ(requests.at(0).getMaxNewTokens(), 8);
+        }
+    }
+}
+
+TEST(UtilsTest, splitBatchInputsTensorsBS3)
+{
+    auto modelType = executor::ModelType::kDECODER_ONLY;
+    // Batch size 3
+    std::vector<int32_t> const& inputTokens = {1, 2, -1, 3, 4, 5, 6, -1, -1};
+    std::vector<int32_t> const& inputLengths = {2, 3, 1};
+    std::vector<int32_t> const& maxTokens = {8, 10, 11};
+    InputTensors inputTensors;
+    pushTensor<int32_t>(inputTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32, {3, 3}, inputTokens);
+    pushTensor<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {3}, maxTokens);
+
+    {
+        // W/o lengths, it should throw an error
+        try
+        {
+            auto inputsTensors = splitBatchInputsTensors(inputTensors);
+            FAIL() << "Expected exception";
+        }
+        catch (tensorrt_llm::common::TllmException const& e)
+        {
+            EXPECT_THAT(e.what(), testing::HasSubstr("input lengths tensor not provided"));
+        }
+    }
+
+    pushTensor<int32_t>(inputTensors, InputFieldsNames::inputLengths, nvinfer1::DataType::kINT32, {3}, inputLengths);
+    auto inputsTensors = splitBatchInputsTensors(inputTensors);
+
+    EXPECT_EQ(inputsTensors.size(), 3);
+    for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
+    {
+        auto& inputTensors = inputsTensors.at(batchId);
+        EXPECT_EQ(inputTensors.size(), 3);
+        EXPECT_EQ(inputTensors.count(InputFieldsNames::inputTokens), 1);
+        auto inputTokensTensor = inputTensors.at(InputFieldsNames::inputTokens).tensor;
+        EXPECT_EQ(inputTokensTensor->getShape().nbDims, 2);
+        EXPECT_EQ(inputTokensTensor->getShape().d[0], 1);
+        EXPECT_EQ(inputTokensTensor->getShape().d[1], inputLengths[batchId]);
+        auto inputTokensData = reinterpret_cast<int32_t*>(inputTokensTensor->data());
+        EXPECT_EQ(inputTokensData[0], inputTokens[batchId * 3 + 0]);
+        EXPECT_EQ(inputTokensData[1], inputTokens[batchId * 3 + 1]);
+        EXPECT_EQ(inputTokensData[2], inputTokens[batchId * 3 + 2]);
+
+        EXPECT_EQ(inputTensors.count(InputFieldsNames::maxNewTokens), 1);
+        auto maxTokensTensor = inputTensors.at(InputFieldsNames::maxNewTokens).tensor;
+        EXPECT_EQ(maxTokensTensor->getShape().nbDims, 1);
+        EXPECT_EQ(maxTokensTensor->getShape().d[0], 1);
+        auto maxTokensData = reinterpret_cast<int32_t*>(maxTokensTensor->data());
+        EXPECT_EQ(maxTokensData[0], maxTokens[batchId]);
+
+        EXPECT_EQ(inputTensors.count(InputFieldsNames::inputLengths), 1);
+        auto inputLengthsTensor = inputTensors.at(InputFieldsNames::inputLengths).tensor;
+        EXPECT_EQ(maxTokensTensor->getShape().nbDims, 1);
+        EXPECT_EQ(maxTokensTensor->getShape().d[0], 1);
+        auto inputLengthsData = reinterpret_cast<int32_t*>(inputLengthsTensor->data());
+        EXPECT_EQ(inputLengthsData[0], inputLengths[batchId]);
+    }
+
+    // Get the requests
+    {
+        auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType);
+        EXPECT_EQ(requests.size(), 3);
+        for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
+        {
+            auto const& request = requests[batchId];
+            EXPECT_EQ(request.getInputTokenIds(),
+                std::vector<int32_t>(
+                    inputTokens.begin() + batchId * 3, inputTokens.begin() + batchId * 3 + inputLengths[batchId]));
+            EXPECT_EQ(request.getMaxNewTokens(), maxTokens[batchId]);
         }
     }
 }
