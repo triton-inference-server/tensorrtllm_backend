@@ -31,18 +31,18 @@ input [
     {
         name: "QUERY"
         data_type: TYPE_STRING
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "DECODER_QUERY"
         data_type: TYPE_STRING
-        dims: [ -1 ]
+        dims: [ 1 ]
         optional: true
     },
     {
         name: "REQUEST_OUTPUT_LEN"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "BAD_WORDS_DICT"
@@ -71,13 +71,13 @@ input [
     {
         name: "END_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
         optional: true
     },
     {
         name: "PAD_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
         optional: true
     }
 ]
@@ -125,12 +125,12 @@ output [
     {
         name: "OUT_END_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "OUT_PAD_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
     }
 ]
 

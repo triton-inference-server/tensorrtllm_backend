@@ -91,13 +91,12 @@ class Request:
                               "max_tokens must be a single value > 0")
 
         num_draft_tokens = _single_value(self.num_draft_tokens)
-        stream = _single_value(self.stream)
         _single_value(self.return_generation_logits)
         context_logits = _single_value(self.return_context_logits)
 
         if num_draft_tokens:
             _validate_that(
-                not stream,
+                not self.stream.any(),
                 "streaming is not supported with speculative decoding")
             _validate_that(
                 not context_logits,
@@ -149,6 +148,7 @@ class GenerationResponse:
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
+    batch_index: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -158,6 +158,7 @@ class Response:
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
+    batch_index: Optional[np.ndarray] = None
 
     def __eq__(self, o) -> bool:
         """Just for testing"""
@@ -166,8 +167,9 @@ class Response:
         return (np.array_equal(self.text_output, o.text_output)
                 and np.array_equal(self.cum_log_probs, o.cum_log_probs)
                 and np.array_equal(self.output_log_probs, o.output_log_probs)
-                and np.array_equal(self.context_logits, o.context_logits) and
-                np.array_equal(self.generation_logits, o.generation_logits))
+                and np.array_equal(self.context_logits, o.context_logits)
+                and np.array_equal(self.generation_logits, o.generation_logits)
+                and np.array_equal(self.batch_index, o.batch_index))
 
 
 class Decoder:
@@ -181,13 +183,19 @@ class Decoder:
     def decode(self,
                request: Request,
                speculative_decoding=False) -> Generator[Response, None, None]:
+
+        batch_size = request.text_input.shape[0]
         preproc_response = self.preprocess(request)
 
         if speculative_decoding:
+            if batch_size > 1:
+                raise Exception(
+                    "speculative decoding is not supported with batch size > 1"
+                )
             for gen_response in self._spec_generate(preproc_response, request):
                 yield self.postprocess(gen_response)
         else:
-            if not self._streaming:
+            if not self._streaming and batch_size == 1:
                 gen_response = self._generate_non_streaming(
                     preproc_response, request)
                 yield self.postprocess(gen_response)
@@ -204,6 +212,10 @@ class Decoder:
     def _spec_generate(
             self, preproc: PreprocResponse,
             request: Request) -> Generator[GenerationResponse, None, None]:
+
+        if preproc.input_ids.shape[0] > 1:
+            raise Exception(
+                "Speculative decoding does not support batch size > 1.")
 
         prompt_input_ids: np.ndarray = preproc.input_ids[0]
         input_ids: np.ndarray = prompt_input_ids
