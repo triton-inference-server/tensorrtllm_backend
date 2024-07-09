@@ -350,6 +350,11 @@ output [
     name: "generation_logits"
     data_type: TYPE_FP32
     dims: [ -1, -1, -1 ]
+  },
+  {
+    name: "batch_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
   }
 ]
 instance_group [
