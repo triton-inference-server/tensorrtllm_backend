@@ -6,6 +6,7 @@ TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
 DRAFT_ENGINE_PATH=$5
 ENCODER_ENGINE_PATH=$6
+VISUAL_ENGINE_PATH=$7
 
 set -ex
 set -o pipefail
@@ -151,7 +152,7 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},encoder_engine_dir:${ENCODER_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -161,6 +162,14 @@ fill_triton_repo () {
         cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_draft
         sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_draft"/g' ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt
         python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    fi
+
+    if [ "${ENCODER_ENGINE_PATH}" != "" ] && [ "${ENCODER_ENGINE_PATH}" != "skip" ]; then
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt encoder_engine_dir:${ENCODER_ENGINE_PATH}
+    fi
+
+    if [ "${VISUAL_ENGINE_PATH}" != "" ] && [ "${VISUAL_ENGINE_PATH}" != "skip" ]; then
+        python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH}
     fi
 }
 
@@ -1069,4 +1078,50 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     done
     E2E_MODEL_NAME="ensemble"
     ACCUMULATE_TOKEN="false"
+fi
+
+if [ "$MODEL" = "blip2-opt" ]; then
+
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+
+    # Test none-streaming
+    DECOUPLED_MODE="False"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        python3 tools/multimodal/blip2_opt2.7b_client.py
+        kill_triton_server
+    done
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        python3 tools/multimodal/blip2_opt2.7b_client.py --streaming
+        kill_triton_server
+    done
+    DECOUPLED_MODE="False"
+
+    # Python BLS
+    DECOUPLED_MODE="True"
+    ACCUMULATE_TOKENS=( "false" "true" )
+    E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+    for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
+    for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
+
+        if [[ "${E2E_MODEL_NAME}" == "ensemble" && "${ACCUMULATE_TOKEN}" == "true" ]]; then
+            continue
+        fi
+        launch_triton_server
+        python3 tools/multimodal/blip2_opt2.7b_client.py --use_bls --streaming
+        kill_triton_server
+    done
+    done
+    done
+    E2E_MODEL_NAME="ensemble"
+    ACCUMULATE_TOKEN="false"
+    DECOUPLED_MODE="False"
+
 fi

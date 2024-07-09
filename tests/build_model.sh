@@ -15,6 +15,7 @@ VICUNA=/home/scratch.trt_llm_data/llm-models/vicuna-7b-v1.3
 MEDUSA_VICUNA=/home/scratch.trt_llm_data/llm-models/medusa-vicuna-7b-v1.3/
 BART=/home/scratch.trt_llm_data/llm-models/bart-large-cnn/
 T5=/home/scratch.trt_llm_data/llm-models/t5-small/
+BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
 
 set -e
 
@@ -418,5 +419,28 @@ if [ "$MODEL" = "gpt-gather-generation-logits" ]; then
         --output_dir trt_engine/gpt2-draft-gather-generation-logits/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
+
+fi
+
+if [ "$MODEL" = "blip2-opt" ]; then
+
+    pushd tensorrt_llm/examples/multimodal
+
+    echo "Convert OPT from HF"
+    python3 ../opt/convert_checkpoint.py --model_type blip2 --model_dir ${BLIP2_OPT_2_7B} --dtype float16 --output_dir ./c-model/opt-2.7b/fp16
+
+    echo "OPT builder"
+    trtllm-build --checkpoint_dir ./c-model/opt-2.7b/fp16 \
+                --gemm_plugin float16 \
+                --max_beam_width 1 \
+                --max_batch_size 8 \
+                --max_multimodal_len 256 \
+                --max_input_len 924 \
+                --max_seq_len 1024 \
+                --output_dir trt_engines/opt-2.7b/fp16/1-gpu
+
+    python build_visual_engine.py --model_type blip2 --model_path ${BLIP2_OPT_2_7B} --max_batch_size 8
+
+    popd # tensorrt_llm/examples/multimodal
 
 fi

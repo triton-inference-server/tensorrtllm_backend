@@ -64,6 +64,7 @@ CASE_TO_MODEL = [
   "medusa": "vicuna-7b-v1.3",
   "bart-ib": "bart-large-cnn",
   "t5-ib": "t5-small",
+  "blip2-opt": "blip2-opt-2.7b",
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -81,6 +82,7 @@ CASE_TO_ENGINE_DIR = [
   "medusa": "medusa/tmp/medusa/7B/trt_engines/fp16/1-gpu/",
   "bart-ib": "enc_dec/trt_engine/bart-ib/fp16/1-gpu/",
   "t5-ib": "enc_dec/trt_engine/t5-ib/fp16/1-gpu/",
+  "blip2-opt": "multimodal/trt_engines/opt-2.7b/fp16/1-gpu"
 ]
 
 // Utilities
@@ -367,7 +369,7 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("blip2-opt")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm_common.so /opt/tritonserver/backends/tensorrtllm"
@@ -414,7 +416,12 @@ def runTRTLLMBackendTest(caseName)
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
       sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath}/decoder ${modelPath} ${tokenizerType} skip ${enginePath}/encoder"
     }
-
+    else if (caseName.contains("blip2-opt")){
+      def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
+      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/visual_engines/blip2-opt-2.7b/"
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip ${visualEnginePath}"
+    }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
       def testExample = CASE_TO_EXAMPLE[caseName]
@@ -698,6 +705,11 @@ pipeline {
               stage("Test BLS python unit tests") {
                 steps {
                   runTRTLLMBackendTest("python-bls-unit-tests")
+                }
+              }
+              stage("Test blip2-opt") {
+                steps {
+                  runTRTLLMBackendTest("blip2-opt")
                 }
               }
             }
