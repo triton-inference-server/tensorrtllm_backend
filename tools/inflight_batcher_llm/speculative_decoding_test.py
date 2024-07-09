@@ -252,7 +252,9 @@ if __name__ == '__main__':
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
                 FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
-                None, FLAGS.end_id, FLAGS.pad_id, FLAGS.verbose)
+                None, FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose)
+            assert (len(output_target) == 1)
+            output_target = output_target[0]
             if FLAGS.verbose:
                 print(f"output_target: {output_target}", flush=True)
                 print(f"flags: {FLAGS}")
@@ -271,8 +273,10 @@ if __name__ == '__main__':
                     FLAGS.stop_words, FLAGS.bad_words, [], [],
                     "tensorrt_llm_bls", False, 1, False, None,
                     np.array([[FLAGS.return_generation_logits]], dtype=bool),
-                    FLAGS.end_id, FLAGS.pad_id, FLAGS.verbose,
+                    FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose,
                     FLAGS.num_draft_tokens, FLAGS.use_draft_logits)
+                assert (len(output_speculative) == 1)
+                output_speculative = output_speculative[0]
                 if FLAGS.verbose:
                     print(f"output_bls_speculative: {output_speculative}",
                           flush=True)

@@ -214,7 +214,7 @@ The BLS model has an optional parameter `accumulate_tokens` which can be used in
 postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
-The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding.
+The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding. Also note that requests with batch size greater than 1 is not supported with speculative decoding right now.
 
 BLS Inputs
 

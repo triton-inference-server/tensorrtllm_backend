@@ -142,6 +142,10 @@ class TritonPythonModel:
             generation_logits = pb_utils.get_input_tensor_by_name(
                 request, 'GENERATION_LOGITS')
 
+            # Get the batch index
+            batch_index = pb_utils.get_input_tensor_by_name(
+                request, 'BATCH_INDEX')
+
             # Reshape Input
             # tokens_batch = tokens_batch.reshape([-1, tokens_batch.shape[0]])
             # tokens_batch = tokens_batch.T
@@ -196,6 +200,15 @@ class TritonPythonModel:
                     'OUT_GENERATION_LOGITS',
                     np.array([[[[0.0]]]], dtype=np.float32))
                 outputs.append(out_generation_logits)
+
+            if batch_index:
+                out_batch_index = pb_utils.Tensor('OUT_BATCH_INDEX',
+                                                  batch_index.as_numpy())
+                outputs.append(out_batch_index)
+            else:
+                out_batch_index = pb_utils.Tensor(
+                    'OUT_BATCH_INDEX', np.array([[0]], dtype=np.float32))
+                outputs.append(out_batch_index)
 
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.

@@ -271,19 +271,6 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
         TLLM_LOG_WARNING(e.what());
     }
 
-    if (isDecoupled() && schedulerPolicy != CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT)
-    {
-        if (!enableChunkedContext)
-        {
-            TLLM_LOG_WARNING(
-                "Decoupled mode with a batch scheduler policy other than guaranteed_no_evict "
-                "requires building the model with use_paged_context_fmha and setting "
-                "enable_chunked_context to true. "
-                "The batch scheduler policy will be set to guaranteed_no_evict "
-                "since enable_chunked_context is false.");
-            schedulerPolicy = CapacitySchedulerPolicy::kGUARANTEED_NO_EVICT;
-        }
-    }
     return executor::SchedulerConfig(schedulerPolicy);
 }
 
@@ -591,29 +578,33 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
             throw std::runtime_error("Trying to stop a request but request ID is not provided");
         }
         std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
-        if (mTritonRequestIdToRequestId.count(tritonRequestId))
+        if (mTritonRequestIdToRequestIds.count(tritonRequestId))
         {
-            auto requestId = mTritonRequestIdToRequestId[tritonRequestId];
-            mExecutor->cancelRequest(requestId);
+            auto requestIds = mTritonRequestIdToRequestIds[tritonRequestId];
+            for (auto const& requestId : requestIds)
+            {
+                mExecutor->cancelRequest(requestId);
+            }
         }
     }
     catch (std::exception const& e)
     {
         error = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, e.what());
     }
-    // mTritonRequestIdToRequestId.count(tritonRequestId) == false doesn't necessary mean an error since the
+    // mTritonRequestIdToRequestIds.count(tritonRequestId) == false doesn't necessary mean an error since the
     // request to cancel may already be completed.
     // Send an empty response to indicate the request has been successfully cancelled
     sendEnqueueResponse(request, error);
     return true;
 }
 
-executor::Request ModelInstanceState::createExecutorRequest(
+// Split batched TRITONBACKEND_Request into one executor:Request object per sample.
+std::vector<executor::Request> ModelInstanceState::createExecutorRequests(
     TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
-    return utils::createRequestFromInputTensors(
+    return utils::createRequestsFromInputTensors(
         inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType);
 }
 
@@ -642,33 +633,46 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequest = createExecutorRequest(
+            auto executorRequests = createExecutorRequests(
                 request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(), mModelType);
 
-            int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
-            executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
-            uint64_t compute_start_ns{0};
-            SET_TIMESTAMP(compute_start_ns);
-            auto requestId = mExecutor->enqueueRequest(executorRequest);
-            if (mRequestIdToRequestData.count(requestId))
-            {
-                TLLM_LOG_ERROR(
-                    "Executor returns a request ID that already exists. This shouldn't happen unless there is "
-                    "something "
-                    "wrong in TRT-LLM runtime.");
-            }
             TRITONBACKEND_ResponseFactory* factory;
             LOG_IF_ERROR(
                 TRITONBACKEND_ResponseFactoryNew(&factory, request), "failed to create triton response factory");
 
-            auto requestOutputNames = utils::getRequestOutputNames(request);
-            mRequestIdToRequestData.emplace(requestId,
-                RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
-                    std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}});
+            uint64_t compute_start_ns{0};
+            SET_TIMESTAMP(compute_start_ns);
+
+            auto requestIds = mExecutor->enqueueRequests(executorRequests);
+            auto requestIdsSet = std::make_shared<std::set<executor::IdType>>(requestIds.begin(), requestIds.end());
+
+            // Note:
+            // A single TRITONBACKEND_Request will produce multiple executor requests when bs > 1.
+            // They are treated as individual executor requests until they come back to triton server,
+            // which generates a single response combining responses for all requests in the batch.
+            for (int32_t batchIndex = 0; batchIndex < static_cast<int32_t>(requestIds.size()); ++batchIndex)
+            {
+                auto const& requestId = requestIds.at(batchIndex);
+                auto const& executorRequest = executorRequests.at(batchIndex);
+                int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
+                executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
+                if (mRequestIdToRequestData.count(requestId))
+                {
+                    TLLM_LOG_ERROR(
+                        "Executor returns a request ID that already exists. This shouldn't happen unless there is "
+                        "something "
+                        "wrong in TRT-LLM runtime.");
+                }
+                auto requestOutputNames = utils::getRequestOutputNames(request);
+                mRequestIdToRequestData.emplace(requestId,
+                    RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
+                        std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
+                        requestIdsSet});
+            }
             if (tritonRequestId != "")
             {
-                mTritonRequestIdToRequestId[tritonRequestId] = requestId;
+                mTritonRequestIdToRequestIds[tritonRequestId] = *requestIdsSet;
             }
         }
         catch (std::exception const& e)
@@ -842,6 +846,16 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                     utils::flatten<float>(std::vector<float>{0}, cumLogProbsBuffer, cumLogProbsShape);
                 }
             }
+
+            if (requestData.outputNames.count(OutputFieldsNames::batchIndex) > 0)
+            {
+                std::vector<int64_t> batchIndexShape{1, 1};
+                auto batchIndexType = TRITONSERVER_TYPE_INT32;
+                auto batchIndexBuffer = utils::getResponseBuffer<int32_t>(
+                    tritonResponse, batchIndexShape, batchIndexType, OutputFieldsNames::batchIndex);
+                std::vector<int32_t> batchIndexVec = {requestData.batchIndex};
+                utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
+            }
         }
         else
         {
@@ -889,25 +903,44 @@ void ModelInstanceState::WaitForResponse()
 
             auto [tritonResponse, isFinal, error] = fillTritonResponse(factory, response, requestData);
 
-            LOG_IF_ERROR(
-                TRITONBACKEND_ResponseSend(tritonResponse, isFinal ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, error),
-                "Cannot send response");
-
             if (isFinal)
             {
                 std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
+                bool signalFinal = requestData.pendingBatchedRequestIds->size() == 1;
+                LOG_IF_ERROR(TRITONBACKEND_ResponseSend(
+                                 tritonResponse, signalFinal ? TRITONSERVER_RESPONSE_COMPLETE_FINAL : 0, error),
+                    "Cannot send response");
                 if (requestData.tritonRequestId != "")
                 {
-                    mTritonRequestIdToRequestId.erase(requestData.tritonRequestId);
+                    auto itr = mTritonRequestIdToRequestIds.find(requestData.tritonRequestId);
+                    if (itr != mTritonRequestIdToRequestIds.end())
+                    {
+                        auto& pendingBatchedRequestIds = itr->second;
+                        pendingBatchedRequestIds.erase(requestId);
+                        if (pendingBatchedRequestIds.size() == 0)
+                        {
+                            mTritonRequestIdToRequestIds.erase(requestData.tritonRequestId);
+                        }
+                    }
                 }
+                auto& pendingBatchedRequestIds = *requestData.pendingBatchedRequestIds;
+                pendingBatchedRequestIds.erase(requestId);
+                if (pendingBatchedRequestIds.size() == 0)
+                {
+                    requestData.timestamps.compute_end_ns = compute_end_ns;
+                    LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
 
-                requestData.timestamps.compute_end_ns = compute_end_ns;
-                LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
+                    LOG_IF_ERROR(
+                        TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
+                        "Cannot release request");
 
-                LOG_IF_ERROR(TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
-                    "Cannot release request");
-                LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory), "Cannot delete response factory");
+                    LOG_IF_ERROR(TRITONBACKEND_ResponseFactoryDelete(factory), "Cannot delete response factory");
+                }
                 mRequestIdToRequestData.erase(requestId);
+            }
+            else
+            {
+                LOG_IF_ERROR(TRITONBACKEND_ResponseSend(tritonResponse, 0, error), "Cannot send response");
             }
         }
     }

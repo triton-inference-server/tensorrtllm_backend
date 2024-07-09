@@ -86,6 +86,8 @@ struct RequestData
     executor::SizeType32 beamWidth;
     std::unordered_set<std::string> outputNames;
     Timestamps timestamps;
+    int32_t batchIndex;
+    std::shared_ptr<std::set<executor::IdType>> pendingBatchedRequestIds;
 };
 
 //
@@ -168,8 +170,8 @@ private:
     /// @brief Cancel a request
     bool handleStopRequest(TRITONBACKEND_Request* request, std::string const& tritonRequestId);
 
-    /// @brief Create an executor::Request from input tensors
-    static executor::Request createExecutorRequest(
+    /// @brief Create an executor::Request from input tensors for each sample in batch
+    static std::vector<executor::Request> createExecutorRequests(
         TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType);
 
     /// @brief Fill in a triton response based on executor response
@@ -206,7 +208,7 @@ private:
     bool mStopWaitForCancel;
 
     std::unordered_map<executor::IdType, RequestData> mRequestIdToRequestData;
-    std::unordered_map<std::string, executor::IdType> mTritonRequestIdToRequestId;
+    std::unordered_map<std::string, std::set<executor::IdType>> mTritonRequestIdToRequestIds;
     std::mutex mRequestIdToRequestDataMutex;
 
     // The type of model (encoder-only, decoder-only, encoder-decoder)
