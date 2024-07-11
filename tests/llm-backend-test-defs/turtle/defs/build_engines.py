@@ -5,6 +5,14 @@ from trt_test.misc import check_call, print_info
 install_requirement_cmd = "pip3 install -r requirements.txt"
 
 
+def append_timing_cache_args(build_cmd):
+    TIMING_CACHE_DIR = os.environ.get("TIMING_CACHE_DIR", "")
+    if TIMING_CACHE_DIR:
+        timing_cache = os.path.join(TIMING_CACHE_DIR, "model.cache")
+        build_cmd.append(f"--input_timing_cache={timing_cache}")
+        build_cmd.append(f"--output_timing_cache={timing_cache}")
+
+
 def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
                                     vicuna_7b_model_root,
                                     medusa_vicuna_7b_model_root):
@@ -33,6 +41,7 @@ def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
         "--speculative_decoding_mode=medusa",
     ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -107,6 +116,8 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "--context_fmha=disable",
         "--use_custom_all_reduce=disable",
     ]
+    append_timing_cache_args(encoder_build_cmd)
+    append_timing_cache_args(decoder_build_cmd)
 
     convert_cmd = " ".join(convert_cmd)
     encoder_build_cmd = " ".join(encoder_build_cmd)
@@ -176,6 +187,8 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -228,6 +241,8 @@ def prepare_gptj_6b_engine(type, tensorrt_llm_gptj_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -280,6 +295,8 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -332,6 +349,8 @@ def prepare_gpt_return_logits_engine(type, tensorrt_llm_gpt_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -416,6 +435,8 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_ckpt_cmd = " ".join(convert_ckpt_cmd)
     build_cmd = " ".join(build_cmd)
     convert_lora_train_cmd = " ".join(convert_lora_train_cmd)
@@ -480,6 +501,7 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
             "--paged_kv_cache=enable",
         ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -590,6 +612,7 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
             "--paged_kv_cache=enable",
         ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -648,6 +671,7 @@ def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
             "--paged_kv_cache=enable",
         ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -719,6 +743,7 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
         "--max_prompt_embedding_table_size=800",
     ]
 
+    append_timing_cache_args(build_cmd)
     convert_weights_cmd = " ".join(convert_weights_cmd)
     convert_table_cmd = " ".join(convert_table_cmd)
     build_cmd = " ".join(build_cmd)
@@ -786,6 +811,7 @@ def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
             "--max_batch_size=8",
         ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -841,6 +867,8 @@ def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
+
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
@@ -898,6 +926,7 @@ def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
             "--paged_kv_cache=enable",
         ]
 
+    append_timing_cache_args(build_cmd)
     convert_cmd = " ".join(convert_cmd)
     build_cmd = " ".join(build_cmd)
     if not os.path.exists(engine_dir):
