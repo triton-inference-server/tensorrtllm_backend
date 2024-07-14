@@ -344,6 +344,13 @@ if __name__ == "__main__":
         default=False,
         help="Enable check of output ids for CI",
     )
+    parser.add_argument(
+        "--correctness-threshold",
+        type=float,
+        required=False,
+        default=1.0,
+        help="Error tolerance when checking output for CI",
+    )
 
     parser.add_argument(
         "-b",
@@ -849,11 +856,25 @@ if __name__ == "__main__":
                                      str(FLAGS.request_output_len) +
                                      " output tokens, got " +
                                      str(len(output_ids_wo_prompt)))
-
             curate_log_output(output_ids_w_prompt, "Output")
 
             if (FLAGS.check_output and beam == 0):
-                passed = (output_ids_w_prompt == expected_output_ids)
+                passed = False
+                if FLAGS.correctness_threshold == 1.0:
+                    passed = (output_ids_w_prompt == expected_output_ids)
+                else:
+                    # Compare the output tokens one by one
+                    num_same_output_id = 0
+                    for i in range(
+                            min(len(output_ids_w_prompt),
+                                len(expected_output_ids))):
+                        if output_ids_w_prompt[i] == expected_output_ids[i]:
+                            num_same_output_id += 1
+                    # Calculate the match rate
+                    match_rate = num_same_output_id / len(expected_output_ids)
+                    print(f"Output token matching rate: {match_rate}")
+                    passed = (match_rate > FLAGS.correctness_threshold)
+
                 print("expected_output_ids = ", expected_output_ids)
                 print("\n=====")
                 print("PASS!" if passed else "FAIL!")
