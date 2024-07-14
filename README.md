@@ -71,13 +71,16 @@ git lfs install
 git submodule update --init --recursive
 
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/pytorch:24.04-py3
-TRT_VERSION=10.0.1.6
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.Linux.x86_64-gnu.cuda-12.4.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
+BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.05-py3-min
+# Use the PyTorch package shipped with the PyTorch NGC container.
+PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.05-py3
+TRT_VERSION=10.1.0.27
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.Linux.x86_64-gnu.cuda-12.4.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
 
 docker build -t trtllm_base \
              --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+             --build-arg PYTORCH_IMAGE="${PYTORCH_IMAGE}" \
              --build-arg TRT_VER="${TRT_VERSION}" \
              --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}" \
              --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}" \
@@ -88,7 +91,7 @@ docker build -t trtllm_base \
 # see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
 TRTLLM_BASE_IMAGE=trtllm_base
 TENSORRTLLM_BACKEND_REPO_TAG=rel
-PYTHON_BACKEND_REPO_TAG=r24.04
+PYTHON_BACKEND_REPO_TAG=r24.07
 
 cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
@@ -458,7 +461,7 @@ number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
 
 #### Return context logits and/or generation logits
-If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md).
 
 After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash

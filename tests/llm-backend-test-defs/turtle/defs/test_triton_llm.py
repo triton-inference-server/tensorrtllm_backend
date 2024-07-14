@@ -669,6 +669,9 @@ def test_medusa_vicuna_7b_ifb(
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
     )
+    # Allow the output of the medusa model to be somewhat different from the output of the base model
+    # This is a known issue, because starting medusa may select a different kernel
+    correctness_threshold = 0.7
 
     # Launch Triton Server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
@@ -680,13 +683,11 @@ def test_medusa_vicuna_7b_ifb(
     # Run Test
     run_cmd = [
         f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py",
-        "--request-output-len=128",
-        "--end-id=1284",
-        "--request-id=1",
+        "--request-output-len=128", "--end-id=1284", "--request-id=1",
         f"--tokenizer-dir={llama_v2_tokenizer_model_root}",
         f"--input-tokens-csv={llm_backend_dataset_root}/short_input_end_id_medusa.csv",
         f"--output-tokens-csv={llm_backend_dataset_root}/short_output_end_id_medusa.csv",
-        "--check-output",
+        "--check-output", f"--correctness-threshold={correctness_threshold}"
     ]
     if DECOUPLED_MODE == "True":
         run_cmd += [
