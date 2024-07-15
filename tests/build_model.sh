@@ -40,7 +40,8 @@ if [ "$MODEL" = "gpt" ]; then
         --gemm_plugin float16 \
         --context_fmha enable \
         --remove_input_padding enable \
-        --max_batch_size 8 --max_input_len 924 --max_output_len 100 \
+        --max_batch_size 8 \
+        --max_seq_len 1024 \
         --max_num_tokens 7392 \
         --output_dir trt_engine/gpt2/fp16/1-gpu/
 
@@ -65,8 +66,7 @@ if [ "$MODEL" = "opt" ]; then
                 --gpt_attention_plugin float16 \
                 --context_fmha=enable \
                 --max_batch_size 8 \
-                --max_input_len 924 \
-                --max_output_len 100 \
+                --max_seq_len 1024 \
                 --max_num_tokens 7392 \
                 --output_dir trt_engine/opt-125m/fp16/1-gpu/
 
@@ -297,7 +297,7 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         --paged_kv_cache enable \
         --gemm_plugin float16 \
         --context_fmha enable \
-        --max_batch_size 4 --max_input_len 128 --max_output_len 128 --max_beam_width 1 \
+        --max_batch_size 4 --max_seq_len 256 --max_beam_width 1 \
         --max_num_tokens 512 \
         --output_dir trt_engine/email_composition/fp16/1-gpu/ \
         --max_prompt_embedding_table_size 300
@@ -358,7 +358,7 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
         --paged_kv_cache enable \
         --gemm_plugin float16 \
         --context_fmha enable \
-        --max_batch_size 128 --max_input_len 300 --max_output_len 300 \
+        --max_batch_size 128 --max_seq_len 600 \
         --gather_all_token_logits \
         --output_dir trt_engine/gpt2-gather-logits/fp16/1-gpu/ \
         --max_num_tokens 38400
@@ -386,7 +386,7 @@ if [ "$MODEL" = "medusa" ]; then
              --output_dir ./tmp/medusa/7B/trt_engines/fp16/1-gpu/ \
              --gemm_plugin float16 \
              --speculative_decoding_mode medusa \
-             --max_batch_size 8 --max_input_len 300 --max_output_len 300 \
+             --max_batch_size 8 --max_seq_len 600 \
              --max_num_tokens 2400
 
     popd # tensorrt_llm/examples/medusa
@@ -407,8 +407,7 @@ if [ "$MODEL" = "gpt-gather-generation-logits" ]; then
     echo "Build GPT: float16 | gather_all_token_logits"
     trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
         --max_batch_size 4 \
-        --max_input_len 512 \
-        --max_output_len 128 \
+        --max_seq_len 640 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
         --paged_kv_cache enable \

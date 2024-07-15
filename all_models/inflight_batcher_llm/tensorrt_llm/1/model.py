@@ -313,7 +313,8 @@ def convert_decoding_mode(decoding_mode: str):
 
 def convert_timestamp_to_seconds(timestamp: str):
     return int(
-        datetime.datetime.strptime(timestamp, "%m-%d-%Y %H:%M:%S").timestamp())
+        datetime.datetime.strptime(timestamp,
+                                   "%m-%d-%Y %H:%M:%S.%f").timestamp())
 
 
 class TritonPythonModel:
