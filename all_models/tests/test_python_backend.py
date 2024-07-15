@@ -575,5 +575,6 @@ def test_get_executor_config_minimal():
 
 
 def test_convert_timestamp_to_seconds():
-    assert convert_timestamp_to_seconds("01-01-1970 00:00:00") == 0
-    assert convert_timestamp_to_seconds("05-17-2024 23:28:39") == 1715988519
+    assert convert_timestamp_to_seconds("01-01-1970 00:00:00.000000") == 0
+    assert convert_timestamp_to_seconds(
+        "05-17-2024 23:28:39.000000") == 1715988519

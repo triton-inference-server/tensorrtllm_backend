@@ -148,8 +148,7 @@ trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu \
             --output_dir /tmp/llama_7b_with_lora_qkv/trt_engines/fp16/1-gpu/ \
             --gemm_plugin float16 \
             --max_batch_size 8 \
-            --max_input_len 512 \
-            --max_output_len 50 \
+            --max_seq_len 562 \
             --gpt_attention_plugin float16 \
             --paged_kv_cache enable \
             --remove_input_padding enable \
