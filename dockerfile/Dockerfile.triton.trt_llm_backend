@@ -1,17 +1,27 @@
-ARG BASE_IMAGE # Use NGC PyTorch image as base image
+ARG BASE_IMAGE
+ARG PYTORCH_IMAGE
 
+FROM ${PYTORCH_IMAGE} as pytorch_image
 FROM ${BASE_IMAGE} as install_dependencies
 
-RUN apt-get update -q=2 \
-    && apt-get install -y --no-install-recommends \
+# Copy PyTorch package from PyTorch image
+COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch /usr/local/lib/python3.10/dist-packages/torch
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch-2.4.0a0+07cecf4168.nv24.5.dist-info /usr/local/lib/python3.10/dist-packages/torch-2.4.0a0+07cecf4168.nv24.5.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchgen /usr/local/lib/python3.10/dist-packages/torchgen
+# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
+COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
+
+RUN apt-get update -q=2 && \
+    apt-get install -y --no-install-recommends \
+        python3-dev \
         python3-pip \
         ccache \
-        git-lfs \
-    && rm -rf /var/lib/apt/lists/*
-# Remove previous TRT installation
-# We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
-RUN apt-get remove -y tensorrt*
-RUN pip3 uninstall -y tensorrt
+        git-lfs && \
+    # Remove previous TRT installation
+    apt-get remove -y tensorrt* libnvinfer* && \
+    pip3 uninstall -y tensorrt && \
+    rm -rf /var/lib/apt/lists/*
 
 ARG TRT_VER
 
@@ -35,12 +45,12 @@ RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
 ARG NVRTC_VER="12.4.99-1"
 ENV NVRTC_VER="${NVRTC_VER}"
 
-RUN apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev*
-RUN CUDA_VER_SHORT=$(echo $CUDA_VER | awk -F. '{print $1"."$2}') \
-    && NVRTC_CUDA_VERSION=$(echo $CUDA_VER_SHORT | sed 's/\./-/g') \
-    && apt update -qq \
-    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* && \
+    CUDA_VER_SHORT=$(echo $CUDA_VER | awk -F. '{print $1"."$2}') && \
+    NVRTC_CUDA_VERSION=$(echo $CUDA_VER_SHORT | sed 's/\./-/g') && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} && \
+    rm -rf /var/lib/apt/lists/*
 
 ARG RELEASE_URL_TRT_x86
 ARG RELEASE_URL_TRT_ARM
@@ -57,12 +67,14 @@ ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
 
 FROM install_dependencies as tensorrt_llm_build
-RUN pip3 install --no-cache-dir \
-      cmake \
-      polygraphy==0.49.0 \
-      mpi4py==3.1.5
+
+RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5
 
 WORKDIR /workspace
+# Install CMake
+COPY tensorrt_llm/docker/common/install_cmake.sh install_cmake.sh
+RUN bash ./install_cmake.sh && rm install_cmake.sh
+
 COPY scripts scripts
 COPY tensorrt_llm tensorrt_llm
 RUN cd tensorrt_llm && python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --job_count 18 && cd ..
@@ -72,4 +84,8 @@ FROM install_dependencies as base
 WORKDIR /tmp
 COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
 
-RUN pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm*.whl
+# Install TRT-LLM wheel and remove unnecessary files to reduce image size
+RUN pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm*.whl && \
+    ARCH=$(uname -m) && \
+    cd /usr/local/tensorrt/targets/${ARCH}-linux-gnu/lib && \
+    rm -f *.a

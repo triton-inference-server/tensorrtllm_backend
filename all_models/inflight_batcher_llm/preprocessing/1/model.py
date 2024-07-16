@@ -25,10 +25,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import json
+import os
 from typing import List
 
 import numpy as np
+import tensorrt as trt
+import torch
 import triton_python_backend_utils as pb_utils
+from torch.utils.dlpack import from_dlpack
 from transformers import AutoTokenizer, T5Tokenizer
 
 
@@ -59,6 +63,11 @@ class TritonPythonModel:
 
         add_special_tokens = model_config['parameters'].get(
             'add_special_tokens')
+        visual_model_path = model_config['parameters']['visual_model_path'][
+            'string_value']
+        if visual_model_path == "${visual_model_path}" or visual_model_path == "":
+            visual_model_path = None
+
         if add_special_tokens is not None:
             add_special_tokens_str = add_special_tokens['string_value'].lower()
             if add_special_tokens_str in [
@@ -93,11 +102,51 @@ class TritonPythonModel:
         self.tokenizer_pad_id = self.tokenizer.encode(
             self.tokenizer.pad_token, add_special_tokens=False)[0]
 
+        self.visual_engine = None
+        self.visual_context = None
+        self.stream = None
+        self.vocab_size = None
+        self.dtype = None
+        if visual_model_path is not None:
+            llm_model_path = model_config['parameters']['gpt_model_path'][
+                'string_value']
+            llm_model_path = os.path.join(llm_model_path, 'config.json')
+
+            vision_encoder_path = os.path.join(visual_model_path,
+                                               'visual_encoder.engine')
+            with open(vision_encoder_path, 'rb') as f:
+                engine_buffer = f.read()
+
+            self.stream = torch.cuda.Stream()
+            torch.cuda.set_stream(self.stream)
+
+            trt_logger = trt.Logger(trt.Logger.WARNING)
+            visual_runtime = trt.Runtime(trt_logger)
+            if engine_buffer is not None:
+                self.visual_engine = visual_runtime.deserialize_cuda_engine(
+                    engine_buffer)
+            self.visual_context = self.visual_engine.create_execution_context()
+            self.visual_context.set_optimization_profile_async(
+                0, self.stream.cuda_stream)
+
+            assert self.visual_engine.get_tensor_dtype(
+                'input'
+            ) == trt.float16 and self.visual_engine.get_tensor_dtype(
+                'output'
+            ) == trt.float16 and self.visual_engine.num_io_tensors == 2, "Please use the model built in examples/multimodal."
+
+            self.stream.synchronize()
+
+            with open(llm_model_path, 'r') as f:
+                llm_model_config = json.load(f)
+            self.vocab_size = int(
+                llm_model_config["pretrained_config"]["vocab_size"])
+
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
             "INPUT_ID", "DECODER_INPUT_ID", "REQUEST_INPUT_LEN",
             "REQUEST_DECODER_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
-            "OUT_END_ID", "OUT_PAD_ID"
+            "OUT_END_ID", "OUT_PAD_ID", "OUT_PROMPT_EMBEDDING_TABLE"
         ]
         input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
         for input_name in input_names:
@@ -140,6 +189,7 @@ class TritonPythonModel:
 
         # Every Python backend must iterate over everyone of the requests
         # and create a pb_utils.InferenceResponse for each of them.
+        logger = pb_utils.Logger
         for idx, request in enumerate(requests):
             # Get input tensors
             query = pb_utils.get_input_tensor_by_name(request,
@@ -150,6 +200,27 @@ class TritonPythonModel:
                 request, 'DECODER_QUERY')
             if decoder_query is not None:
                 decoder_query = decoder_query.as_numpy()
+
+            image = pb_utils.get_input_tensor_by_name(request, 'IMAGE')
+            if image is not None:
+                image = from_dlpack(image.to_dlpack()).cuda().half()
+                if self.visual_engine is None:
+                    err_str = "Images cannot be processed without a vision model."
+                    logger.log_error(err_str)
+                    responses.append(
+                        pb_utils.InferenceResponse(
+                            output_tensors=[],
+                            error=pb_utils.TritonError(err_str)))
+                    continue
+
+                if image.shape[0] != batch_size:
+                    err_str = "Query and Image have different batch sizes."
+                    logger.log_error(err_str)
+                    responses.append(
+                        pb_utils.InferenceResponse(
+                            output_tensors=[],
+                            error=pb_utils.TritonError(err_str)))
+                    continue
 
             request_output_len = pb_utils.get_input_tensor_by_name(
                 request, 'REQUEST_OUTPUT_LEN').as_numpy()
@@ -174,6 +245,58 @@ class TritonPythonModel:
             if embedding_bias_weights is not None:
                 embedding_bias_weights = embedding_bias_weights.as_numpy()
 
+            prompt_embedding_table_tensor = pb_utils.get_input_tensor_by_name(
+                request, 'PROMPT_EMBEDDING_TABLE')
+            if prompt_embedding_table_tensor is not None:
+                prompt_embedding_table = prompt_embedding_table_tensor.as_numpy(
+                )
+                prompt_embedding_table_tensor = pb_utils.Tensor(
+                    'OUT_PROMPT_EMBEDDING_TABLE', prompt_embedding_table)
+
+            if image is not None and prompt_embedding_table_tensor is not None:
+
+                err_str = "Image and prompt table cannot be provided simultaneously."
+                logger.log_error(err_str)
+                responses.append(
+                    pb_utils.InferenceResponse(
+                        output_tensors=[],
+                        error=pb_utils.TritonError(err_str)))
+                continue
+
+            visual_output = None
+            if image is not None:
+                ok = self.visual_context.set_input_shape('input', image.shape)
+                if not ok:
+                    err_str = "Image has wrong shape."
+                    logger.log_error(err_str)
+                    responses.append(
+                        pb_utils.InferenceResponse(
+                            output_tensors=[],
+                            error=pb_utils.TritonError(err_str)))
+                    continue
+                self.visual_context.set_tensor_address('input',
+                                                       image.data_ptr())
+
+                visual_output_shape = self.visual_context.get_tensor_shape(
+                    'output')
+                visual_output = torch.empty(tuple(visual_output_shape),
+                                            dtype=torch.float16,
+                                            device=image.device)
+                self.visual_context.set_tensor_address(
+                    'output', visual_output.data_ptr())
+
+                ok = self.visual_context.execute_async_v3(
+                    self.stream.cuda_stream)
+                if not ok:
+                    err_str = "Runtime execution failed for vision encoder model."
+                    logger.log_error(err_str)
+                    responses.append(
+                        pb_utils.InferenceResponse(
+                            output_tensors=[],
+                            error=pb_utils.TritonError(err_str)))
+                    continue
+                self.stream.synchronize()
+
             # Take the end_id from the input tensors
             # If not specified, use tokenizer to get end_id
             end_id = pb_utils.get_input_tensor_by_name(request, 'END_ID')
@@ -191,8 +314,8 @@ class TritonPythonModel:
                 pad_id = [[self.tokenizer_pad_id]] * batch_size
 
             # Preprocessing input data.
-            input_id, request_input_len = self._create_request(query)
-
+            input_id, request_input_len = self._create_request(
+                query, visual_output)
             if decoder_query is not None:
                 decoder_input_id, request_decoder_input_len = self._create_request(
                     decoder_query)
@@ -207,6 +330,12 @@ class TritonPythonModel:
             embedding_bias = self._get_embedding_bias(
                 embedding_bias_words, embedding_bias_weights,
                 self.embedding_bias_weights_dtype, batch_size)
+
+            if image is not None:
+                prompt_table = np.array(visual_output.cpu())
+                prompt_embedding_table_tensor = pb_utils.Tensor(
+                    'OUT_PROMPT_EMBEDDING_TABLE',
+                    prompt_table.astype(self.out_prompt_embedding_table_dtype))
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -234,12 +363,27 @@ class TritonPythonModel:
             pad_id_tensor = pb_utils.Tensor('OUT_PAD_ID',
                                             np.array(pad_id, dtype=np.int32))
 
-            inference_response = pb_utils.InferenceResponse(output_tensors=[
-                input_id_tensor, decoder_input_id_tensor, bad_words_ids_tensor,
-                stop_words_ids_tensor, request_input_len_tensor,
-                request_decoder_input_len_tensor, request_output_len_tensor,
-                embedding_bias_tensor, end_id_tensor, pad_id_tensor
-            ])
+            if prompt_embedding_table_tensor is not None:
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=[
+                        input_id_tensor, decoder_input_id_tensor,
+                        bad_words_ids_tensor, stop_words_ids_tensor,
+                        request_input_len_tensor,
+                        request_decoder_input_len_tensor,
+                        request_output_len_tensor, embedding_bias_tensor,
+                        end_id_tensor, pad_id_tensor,
+                        prompt_embedding_table_tensor
+                    ])
+            else:
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=[
+                        input_id_tensor, decoder_input_id_tensor,
+                        bad_words_ids_tensor, stop_words_ids_tensor,
+                        request_input_len_tensor,
+                        request_decoder_input_len_tensor,
+                        request_output_len_tensor, embedding_bias_tensor,
+                        end_id_tensor, pad_id_tensor
+                    ])
             responses.append(inference_response)
 
         # You should return a list of pb_utils.InferenceResponse. Length
@@ -253,7 +397,7 @@ class TritonPythonModel:
         """
         print('Cleaning up...')
 
-    def _create_request(self, query):
+    def _create_request(self, query, visual_features):
         """
             query : batch string (2D numpy array)
         """
@@ -271,6 +415,14 @@ class TritonPythonModel:
                         add_special_tokens=self.add_special_tokens)).astype(
                             int) for s in query
             ]
+        if visual_features is not None:
+            fake_prompt_id = np.arange(
+                self.vocab_size, self.vocab_size + visual_features.shape[1])
+            start_ids = [
+                np.concatenate((fake_prompt_id, ids), axis=0)
+                for ids in start_ids
+            ]
+
         start_lengths = np.array([[len(ids)] for ids in start_ids]).astype(int)
 
         max_len = 0
