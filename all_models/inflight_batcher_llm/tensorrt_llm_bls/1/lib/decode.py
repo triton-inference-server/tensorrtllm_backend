@@ -59,6 +59,7 @@ def _single_value(data: Optional[np.ndarray]):
 class Request:
     text_input: np.ndarray = np.array([])
     decoder_text_input: np.ndarray = None
+    image_input: Optional[np.ndarray] = None
     max_tokens: np.ndarray = np.array([])
     bad_words: Optional[np.ndarray] = None
     stop_words: Optional[np.ndarray] = None
@@ -120,24 +121,24 @@ class PreprocResponse:
     embedding_bias: Optional[np.ndarray] = None
     end_id: Optional[np.ndarray] = None
     pad_id: Optional[np.ndarray] = None
+    prompt_embedding_table: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
                         other,
                         input_ids: Optional[np.ndarray] = None,
                         input_lengths: Optional[np.ndarray] = None):
-        return cls(
-            input_ids=(input_ids
-                       if input_ids is not None else other.input_ids),
-            input_lengths=(input_lengths if input_lengths is not None else
-                           other.input_lengths),
-            decoder_input_ids=other.decoder_input_ids,
-            decoder_input_lengths=other.decoder_input_lengths,
-            bad_words_list=other.bad_words_list,
-            stop_words_list=other.stop_words_list,
-            end_id=other.end_id,
-            pad_id=other.pad_id,
-        )
+        return cls(input_ids=(input_ids
+                              if input_ids is not None else other.input_ids),
+                   input_lengths=(input_lengths if input_lengths is not None
+                                  else other.input_lengths),
+                   decoder_input_ids=other.decoder_input_ids,
+                   decoder_input_lengths=other.decoder_input_lengths,
+                   bad_words_list=other.bad_words_list,
+                   stop_words_list=other.stop_words_list,
+                   end_id=other.end_id,
+                   pad_id=other.pad_id,
+                   prompt_embedding_table=other.prompt_embedding_table)
 
 
 @dataclass

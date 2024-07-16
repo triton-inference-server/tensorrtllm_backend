@@ -45,6 +45,12 @@ input [
     optional: true
   },
   {
+    name: "image_input"
+    data_type: TYPE_FP16
+    dims: [ 3, 224, 224 ]
+    optional: true
+  },
+  {
     name: "max_tokens"
     data_type: TYPE_INT32
     dims: [ 1 ]

@@ -237,8 +237,14 @@ class TritonPythonModel:
         for batch_idx, beam_tokens in enumerate(tokens_batch):
             for beam_idx, tokens in enumerate(beam_tokens):
                 seq_len = sequence_lengths[batch_idx][beam_idx]
+                # Exclude fake ids in multimodal models
+                fake_id_len = 0
+                for i in range(seq_len):
+                    if tokens[i] < self.tokenizer.vocab_size:
+                        fake_id_len = i
+                        break
                 output = self.tokenizer.decode(
-                    tokens[:seq_len],
+                    tokens[fake_id_len:seq_len],
                     skip_special_tokens=self.skip_special_tokens)
                 outputs.append(output.encode('utf8'))
         return outputs
