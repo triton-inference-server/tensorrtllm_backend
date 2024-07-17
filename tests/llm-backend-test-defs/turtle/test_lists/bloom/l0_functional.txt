@@ -1,5 +1,6 @@
 test_triton_llm.py::test_gpt_350m_python_backend[accuracy]
 test_triton_llm.py::test_gpt_350m_python_backend[e2e]
+test_triton_llm.py::test_blip2_opt[False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-tensorrt_llm_bls]
 test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
 test_triton_llm.py::test_llama_v2_7b_ifb[test_stop_words-False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-True-tensorrt_llm_bls]
 test_triton_llm.py::test_mistral_v1_7b_ifb[False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-4096-1-1-1-False-ensemble]
