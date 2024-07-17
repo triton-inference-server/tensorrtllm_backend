@@ -29,6 +29,8 @@
 
 #include <nlohmann/json.hpp>
 
+using executor::SizeType32;
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -377,23 +379,23 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         std::string decodingModeStr = model_state_->GetParameter<std::string>("decoding_mode");
         if (decodingModeStr == "top_k")
         {
-            decodingMode = executor::DecodingMode::kTOP_K;
+            decodingMode = executor::DecodingMode::TopK();
         }
         else if (decodingModeStr == "top_p")
         {
-            decodingMode = executor::DecodingMode::kTOP_P;
+            decodingMode = executor::DecodingMode::TopP();
         }
         else if (decodingModeStr == "top_k_top_p")
         {
-            decodingMode = executor::DecodingMode::kTOP_K_TOP_P;
+            decodingMode = executor::DecodingMode::TopKTopP();
         }
         else if (decodingModeStr == "beam_search")
         {
-            decodingMode = executor::DecodingMode::kBEAM_SEARCH;
+            decodingMode = executor::DecodingMode::BeamSearch();
         }
         else if (decodingModeStr == "medusa")
         {
-            decodingMode = executor::DecodingMode::kMEDUSA;
+            decodingMode = executor::DecodingMode::Medusa();
         }
         else
         {
@@ -404,20 +406,25 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     {
         TLLM_LOG_WARNING(
             "decoding_mode parameter is invalid or not specified"
-            "(must be one of the {top_k, top_p, top_k_top_p, beam_search})."
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search, medusa})."
             "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
     }
 
-    std::optional<executor::MedusaChoices> medusaChoices = std::nullopt;
+    executor::DecodingConfig decodingConfig(decodingMode);
+
     try
     {
-        medusaChoices = model_state_->GetParameter<executor::MedusaChoices>("medusa_choices");
+        auto medusaChoices = model_state_->GetParameter<executor::MedusaChoices>("medusa_choices");
+        decodingConfig.setMedusaChoices(medusaChoices);
     }
     catch (std::exception const& e)
     {
-        TLLM_LOG_WARNING(
-            "medusa_choices parameter is not specified. "
-            "Will be using default mc_sim_7b_63 choices instead");
+        if (decodingMode && decodingMode->isMedusa())
+        {
+            TLLM_LOG_WARNING(
+                "medusa_choices parameter is not specified. "
+                "Will be using default mc_sim_7b_63 choices instead.");
+        }
     }
 
     float gpuWeightsPercent = 1.0f;
@@ -431,15 +438,14 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     }
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
-        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, parallelConfig,
-        peftCacheConfig, std::nullopt, medusaChoices, decodingMode, gpuWeightsPercent);
+        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
+        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
 {
-    mModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
 
     auto executorConfig = getExecutorConfigFromParams();
 
@@ -449,7 +455,59 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         (executorConfig.getBatchingType() == executor::BatchingType::kSTATIC));
 #endif
 
-    mExecutor.reset(new executor::Executor(mModelPath, executor::ModelType::kDECODER_ONLY, executorConfig));
+    std::string decoderModelPath;
+    try
+    {
+        decoderModelPath = model_state_->GetParameter<std::string>("gpt_model_path");
+        TLLM_CHECK_WITH_INFO(std::filesystem::exists(decoderModelPath),
+            "Decoder (GPT) model path at %s does not exist.", decoderModelPath.c_str());
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("gpt_model_path is not specified, will be left empty");
+        decoderModelPath = "";
+    }
+
+    std::string encoderModelPath;
+    try
+    {
+        encoderModelPath = model_state_->GetParameter<std::string>("encoder_model_path");
+        TLLM_CHECK_WITH_INFO(std::filesystem::exists(encoderModelPath), "Encoder model path at %s does not exist.",
+            encoderModelPath.c_str());
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("encoder_model_path is not specified, will be left empty");
+        encoderModelPath = "";
+    }
+
+    TLLM_CHECK_WITH_INFO(
+        !decoderModelPath.empty() || !encoderModelPath.empty(), "Both encoder and decoder model paths are empty");
+
+    if (!decoderModelPath.empty())
+    {
+        // Encoder-decoder model
+        if (!encoderModelPath.empty())
+        {
+            mModelType = executor::ModelType::kENCODER_DECODER;
+            mExecutor
+                = std::make_unique<executor::Executor>(encoderModelPath, decoderModelPath, mModelType, executorConfig);
+        }
+        // Decoder only model
+        else
+        {
+            mModelType = executor::ModelType::kDECODER_ONLY;
+            mExecutor = std::make_unique<executor::Executor>(decoderModelPath, mModelType, executorConfig);
+        }
+    }
+    // Encoder only
+    else
+    {
+        mModelType = executor::ModelType::kENCODER_ONLY;
+        mExecutor = std::make_unique<executor::Executor>(encoderModelPath, mModelType, executorConfig);
+    }
 
     bool excludeInputInOutput = false;
     try
@@ -551,11 +609,12 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 }
 
 executor::Request ModelInstanceState::createExecutorRequest(
-    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled)
+    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
-    return utils::createRequestFromInputTensors(inputsTensors, excludeInputFromOutput, isDecoupled, streaming);
+    return utils::createRequestFromInputTensors(
+        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -583,8 +642,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequest
-                = createExecutorRequest(request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled());
+            auto executorRequest = createExecutorRequest(
+                request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(), mModelType);
 
             int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
             executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();

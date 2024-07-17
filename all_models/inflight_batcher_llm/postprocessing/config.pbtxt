@@ -101,7 +101,7 @@ parameters {
 parameters {
   key: "skip_special_tokens"
   value: {
-    string_value: "True"
+    string_value: "${skip_special_tokens}"
   }
 }
 

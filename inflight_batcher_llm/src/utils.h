@@ -46,6 +46,7 @@ namespace triton::backend::inflight_batcher_llm
 struct InputFieldsNames
 {
     static constexpr char const* inputTokens = "input_ids";
+    static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
     static constexpr char const* endId = "end_id";
     static constexpr char const* padId = "pad_id";
@@ -83,7 +84,7 @@ struct InputFieldsNames
     static constexpr char const* loraWeights = "lora_weights";
     static constexpr char const* loraConfig = "lora_config";
 
-    // SpeculativeDecodingConfig
+    // ExternalDraftTokensConfig
     static constexpr char const* draftInputs = "draft_input_ids";
     static constexpr char const* draftLogits = "draft_logits";
     static constexpr char const* draftAcceptanceThreshold = "draft_acceptance_threshold";
@@ -121,8 +122,8 @@ executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputs
 /// @brief Construct executor::OutputConfig from input tensors
 executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTensors);
 
-/// @brief Construct executor::SpeculativeDecodingConfig from input tensors
-std::optional<executor::SpeculativeDecodingConfig> getSpeculativeDecodingConfigFromTensors(
+/// @brief Construct executor::ExternalDraftTokensConfig from input tensors
+std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
     InputTensors const& inputsTensors);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
@@ -134,7 +135,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 /// @brief Construct executor::Request from input tensors
 executor::Request createRequestFromInputTensors(
     std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> const& inputsTensors,
-    bool excludeInputFromOutput, bool isDecoupled, bool streaming);
+    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t

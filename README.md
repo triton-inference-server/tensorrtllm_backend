@@ -45,8 +45,6 @@ repo. If you don't find your answer there you can ask questions on the
 
 There are several ways to access the TensorRT-LLM Backend.
 
-**Before Triton 23.10 release, please use [Option 3 to build TensorRT-LLM backend via Docker](#option-3-build-via-docker).**
-
 ### Run the Pre-built Docker Container
 
 Starting with Triton 23.10 release, Triton includes a container with the TensorRT-LLM
@@ -69,14 +67,20 @@ The below commands will build the same Triton TRT-LLM container as the one on th
 ```bash
 # Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
 cd tensorrtllm_backend
+git lfs install
+git submodule update --init --recursive
+
 # Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/pytorch:24.03-py3
-TRT_VERSION=10.0.1.6
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.Linux.x86_64-gnu.cuda-12.4.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.0.1/tars/TensorRT-10.0.1.6.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
+BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.05-py3-min
+# Use the PyTorch package shipped with the PyTorch NGC container.
+PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.05-py3
+TRT_VERSION=10.1.0.27
+TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.Linux.x86_64-gnu.cuda-12.4.tar.gz
+TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
 
 docker build -t trtllm_base \
              --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+             --build-arg PYTORCH_IMAGE="${PYTORCH_IMAGE}" \
              --build-arg TRT_VER="${TRT_VERSION}" \
              --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}" \
              --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}" \
@@ -87,7 +91,7 @@ docker build -t trtllm_base \
 # see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
 TRTLLM_BASE_IMAGE=trtllm_base
 TENSORRTLLM_BACKEND_REPO_TAG=rel
-PYTHON_BACKEND_REPO_TAG=r24.04
+PYTHON_BACKEND_REPO_TAG=r24.07
 
 cd server
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
@@ -188,7 +192,7 @@ prompts(string) to input_ids(list of ints).
 
 This model is a wrapper of your TensorRT-LLM model and is used
 for inferencing.
-Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/inference_request.md)
+Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/inference-request.md)
 
 #### postprocessing
 
@@ -457,7 +461,7 @@ number of generated tokens is lower than 200. You can have a look at the
 client code to see how early stopping is achieved.
 
 #### Return context logits and/or generation logits
-If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/gpt_runtime.md).
+If you want to get context logits and/or generation logits, you need to enable `--gather_context_logits` and/or `--gather_generation_logits` when building the engine (or `--gather_all_token_logits` to enable both at the same time). For more setting details about these two flags, please refer to [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py) or [gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md).
 
 After launching the server, you could get the output of logits by passing the corresponding parameters `--return-context-logits` and/or `--return-generation-logits` in the client scripts ([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) and [inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)). For example:
 ```bash
@@ -554,7 +558,7 @@ pkill tritonserver
 
 ## Triton Metrics
 Starting with the 23.11 release of Triton, users can now obtain TRT LLM Batch
-Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/batch_manager.md#statistics)
+Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/batch-manager.md#statistics)
 by querying the Triton metrics endpoint. This can be accomplished by launching
 a Triton server in any of the ways described above (ensuring the build code /
 container is 23.11 or later) and querying the server. Upon receiving a
@@ -638,6 +642,49 @@ nv_inference_compute_output_duration_us{model="tensorrt_llm",version="1"} 0
 # TYPE nv_inference_pending_request_count gauge
 nv_inference_pending_request_count{model="tensorrt_llm",version="1"} 0
 ```
+
+## Multi-instance Support
+
+TensorRT-LLM backend relies on MPI to coordinate the execution of a model across multiple GPUs
+and nodes. Currently, there are two different modes supported to run a model across multiple GPUs:
+
+1. [Leader mode](#leader-mode)
+2. [Orchestrator mode](#orchestrator-mode)
+
+### Leader Mode
+
+In leader mode, TensorRT-LLM backend spawns one Triton Server process for every
+GPU. The process with rank 0 is the leader process. Other Triton Server processes,
+do not return from the `TRITONBACKEND_ModelInstanceInitialize` call to avoid
+port collision and allowing the other processes to receive requests.
+
+The overview of this mode is described in the diagram below:
+
+![Leader Mode Overview](./images/leader-mode.png)
+
+This mode is friendly with [slurm](https://slurm.schedmd.com) deployments since
+it doesn't use
+[MPI_Comm_spawn](https://www.open-mpi.org/doc/v4.1/man3/MPI_Comm_spawn.3.php).
+
+### Orchestrator Mode
+
+In orchestrator mode, the TensorRT-LLM backend spawns a single Triton Server process
+that acts as an orchestrator and spawns one Triton Server process for every
+GPU that each model requires. This mode is mainly used when serving multiple models
+with TensorRT-LLM backend.  In this mode, the `MPI` world size must be one as
+TRT-LLM backend will automatically create new workers as needed. The overview
+of this mode is described in the diagram below:
+
+![Orchestrator Mode Overview](./images/orchestrator-mode.png)
+
+Since this mode uses [MPI_Comm_spawn](https://www.open-mpi.org/doc/v4.1/man3/MPI_Comm_spawn.3.php),
+it might not work properly with [slurm](https://slurm.schedmd.com) deployments.
+Additionally, this currently only works for single node deployments.
+
+### Running Multiple Instances of LLaMa Model
+
+Please refer to [Running Multiple Instances of the LLaMa Model](docs/llama_multi_instance.md)
+for more information on running multiple instances of LLaMa model in different configurations.
 
 ## Testing the TensorRT-LLM Backend
 Please follow the guide in [`ci/README.md`](ci/README.md) to see how to run

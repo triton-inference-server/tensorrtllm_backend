@@ -38,7 +38,9 @@ class TritonPythonModel:
                                                        padding_side='left',
                                                        legacy=False,
                                                        trust_remote_code=True)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        if not self.tokenizer.pad_token:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
         self.pad_id = self.tokenizer.encode(self.tokenizer.pad_token,
                                             add_special_tokens=False)[0]
 

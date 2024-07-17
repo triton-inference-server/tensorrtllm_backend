@@ -291,12 +291,12 @@ def test_convert_request(triton_request: MockTritonRequest):
     assert (converted.embedding_bias == torch.tensor([0., 0., 0.])).all()
     assert converted.logits_post_processor_name is None
 
-    assert isinstance(converted.speculative_decoding_config,
-                      trtllm.SpeculativeDecodingConfig)
-    assert converted.speculative_decoding_config.tokens == [0, 1]
-    assert (converted.speculative_decoding_config.logits == torch.tensor(
+    assert isinstance(converted.external_draft_tokens_config,
+                      trtllm.ExternalDraftTokensConfig)
+    assert converted.external_draft_tokens_config.tokens == [0, 1]
+    assert (converted.external_draft_tokens_config.logits == torch.tensor(
         [[1.0, 2.0], [3.0, 4.0]])).all()
-    assert converted.speculative_decoding_config.acceptance_threshold == 1.0
+    assert converted.external_draft_tokens_config.acceptance_threshold == 1.0
 
     assert isinstance(converted.prompt_tuning_config,
                       trtllm.PromptTuningConfig)
@@ -345,7 +345,7 @@ def test_convert_request_minimal(triton_request_minimal: MockTritonRequest):
     assert converted.bad_words is None
     assert converted.embedding_bias is None
     assert converted.logits_post_processor_name is None
-    assert converted.speculative_decoding_config is None
+    assert converted.external_draft_tokens_config is None
     assert converted.prompt_tuning_config is None
     assert converted.lora_config is None
 
@@ -468,14 +468,12 @@ def test_convert_batching_type():
 
 def test_convert_decoding_mode():
     assert convert_decoding_mode(None) is None
-    assert convert_decoding_mode("none") == trtllm.DecodingMode.NONE
-    assert convert_decoding_mode("top_k") == trtllm.DecodingMode.TOP_K
-    assert convert_decoding_mode("top_p") == trtllm.DecodingMode.TOP_P
-    assert convert_decoding_mode(
-        "top_k_top_p") == trtllm.DecodingMode.TOP_K_TOP_P
-    assert convert_decoding_mode(
-        "beam_search") == trtllm.DecodingMode.BEAM_SEARCH
-    assert convert_decoding_mode("medusa") == trtllm.DecodingMode.MEDUSA
+    assert convert_decoding_mode("auto").isAuto()
+    assert convert_decoding_mode("top_k").isTopK()
+    assert convert_decoding_mode("top_p").isTopP()
+    assert convert_decoding_mode("top_k_top_p").isTopKandTopP()
+    assert convert_decoding_mode("beam_search").isBeamSearch()
+    assert convert_decoding_mode("medusa").isMedusa()
     with pytest.raises(
             Exception,
             match="decoding_mode value of 'other' is not supported"):
@@ -490,7 +488,7 @@ def model_config() -> Dict:
         "normalize_log_probs": "false",
         "gpt_model_type": "inflight_batching",
         "medusa_choices": "{1, 2, 3, 4}, {5, 6, 7}",
-        "decoding_mode": "top_k_top_p",
+        "decoding_mode": "medusa",
         "batch_scheduler_policy": "max_utilization",
         "enable_kv_cache_reuse": "true",
         "max_tokens_in_paged_kv_cache": "1",
@@ -516,8 +514,8 @@ def test_get_executor_config(model_config: Dict):
     assert config.enable_chunked_context == True
     assert config.normalize_log_probs == False
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
-    assert config.medusa_choices == [[1, 2, 3, 4], [5, 6, 7]]
-    assert config.decoding_mode == trtllm.DecodingMode.TOP_K_TOP_P
+    assert config.decoding_config.medusa_choices == [[1, 2, 3, 4], [5, 6, 7]]
+    assert config.decoding_config.decoding_mode.isMedusa()
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
     assert config.kv_cache_config.enable_block_reuse == True
     assert config.kv_cache_config.max_tokens == 1
@@ -556,8 +554,8 @@ def test_get_executor_config_minimal():
     assert config.enable_chunked_context == False
     assert config.normalize_log_probs == True
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
-    assert config.medusa_choices is None
-    assert config.decoding_mode is None
+    assert config.decoding_config.decoding_mode is None
+    assert config.decoding_config.medusa_choices is None
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     assert config.kv_cache_config.enable_block_reuse == False
     assert config.kv_cache_config.max_tokens is None
@@ -574,3 +572,8 @@ def test_get_executor_config_minimal():
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+
+
+def test_convert_timestamp_to_seconds():
+    assert convert_timestamp_to_seconds("01-01-1970 00:00:00") == 0
+    assert convert_timestamp_to_seconds("05-17-2024 23:28:39") == 1715988519

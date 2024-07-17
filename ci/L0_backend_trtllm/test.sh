@@ -38,6 +38,7 @@ BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
 CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
 CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
 SERVER_PID=0
+SLEEP_DURATION=3
 
 # Force environment to use python version 3
 apt update -q=2 \
@@ -237,7 +238,10 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
     set +e
 
+    # Make sure the metrics is retrieved after the server has updated the metrics internally
+    sleep ${SLEEP_DURATION}
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_v1_no_stream_metrics.out
+
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
@@ -285,7 +289,10 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
     set +e
 
+    # Make sure the metrics is retrieved after the server has updated the metrics internally
+    sleep ${SLEEP_DURATION}
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
+
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
@@ -342,7 +349,10 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         fi
         set +e
 
+        # Make sure the metrics is retrieved after the server has updated the metrics internally
+        sleep ${SLEEP_DURATION}
         curl localhost:8002/metrics -o ${NUM_GPU}gpu_multi_model_metrics.out
+
         kill_server
         wait_for_server_terminated ${SERVER_PID[@]}
     fi
@@ -375,7 +385,10 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
     set +e
 
+    # Make sure the metrics is retrieved after the server has updated the metrics internally
+    sleep ${SLEEP_DURATION}
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_stream_metrics.out
+
     kill_server
     wait_for_server_terminated ${SERVER_PID[@]}
 
