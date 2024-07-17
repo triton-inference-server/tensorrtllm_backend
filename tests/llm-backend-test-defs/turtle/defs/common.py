@@ -109,7 +109,8 @@ def modify_ib_config_pbtxt(REPO_PATH,
                            TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft",
                            BACKEND="tensorrtllm",
                            GPU_WEIGHTS_PERCENT="1.0",
-                           ENCODER_ENGINE_PATH=""):
+                           ENCODER_ENGINE_PATH="",
+                           VISUAL_ENGINE_PATH=""):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     llm_config = os.path.join(llm_backend_repo_root, REPO_PATH, "tensorrt_llm",
@@ -134,7 +135,8 @@ def modify_ib_config_pbtxt(REPO_PATH,
     else:
         check_call(
             f"python3 {fill_template_py} -i {preprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \
-            f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:{PREPROCESSING_INSTANCE_COUNT}",
+            f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:{PREPROCESSING_INSTANCE_COUNT}," \
+            f"visual_model_path:{VISUAL_ENGINE_PATH},engine_dir:{ENGINE_PATH}",
             shell=True)
         check_call(
             f"python3 {fill_template_py} -i {postprocessing_config} tokenizer_dir:{TOKENIZER_PATH}," \

@@ -142,6 +142,13 @@ def llm_backend_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def llm_backend_multimodal_example_root(llm_backend_root):
+    backend_multimodal_example_root = os.path.join(llm_backend_root, "tools",
+                                                   "multimodal")
+    return backend_multimodal_example_root
+
+
+@pytest.fixture(scope="session")
 def llm_backend_inflight_batcher_llm_root(llm_backend_root):
     backend_gpt_example_root = os.path.join(llm_backend_root, "tools",
                                             "inflight_batcher_llm")
@@ -174,6 +181,21 @@ def tensorrt_llm_gptj_example_root(llm_backend_root):
     llm_gpt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                         "examples", "gptj")
     return llm_gpt_example_root
+
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_multimodal_example_root(llm_backend_root):
+    llm_multimodal_example_root = os.path.join(llm_backend_root,
+                                               "tensorrt_llm", "examples",
+                                               "multimodal")
+    return llm_multimodal_example_root
+
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_opt_example_root(llm_backend_root):
+    llm_opt_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                        "examples", "opt")
+    return llm_opt_example_root
 
 
 @pytest.fixture(scope="session")
@@ -357,6 +379,18 @@ def gpt_2b_lora_model_root():
         gpt_2b_lora_model_root
     ), f"{gpt_2b_lora_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return gpt_2b_lora_model_root
+
+
+@pytest.fixture(scope="session")
+def blip2_opt_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    blip2_opt_model_root = os.path.join(models_root, "blip2-opt-2.7b")
+
+    assert os.path.exists(
+        blip2_opt_model_root
+    ), f"{blip2_opt_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return blip2_opt_model_root
 
 
 @pytest.fixture(scope="session")
