@@ -207,7 +207,7 @@ class TritonPythonModel:
                 outputs.append(out_batch_index)
             else:
                 out_batch_index = pb_utils.Tensor(
-                    'OUT_BATCH_INDEX', np.array([[0]], dtype=np.float32))
+                    'OUT_BATCH_INDEX', np.array([[0]], dtype=np.int32))
                 outputs.append(out_batch_index)
 
             # Create InferenceResponse. You can set an error here in case
