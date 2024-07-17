@@ -119,7 +119,7 @@ std::string const ModelState::GetExecutorWorkerPath()
         auto workerPath = GetParameter<std::string>("worker_path");
         TLLM_THROW(
             "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path "
-            "instead to specify the location of the trtllmExecuutorWorker executable.");
+            "instead to specify the location of the trtllmExecutorWorker executable.");
     }
     catch (std::exception const& e)
     {

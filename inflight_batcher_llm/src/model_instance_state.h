@@ -26,26 +26,24 @@
 
 #pragma once
 
-#include <map>
-#include <queue>
-
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#include "tensorrt_llm/batch_manager/BatchManager.h"
-#include "tensorrt_llm/batch_manager/GptManager.h"
 #include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
 #include "tensorrt_llm/batch_manager/namedTensor.h"
-#include "tensorrt_llm/batch_manager/trtGptModelOptionalParams.h"
-#include "tensorrt_llm/runtime/decodingMode.h"
+#include "tensorrt_llm/executor/types.h"
 
 #include "model_state.h"
 
 #ifdef TRITON_ENABLE_METRICS
 #include "custom_metrics_reporter/custom_metrics_reporter.h"
 #endif
+
+#include <map>
+#include <queue>
+#include <thread>
 
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
@@ -98,18 +96,16 @@ struct RequestData
 //
 class ModelInstanceState
 {
-    using DecodingMode = tensorrt_llm::runtime::DecodingMode;
     using InferenceRequest = tensorrt_llm::batch_manager::InferenceRequest;
     using NamedTensor = tensorrt_llm::batch_manager::NamedTensor;
-    using TrtGptModelType = tensorrt_llm::batch_manager::TrtGptModelType;
 
 public:
     // number of cpu workers used to move weights host cache to gpu cache
-    static constexpr SizeType32 kPeftCacheNumEnsureWorkers = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumEnsureWorkers = 4;
     // number of cuda streams used for H2D copies of peft cache pages
-    static constexpr SizeType32 kPeftCacheNumCopyStreams = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumCopyStreams = 4;
     // number of cpu workers used to load weight into host cache
-    static constexpr SizeType32 kPeftCacheNumPutWorkers = 4;
+    static constexpr executor::SizeType32 kPeftCacheNumPutWorkers = 4;
 
     /// @brief Create a ModelInstanceObject
     static TRITONSERVER_Error* Create(
@@ -166,8 +162,6 @@ private:
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;
 
-    std::string mModelPath;
-
     /// @brief Send a response during enqueue
     void sendEnqueueResponse(TRITONBACKEND_Request* request, TRITONSERVER_Error* error);
 
@@ -176,7 +170,7 @@ private:
 
     /// @brief Create an executor::Request from input tensors
     static executor::Request createExecutorRequest(
-        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled);
+        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
@@ -214,6 +208,9 @@ private:
     std::unordered_map<executor::IdType, RequestData> mRequestIdToRequestData;
     std::unordered_map<std::string, executor::IdType> mTritonRequestIdToRequestId;
     std::mutex mRequestIdToRequestDataMutex;
+
+    // The type of model (encoder-only, decoder-only, encoder-decoder)
+    executor::ModelType mModelType;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

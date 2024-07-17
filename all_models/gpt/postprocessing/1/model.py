@@ -35,7 +35,8 @@ class TritonPythonModel:
                                                        legacy=False,
                                                        padding_side="left",
                                                        trust_remote_code=True)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        if not self.tokenizer.pad_token:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Parse model output configs
         output_config = pb_utils.get_output_config_by_name(

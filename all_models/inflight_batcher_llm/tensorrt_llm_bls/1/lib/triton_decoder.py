@@ -50,7 +50,9 @@ class TritonDecoder(Decoder):
 
         self._preproc_outputs = [
             "INPUT_ID",
+            "DECODER_INPUT_ID",
             "REQUEST_INPUT_LEN",
+            "REQUEST_DECODER_INPUT_LEN",
             "BAD_WORDS_IDS",
             "STOP_WORDS_IDS",
             "EMBEDDING_BIAS",
@@ -73,6 +75,7 @@ class TritonDecoder(Decoder):
 
         self.input_names = [
             "text_input",
+            "decoder_text_input",
             "max_tokens",
             "bad_words",
             "stop_words",
@@ -217,6 +220,7 @@ class TritonDecoder(Decoder):
     def _get_preproc_tensors(self, request: Request):
         name_map = {
             "text_input": "QUERY",
+            "decoder_text_input": "DECODER_QUERY",
             "max_tokens": "REQUEST_OUTPUT_LEN",
             "bad_words": "BAD_WORDS_DICT",
             "stop_words": "STOP_WORDS_DICT",
@@ -230,7 +234,9 @@ class TritonDecoder(Decoder):
     def _get_preproc_response(self, triton_output):
         name_map = {
             "INPUT_ID": "input_ids",
+            "DECODER_INPUT_ID": "decoder_input_ids",
             "REQUEST_INPUT_LEN": "input_lengths",
+            "REQUEST_DECODER_INPUT_LEN": "decoder_input_lengths",
             "BAD_WORDS_IDS": "bad_words_list",
             "STOP_WORDS_IDS": "stop_words_list",
             "EMBEDDING_BIAS": "embedding_bias",
@@ -303,6 +309,7 @@ class TritonDecoder(Decoder):
     def _get_tensors_from_preproc(self, preproc: PreprocResponse):
         name_map = {
             "input_ids": "input_ids",
+            "decoder_input_ids": "decoder_input_ids",
             "input_lengths": "input_lengths",
             "bad_words_list": "bad_words_list",
             "stop_words_list": "stop_words_list",

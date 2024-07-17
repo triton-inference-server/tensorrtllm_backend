@@ -189,6 +189,24 @@ if __name__ == '__main__':
                         required=False,
                         help='disable output check')
 
+    parser.add_argument(
+        "--return-draft-model-draft-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return draft model's draft tokens' logits, require to enable `gather_generation_logits` when build engine"
+    )
+
+    parser.add_argument(
+        "--return-target-model-accepted-token-logits",
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        "Return target model's accepted token logits, require to enable `gather_generation_logits` when build engine",
+    )
+
     FLAGS = parser.parse_args()
     if not FLAGS.url_target:
         FLAGS.url_target = "localhost:8001"
@@ -272,7 +290,10 @@ if __name__ == '__main__':
                     FLAGS.preprocessor_model_name,
                     FLAGS.draft_tensorrt_llm_model_name,
                     FLAGS.target_tensorrt_llm_model_name,
-                    FLAGS.postprocessor_model_name, FLAGS.verbose)
+                    FLAGS.postprocessor_model_name,
+                    FLAGS.return_draft_model_draft_logits,
+                    FLAGS.return_target_model_accepted_token_logits,
+                    FLAGS.verbose)
                 if FLAGS.verbose:
                     print(f"output_speculative: {output_speculative}",
                           flush=True)

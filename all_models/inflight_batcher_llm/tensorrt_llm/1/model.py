@@ -134,7 +134,7 @@ def get_output_config_from_request(request, exclude_input_from_output):
     return trtllm.OutputConfig(**kwargs)
 
 
-def get_speculative_decoding_config_from_request(request):
+def get_external_draft_tokens_config_from_request(request):
     kwargs = {}
     draft_input_ids = get_input_tensor_by_name(request, 'draft_input_ids')
     if draft_input_ids is not None:
@@ -146,7 +146,7 @@ def get_speculative_decoding_config_from_request(request):
         request, 'draft_acceptance_threshold')
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
-        return trtllm.SpeculativeDecodingConfig(**kwargs)
+        return trtllm.ExternalDraftTokensConfig(**kwargs)
     return None
 
 
@@ -211,7 +211,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
     sampling_config = get_sampling_config_from_request(request)
     output_config = get_output_config_from_request(request,
                                                    exclude_input_from_output)
-    speculative_decoding_config = get_speculative_decoding_config_from_request(
+    external_draft_tokens_config = get_external_draft_tokens_config_from_request(
         request)
     prompt_tuning_config = get_prompt_tuning_config_from_request(request)
     lora_config = get_lora_config_from_request(request)
@@ -220,7 +220,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         **inputs,
         sampling_config=sampling_config,
         output_config=output_config,
-        speculative_decoding_config=speculative_decoding_config,
+        external_draft_tokens_config=external_draft_tokens_config,
         prompt_tuning_config=prompt_tuning_config,
         lora_config=lora_config,
     )
@@ -295,20 +295,25 @@ def convert_batching_type(gpt_model_type: str):
 def convert_decoding_mode(decoding_mode: str):
     if decoding_mode is None:
         return None
-    elif decoding_mode == "none":
-        return trtllm.DecodingMode.NONE
+    elif decoding_mode == "auto":
+        return trtllm.DecodingMode.Auto()
     elif decoding_mode == "top_k":
-        return trtllm.DecodingMode.TOP_K
+        return trtllm.DecodingMode.TopK()
     elif decoding_mode == "top_p":
-        return trtllm.DecodingMode.TOP_P
+        return trtllm.DecodingMode.TopP()
     elif decoding_mode == "top_k_top_p":
-        return trtllm.DecodingMode.TOP_K_TOP_P
+        return trtllm.DecodingMode.TopKTopP()
     elif decoding_mode == "beam_search":
-        return trtllm.DecodingMode.BEAM_SEARCH
+        return trtllm.DecodingMode.BeamSearch()
     elif decoding_mode == "medusa":
-        return trtllm.DecodingMode.MEDUSA
+        return trtllm.DecodingMode.Medusa()
     raise pb_utils.TritonModelException(
         f"decoding_mode value of '{decoding_mode}' is not supported.")
+
+
+def convert_timestamp_to_seconds(timestamp: str):
+    return int(
+        datetime.datetime.strptime(timestamp, "%m-%d-%Y %H:%M:%S").timestamp())
 
 
 class TritonPythonModel:
@@ -358,7 +363,7 @@ class TritonPythonModel:
             worker_path = get_parameter(model_config, "worker_path")
             if worker_path is not None:
                 raise pb_utils.TritonModelException(
-                    "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path instead to specify the location of the trtllmExecuutorWorker executable."
+                    "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path instead to specify the location of the trtllmExecutorWorker executable."
                 )
             executor_worker_path = get_parameter(model_config,
                                                  "executor_worker_path")
@@ -384,6 +389,19 @@ class TritonPythonModel:
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.PeftCacheConfig(**kwargs)
 
+    def get_decoding_config(self, model_config):
+        kwargs = {
+            "medusa_choices":
+            parse_medusa_choices(get_parameter(model_config,
+                                               "medusa_choices")),
+            "decoding_mode":
+            convert_decoding_mode(get_parameter(model_config,
+                                                "decoding_mode")),
+        }
+        print(kwargs)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        return trtllm.DecodingConfig(**kwargs)
+
     def get_executor_config(self, model_config):
         kwargs = {
             "max_beam_width":
@@ -403,15 +421,160 @@ class TritonPythonModel:
             self.get_parallel_config(model_config),
             "peft_cache_config":
             self.get_peft_cache_config(model_config),
-            "medusa_choices":
-            parse_medusa_choices(get_parameter(model_config,
-                                               "medusa_choices")),
-            "decoding_mode":
-            convert_decoding_mode(get_parameter(model_config,
-                                                "decoding_mode")),
+            "decoding_config":
+            self.get_decoding_config(model_config),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)
+
+    def create_metrics(self, model: str, version: str, is_v1_model: bool):
+        self.request_metric_family = pb_utils.MetricFamily(
+            name="nv_trt_llm_request_metrics",
+            description="TRT LLM request metrics",
+            kind=pb_utils.MetricFamily.GAUGE,
+        )
+        self.runtime_memory_metric_family = pb_utils.MetricFamily(
+            name="nv_trt_llm_runtime_memory_metrics",
+            description="TRT LLM runtime memory metrics",
+            kind=pb_utils.MetricFamily.GAUGE,
+        )
+        self.kv_cache_metric_family = pb_utils.MetricFamily(
+            name="nv_trt_llm_kv_cache_block_metrics",
+            description="TRT LLM KV cache block metrics",
+            kind=pb_utils.MetricFamily.GAUGE,
+        )
+        model_type = "v1" if is_v1_model else "inflight_batcher"
+        self.model_type_metric_family = pb_utils.MetricFamily(
+            name=f"nv_trt_llm_{model_type}_metrics",
+            description=f"TRT LLM {model_type}-specific metrics",
+            kind=pb_utils.MetricFamily.GAUGE,
+        )
+        self.general_metric_family = pb_utils.MetricFamily(
+            name="nv_trt_llm_general_metrics",
+            description="General TRT LLM metrics",
+            kind=pb_utils.MetricFamily.GAUGE,
+        )
+        common_labels = {"model": model, "version": version}
+        self.all_metrics = {
+            # Request metrics
+            "num_active_requests":
+            self.request_metric_family.Metric(labels={
+                "request_type": "active",
+                **common_labels
+            }),
+            "max_num_active_requests":
+            self.request_metric_family.Metric(labels={
+                "request_type": "max",
+                **common_labels
+            }),
+            "num_scheduled_requests":
+            self.request_metric_family.Metric(labels={
+                "request_type": "scheduled",
+                **common_labels
+            }),
+            "num_context_requests":
+            self.request_metric_family.Metric(labels={
+                "request_type": "context",
+                **common_labels
+            }),
+            # Runtime metrics
+            "cpu_mem_usage":
+            self.runtime_memory_metric_family.Metric(labels={
+                "memory_type": "cpu",
+                **common_labels
+            }),
+            "gpu_mem_usage":
+            self.runtime_memory_metric_family.Metric(labels={
+                "memory_type": "gpu",
+                **common_labels
+            }),
+            "pinned_mem_usage":
+            self.runtime_memory_metric_family.Metric(labels={
+                "memory_type": "pinned",
+                **common_labels
+            }),
+            # KV cache metrics
+            "max_num_blocks":
+            self.kv_cache_metric_family.Metric(labels={
+                "kv_cache_block_type": "max",
+                **common_labels
+            }),
+            "free_num_blocks":
+            self.kv_cache_metric_family.Metric(labels={
+                "kv_cache_block_type": "free",
+                **common_labels
+            }),
+            "used_num_blocks":
+            self.kv_cache_metric_family.Metric(labels={
+                "kv_cache_block_type": "used",
+                **common_labels
+            }),
+            "tokens_per_block":
+            self.kv_cache_metric_family.Metric(labels={
+                "kv_cache_block_type": "tokens_per",
+                **common_labels
+            }),
+            # General metrics
+            "timestamp":
+            self.general_metric_family.Metric(labels={
+                "general_type": "timestamp",
+                **common_labels
+            }),
+            "iter":
+            self.general_metric_family.Metric(labels={
+                "general_type": "iteration_counter",
+                **common_labels
+            }),
+        }
+        if is_v1_model:
+            self.all_metrics.update({
+                "num_ctx_tokens":
+                self.model_type_metric_family.Metric(labels={
+                    "v1_specific_metric": "total_context_tokens",
+                    **common_labels
+                }),
+                "num_gen_tokens":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "v1_specific_metric": "total_generation_tokens",
+                        **common_labels
+                    }),
+                "empty_gen_slots":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "v1_specific_metric": "empty_generation_slots",
+                        **common_labels
+                    }),
+            })
+        else:
+            self.all_metrics.update({
+                "num_ctx_tokens":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "inflight_batcher_specific_metric":
+                        "total_context_tokens",
+                        **common_labels
+                    }),
+                "num_gen_requests":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "inflight_batcher_specific_metric":
+                        "generation_requests",
+                        **common_labels
+                    }),
+                "micro_batch_id":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "inflight_batcher_specific_metric": "micro_batch_id",
+                        **common_labels
+                    }),
+                "num_paused_requests":
+                self.model_type_metric_family.Metric(
+                    labels={
+                        "inflight_batcher_specific_metric": "paused_requests",
+                        **common_labels
+                    }),
+            })
 
     def initialize(self, args):
         """`initialize` is called only once when the model is being loaded.
@@ -444,22 +607,30 @@ class TritonPythonModel:
             model_config)
         self.cancellation_check_period_ms = get_parameter(
             model_config, "cancellation_check_period_ms", int) or 100
+        self.stats_check_period_ms = get_parameter(
+            model_config, "stats_check_period_ms", int) or 100
 
         if not self.decoupled:
             raise pb_utils.TritonModelException(
                 "Please enable decoupled transaction policy in the model configuration to serve this model"
             )
 
+        self.create_metrics(args["model_name"],
+                            args["model_version"],
+                            is_v1_model=executor_config.batching_type ==
+                            trtllm.BatchingType.STATIC)
         self.triton_id_to_req_id = {}
         self.req_id_to_response_sender = {}
         self.lock = Lock()
         self.running = False
         self.awaiter_thread = Thread(target=self.awaiter_loop)
         self.cancellation_thread = Thread(target=self.cancellation_loop)
+        self.metrics_thread = Thread(target=self.metrics_loop)
         if self.executor.can_enqueue_requests():
             self.running = True
             self.awaiter_thread.start()
             self.cancellation_thread.start()
+            self.metrics_thread.start()
         else:
             # In leader mode, worker ranks will wait here until leader is done.
             self.executor.shutdown()
@@ -555,7 +726,6 @@ class TritonPythonModel:
                         del self.req_id_to_response_sender[req_id]
                 # Remove local reference so response_sender can be cleaned properly.
                 del response_sender
-            # TODO: Read stats: https://jirasw.nvidia.com/browse/TRTLLM-563
 
     def cancellation_loop(self):
         """Checks if any pending requests have been cancelled."""
@@ -569,6 +739,36 @@ class TritonPythonModel:
                     # Remove local reference so response_sender can be cleaned properly.
                     del response_sender
 
+    def metrics_loop(self):
+        """Updates triton metrics using stats from the executor."""
+        while self.running:
+            time.sleep(self.stats_check_period_ms / 1000.0)
+            for stat in self.executor.get_latest_iteration_stats():
+                try:
+                    for key, metric in self.all_metrics.items():
+                        value = None
+                        if hasattr(stat, key):
+                            value = getattr(stat, key)
+                        elif stat.kv_cache_stats is not None and hasattr(
+                                stat.kv_cache_stats, key):
+                            value = getattr(stat.kv_cache_stats, key)
+                        elif stat.static_batching_stats is not None and hasattr(
+                                stat.static_batching_stats, key):
+                            value = getattr(stat.static_batching_stats, key)
+                        elif stat.inflight_batching_stats is not None and hasattr(
+                                stat.inflight_batching_stats, key):
+                            value = getattr(stat.inflight_batching_stats, key)
+                        if value is not None:
+                            if key == "timestamp":
+                                value = convert_timestamp_to_seconds(value)
+                            metric.set(value)
+                        else:
+                            pb_utils.Logger.log_warn(
+                                f"Metric \"{key}\" not found.")
+                except Exception as e:
+                    pb_utils.Logger.log_warn(
+                        f"Error while processing metrics: {e}")
+
     def finalize(self):
         """`finalize` is called only once when the model is being unloaded.
         Implementing `finalize` function is optional. This function allows
@@ -578,4 +778,5 @@ class TritonPythonModel:
             self.running = False
             self.awaiter_thread.join()
             self.cancellation_thread.join()
+            self.metrics_thread.join()
             self.executor.shutdown()

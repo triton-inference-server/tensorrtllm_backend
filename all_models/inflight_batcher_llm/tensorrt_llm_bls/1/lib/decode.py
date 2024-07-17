@@ -58,6 +58,7 @@ def _single_value(data: Optional[np.ndarray]):
 @dataclass
 class Request:
     text_input: np.ndarray = np.array([])
+    decoder_text_input: np.ndarray = None
     max_tokens: np.ndarray = np.array([])
     bad_words: Optional[np.ndarray] = None
     stop_words: Optional[np.ndarray] = None
@@ -91,17 +92,13 @@ class Request:
 
         num_draft_tokens = _single_value(self.num_draft_tokens)
         stream = _single_value(self.stream)
-        gen_logits = _single_value(self.return_generation_logits)
+        _single_value(self.return_generation_logits)
         context_logits = _single_value(self.return_context_logits)
 
         if num_draft_tokens:
             _validate_that(
                 not stream,
                 "streaming is not supported with speculative decoding")
-            _validate_that(
-                not gen_logits,
-                "generation logits are not supported with speculative decoding"
-            )
             _validate_that(
                 not context_logits,
                 "context logits are not supported with speculative decoding")
@@ -116,7 +113,9 @@ class DraftRequest:
 @dataclass
 class PreprocResponse:
     input_ids: np.ndarray = np.array([])
+    decoder_input_ids: np.ndarray = None
     input_lengths: np.ndarray = np.array([])
+    decoder_input_lengths: np.ndarray = None
     bad_words_list: Optional[np.ndarray] = None
     stop_words_list: Optional[np.ndarray] = None
     embedding_bias: Optional[np.ndarray] = None
@@ -133,6 +132,8 @@ class PreprocResponse:
                        if input_ids is not None else other.input_ids),
             input_lengths=(input_lengths if input_lengths is not None else
                            other.input_lengths),
+            decoder_input_ids=other.decoder_input_ids,
+            decoder_input_lengths=other.decoder_input_lengths,
             bad_words_list=other.bad_words_list,
             stop_words_list=other.stop_words_list,
             end_id=other.end_id,
