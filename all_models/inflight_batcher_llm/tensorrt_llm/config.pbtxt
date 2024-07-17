@@ -54,6 +54,7 @@ input [
     name: "request_output_len"
     data_type: TYPE_INT32
     dims: [ 1 ]
+    reshape: { shape: [ ] }
   },
   {
     name: "draft_input_ids"
@@ -255,12 +256,14 @@ input [
     name: "stop"
     data_type: TYPE_BOOL
     dims: [ 1 ]
+    reshape: { shape: [ ] }
     optional: true
   },
   {
     name: "streaming"
     data_type: TYPE_BOOL
     dims: [ 1 ]
+    reshape: { shape: [ ] }
     optional: true
   },
   {

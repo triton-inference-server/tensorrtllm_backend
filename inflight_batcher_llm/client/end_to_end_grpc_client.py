@@ -189,6 +189,10 @@ def run_inference(triton_client,
                 for (key, value) in bs1_input.items()
             ])
 
+    if beam_width > 1 and FLAGS.check_outputs:
+        raise Exception(
+            "check_outputs flag only works with beam_width == 1 currently")
+
     output_texts = []
     user_data = UserData()
     for inputs in multiple_inputs:
@@ -196,6 +200,7 @@ def run_inference(triton_client,
         triton_client.start_stream(callback=partial(callback, user_data))
 
         # Send request
+        batch_size = inputs[0].shape()[0]
         triton_client.async_stream_infer(model_name,
                                          inputs,
                                          request_id=request_id)
@@ -204,7 +209,7 @@ def run_inference(triton_client,
         triton_client.stop_stream()
 
         # Parse the responses
-        output_text = ""
+        batch_output_text = [''] * batch_size
         while True:
             try:
                 result = user_data._completed_requests.get(block=False)
@@ -216,23 +221,20 @@ def run_inference(triton_client,
                 print(result)
             else:
                 output = result.as_numpy('text_output')
+                batch_index = result.as_numpy('batch_index')[0][0]
                 if streaming and beam_width == 1:
                     if verbose:
-                        print(result.as_numpy('batch_index'),
-                              output,
-                              flush=True)
+                        print(batch_index, output, flush=True)
                     new_output = output[0].decode("utf-8")
                     if overwrite_output_text:
-                        output_text = new_output
+                        batch_output_text[batch_index] = new_output
                     else:
-                        output_text += new_output
+                        batch_output_text[batch_index] += new_output
                 else:
                     output_text = output[0].decode("utf-8")
-                    output_texts.append(output_text)
+                    batch_output_text[batch_index] = output_text
                     if verbose:
-                        print(
-                            f"{result.as_numpy('batch_index')[0][0]}: {output_text}",
-                            flush=True)
+                        print(f"{batch_index}: {output_text}", flush=True)
 
                 if return_context_logits_data is not None:
                     context_logits = result.as_numpy('context_logits')
@@ -249,7 +251,11 @@ def run_inference(triton_client,
 
         if streaming and beam_width == 1:
             if verbose:
-                print(output_text)
+                for output_text in batch_output_text:
+                    print(output_text)
+
+        for output_text in batch_output_text:
+            output_texts.append(output_text)
 
     return output_texts
 
@@ -267,6 +273,23 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Inference server URL.')
+
+    parser.add_argument(
+        '--expected-outputs',
+        type=str,
+        required=False,
+        help=
+        'Expected outputs either a single string or a list of json encoded strings.'
+    )
+
+    parser.add_argument(
+        '--check-outputs',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'Boolean that indicates if outputs should be compared with expected outputs (passed via --expected-outputs)'
+    )
 
     parser.add_argument(
         '-p',
@@ -434,7 +457,7 @@ if __name__ == '__main__':
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
-    output_text = run_inference(
+    output_texts = run_inference(
         client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
         FLAGS.repetition_penalty, FLAGS.presence_penalty,
         FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
@@ -443,3 +466,11 @@ if __name__ == '__main__':
         FLAGS.overwrite_output_text, return_context_logits_data,
         return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id,
         FLAGS.batch_inputs, True)
+
+    if FLAGS.check_outputs:
+        expected_outputs = json.loads(FLAGS.expected_outputs)
+        assert len(expected_outputs) == len(output_texts)
+        assert all([
+            output_text == expected_output for output_text, expected_output in
+            zip(output_texts, expected_outputs)
+        ])

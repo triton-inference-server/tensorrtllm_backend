@@ -437,6 +437,16 @@ run_cpp_e2e_backend_tests () {
                 --embedding-bias-weights -20 \
                 2>&1 | tee output_w_bias
             grep -v "that the government will" output_w_bias
+
+            #Only run batched test in streaming for now since it requires decoupled mode
+            if [[ "$STREAMING" == "true" ]]; then
+                # test with batched requests
+                python3 end_to_end_grpc_client.py \
+                    ${STREAMING_FLAG} \
+                    -o 5 \
+                    -p '["This is a test","I want you to","The cat is"]'  \
+                    --batch-inputs --check-outputs --expected-outputs '[" of the power of the"," know that I am not"," a very good cat."]'
+            fi
         fi
     fi
 
