@@ -225,8 +225,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
-    --remove_input_padding enable --context_fmha disable \
-    --use_custom_all_reduce disable
+    --remove_input_padding enable --context_fmha disable
 
 
     echo "Build Decoder:"
@@ -238,8 +237,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
     --gpt_attention_plugin float16 \
-    --remove_input_padding enable --context_fmha disable \
-    --use_custom_all_reduce disable
+    --remove_input_padding enable --context_fmha disable
 
     popd # tensorrt_llm/examples/bart
 
