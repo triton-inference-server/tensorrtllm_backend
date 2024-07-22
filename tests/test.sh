@@ -251,19 +251,21 @@ run_cpp_trtllm_backend_tests () {
                 PROMPT="The only thing we have to fear is"
                 OUTLEN=10
 
-                ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" 2>&1)
+                ORIGINAL_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" 2>&1 | tail -n 1)
+                echo "original output"
+                echo $ORIGINAL_OUTPUT
                 # should be something like "[...] that the government will [...]"
 
                 # examples of stop words that won't affect generation
                 # "government" isn't tokenized like " government"
                 # " that the public" doesn't match entirely the generated string
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words "government" " that the public" 2>&1 | tail -n 1)
                 [[ "${ORIGINAL_OUTPUT}" == "${TEST_OUTPUT}" ]]
 
                 # check that output finishes at "government"
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " lorem" " government" 2>&1 | tail -n 1)
                 [[ "${TEST_OUTPUT}" == *"government" ]]
-                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1)
+                TEST_OUTPUT=$(python3 end_to_end_grpc_client.py ${STREAMING_FLAG} -o ${OUTLEN} -p "${PROMPT}" --stop-words " that the government" 2>&1 | tail -n 1)
                 [[ "${TEST_OUTPUT}" == *"government" ]]
             }
             test_stop_words
