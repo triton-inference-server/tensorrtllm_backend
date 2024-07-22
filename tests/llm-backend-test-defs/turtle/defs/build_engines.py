@@ -95,7 +95,6 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "--gpt_attention_plugin=float16",
         "--remove_input_padding=enable",
         "--context_fmha=disable",
-        "--use_custom_all_reduce=disable",
     ]
     decoder_build_cmd = [
         "trtllm-build",
@@ -113,7 +112,6 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "--gpt_attention_plugin=float16",
         "--remove_input_padding=enable",
         "--context_fmha=disable",
-        "--use_custom_all_reduce=disable",
     ]
     append_timing_cache_args(encoder_build_cmd)
     append_timing_cache_args(decoder_build_cmd)

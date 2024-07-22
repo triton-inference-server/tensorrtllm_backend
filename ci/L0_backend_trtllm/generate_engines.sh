@@ -46,10 +46,6 @@ function build_tensorrt_engine_inflight_batcher {
     # ./c-model/gpt2/ must already exist (it will if build_base_model
     # has already been run)
     extra_args=""
-    # If no nvlink, disable custom all reduce.
-    if [ "$(nvidia-smi nvlink -s | wc -l)" -eq "0" ] || [ $(nvidia-smi nvlink --status | grep inActive | wc -l) -ge 1 ]; then
-        extra_args+="--use_custom_all_reduce=disable"
-    fi
     trtllm-build --checkpoint_dir "${GPT_MODEL_DIR}" \
             --gpt_attention_plugin float16 \
             --remove_input_padding enable \

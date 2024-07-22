@@ -153,7 +153,6 @@ trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu \
             --paged_kv_cache enable \
             --remove_input_padding enable \
             --use_paged_context_fmha enable \
-            --use_custom_all_reduce disable
             --lora_plugin float16 \
             --lora_target_modules attn_q attn_k attn_v \
             --max_lora_rank 8
