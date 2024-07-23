@@ -59,15 +59,19 @@ const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
 const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
 const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
 
-uint64_t convertTimestampToSeconds(std::string const& ts)
+uint64_t convertTimestampToMicroseconds(std::string const& ts)
 {
     std::tm tm = {};
     std::stringstream ss(ts);
     ss >> std::get_time(&tm, "%m-%d-%Y %H:%M:%S");
     auto timestamp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-    auto epoch = std::chrono::time_point_cast<std::chrono::seconds>(timestamp).time_since_epoch();
-    uint64_t time_in_seconds = std::chrono::duration_cast<std::chrono::seconds>(epoch).count();
-    return time_in_seconds;
+    auto epoch = std::chrono::time_point_cast<std::chrono::microseconds>(timestamp).time_since_epoch();
+    uint64_t seconds_to_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(epoch).count();
+
+    // std::get_time does not support microsecond resolution, so we must manually add
+    // microseconds to our converted value.
+    uint64_t microseconds = std::strtol(ts.substr(ts.rfind(".") + 1).c_str(), NULL, 10);
+    return (seconds_to_microseconds + microseconds);
 }
 
 TritonMetricGroup::TritonMetricGroup(std::string const& metric_family_label,
@@ -203,7 +207,7 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const
             {
                 std::string timestamp;
                 value_json.AsString(&timestamp);
-                value = convertTimestampToSeconds(timestamp);
+                value = convertTimestampToMicroseconds(timestamp);
             }
             else
             {
