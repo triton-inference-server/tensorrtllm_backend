@@ -75,8 +75,7 @@ For the specific models supported by encoder-decoder family, please visit [Tenso
         --gemm_plugin float16 \
         --bert_attention_plugin float16 \
         --gpt_attention_plugin float16 \
-        --context_fmha disable \
-        --use_custom_all_reduce disable
+        --context_fmha disable
 
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/decoder \
         --output_dir ${ENGINE_PATH}/decoder \
@@ -88,7 +87,6 @@ For the specific models supported by encoder-decoder family, please visit [Tenso
         --gpt_attention_plugin float16 \
         --context_fmha disable \
         --max_input_len 1 \
-        --use_custom_all_reduce disable \
         --max_encoder_input_len 2048
     ```
     <!-- > **NOTE**
@@ -211,8 +209,7 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
         --gemm_plugin float16 \
         --bert_attention_plugin float16 \
         --gpt_attention_plugin float16 \
-        --context_fmha disable \
-        --use_custom_all_reduce disable
+        --context_fmha disable
 
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/decoder \
         --output_dir ${ENGINE_PATH}/decoder \
@@ -224,7 +221,6 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
         --gpt_attention_plugin float16 \
         --context_fmha disable \
         --max_input_len 1 \
-        --use_custom_all_reduce disable \
         --max_encoder_input_len 2048
     ```
 2. Setup Tritonserver config with the same commands in [step 4](#prepare-tritonserver-configs) of [Tritonserver Single-GPU Setup

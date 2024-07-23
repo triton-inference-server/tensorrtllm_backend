@@ -1,7 +1,9 @@
 import datetime
 import json
 import os
+import sys
 import time
+from random import randint
 from threading import Lock, Thread
 
 import numpy as np
@@ -11,21 +13,45 @@ from torch import from_numpy
 import tensorrt_llm.bindings.executor as trtllm
 
 
-def get_input_tensor_by_name(request, name):
+def get_input_tensor_by_name(request,
+                             name,
+                             expected_batch_size=None,
+                             batch_index=None):
     tensor = pb_utils.get_input_tensor_by_name(request, name)
     if tensor is None:
         return None
-    return tensor.as_numpy()
+    tensor = tensor.as_numpy()
+    if expected_batch_size is not None and tensor.shape[
+            0] != expected_batch_size:
+        raise pb_utils.TritonModelException(
+            f"Expected batch size doesn't match batch size for tensor {name}. Expected {expected_batch_size} got {tensor.shape[0]}"
+        )
+
+    if batch_index is not None and expected_batch_size is not None and batch_index >= expected_batch_size:
+        raise pb_utils.TritonModelException(
+            f"Invalid batch index in get_input_tensor_by_name for {name}")
+
+    if batch_index is not None:
+        # Add leading 1 batch dimension
+        return np.expand_dims(tensor[batch_index], axis=0)
+    else:
+        return tensor
 
 
-def get_input_scalar_by_name(request, name):
-    tensor = get_input_tensor_by_name(request, name)
+def get_input_scalar_by_name(request,
+                             name,
+                             expected_batch_size=1,
+                             batch_index=0):
+    tensor = pb_utils.get_input_tensor_by_name(request, name)
     if tensor is None:
         return None
-    if tensor.size != 1:
+    tensor = tensor.as_numpy()
+
+    if tensor.size != expected_batch_size:
         raise pb_utils.TritonModelException(
-            f"Expected a single value for {name}")
-    return tensor.item()
+            f"Expected a scalar tensor for tensor {name}")
+
+    return tensor.item(batch_index)
 
 
 def read_parameter_as_type(value, name, pytype=str):
@@ -90,88 +116,110 @@ def parse_medusa_choices(medusa_choices):
     return result
 
 
-def get_sampling_config_from_request(request):
+def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
-    kwargs['beam_width'] = get_input_scalar_by_name(request, 'beam_width') or 1
-    kwargs['top_k'] = get_input_scalar_by_name(request, 'runtime_top_k')
-    kwargs['top_p'] = get_input_scalar_by_name(request, 'runtime_top_p')
+    kwargs['beam_width'] = get_input_scalar_by_name(
+        request, 'beam_width', batch_size, batch_index) or 1
+    kwargs['top_k'] = get_input_scalar_by_name(request, 'runtime_top_k',
+                                               batch_size, batch_index)
+    kwargs['top_p'] = get_input_scalar_by_name(request, 'runtime_top_p',
+                                               batch_size, batch_index)
     kwargs['top_p'] = None if kwargs['top_p'] is None or kwargs[
         'top_p'] <= 0 else kwargs['top_p']
-    kwargs['random_seed'] = get_input_scalar_by_name(request, 'random_seed')
-    kwargs['temperature'] = get_input_scalar_by_name(request, 'temperature')
-    kwargs['min_length'] = get_input_scalar_by_name(request, 'min_length')
+    kwargs['random_seed'] = get_input_scalar_by_name(request, 'random_seed',
+                                                     batch_size, batch_index)
+    kwargs['temperature'] = get_input_scalar_by_name(request, 'temperature',
+                                                     batch_size, batch_index)
+    kwargs['min_length'] = get_input_scalar_by_name(request, 'min_length',
+                                                    batch_size, batch_index)
     kwargs['repetition_penalty'] = get_input_scalar_by_name(
-        request, 'repetition_penalty')
+        request, 'repetition_penalty', batch_size, batch_index)
     kwargs['presence_penalty'] = get_input_scalar_by_name(
-        request, 'presence_penalty')
+        request, 'presence_penalty', batch_size, batch_index)
     kwargs['frequency_penalty'] = get_input_scalar_by_name(
-        request, 'frequency_penalty')
-    kwargs['length_penalty'] = get_input_scalar_by_name(request, 'len_penalty')
+        request, 'frequency_penalty', batch_size, batch_index)
+    kwargs['length_penalty'] = get_input_scalar_by_name(
+        request, 'len_penalty', batch_size, batch_index)
     kwargs['top_p_min'] = get_input_scalar_by_name(request,
-                                                   'runtime_top_p_min')
+                                                   'runtime_top_p_min',
+                                                   batch_size, batch_index)
     kwargs['top_p_reset_ids'] = get_input_scalar_by_name(
-        request, 'runtime_top_p_reset_ids')
+        request, 'runtime_top_p_reset_ids', batch_size, batch_index)
     kwargs['top_p_decay'] = get_input_scalar_by_name(request,
-                                                     'runtime_top_p_decay')
+                                                     'runtime_top_p_decay',
+                                                     batch_size, batch_index)
     kwargs['beam_search_diversity_rate'] = get_input_scalar_by_name(
-        request, 'beam_search_diversity_rate')
+        request, 'beam_search_diversity_rate', batch_size, batch_index)
     kwargs['early_stopping'] = get_input_scalar_by_name(
-        request, 'early_stopping')
+        request, 'early_stopping', batch_size, batch_index)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.SamplingConfig(**kwargs)
 
 
-def get_output_config_from_request(request, exclude_input_from_output):
+def get_output_config_from_request(request,
+                                   exclude_input_from_output,
+                                   batch_size=1,
+                                   batch_index=0):
     kwargs = {}
     kwargs["return_log_probs"] = get_input_scalar_by_name(
-        request, 'return_log_probs')
+        request, 'return_log_probs', batch_size, batch_index)
     kwargs["return_context_logits"] = get_input_scalar_by_name(
-        request, 'return_context_logits')
+        request, 'return_context_logits', batch_size, batch_index)
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
-        request, 'return_generation_logits')
+        request, 'return_generation_logits', batch_size, batch_index)
     kwargs["exclude_input_from_output"] = exclude_input_from_output
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
 
-def get_external_draft_tokens_config_from_request(request):
+def get_external_draft_tokens_config_from_request(request,
+                                                  batch_size=1,
+                                                  batch_index=0):
     kwargs = {}
-    draft_input_ids = get_input_tensor_by_name(request, 'draft_input_ids')
+    draft_input_ids = get_input_tensor_by_name(request, 'draft_input_ids',
+                                               batch_size, batch_index)
     if draft_input_ids is not None:
-        kwargs['tokens'] = draft_input_ids.tolist()
-    draft_logits = get_input_tensor_by_name(request, 'draft_logits')
+        kwargs['tokens'] = draft_input_ids[0].tolist()
+    draft_logits = get_input_tensor_by_name(request, 'draft_logits',
+                                            batch_size, batch_index)
     if draft_logits is not None:
-        kwargs['logits'] = from_numpy(draft_logits)
+        kwargs['logits'] = from_numpy(draft_logits).squeeze()
     kwargs['acceptance_threshold'] = get_input_scalar_by_name(
-        request, 'draft_acceptance_threshold')
+        request, 'draft_acceptance_threshold', batch_size, batch_index)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.ExternalDraftTokensConfig(**kwargs)
     return None
 
 
-def get_prompt_tuning_config_from_request(request):
+def get_prompt_tuning_config_from_request(request,
+                                          batch_size=1,
+                                          batch_index=0):
     # prompt_vocab_size is unused by executor.
     kwargs = {}
     prompt_embedding_table = get_input_tensor_by_name(
-        request, 'prompt_embedding_table')
+        request, 'prompt_embedding_table', batch_size, batch_index)
     if prompt_embedding_table is not None:
-        kwargs["embedding_table"] = from_numpy(prompt_embedding_table)
+        kwargs["embedding_table"] = from_numpy(
+            prompt_embedding_table).squeeze()
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.PromptTuningConfig(**kwargs)
     return None
 
 
-def get_lora_config_from_request(request):
+def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
-    kwargs["task_id"] = get_input_scalar_by_name(request, 'lora_task_id')
-    lora_weights = get_input_tensor_by_name(request, 'lora_weights')
+    kwargs["task_id"] = get_input_scalar_by_name(request, 'lora_task_id',
+                                                 batch_size, batch_index)
+    lora_weights = get_input_tensor_by_name(request, 'lora_weights',
+                                            batch_size, batch_index)
     if lora_weights is not None:
-        kwargs["weights"] = from_numpy(lora_weights)
-    lora_config = get_input_tensor_by_name(request, 'lora_config')
+        kwargs["weights"] = from_numpy(lora_weights).squeeze()
+    lora_config = get_input_tensor_by_name(request, 'lora_config', batch_size,
+                                           batch_index)
     if lora_config is not None:
-        kwargs["config"] = from_numpy(lora_config)
+        kwargs["config"] = from_numpy(lora_config).squeeze()
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.LoraConfig(**kwargs)
@@ -184,49 +232,77 @@ def convert_request(request, exclude_input_from_output, decoupled):
     if input_token_ids is None:
         raise pb_utils.TritonModelException(
             "A value is required for input_ids")
-    input_token_ids = input_token_ids.tolist()
-    if len(input_token_ids) == 0:
+    if len(input_token_ids.shape) != 2:
         raise pb_utils.TritonModelException(f"Invalid format for input_ids")
-    inputs['input_token_ids'] = input_token_ids[0]
-    # input_lengths is not not used by executor.
-    inputs['max_new_tokens'] = get_input_scalar_by_name(
-        request, 'request_output_len')
-    if inputs['max_new_tokens'] is None:
-        raise pb_utils.TritonModelException(
-            "A value is required for request_output_len")
-    inputs['streaming'] = get_input_scalar_by_name(request, 'streaming')
-    if inputs['streaming'] and not decoupled:
-        raise pb_utils.TritonModelException(
-            "Streaming is only supported in decoupled mode.")
-    inputs['end_id'] = get_input_scalar_by_name(request, 'end_id')
-    inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id')
-    inputs['stop_words'] = convert_word_list(
-        get_input_tensor_by_name(request, 'stop_words_list'))
-    inputs['bad_words'] = convert_word_list(
-        get_input_tensor_by_name(request, 'bad_words_list'))
-    embedding_bias = get_input_tensor_by_name(request, 'embedding_bias')
-    if embedding_bias is not None and embedding_bias.size != 0:
-        inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze()
+    batch_size = input_token_ids.shape[0]
+    requests = []
+    for batch_index in range(0, batch_size):
+        input_token_ids = get_input_tensor_by_name(request, 'input_ids',
+                                                   batch_size, batch_index)[0]
+        if input_token_ids is None:
+            raise pb_utils.TritonModelException(
+                "A value is required for input_ids")
+        input_token_ids = input_token_ids.tolist()
+        if len(input_token_ids) == 0:
+            raise pb_utils.TritonModelException(
+                f"Invalid format for input_ids")
 
-    sampling_config = get_sampling_config_from_request(request)
-    output_config = get_output_config_from_request(request,
-                                                   exclude_input_from_output)
-    external_draft_tokens_config = get_external_draft_tokens_config_from_request(
-        request)
-    prompt_tuning_config = get_prompt_tuning_config_from_request(request)
-    lora_config = get_lora_config_from_request(request)
+        input_length = get_input_scalar_by_name(request, 'input_lengths',
+                                                batch_size, batch_index)
+        if input_length is None:
+            input_length = len(input_token_ids)
+        # Trim input token ids with input_lengths
+        inputs['input_token_ids'] = input_token_ids[0:input_length]
 
-    return trtllm.Request(
-        **inputs,
-        sampling_config=sampling_config,
-        output_config=output_config,
-        external_draft_tokens_config=external_draft_tokens_config,
-        prompt_tuning_config=prompt_tuning_config,
-        lora_config=lora_config,
-    )
+        inputs['max_new_tokens'] = get_input_scalar_by_name(
+            request, 'request_output_len', batch_size, batch_index)
+        if inputs['max_new_tokens'] is None:
+            raise pb_utils.TritonModelException(
+                "A value is required for request_output_len")
+        inputs['streaming'] = get_input_scalar_by_name(request, 'streaming',
+                                                       batch_size, batch_index)
+        if inputs['streaming'] and not decoupled:
+            raise pb_utils.TritonModelException(
+                "Streaming is only supported in decoupled mode.")
+        inputs['end_id'] = get_input_scalar_by_name(request, 'end_id',
+                                                    batch_size, batch_index)
+        inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id',
+                                                    batch_size, batch_index)
+        inputs['stop_words'] = convert_word_list(
+            get_input_tensor_by_name(request, 'stop_words_list', batch_size,
+                                     batch_index))
+        inputs['bad_words'] = convert_word_list(
+            get_input_tensor_by_name(request, 'bad_words_list', batch_size,
+                                     batch_index))
+        embedding_bias = get_input_tensor_by_name(request, 'embedding_bias',
+                                                  batch_size, batch_index)
+        if embedding_bias is not None and embedding_bias.size != 0:
+            inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze()
+
+        sampling_config = get_sampling_config_from_request(
+            request, batch_size, batch_index)
+        output_config = get_output_config_from_request(
+            request, exclude_input_from_output, batch_size, batch_index)
+        external_draft_tokens_config = get_external_draft_tokens_config_from_request(
+            request, batch_size, batch_index)
+        prompt_tuning_config = get_prompt_tuning_config_from_request(
+            request, batch_size, batch_index)
+        lora_config = get_lora_config_from_request(request, batch_size,
+                                                   batch_index)
+
+        requests.append(
+            trtllm.Request(
+                **inputs,
+                sampling_config=sampling_config,
+                output_config=output_config,
+                external_draft_tokens_config=external_draft_tokens_config,
+                prompt_tuning_config=prompt_tuning_config,
+                lora_config=lora_config,
+            ))
+    return requests
 
 
-def convert_response(response):
+def convert_response(response, batch_index):
     if response.has_error():
         return pb_utils.InferenceResponse(output_tensors=[],
                                           error=pb_utils.TritonError(
@@ -266,6 +342,10 @@ def convert_response(response):
             np.expand_dims(np.array(result.generation_logits, np.float32), 0)
             if result.generation_logits is not None else np.zeros(
                 (1, 1, 1, 1), np.float32)))
+    output_tensors.append(
+        pb_utils.Tensor("batch_index",
+                        np.expand_dims(np.array([batch_index], np.int32), 0)))
+
     return pb_utils.InferenceResponse(output_tensors), result.is_final
 
 
@@ -620,8 +700,9 @@ class TritonPythonModel:
                             args["model_version"],
                             is_v1_model=executor_config.batching_type ==
                             trtllm.BatchingType.STATIC)
-        self.triton_id_to_req_id = {}
-        self.req_id_to_response_sender = {}
+        self.triton_user_id_to_req_ids = {}
+        self.triton_req_id_to_req_ids = {}
+        self.req_id_to_request_data = {}
         self.lock = Lock()
         self.running = False
         self.awaiter_thread = Thread(target=self.awaiter_loop)
@@ -636,17 +717,19 @@ class TritonPythonModel:
             # In leader mode, worker ranks will wait here until leader is done.
             self.executor.shutdown()
 
-    def handle_stop_request(self, triton_id, response_sender):
-        if triton_id is None or triton_id == "":
+    def handle_stop_request(self, triton_user_id, response_sender):
+        if triton_user_id is None or triton_user_id == "":
             response_sender.send(
                 pb_utils.InferenceResponse(error=pb_utils.TritonError(
                     "A request id must be provided for request cancellation")),
                 flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
             return
 
-        if triton_id in self.triton_id_to_req_id:
-            req_id = self.triton_id_to_req_id[triton_id]
-            self.executor.cancel_request(req_id)
+        with self.lock:
+            if triton_user_id in self.triton_user_id_to_req_ids:
+                req_ids = self.triton_user_id_to_req_ids[triton_user_id]
+                for req_id in req_ids:
+                    self.executor.cancel_request(req_id)
 
         response_sender.send(
             pb_utils.InferenceResponse(),
@@ -673,17 +756,33 @@ class TritonPythonModel:
             return
 
         # Convert to executor requests.
+
         triton_requests = []
         executor_requests = []
+        batch_indices = []
+        triton_user_ids = []
+        triton_req_ids = []
+
         for request in requests:
+
+            triton_user_id = request.request_id()
+
             response_sender = request.get_response_sender()
-            if get_input_scalar_by_name(request, 'stop'):
-                self.handle_stop_request(request.request_id(), response_sender)
+            stop = get_input_scalar_by_name(request, 'stop')
+
+            if stop:
+                self.handle_stop_request(triton_user_id, response_sender)
             else:
+                #Unique request id used to identify each triton request
+                triton_req_id = str(randint(0, sys.maxsize))
+                self.triton_req_id_to_req_ids[triton_req_id] = set()
+                if triton_user_id is not None and triton_user_id != "":
+                    self.triton_user_id_to_req_ids[triton_user_id] = set()
+
                 try:
-                    converted = convert_request(request,
-                                                self.exclude_input_from_output,
-                                                self.decoupled)
+                    converted_reqs = convert_request(
+                        request, self.exclude_input_from_output,
+                        self.decoupled)
                 except Exception as e:
                     response_sender.send(
                         pb_utils.InferenceResponse(error=pb_utils.TritonError(
@@ -691,16 +790,26 @@ class TritonPythonModel:
                         )),
                         flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                 else:
-                    triton_requests.append(request)
-                    executor_requests.append(converted)
+                    for batch_index, converted_req in enumerate(
+                            converted_reqs):
+                        triton_requests.append(request)
+                        executor_requests.append(converted_req)
+                        triton_user_ids.append(triton_user_id)
+                        triton_req_ids.append(triton_req_id)
+                        batch_indices.append(batch_index)
 
         with self.lock:
             request_ids = self.executor.enqueue_requests(executor_requests)
-            for req_id, request in zip(request_ids, triton_requests):
-                triton_id = request.request_id()
-                self.req_id_to_response_sender[
-                    req_id] = triton_id, request.get_response_sender()
-                self.triton_id_to_req_id[triton_id] = req_id
+            for req_id, triton_req_id, triton_user_id, triton_request, batch_index in zip(
+                    request_ids, triton_req_ids, triton_user_ids,
+                    triton_requests, batch_indices):
+                self.req_id_to_request_data[
+                    req_id] = triton_req_id, triton_user_id, batch_index, triton_request.get_response_sender(
+                    )
+                self.triton_req_id_to_req_ids[triton_req_id].add(req_id)
+                if triton_user_id is not None and triton_user_id != "":
+                    self.triton_user_id_to_req_ids[triton_user_id].add(req_id)
+
         return None
 
     def awaiter_loop(self):
@@ -710,21 +819,37 @@ class TritonPythonModel:
                     timeout=datetime.timedelta(milliseconds=1)):
                 req_id = response.request_id
                 with self.lock:
-                    if req_id not in self.req_id_to_response_sender:
+                    if req_id not in self.req_id_to_request_data:
                         continue
-                    triton_id, response_sender = self.req_id_to_response_sender[
+                    triton_req_id, triton_user_id, batch_index, response_sender = self.req_id_to_request_data[
                         req_id]
 
-                triton_response, is_final = convert_response(response)
+                triton_response, is_final = convert_response(
+                    response, batch_index)
+
+                triton_request_final = False
+                if is_final:
+                    with self.lock:
+                        # Check if all executor requests part of that triton request are finished
+                        self.triton_req_id_to_req_ids[triton_req_id].remove(
+                            req_id)
+                        if len(self.triton_req_id_to_req_ids[triton_req_id]
+                               ) == 0:
+                            pb_utils.Logger.log_info(
+                                f"DELETING Req id {req_id}, triton_req_id {triton_req_id} "
+                            )
+                            triton_request_final = True
+                            del self.triton_req_id_to_req_ids[triton_req_id]
+                            if triton_user_id is not None and triton_user_id != "":
+                                del self.triton_user_id_to_req_ids[
+                                    triton_user_id]
+                        del self.req_id_to_request_data[req_id]
+
                 response_sender.send(
                     triton_response,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL
-                    if is_final else 0)
+                    if triton_request_final else 0)
 
-                if is_final:
-                    with self.lock:
-                        del self.triton_id_to_req_id[triton_id]
-                        del self.req_id_to_response_sender[req_id]
                 # Remove local reference so response_sender can be cleaned properly.
                 del response_sender
 
@@ -733,8 +858,9 @@ class TritonPythonModel:
         while self.running:
             time.sleep(self.cancellation_check_period_ms / 1000.0)
             with self.lock:
-                for req_id, (triton_id, response_sender
-                             ) in self.req_id_to_response_sender.items():
+                for req_id, (triton_req_id, triton_user_id, batch_index,
+                             response_sender
+                             ) in self.req_id_to_request_data.items():
                     if response_sender.is_cancelled():
                         self.executor.cancel_request(req_id)
                     # Remove local reference so response_sender can be cleaned properly.
