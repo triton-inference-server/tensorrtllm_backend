@@ -1149,7 +1149,7 @@ def test_gpt_gather_logits_ifb(
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
@@ -1317,7 +1317,7 @@ def test_gpt_350m_speculative_decoding(
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
@@ -1485,7 +1485,7 @@ def test_gpt_350m_speculative_decoding_return_logits(
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
