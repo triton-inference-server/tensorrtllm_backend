@@ -42,7 +42,8 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```bash
     export HF_MODEL_PATH=tmp/hf_models/${MODEL_NAME}
     export UNIFIED_CKPT_PATH=tmp/trt_models/${MODEL_NAME}/fp16/1-gpu
-    export ENGINE_PATH=trt_engines/${MODEL_NAME}/fp16/1-gpu
+    export ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/fp16/1-gpu
+    export VISUAL_ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/vision_encoder
     python tensorrt_llm/examples/opt/convert_checkpoint.py --model_type blip2 \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
@@ -65,7 +66,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     >
     > `max_multimodal_len = max_batch_size * num_visual_features`, so if you change `max_batch_size`, `max_multimodal_len` **MUST** be changed accordingly.
     >
-    > The built visual engines are located in `./visual_engines/${MODEL_NAME}`.
+    > The built visual engines are located in `tmp/trt_engines/${MODEL_NAME}/vision_encoder`.
 
 3. Prepare Tritonserver configs
 
@@ -74,7 +75,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False
 
-    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:visual_engines/${MODEL_NAME},engine_dir:${ENGINE_PATH}
+    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH}
 
     python3 tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
 

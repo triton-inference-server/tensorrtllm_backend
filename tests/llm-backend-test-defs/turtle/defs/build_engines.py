@@ -314,7 +314,8 @@ def prepare_blip2_opt_engine(tensorrt_llm_multimodal_example_root,
         print_info(f"Skipped: {build_visual_engine_cmd}")
 
     visual_engine_dir = os.path.join(tensorrt_llm_multimodal_example_root,
-                                     "visual_engines", "blip2-opt-2.7b")
+                                     "tmp", "trt_engines", "blip2-opt-2.7b",
+                                     "vision_encoder")
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
     assert os.path.exists(
         visual_engine_dir), f"{visual_engine_dir} does not exists."
