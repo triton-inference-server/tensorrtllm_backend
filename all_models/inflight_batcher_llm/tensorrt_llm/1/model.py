@@ -504,6 +504,14 @@ class TritonPythonModel:
             self.get_peft_cache_config(model_config),
             "decoding_config":
             self.get_decoding_config(model_config),
+            "max_queue_size":
+            model_config.get(
+                "dynamic_batching",
+                {},
+            ).get(
+                "default_queue_policy",
+                {},
+            ).get("max_queue_size"),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)

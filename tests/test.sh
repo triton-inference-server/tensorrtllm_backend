@@ -144,6 +144,7 @@ print_test_params () {
     echo "ENABLE_CHUNKED_CONTEXT: ${ENABLE_CHUNKED_CONTEXT}"
     echo "GPU_DEVICE_IDS: ${GPU_DEVICE_IDS}"
     echo "DECODING_MODE: ${DECODING_MODE}"
+    echo "MAX_QUEUE_SIZE: ${MAX_QUEUE_SIZE}"
     echo "run_all_tests: ${run_all_tests}"
     echo "----------------------------------"
 }
@@ -152,7 +153,7 @@ fill_triton_repo () {
 
     echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
 
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
     python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
     python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -478,6 +479,19 @@ run_cpp_e2e_backend_tests () {
     popd # tools/inflight_batcher_llm
 }
 
+run_cpp_trtllm_queue_size_tests () {
+    # Test client
+    echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input.csv
+    pushd tools/inflight_batcher_llm
+    EXTRA_FLAGS=""
+    if [[ "${DECOUPLED_MODE}" == "True" ]]; then
+        EXTRA_FLAGS="-p grpc -u localhost:8001"
+    fi
+    python3 test_max_queue_size.py --input-tokens-csv ../../input.csv --request-output-len 256 --num-requests 100 ${EXTRA_FLAGS}
+
+    popd # tools/inflight_batcher_llm
+}
+
 BACKENDS=( "tensorrtllm" "python" )
 BATCHING_STRATEGIES=( "inflight_fused_batching" "v1" )
 MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
@@ -505,6 +519,7 @@ TRITON_GRPC_PORT="8001"
 TRITON_METRICS_PORT="8002"
 GPU_DEVICE_IDS=""
 DECODING_MODE="top_k_top_p"
+MAX_QUEUE_SIZE="0"
 
 if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistral-ib-mm" ]; then
 
@@ -593,6 +608,28 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
         kill_triton_server
     done
     MAX_QUEUE_DELAY_MICROSECONDS="0"
+
+    # -------------------------------
+    #  Max queue size
+    # -------------------------------
+    run_all_tests="false"
+    MAX_QUEUE_SIZE="6"
+    TRITON_MAX_BATCH_SIZE="1"
+    BATCHING_STRATEGY="inflight_fused_batching"
+
+    for BACKEND in "${BACKENDS[@]}"; do
+        if [[ "${BACKEND}" == "python" ]]; then
+            DECOUPLED_MODE="True"
+        fi
+        launch_triton_server
+        run_cpp_trtllm_queue_size_tests
+        kill_triton_server
+        DECOUPLED_MODE="False"
+    done
+
+    MAX_QUEUE_SIZE="0"
+    TRITON_MAX_BATCH_SIZE="128"
+    BACKEND="${BACKENDS[0]}"
 
     # -------------------------------
     #  Python BLS

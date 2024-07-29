@@ -35,6 +35,7 @@ model_transaction_policy {
 dynamic_batching {
     preferred_batch_size: [ ${triton_max_batch_size} ]
     max_queue_delay_microseconds: ${max_queue_delay_microseconds}
+    default_queue_policy: { max_queue_size: ${max_queue_size} }
 }
 
 input [
