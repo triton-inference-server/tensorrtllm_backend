@@ -424,9 +424,32 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_WARNING("gpu_weights_percent parameter is not specified, will use default value of 1.0");
     }
 
+    std::optional<SizeType32> maxQueueSize = std::nullopt;
+    try
+    {
+        triton::common::TritonJson::Value dynamic_batching;
+        if (model_state_->GetModelConfig().Find("dynamic_batching", &dynamic_batching))
+        {
+            triton::common::TritonJson::Value default_queue_policy;
+            if (dynamic_batching.Find("default_queue_policy", &default_queue_policy))
+            {
+                int64_t max_queue_size;
+                auto err = default_queue_policy.MemberAsInt("max_queue_size", &max_queue_size);
+                if (err == nullptr)
+                {
+                    maxQueueSize = static_cast<SizeType32>(max_queue_size);
+                }
+            }
+        }
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(e.what());
+    }
+
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent);
+        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
