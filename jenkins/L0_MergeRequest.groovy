@@ -418,7 +418,7 @@ def runTRTLLMBackendTest(caseName)
     }
     else if (caseName.contains("blip2-opt")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
-      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/visual_engines/blip2-opt-2.7b/"
+      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/tmp/trt_engines/blip2-opt-2.7b/vision_encoder/"
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
       sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip ${visualEnginePath}"
     }
