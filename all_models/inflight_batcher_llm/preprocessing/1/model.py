@@ -113,7 +113,7 @@ class TritonPythonModel:
             llm_model_path = os.path.join(llm_model_path, 'config.json')
 
             vision_encoder_path = os.path.join(visual_model_path,
-                                               'visual_encoder.engine')
+                                               'model.engine')
             with open(vision_encoder_path, 'rb') as f:
                 engine_buffer = f.read()
 

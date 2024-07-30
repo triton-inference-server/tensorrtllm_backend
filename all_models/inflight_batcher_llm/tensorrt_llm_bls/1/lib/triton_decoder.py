@@ -345,26 +345,23 @@ class TritonDecoder(Decoder):
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)
+        out_len = None
         if request.max_tokens is not None:
+            out_len = request.max_tokens[0][0]
+        if num_output_tokens is not None:
+            out_len = num_output_tokens
+        elif draft_request:
+            if draft_request.draft_input_ids is not None:
+                out_len = len(draft_request.draft_input_ids[0]) + 1
+            else:
+                out_len = 1
+
+        if out_len is None:
+            raise Exception("Could not determine request_output_len")
+        else:
             tensors.append(
                 pb_utils.Tensor("request_output_len",
-                                np.array(request.max_tokens, dtype=np.int32)))
-        else:
-            out_len = None
-            if num_output_tokens is not None:
-                out_len = num_output_tokens
-            elif draft_request:
-                if draft_request.draft_input_ids is not None:
-                    out_len = len(draft_request.draft_input_ids[0]) + 1
-                else:
-                    out_len = 1
-
-            if out_len is None:
-                raise Exception("Could not determine request_output_len")
-            else:
-                tensors.append(
-                    pb_utils.Tensor("request_output_len",
-                                    np.array([[out_len]], dtype=np.int32)))
+                                np.array([[out_len]], dtype=np.int32)))
 
         if draft_request:
             if draft_request.draft_input_ids is not None:
@@ -377,21 +374,35 @@ class TritonDecoder(Decoder):
                         pb_utils.Tensor("draft_logits",
                                         draft_request.draft_logits))
 
-        return_context_logits = [[False]] * batch_size
-        return_generation_logits = [[False]] * batch_size
+        return_context_logits_data = [False]
+        return_generation_logits_data = [False]
         if draft_request is None:
             if is_draft_model_request:
-                return_generation_logits = request.use_draft_logits if request.use_draft_logits is not None else return_generation_logits
+                return_generation_logits_data = request.use_draft_logits if request.use_draft_logits is not None else [
+                    False
+                ]
             else:
-                return_context_logits = request.return_context_logits if request.return_context_logits is not None else return_context_logits
-                return_generation_logits = request.return_generation_logits if request.return_generation_logits is not None else return_generation_logits
+                return_context_logits_data = request.return_context_logits if request.return_context_logits is not None else [
+                    False
+                ]
+                return_generation_logits_data = request.return_generation_logits if request.return_generation_logits is not None else [
+                    False
+                ]
+        return_context_logits = np.array([return_context_logits_data] *
+                                         batch_size,
+                                         dtype=bool)
+        return_generation_logits = np.array([return_generation_logits_data] *
+                                            batch_size,
+                                            dtype=bool)
+
+        assert len(return_context_logits.shape) == 2
+        assert len(return_generation_logits.shape) == 2
 
         tensors.append(
-            pb_utils.Tensor("return_context_logits",
-                            np.array(return_context_logits)))
+            pb_utils.Tensor("return_context_logits", return_context_logits))
         tensors.append(
             pb_utils.Tensor("return_generation_logits",
-                            np.array(return_generation_logits)))
+                            return_generation_logits))
         return tensors
 
     def _get_llm_response(self, triton_output):
