@@ -35,6 +35,11 @@ if __name__ == '__main__':
                         required=True,
                         help='Inference server URL for the draft model')
 
+    parser.add_argument('--url-control',
+                        type=str,
+                        required=True,
+                        help='Inference server URL for the control model')
+
     parser.add_argument('--max-input-len',
                         type=int,
                         required=True,
@@ -75,7 +80,7 @@ if __name__ == '__main__':
         required=False,
         default="tensorrt_llm_bls",
         help=
-        'Name of the tensorrt_llm bls  model (only supports the case of url-target == url-draft)'
+        'Name of the tensorrt_llm bls model (only supports the case of url-target == url-draft)'
     )
 
     parser.add_argument(
@@ -214,11 +219,17 @@ if __name__ == '__main__':
     if not FLAGS.url_draft:
         FLAGS.url_draft = FLAGS.url_target
 
+    if not FLAGS.url_control:
+        FLAGS.url_control = FLAGS.url_target
+
     try:
         client_target = grpcclient.InferenceServerClient(url=FLAGS.url_target)
         client_draft = grpcclient.InferenceServerClient(
             url=FLAGS.url_draft) if (
                 FLAGS.url_target != FLAGS.url_draft) else client_target
+        client_control = grpcclient.InferenceServerClient(
+            url=FLAGS.url_control) if (
+                FLAGS.url_target != FLAGS.url_control) else client_target
     except Exception as e:
         print("client creation failed: " + str(e))
         sys.exit(1)
@@ -241,25 +252,23 @@ if __name__ == '__main__':
             # 1.3 is a magic number that converts number of words to number of tokens
             output_len = int(len(output.split(' ')) * 1.3)
             if FLAGS.verbose:
+                print(f"flags: {FLAGS}")
                 print(f"Prompt: {prompt}")
                 print(f"Output len: {output_len}")
 
-            # Calling target model only
+            # Calling control model only
             if FLAGS.verbose:
-                print(f"Calling target model", flush=True)
-            output_target = end_to_end_grpc_client.run_inference(
-                client_target, prompt, output_len, str(request_id),
+                print(f"Calling control model", flush=True)
+            output_control = end_to_end_grpc_client.run_inference(
+                client_control, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
                 FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
                 None, FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose)
-            assert (len(output_target) == 1)
-            output_target = output_target[0]
+            assert (len(output_control) == 1)
+            output_control = output_control[0]
             if FLAGS.verbose:
-                print(f"output_target: {output_target}", flush=True)
-                print(f"flags: {FLAGS}")
-                print(f"prompt: {prompt}")
-                print(f"output_len: {output_len}")
+                print(f"output_control: {output_control}", flush=True)
 
             # Calling BLS speculative decoding
             if FLAGS.execute_bls_speculative_decoding:
@@ -304,13 +313,13 @@ if __name__ == '__main__':
 
             total_count = total_count + 1
             if not FLAGS.disable_output_comparison:
-                if (output_target != output_speculative):
+                if (output_control != output_speculative):
                     failed_count = failed_count + 1
                     print(f"{total_count}: Outputs don't match")
                     print(f"Prompt:")
                     print(f"{prompt}")
-                    print(f"Output target:")
-                    print(f"{output_target}")
+                    print(f"Output control:")
+                    print(f"{output_control}")
                     print(f"Output speculative:")
                     print(f"{output_speculative}")
                 else:

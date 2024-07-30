@@ -383,17 +383,17 @@ def runTRTLLMBackendTest(caseName)
     if (caseName.contains("speculative-decoding")) {
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
       {
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib"
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib"
-        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib" // draft model
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
+        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
       }
     }
     else if (caseName.contains("speculative-decoding-bls")) {
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
       {
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib"
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib"
-        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-ib-speculative-decoding-bls ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/"
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib" // draft model
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
+        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-ib-speculative-decoding-bls ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
       }
     }
     else if (caseName.contains("gather-logits")){
@@ -403,8 +403,8 @@ def runTRTLLMBackendTest(caseName)
       // speculative decoding return draft model draft token logits
       // and target model accepted token logits
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-gather-generation-logits" // draft model
-      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // target model
-      sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-draft-gather-generation-logits/fp16/1-gpu/"
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
+      sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-gather-logits ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-draft-gather-generation-logits/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
 
     }
     else if (caseName.contains("python-bls-unit-tests")){
@@ -414,13 +414,13 @@ def runTRTLLMBackendTest(caseName)
     else if (caseName.contains("bart-ib") || caseName.contains("t5-ib")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
-      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath}/decoder ${modelPath} ${tokenizerType} skip ${enginePath}/encoder"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath}/decoder ${modelPath} ${tokenizerType} skip skip ${enginePath}/encoder"
     }
     else if (caseName.contains("blip2-opt")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
       def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/tmp/trt_engines/blip2-opt-2.7b/vision_encoder/"
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
-      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip ${visualEnginePath}"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip skip ${visualEnginePath}"
     }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]

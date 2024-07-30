@@ -1,12 +1,13 @@
 #!/usr/bin/bash
 
 MODEL=$1
-TARGET_ENGINE_PATH=$2
+DECODER_ENGINE_PATH=$2
 TOKENIZER_PATH=$3
 TOKENIZER_TYPE=$4
 DRAFT_ENGINE_PATH=$5
-ENCODER_ENGINE_PATH=$6
-VISUAL_ENGINE_PATH=$7
+TARGET_ENGINE_PATH=$6
+ENCODER_ENGINE_PATH=$7
+VISUAL_ENGINE_PATH=$8
 
 set -ex
 set -o pipefail
@@ -34,7 +35,7 @@ fi
 
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "opt" ] || [ "$MODEL" = "llama" ] || [ "$MODEL" = "gptj" ] || [ "$MODEL" = "mistral" ]; then
     # Modify config.pbtxt
-    python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${TARGET_ENGINE_PATH}
+    python3 tools/fill_template.py -i all_models/gpt/tensorrt_llm/config.pbtxt engine_dir:${DECODER_ENGINE_PATH}
     python3 tools/fill_template.py -i all_models/gpt/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH}
     python3 tools/fill_template.py -i all_models/gpt/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH}
 
@@ -135,6 +136,7 @@ print_test_params () {
     echo "ENABLE_KV_CACHE_REUSE: ${ENABLE_KV_CACHE_REUSE}"
     echo "E2E_MODEL_NAME: ${E2E_MODEL_NAME}"
     echo "TENSORRT_LLM_MODEL_NAME: ${TENSORRT_LLM_MODEL_NAME}"
+    echo "TENSORRT_LLM_TARGET_MODEL_NAME: ${TENSORRT_LLM_TARGET_MODEL_NAME}"
     echo "TENSORRT_LLM_DRAFT_MODEL_NAME: ${TENSORRT_LLM_DRAFT_MODEL_NAME}"
     echo "ACCUMULATE_TOKEN: ${ACCUMULATE_TOKEN}"
     echo "BLS_INSTANCE_COUNT: ${BLS_INSTANCE_COUNT}"
@@ -151,18 +153,37 @@ print_test_params () {
 
 fill_triton_repo () {
 
-    echo "Filling triton repository at ${TRITON_REPO} with engine ${ENGINE_PATH}"
-
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
-    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:${TENSORRT_LLM_MODEL_NAME},tensorrt_llm_draft_model_name:${TENSORRT_LLM_DRAFT_MODEL_NAME}
-
     if [ "${DRAFT_ENGINE_PATH}" != "" ] && [ "${DRAFT_ENGINE_PATH}" != "skip" ]; then
         cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_draft
         sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_draft"/g' ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt
-        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE}
+    fi
+
+    if [ "${TARGET_ENGINE_PATH}" != "" ] && [ "${TARGET_ENGINE_PATH}" != "skip" ]; then
+        cp -R ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/tensorrt_llm_target
+        sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_target"/g' ${TRITON_REPO}/tensorrt_llm_target/config.pbtxt
+    fi
+
+    echo "Filling triton repository at ${TRITON_REPO}/tensorrt_llm with engine ${DECODER_ENGINE_PATH}"
+    python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt triton_backend:${BACKEND},engine_dir:${DECODER_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
+
+    python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${PREPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_PATH},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${POSTPROCESSING_INSTANCE_COUNT}
+    python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
+
+    if [ "${DRAFT_ENGINE_PATH}" != "" ] && [ "${DRAFT_ENGINE_PATH}" != "skip" ] && [ "${TARGET_ENGINE_PATH}" != "" ] && [ "${TARGET_ENGINE_PATH}" != "skip" ]; then
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:${TENSORRT_LLM_TARGET_MODEL_NAME},tensorrt_llm_draft_model_name:${TENSORRT_LLM_DRAFT_MODEL_NAME}
+    else
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:${TENSORRT_LLM_MODEL_NAME},tensorrt_llm_draft_model_name:${TENSORRT_LLM_MODEL_NAME}
+    fi
+
+    if [ "${DRAFT_ENGINE_PATH}" != "" ] && [ "${DRAFT_ENGINE_PATH}" != "skip" ]; then
+        echo "Filling triton repository at ${TRITON_REPO}/tensorrt_llm_draft with engine ${DRAFT_ENGINE_PATH}"
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_draft/config.pbtxt triton_backend:${BACKEND},engine_dir:${DRAFT_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
+    fi
+
+    if [ "${TARGET_ENGINE_PATH}" != "" ] && [ "${TARGET_ENGINE_PATH}" != "skip" ]; then
+        echo "Filling triton repository at ${TRITON_REPO}/tensorrt_llm_target with engine ${TARGET_ENGINE_PATH}"
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_target/config.pbtxt triton_backend:${BACKEND},engine_dir:${TARGET_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:${ENABLE_KV_CACHE_REUSE},normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
     fi
 
     if [ "${ENCODER_ENGINE_PATH}" != "" ] && [ "${ENCODER_ENGINE_PATH}" != "skip" ]; then
@@ -170,7 +191,7 @@ fill_triton_repo () {
     fi
 
     if [ "${VISUAL_ENGINE_PATH}" != "" ] && [ "${VISUAL_ENGINE_PATH}" != "skip" ]; then
-        python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${DECODER_ENGINE_PATH}
     fi
 }
 
@@ -506,6 +527,8 @@ MAX_BEAM_WIDTH="1"
 ENABLE_KV_CACHE_REUSE="false"
 E2E_MODEL_NAME="ensemble"
 TENSORRT_LLM_MODEL_NAME="tensorrt_llm"
+TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"
+TENSORRT_LLM_TARGET_MODEL_NAME="tensorrt_llm_target"
 ACCUMULATE_TOKEN="false"
 EXCLUDE_INPUT_IN_OUTPUT="false"
 BLS_INSTANCE_COUNT="1"
@@ -513,7 +536,6 @@ PREPROCESSING_INSTANCE_COUNT="1"
 POSTPROCESSING_INSTANCE_COUNT="1"
 NORMALIZE_LOG_PROBS="true"
 TRITON_REPO="triton_repo"
-ENGINE_PATH=${TARGET_ENGINE_PATH}
 TRITON_HTTP_PORT="8000"
 TRITON_GRPC_PORT="8001"
 TRITON_METRICS_PORT="8002"
@@ -732,11 +754,11 @@ if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
-    TENSORRT_LLM_DRAFT_MODEL_NAME="tensorrt_llm_draft"
     USE_DRAFT_LOGITS_VALUES=( "true" "false" )
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for USE_DRAFT_LOGITS in "${USE_DRAFT_LOGITS_VALUES[@]}"; do
+
 
         if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
             continue
@@ -757,8 +779,9 @@ if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
             --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
             --url-target=localhost:8001 \
             --url-draft=localhost:8001 \
+            --url-control=localhost:8001 \
             --draft-tensorrt-llm-model-name="${TENSORRT_LLM_DRAFT_MODEL_NAME}" \
-            --target-tensorrt-llm-model-name="${TENSORRT_LLM_MODEL_NAME}" \
+            --target-tensorrt-llm-model-name="${TENSORRT_LLM_TARGET_MODEL_NAME}" \
             --bls-speculative-tensorrt-llm-model-name="tensorrt_llm_bls" \
             --execute-bls-speculative-decoding \
             ${draft_args} \
@@ -777,11 +800,22 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     pushd tensorrt_llm/examples/gpt
 
     # Input with virtual tokens:
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/tokenizer.model --prompt_table_path=email_composition.npy --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_w_prompt.csv
+    python3 ../run.py \
+        --max_output_len=8 \
+        --vocab_file=c-model/email_composition/fp16/tokenizer.model \
+        --prompt_table_path=email_composition.npy \
+        --input_file=input.csv \
+        --engine_dir ${DECODER_ENGINE_PATH} \
+        --output_csv output_w_prompt.csv
 
     #Input w/o virtual tokens:
     echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
-    python3 ../run.py --max_output_len=8 --vocab_file=c-model/email_composition/fp16/tokenizer.model --input_file=input_wo_prompt.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output_wo_prompt.csv
+    python3 ../run.py \
+        --max_output_len=8 \
+        --vocab_file=c-model/email_composition/fp16/tokenizer.model \
+        --input_file=input_wo_prompt.csv \
+        --engine_dir ${DECODER_ENGINE_PATH} \
+        --output_csv output_wo_prompt.csv
 
     popd
 
@@ -813,11 +847,15 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     pushd tensorrt_llm/examples/gpt
 
     # Input with virtual tokens:
-    python3 ../run.py --max_output_len=8 \
+    python3 ../run.py \
+        --max_output_len=8 \
         --lora_dir=gpt2b_lora-900.nemo \
         --lora_ckpt_source nemo \
         --lora_task_uids 0 \
-        --input_file=input.csv --engine_dir ${TARGET_ENGINE_PATH} --output_csv output.csv --use_py_session
+        --engine_dir ${DECODER_ENGINE_PATH} \
+        --input_file=input.csv \
+        --output_csv output.csv \
+        --use_py_session
 
     popd
 
@@ -871,16 +909,12 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
             continue
         fi
 
-        TRITON_REPO="triton_repo"
-        ENGINE_PATH=${TARGET_ENGINE_PATH}
         TRITON_HTTP_PORT="8000"
         TRITON_GRPC_PORT="8001"
         TRITON_METRICS_PORT="8002"
         ENABLE_KV_CACHE_REUSE="true"
         launch_triton_server
 
-        TRITON_REPO="triton_repo_draft"
-        ENGINE_PATH=${DRAFT_ENGINE_PATH}
         TRITON_HTTP_PORT="8003"
         TRITON_GRPC_PORT="8004"
         TRITON_METRICS_PORT="8005"
@@ -892,7 +926,15 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
         # Test client
         pushd tools/inflight_batcher_llm
 
-        python3 speculative_decoding_test.py --max-input-len 200 --dataset ../dataset/mini_cnn_eval_spec_decoding.json --url-draft localhost:8004 --url-target localhost:8001
+        python3 speculative_decoding_test.py \
+            --max-input-len 200 \
+            --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
+            --url-draft localhost:8004 \
+            --url-target localhost:8001 \
+            --url-control localhost:8001 \
+            --draft-tensorrt-llm-model-name="${TENSORRT_LLM_DRAFT_MODEL_NAME}" \
+            --target-tensorrt-llm-model-name="${TENSORRT_LLM_TARGET_MODEL_NAME}" \
+            --verbose
 
         popd # inflight_batcher_llm/client
 
@@ -963,16 +1005,12 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
                 continue
             fi
 
-            TRITON_REPO="triton_repo"
-            ENGINE_PATH=${TARGET_ENGINE_PATH}
             TRITON_HTTP_PORT="8000"
             TRITON_GRPC_PORT="8001"
             TRITON_METRICS_PORT="8002"
             ENABLE_KV_CACHE_REUSE="true"
             launch_triton_server
 
-            TRITON_REPO="triton_repo_draft"
-            ENGINE_PATH=${DRAFT_ENGINE_PATH}
             TRITON_HTTP_PORT="8003"
             TRITON_GRPC_PORT="8004"
             TRITON_METRICS_PORT="8005"
@@ -989,6 +1027,9 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
                 --dataset ../dataset/mini_cnn_eval_spec_decoding.json \
                 --url-draft localhost:8004 \
                 --url-target localhost:8001 \
+                --url-control localhost:8001 \
+                --draft-tensorrt-llm-model-name="${TENSORRT_LLM_DRAFT_MODEL_NAME}" \
+                --target-tensorrt-llm-model-name="${TENSORRT_LLM_TARGET_MODEL_NAME}" \
                 --num-draft-tokens=5 \
                 --return-target-model-accepted-token-logits \
                 --return-draft-model-draft-logits \

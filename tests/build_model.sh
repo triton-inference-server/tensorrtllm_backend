@@ -251,10 +251,23 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
 
     pip3 install -r requirements.txt
 
-    echo "Convert GPT from HF"
+    echo "Convert GPT2 medium from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2_MEDIUM} --dtype float16 --output_dir ./c-model/gpt2-medium/fp16
 
-    echo "Build GPT: float16"
+    echo "Build GPT2 medium control: float16"
+    trtllm-build --checkpoint_dir ./c-model/gpt2-medium/fp16 \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --paged_kv_cache enable \
+        --gemm_plugin float16 \
+        --context_fmha enable \
+        --use_paged_context_fmha enable \
+        --max_batch_size 8 \
+        --max_num_tokens 7392 \
+        --gather_generation_logits \
+        --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
+
+    echo "Build GPT2 medium target: float16"
     trtllm-build --checkpoint_dir ./c-model/gpt2-medium/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
@@ -267,7 +280,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
         --max_batch_size 8 \
         --max_num_tokens 7392 \
         --gather_generation_logits \
-        --output_dir trt_engine/gpt2-medium-ib/fp16/1-gpu/
+        --output_dir trt_engine/gpt2-medium-ib-target/fp16/1-gpu/
 
     popd # tensorrt_llm/examples/gpt
 

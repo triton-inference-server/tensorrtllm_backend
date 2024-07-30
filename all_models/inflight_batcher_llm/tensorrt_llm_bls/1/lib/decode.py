@@ -60,7 +60,7 @@ class Request:
     text_input: np.ndarray = np.array([])
     decoder_text_input: np.ndarray = None
     image_input: Optional[np.ndarray] = None
-    max_tokens: np.ndarray = np.array([])
+    max_tokens: Optional[np.ndarray] = None
     bad_words: Optional[np.ndarray] = None
     stop_words: Optional[np.ndarray] = None
     end_id: Optional[np.ndarray] = None
