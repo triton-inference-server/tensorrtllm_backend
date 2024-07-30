@@ -440,6 +440,9 @@ run_cpp_e2e_backend_tests () {
     STREAMING_FLAG=""
     [ "${STREAMING}" = "true" ] && STREAMING_FLAG="--streaming"
 
+    OVERWRITE_OUTPUT_TEXT_FLAG=""
+    [ "${ACCUMULATE_TOKEN}" = "true" ] && OVERWRITE_OUTPUT_TEXT_FLAG="--overwrite-output-text"
+
     pushd inflight_batcher_llm/client
 
     # testing output accuracy for real weights only
@@ -448,6 +451,7 @@ run_cpp_e2e_backend_tests () {
         python3 end_to_end_grpc_client.py \
             ${STREAMING_FLAG} \
             --output-len 10 --prompt "The only thing we have to fear is" \
+            ${OVERWRITE_OUTPUT_TEXT_FLAG} \
             --model-name "$E2E_MODEL_NAME" | tee output_e2e
         grep "that the government will" output_e2e
 
@@ -455,10 +459,12 @@ run_cpp_e2e_backend_tests () {
             # test with embedding bias
             python3 end_to_end_grpc_client.py \
                 ${STREAMING_FLAG} \
+                ${OVERWRITE_OUTPUT_TEXT_FLAG} \
                 -o 10 \
                 -p "The only thing we have to fear is"  \
                 --embedding-bias-words " government" \
                 --embedding-bias-weights -20 \
+                 --model-name "$E2E_MODEL_NAME" \
                 2>&1 | tee output_w_bias
             grep -v "that the government will" output_w_bias
 
@@ -467,7 +473,9 @@ run_cpp_e2e_backend_tests () {
                 # test with batched requests
                 python3 end_to_end_grpc_client.py \
                     ${STREAMING_FLAG} \
+                    ${OVERWRITE_OUTPUT_TEXT_FLAG} \
                     -o 5 \
+                    --model-name "$E2E_MODEL_NAME" \
                     -p '["This is a test","I want you to","The cat is"]'  \
                     --batch-inputs --check-outputs --expected-outputs '[" of the power of the"," know that I am not"," a very good cat."]'
             fi
@@ -729,6 +737,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     # --------------------
     ACCUMULATE_TOKENS=( "false" "true" )
     E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+    run_all_tests="true"
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
     for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
     for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
@@ -744,6 +753,7 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
     done
     E2E_MODEL_NAME="ensemble"
     ACCUMULATE_TOKEN="false"
+    run_all_tests="false"
 fi
 
 if [ "$MODEL" = "gpt-ib-speculative-decoding-bls" ]; then
