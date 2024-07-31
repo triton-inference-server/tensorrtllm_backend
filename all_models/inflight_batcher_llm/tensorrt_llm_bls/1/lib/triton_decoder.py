@@ -360,8 +360,9 @@ class TritonDecoder(Decoder):
             raise Exception("Could not determine request_output_len")
         else:
             tensors.append(
-                pb_utils.Tensor("request_output_len",
-                                np.array([[out_len]], dtype=np.int32)))
+                pb_utils.Tensor(
+                    "request_output_len",
+                    np.array([[out_len]] * batch_size, dtype=np.int32)))
 
         if draft_request:
             if draft_request.draft_input_ids is not None:
