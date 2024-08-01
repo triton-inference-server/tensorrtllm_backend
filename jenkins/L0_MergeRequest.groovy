@@ -380,20 +380,20 @@ def runTRTLLMBackendTest(caseName)
       tokenizerType = "llama"
     }
 
-    if (caseName.contains("speculative-decoding")) {
-      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
-      {
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib" // draft model
-        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
-        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
-      }
-    }
-    else if (caseName.contains("speculative-decoding-bls")) {
+    if (caseName.contains("speculative-decoding-bls")) {
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
       {
         sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib" // draft model
         sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
         sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-ib-speculative-decoding-bls ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
+      }
+    }
+    else if (caseName.contains("speculative-decoding")) {
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')
+      {
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-ib" // draft model
+        sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh gpt-medium-ib" // control & target model
+        sh "cd ${BACKEND_ROOT} && tests/test.sh gpt-speculative-decoding ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib/fp16/1-gpu/ ${modelPath} ${tokenizerType} ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-ib/fp16/1-gpu/ ${backendPath}/tensorrt_llm/examples/gpt/trt_engine/gpt2-medium-ib-target/fp16/1-gpu/"
       }
     }
     else if (caseName.contains("gather-logits")){
