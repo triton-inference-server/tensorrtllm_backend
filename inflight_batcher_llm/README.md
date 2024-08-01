@@ -65,6 +65,7 @@ cp -R tensorrt_llm/examples/gpt/engines/fp16/1-gpu/ triton_model_repo/tensorrt_l
 
 
 Edit the `triton_model_repo/tensorrt_llm/config.pbtxt` file and replace `${decoupled_mode}` with `True` or `False`, and `${engine_dir}` with `/triton_model_repo/tensorrt_llm/1/1-gpu/` since the `triton_model_repo` folder created above will be mounted to `/triton_model_repo` in the Docker container. Decoupled mode must be set to true if using the streaming option from the client.
+Additionally, replace `${max_queue_size}` with a positive integer if you'd like to set a maximum size for the queue holding requests yet to be processed, once reaching it the server will reject additional requests until it drains below this number. If you do not want this behavior at all, you can set it to 0 or delete the entire `default_queue_policy` block.
 
 
 To use V1 batching, the `config.pbtxt` should have:
