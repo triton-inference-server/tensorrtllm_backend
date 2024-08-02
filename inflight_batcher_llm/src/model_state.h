@@ -33,7 +33,7 @@
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
-
+#include <atomic>
 #include <optional>
 
 using namespace ::triton::common; // TritonJson
@@ -68,14 +68,19 @@ public:
     uint64_t GetModelVersion() const;
     std::string const GetExecutorWorkerPath();
 
-    std::optional<std::vector<int32_t>> GetDeviceIds()
+    std::optional<std::vector<std::vector<int32_t>>> getDeviceIds()
     {
-        return gpu_device_ids_;
+        return mGpuDeviceIds;
     }
 
     bool IsDecoupled() const
     {
         return is_decoupled_;
+    }
+
+    uint32_t getAndIncrementInstanceIndex()
+    {
+        return mInstanceIndex++;
     }
 
     [[nodiscard]] std::vector<int64_t> serialize() const;
@@ -89,9 +94,10 @@ private:
     uint64_t model_version_;
     common::TritonJson::Value model_config_;
     std::shared_ptr<nvinfer1::ILogger> mTrtLogger{};
+    std::atomic<uint32_t> mInstanceIndex{0};
 
     // model parameters
-    std::optional<std::vector<int32_t>> gpu_device_ids_;
+    std::optional<std::vector<std::vector<int32_t>>> mGpuDeviceIds;
     bool is_decoupled_ = false;
 
     void LoadParameters();

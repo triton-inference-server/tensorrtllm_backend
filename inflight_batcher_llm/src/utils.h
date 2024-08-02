@@ -286,5 +286,8 @@ std::vector<int32_t> csvStrToVecInt(std::string const& str);
 /// Helper functions to parse a csv delimited string to a vector of vector ints
 std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str);
 
+/// Split a string by a delimiter and return the tokens in a vector of strings.
+std::vector<std::string> split(std::string const& str, char delimiter);
+
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm
