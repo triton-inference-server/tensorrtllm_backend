@@ -700,3 +700,18 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
         }
     }
 }
+
+TEST(UtilsTest, split)
+{
+    std::string str = "a b c";
+    std::vector<std::string> expected = {"a", "b", "c"};
+    EXPECT_EQ(split(str, ' '), expected);
+
+    str = "a b c ";
+    expected = {"a", "b", "c"};
+    EXPECT_EQ(split(str, ' '), expected);
+
+    str = "";
+    expected = {};
+    EXPECT_EQ(split(str, ' '), expected);
+}

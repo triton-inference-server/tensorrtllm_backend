@@ -139,6 +139,12 @@ public:
     /// @brief Add the request to the executor
     void enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count);
 
+    /// @brief Get GPU device IDs
+    std::optional<std::vector<int32_t>> const& getGpuDeviceIds() const
+    {
+        return mGpuDeviceIds;
+    }
+
 private:
     /// @brief Get batching type
     executor::BatchingType getBatchingTypeFromParams();
@@ -180,6 +186,7 @@ private:
 
     /// @brief TRT-LLM Executor that handles requests
     std::unique_ptr<executor::Executor> mExecutor;
+
     /// @brief Config to be used when sending requests to executor
     InstanceSpecificConfig mInstanceSpecificConfig;
 
@@ -188,22 +195,28 @@ private:
 
     /// @brief Retrieve responses from the executor
     void WaitForResponse();
+
     /// @brief The thread for WaitForResponse() to run
     std::thread mWaitForResponseThread;
+
     /// @brief Flag to stop the WaitForResponse thread when the model instance is being destroyed
     bool mStopWaitForResponse;
 
     /// @brief Retrieve stats from the executor
     void WaitForStats();
+
     /// @brief The thread for WaitForStats() to run
     std::thread mWaitForStatsThread;
+
     /// @brief Flag to stop the WaitForStats thread when the model instance is being destroyed
     bool mStopWaitForStats;
 
     /// @brief Cancel a request for executor if it is marked as cancelled by Triton backend
     void WaitForCancel();
+
     /// @brief The thread for WaitForCancel() to run
     std::thread mWaitForCancelThread;
+
     /// @brief Flag to stop the WaitForCancel thread when the model instance is being destroyed
     bool mStopWaitForCancel;
 
@@ -213,6 +226,12 @@ private:
 
     // The type of model (encoder-only, decoder-only, encoder-decoder)
     executor::ModelType mModelType;
+
+    /// @brief The instance index
+    uint32_t mInstanceIndex;
+
+    /// @brief GPU device ids for this instance
+    std::optional<std::vector<int32_t>> mGpuDeviceIds;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

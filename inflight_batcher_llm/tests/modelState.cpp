@@ -52,7 +52,7 @@ struct ModelStateTestUtils
         EXPECT_EQ(ms1.GetModelName(), ms2.GetModelName());
         EXPECT_EQ(ms1.GetModelVersion(), ms2.GetModelVersion());
         EXPECT_EQ(ms1.GetExecutorWorkerPath(), ms2.GetExecutorWorkerPath());
-        EXPECT_EQ(ms1.GetDeviceIds(), ms2.GetDeviceIds());
+        EXPECT_EQ(ms1.getDeviceIds(), ms2.getDeviceIds());
         EXPECT_EQ(ms1.IsDecoupled(), ms2.IsDecoupled());
 
         // Compare a few parameters

@@ -76,15 +76,22 @@ void ModelState::LoadParameters()
 
     try
     {
-        gpu_device_ids_ = GetParameter<std::vector<int32_t>>("gpu_device_ids");
+        auto gpuDeviceIds = GetParameter<std::string>("gpu_device_ids");
 
-        if (gpu_device_ids_)
+        auto deviceIdsList = utils::split(gpuDeviceIds, ';');
+
+        for (auto const& deviceIds : deviceIdsList)
         {
-            std::string deviceIdInfo("Using GPU device ids: ");
-            for (auto const& deviceId : gpu_device_ids_.value())
+            if (!mGpuDeviceIds)
             {
-                deviceIdInfo += std::to_string(deviceId) + " ";
+                mGpuDeviceIds = std::vector<std::vector<int32_t>>{};
             }
+            mGpuDeviceIds.value().emplace_back(utils::csvStrToVecInt(deviceIds));
+        }
+
+        if (deviceIdsList.size() > 0)
+        {
+            auto deviceIdInfo = std::string{"Using GPU device ids: " + gpuDeviceIds};
             TLLM_LOG_INFO(deviceIdInfo);
         }
     }
