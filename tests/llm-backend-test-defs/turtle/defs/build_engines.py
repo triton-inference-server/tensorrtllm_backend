@@ -141,8 +141,12 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
 def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
                             gpt_tokenizer_model_root):
     # Convert GPT weights from HF
-    ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
-                            "gpt_350m")
+    if type in ["medium_target_ifb", "medium_control_ifb"]:
+        ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                                "gpt_350m_medium")
+    else:
+        ckpt_dir = os.path.join(tensorrt_llm_gpt_example_root, "model_dir",
+                                "gpt_350m")
     convert_cmd = [
         "python3", f"{tensorrt_llm_gpt_example_root}/convert_checkpoint.py",
         f"--model_dir={gpt_tokenizer_model_root}", "--dtype=float16",
@@ -156,9 +160,12 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
     elif type == "ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
                                   "gpt350m_ifb")
-    elif type == "medium_ifb":
+    elif type == "medium_target_ifb":
         engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
-                                  "gpt350m_medium_ifb")
+                                  "gpt350m_medium_target_ifb")
+    elif type == "medium_control_ifb":
+        engine_dir = os.path.join(tensorrt_llm_gpt_example_root, "engine_dir",
+                                  "gpt350m_medium_control_ifb")
     build_cmd = [
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
@@ -167,19 +174,19 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
         "--context_fmha=enable",
         "--use_paged_context_fmha=enable",
         "--remove_input_padding=enable",
-        "--max_batch_size=64",
-        "--max_seq_len=1024",
+        "--max_batch_size=8",
+        "--max_num_tokens=7392",
         "--gather_generation_logits",
         f"--output_dir={engine_dir}",
     ]
 
-    if type == "medium_ifb":
+    if type == "medium_target_ifb":
         build_cmd += [
             "--max_draft_len=5",
             "--speculative_decoding_mode=draft_tokens_external",
         ]
 
-    if type == "ifb" or type == "medium_ifb":
+    if type in ["ifb", "medium_target_ifb", "medium_control_ifb"]:
         build_cmd += [
             "--paged_kv_cache=enable",
         ]
