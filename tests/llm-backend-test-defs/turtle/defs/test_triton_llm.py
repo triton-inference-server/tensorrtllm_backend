@@ -1149,7 +1149,7 @@ def test_gpt_gather_logits_ifb(
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.2"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
@@ -1202,31 +1202,35 @@ def test_gpt_350m_speculative_decoding(
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
-    ENGINE_PATH = prepare_gpt_350m_engine(
-        "medium_ifb",
+    CONTROL_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_control_ifb",
         tensorrt_llm_gpt_example_root,
         gpt2_medium_tokenizer_model_root,
     )
-    DRAFT_ENGINE_PATH = prepare_gpt_350m_engine(
+    TARGET_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_target_ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt2_medium_tokenizer_model_root,
+    )
+    DRAFT_ENGINE_DIR = prepare_gpt_350m_engine(
         "ifb",
         tensorrt_llm_gpt_example_root,
         gpt_tokenizer_model_root,
     )
-    # Prepare two model repos
-    ## first repo
+    # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
-    ## second repo
-    new_model_repo_draft = os.path.join(llm_backend_repo_root,
-                                        "triton_repo_draft")
-    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo_draft)
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_draft")
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_target")
 
-    # Modify two suits of config.pbtxt
-    ## first suit
-    TOKENIZER_PATH = gpt2_medium_tokenizer_model_root
+    # Modify config.pbtxt
+    ENABLE_KV_CACHE_REUSE = "True"
+    TOKENIZER_PATH = gpt_tokenizer_model_root
     modify_ib_config_pbtxt(
         new_model_repo,
-        ENGINE_PATH,
+        CONTROL_ENGINE_DIR,
         TOKENIZER_PATH,
         llm_backend_repo_root,
         DECOUPLED_MODE,
@@ -1249,45 +1253,57 @@ def test_gpt_350m_speculative_decoding(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
+        TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
     )
-    ## second suit
-    TOKENIZER_PATH = gpt_tokenizer_model_root
-    ENABLE_KV_CACHE_REUSE = "False"
-    modify_ib_config_pbtxt(
-        new_model_repo_draft,
-        DRAFT_ENGINE_PATH,
-        TOKENIZER_PATH,
-        llm_backend_repo_root,
-        DECOUPLED_MODE,
-        MAX_TOKENS_IN_KV_CACHE,
-        MAX_ATTENTION_WINDOW_SIZE,
-        BATCH_SCHEDULER_POLICY,
-        BATCHING_STRATEGY,
-        KV_CACHE_FREE_GPU_MEM_FRACTION,
-        EXCLUDE_INPUT_IN_OUTPUT,
-        ENABLE_TRT_OVERLAP,
-        TRITON_MAX_BATCH_SIZE,
-        MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH,
-        ENABLE_KV_CACHE_REUSE,
-        NORMALIZE_LOG_PROBS,
-        ENABLE_CHUNKED_CONTEXT,
-        GPU_DEVICE_IDS,
-        DECODING_MODE,
-        PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN,
-        BLS_INSTANCE_COUNT,
-    )
-    # Launch two Triton Servers
-    ## first server
+
+    # Launch First server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
         f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready(http_port="8000")
-    ## second server
+
+    ## second suit
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_draft")
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_target")
+
+    ENABLE_KV_CACHE_REUSE = "False"
+
+    modify_ib_config_pbtxt(
+        new_model_repo,
+        CONTROL_ENGINE_DIR,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+        DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
+        TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
+    )
+
+    ## Launch second server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
@@ -1295,13 +1311,20 @@ def test_gpt_350m_speculative_decoding(
         f"--grpc_port=8004 --http_port=8003 --metrics_port=8005",
         shell=True)
     check_server_ready(http_port="8003")
+
     # Run Test
+    TENSORRT_LLM_DRAFT_MODEL_NAME = "tensorrt_llm_draft"
+    TENSORRT_LLM_TARGET_MODEL_NAME = "tensorrt_llm_target"
+
     run_cmd = [
         f"{llm_backend_inflight_batcher_llm_root}/speculative_decoding_test.py",
         "--max-input-len=200",
         f"--dataset={llm_backend_dataset_root}/mini_cnn_eval_spec_decoding.json",
         "--url-draft=0.0.0.0:8004",
         "--url-target=0.0.0.0:8001",
+        "--url-control=0.0.0.0:8001",
+        f"--draft-tensorrt-llm-model-name={TENSORRT_LLM_DRAFT_MODEL_NAME}",
+        f"--target-tensorrt-llm-model-name={TENSORRT_LLM_TARGET_MODEL_NAME}",
     ]
 
     venv_check_call(llm_backend_venv, run_cmd)
@@ -1317,7 +1340,7 @@ def test_gpt_350m_speculative_decoding(
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
                          ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.2"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
@@ -1370,31 +1393,35 @@ def test_gpt_350m_speculative_decoding_return_logits(
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
-    ENGINE_PATH = prepare_gpt_350m_engine(
-        "medium_ifb",
+    CONTROL_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_control_ifb",
         tensorrt_llm_gpt_example_root,
         gpt2_medium_tokenizer_model_root,
     )
-    DRAFT_ENGINE_PATH = prepare_gpt_return_logits_engine(
+    TARGET_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_target_ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt2_medium_tokenizer_model_root,
+    )
+    DRAFT_ENGINE_DIR = prepare_gpt_350m_engine(
         "ifb",
         tensorrt_llm_gpt_example_root,
         gpt_tokenizer_model_root,
     )
-    # Prepare two model repos
-    ## first repo
+    # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
-    ## second repo
-    new_model_repo_draft = os.path.join(llm_backend_repo_root,
-                                        "triton_repo_draft")
-    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo_draft)
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_draft")
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_target")
 
-    # Modify two suits of config.pbtxt
-    ## first suit
-    TOKENIZER_PATH = gpt2_medium_tokenizer_model_root
+    # Modify config.pbtxt
+    ENABLE_KV_CACHE_REUSE = "True"
+    TOKENIZER_PATH = gpt_tokenizer_model_root
     modify_ib_config_pbtxt(
         new_model_repo,
-        ENGINE_PATH,
+        CONTROL_ENGINE_DIR,
         TOKENIZER_PATH,
         llm_backend_repo_root,
         DECOUPLED_MODE,
@@ -1417,45 +1444,57 @@ def test_gpt_350m_speculative_decoding_return_logits(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
+        TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
     )
-    ## second suit
-    TOKENIZER_PATH = gpt_tokenizer_model_root
-    ENABLE_KV_CACHE_REUSE = "False"
-    modify_ib_config_pbtxt(
-        new_model_repo_draft,
-        DRAFT_ENGINE_PATH,
-        TOKENIZER_PATH,
-        llm_backend_repo_root,
-        DECOUPLED_MODE,
-        MAX_TOKENS_IN_KV_CACHE,
-        MAX_ATTENTION_WINDOW_SIZE,
-        BATCH_SCHEDULER_POLICY,
-        BATCHING_STRATEGY,
-        KV_CACHE_FREE_GPU_MEM_FRACTION,
-        EXCLUDE_INPUT_IN_OUTPUT,
-        ENABLE_TRT_OVERLAP,
-        TRITON_MAX_BATCH_SIZE,
-        MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH,
-        ENABLE_KV_CACHE_REUSE,
-        NORMALIZE_LOG_PROBS,
-        ENABLE_CHUNKED_CONTEXT,
-        GPU_DEVICE_IDS,
-        DECODING_MODE,
-        PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN,
-        BLS_INSTANCE_COUNT,
-    )
-    # Launch two Triton Servers
-    ## first server
+
+    # Launch First server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
         f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready(http_port="8000")
-    ## second server
+
+    ## second suit
+    prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_draft")
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_target")
+
+    ENABLE_KV_CACHE_REUSE = "False"
+
+    modify_ib_config_pbtxt(
+        new_model_repo,
+        CONTROL_ENGINE_DIR,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+        DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
+        TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
+    )
+
+    ## Launch second server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
@@ -1464,13 +1503,21 @@ def test_gpt_350m_speculative_decoding_return_logits(
         shell=True)
     check_server_ready(http_port="8003")
     # Run Test
+    TENSORRT_LLM_DRAFT_MODEL_NAME = "tensorrt_llm_draft"
+    TENSORRT_LLM_TARGET_MODEL_NAME = "tensorrt_llm_target"
     run_cmd = [
         f"{llm_backend_inflight_batcher_llm_root}/speculative_decoding_test.py",
         "--max-input-len=128",
         f"--dataset={llm_backend_dataset_root}/mini_cnn_eval_spec_decoding.json",
-        "--url-draft=0.0.0.0:8004", "--url-target=0.0.0.0:8001",
-        "--num-draft-tokens=5", "--return-target-model-accepted-token-logits",
-        "--return-draft-model-draft-logits", "--verbose"
+        "--url-draft=0.0.0.0:8004",
+        "--url-target=0.0.0.0:8001",
+        "--url-control=0.0.0.0:8001",
+        "--num-draft-tokens=5",
+        "--return-target-model-accepted-token-logits",
+        "--return-draft-model-draft-logits",
+        "--verbose",
+        f"--draft-tensorrt-llm-model-name={TENSORRT_LLM_DRAFT_MODEL_NAME}",
+        f"--target-tensorrt-llm-model-name={TENSORRT_LLM_TARGET_MODEL_NAME}",
     ]
 
     venv_check_call(llm_backend_venv, run_cmd)
@@ -1483,9 +1530,8 @@ def test_gpt_350m_speculative_decoding_return_logits(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", [""])
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
-@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
-                         ["max_utilization", "guaranteed_no_evict"])
-@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.85"])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.2"])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
 @pytest.mark.parametrize("BATCHING_STRATEGY",
@@ -1540,31 +1586,35 @@ def test_gpt_speculative_decoding_bls(
 
     llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
     # Build engine
-    ENGINE_PATH = prepare_gpt_350m_engine(
-        "medium_ifb",
+    CONTROL_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_control_ifb",
         tensorrt_llm_gpt_example_root,
         gpt2_medium_tokenizer_model_root,
     )
-    DRAFT_ENGINE_PATH = prepare_gpt_350m_engine(
+    TARGET_ENGINE_DIR = prepare_gpt_350m_engine(
+        "medium_target_ifb",
+        tensorrt_llm_gpt_example_root,
+        gpt2_medium_tokenizer_model_root,
+    )
+    DRAFT_ENGINE_DIR = prepare_gpt_350m_engine(
         "ifb",
         tensorrt_llm_gpt_example_root,
         gpt_tokenizer_model_root,
     )
-    # Prepare two model repos
-    ## first repo
+    # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)
-    ## second repo
-    new_model_repo_draft = os.path.join(llm_backend_repo_root, "triton_repo",
-                                        "tensorrt_llm_draft")
-    prepare_bls_draft_model(llm_backend_repo_root, new_model_repo_draft)
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_draft")
+    prepare_custom_config(llm_backend_repo_root, new_model_repo,
+                          "tensorrt_llm_target")
 
-    # Modify two suits of config.pbtxt
-    ## first suit
-    TOKENIZER_PATH = gpt2_medium_tokenizer_model_root
+    # Modify config.pbtxt
+    ENABLE_KV_CACHE_REUSE = "True"
+    TOKENIZER_PATH = gpt_tokenizer_model_root
     modify_ib_config_pbtxt(
         new_model_repo,
-        ENGINE_PATH,
+        CONTROL_ENGINE_DIR,
         TOKENIZER_PATH,
         llm_backend_repo_root,
         DECOUPLED_MODE,
@@ -1587,60 +1637,39 @@ def test_gpt_speculative_decoding_bls(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
+        TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
     )
-    ## second suit
-    TOKENIZER_PATH = gpt_tokenizer_model_root
-    ENABLE_KV_CACHE_REUSE = "False"
-    modify_ib_config_pbtxt(
-        new_model_repo_draft,
-        DRAFT_ENGINE_PATH,
-        TOKENIZER_PATH,
-        llm_backend_repo_root,
-        DECOUPLED_MODE,
-        MAX_TOKENS_IN_KV_CACHE,
-        MAX_ATTENTION_WINDOW_SIZE,
-        BATCH_SCHEDULER_POLICY,
-        BATCHING_STRATEGY,
-        KV_CACHE_FREE_GPU_MEM_FRACTION,
-        EXCLUDE_INPUT_IN_OUTPUT,
-        ENABLE_TRT_OVERLAP,
-        TRITON_MAX_BATCH_SIZE,
-        MAX_QUEUE_DELAY_MICROSECONDS,
-        MAX_BEAM_WIDTH,
-        ENABLE_KV_CACHE_REUSE,
-        NORMALIZE_LOG_PROBS,
-        ENABLE_CHUNKED_CONTEXT,
-        GPU_DEVICE_IDS,
-        DECODING_MODE,
-        PREPROCESSING_INSTANCE_COUNT,
-        POSTPROCESSING_INSTANCE_COUNT,
-        ACCUMULATE_TOKEN,
-        BLS_INSTANCE_COUNT,
-    )
-    # Launch Triton Server
-    ## first server
+
+    # Launch Triton server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
     check_call(
         f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
         shell=True)
     check_server_ready(http_port="8000")
+
     # Run Test
+    TENSORRT_LLM_DRAFT_MODEL_NAME = "tensorrt_llm_draft"
+    TENSORRT_LLM_TARGET_MODEL_NAME = "tensorrt_llm_target"
     run_cmd = [
         f"{llm_backend_inflight_batcher_llm_root}/speculative_decoding_test.py",
         "--max-input-len=200",
         f"--dataset={llm_backend_dataset_root}/mini_cnn_eval_spec_decoding.json",
-        "--url-draft=0.0.0.0:8001", "--url-target=0.0.0.0:8001",
-        "--max-input-len=250",
-        "--draft-tensorrt-llm-model-name=tensorrt_llm_draft",
-        "--target-tensorrt-llm-model-name=tensorrt_llm",
+        "--url-target=0.0.0.0:8001",
+        "--url-draft=0.0.0.0:8001",
+        "--url-control=0.0.0.0:8001",
+        f"--draft-tensorrt-llm-model-name={TENSORRT_LLM_DRAFT_MODEL_NAME}",
+        f"--target-tensorrt-llm-model-name={TENSORRT_LLM_TARGET_MODEL_NAME}",
         "--bls-speculative-tensorrt-llm-model-name=tensorrt_llm_bls",
-        "--execute-bls-speculative-decoding", "--verbose",
-        "--num-draft-tokens=5"
+        "--execute-bls-speculative-decoding",
+        "--num-draft-tokens=5",
+        "--verbose",
     ]
 
     if USE_DRAFT_LOGITS_VALUES:
         run_cmd += [
+            "--return-generation-logits",
             "--use-draft-logits",
             "--disable-output-comparison",
         ]
