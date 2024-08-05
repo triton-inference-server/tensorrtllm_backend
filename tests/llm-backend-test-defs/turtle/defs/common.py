@@ -159,7 +159,7 @@ def modify_ib_config_pbtxt(
             f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
             f"exclude_input_in_output:{EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
             f"max_queue_delay_microseconds:{MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:{MAX_BEAM_WIDTH}," \
-            f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
+            f"enable_kv_cache_reuse:true,normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
             f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}",
             shell=True)
