@@ -179,13 +179,14 @@ class Decoder:
         self._streaming = streaming
         self._accumulate = accumulate
 
-        self._accumulated_tokens = None
+        self._accumulated_tokens = []
 
     def decode(self,
                request: Request,
                speculative_decoding=False) -> Generator[Response, None, None]:
 
         batch_size = request.text_input.shape[0]
+        self._accumulated_tokens = [None] * batch_size
         preproc_response = self.preprocess(request)
 
         if speculative_decoding:
@@ -194,15 +195,15 @@ class Decoder:
                     "speculative decoding is not supported with batch size > 1"
                 )
             for gen_response in self._spec_generate(preproc_response, request):
-                yield self.postprocess(gen_response)
+                yield self.postprocess(gen_response, batch_size)
         else:
             if not self._streaming and batch_size == 1:
                 gen_response = self._generate_non_streaming(
                     preproc_response, request)
-                yield self.postprocess(gen_response)
+                yield self.postprocess(gen_response, batch_size)
             else:
                 for gen_response in self._generate(preproc_response, request):
-                    yield self.postprocess(gen_response)
+                    yield self.postprocess(gen_response, batch_size)
 
     def encountered_stop_words(self, input_ids, stop_words_ids):
         for stop_word_ids in stop_words_ids:
@@ -311,7 +312,8 @@ class Decoder:
     ) -> GenerationResponse:
         raise NotImplementedError()
 
-    def postprocess(self, gen_response: GenerationResponse) -> Response:
+    def postprocess(self, gen_response: GenerationResponse,
+                    batch_size) -> Response:
         if self._accumulate and self._streaming:
             new_tokens: np.ndarray = gen_response.output_ids
             if new_tokens.ndim != 3:
@@ -323,12 +325,24 @@ class Decoder:
                     "Accumulation of tokens is only implemented for beam width = 1"
                 )
 
-            self._accumulated_tokens = new_tokens if (
-                self._accumulated_tokens is None) else np.concatenate(
-                    (self._accumulated_tokens, new_tokens), axis=2)
-            sequence_lengths = np.array([[self._accumulated_tokens.shape[2]]],
-                                        dtype=np.int32)
-            return self._postprocess(self._accumulated_tokens,
+            batch_index = gen_response.batch_index
+            if batch_index.ndim != 2:
+                raise Exception("Expected batch_index tensor to have 2 dims.")
+            if batch_index.shape[0] != 1:
+                raise Exception("Expected batch size of 1")
+            if batch_index.shape[1] != 1:
+                raise Exception("Expected only one batch_index")
+
+            batch_index = batch_index[0][0]
+
+            self._accumulated_tokens[batch_index] = new_tokens if (
+                self._accumulated_tokens[batch_index] is None
+            ) else np.concatenate(
+                (self._accumulated_tokens[batch_index], new_tokens), axis=2)
+            sequence_lengths = np.array(
+                [[self._accumulated_tokens[batch_index].shape[2]]],
+                dtype=np.int32)
+            return self._postprocess(self._accumulated_tokens[batch_index],
                                      sequence_lengths, gen_response)
         else:
             return self._postprocess(gen_response.output_ids, None,
@@ -343,4 +357,4 @@ class Decoder:
         raise NotImplementedError()
 
     def reset_decoder(self):
-        self._accumulated_tokens = None
+        self._accumulated_tokens = []
