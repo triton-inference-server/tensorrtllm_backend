@@ -345,23 +345,27 @@ class TritonDecoder(Decoder):
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)
-        out_len = None
+        out_len_tensor = None
         if request.max_tokens is not None:
-            out_len = request.max_tokens[0][0]
+            out_len_tensor = request.max_tokens
+
+        out_len = None
         if num_output_tokens is not None:
             out_len = num_output_tokens
         elif draft_request:
-            if draft_request.draft_input_ids is not None:
-                out_len = len(draft_request.draft_input_ids[0]) + 1
-            else:
-                out_len = 1
+            out_len = len(
+                draft_request.draft_input_ids[0]
+            ) + 1 if draft_request.draft_input_ids is not None else 1
 
-        if out_len is None:
+        if out_len is not None:
+            out_len_tensor = [[out_len]] * batch_size
+
+        if out_len_tensor is None:
             raise Exception("Could not determine request_output_len")
         else:
             tensors.append(
                 pb_utils.Tensor("request_output_len",
-                                np.array([[out_len]], dtype=np.int32)))
+                                np.array(out_len_tensor, dtype=np.int32)))
 
         if draft_request:
             if draft_request.draft_input_ids is not None:

@@ -76,15 +76,22 @@ void ModelState::LoadParameters()
 
     try
     {
-        gpu_device_ids_ = GetParameter<std::vector<int32_t>>("gpu_device_ids");
+        auto gpuDeviceIds = GetParameter<std::string>("gpu_device_ids");
 
-        if (gpu_device_ids_)
+        auto deviceIdsList = utils::split(gpuDeviceIds, ';');
+
+        for (auto const& deviceIds : deviceIdsList)
         {
-            std::string deviceIdInfo("Using GPU device ids: ");
-            for (auto const& deviceId : gpu_device_ids_.value())
+            if (!mGpuDeviceIds)
             {
-                deviceIdInfo += std::to_string(deviceId) + " ";
+                mGpuDeviceIds = std::vector<std::vector<int32_t>>{};
             }
+            mGpuDeviceIds.value().emplace_back(utils::csvStrToVecInt(deviceIds));
+        }
+
+        if (deviceIdsList.size() > 0)
+        {
+            auto deviceIdInfo = std::string{"Using GPU device ids: " + gpuDeviceIds};
             TLLM_LOG_INFO(deviceIdInfo);
         }
     }
@@ -181,6 +188,7 @@ ModelState ModelState::deserialize(int64_t const* packed_ptr)
     TRITONSERVER_Error* err = model_config.Parse(jsonBuffer, jsonSize);
     if (err)
     {
+        TRITONSERVER_ErrorDelete(err);
         throw std::runtime_error("Failed to parse model config");
     }
 
@@ -199,17 +207,17 @@ std::string ModelState::GetParameter<std::string>(std::string const& name)
     TRITONSERVER_Error* err = model_config_.MemberAsObject("parameters", &parameters);
     if (err != nullptr)
     {
-        throw std::runtime_error("Model config doesn't have a parameters section");
         TRITONSERVER_ErrorDelete(err);
+        throw std::runtime_error("Model config doesn't have a parameters section");
     }
     TritonJson::Value value;
     std::string str_value;
     err = parameters.MemberAsObject(name.c_str(), &value);
     if (err != nullptr)
     {
+        TRITONSERVER_ErrorDelete(err);
         std::string errStr = "Cannot find parameter with name: " + name;
         throw std::runtime_error(errStr);
-        TRITONSERVER_ErrorDelete(err);
     }
     value.MemberAsString("string_value", &str_value);
     return str_value;

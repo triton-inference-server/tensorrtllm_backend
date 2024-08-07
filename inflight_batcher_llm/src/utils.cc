@@ -420,6 +420,20 @@ std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str)
     return output;
 }
 
+std::vector<std::string> split(std::string const& str, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::string token;
+    std::stringstream ss(str);
+
+    while (std::getline(ss, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
 int64_t numElements(std::vector<int64_t> const& shape)
 {
     int64_t n = 1;

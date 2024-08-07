@@ -171,10 +171,9 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
 {
     executor::ParallelConfig parallelConfig;
-    auto const gpuDeviceIds = model_state_->GetDeviceIds();
-    if (gpuDeviceIds.has_value())
+    if (mGpuDeviceIds)
     {
-        parallelConfig.setDeviceIds(gpuDeviceIds.value());
+        parallelConfig.setDeviceIds(mGpuDeviceIds.value());
     }
 
     char const* str = std::getenv("TRTLLM_ORCHESTRATOR");
@@ -457,6 +456,16 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     , modelInstance_(triton_model_instance)
 {
 
+    mInstanceIndex = model_state->getAndIncrementInstanceIndex();
+    if (model_state_->getDeviceIds())
+    {
+        mGpuDeviceIds
+            = model_state_->getDeviceIds().value()[mInstanceIndex % model_state_->getDeviceIds().value().size()];
+    }
+    else
+    {
+        mGpuDeviceIds = std::nullopt;
+    }
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
