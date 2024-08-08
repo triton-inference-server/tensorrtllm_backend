@@ -168,6 +168,33 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         sinkTokenLength, kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
 }
 
+executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
+{
+    bool multiBlockMode = false;
+    try
+    {
+        multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to false");
+    }
+
+    bool enableContextFMHAFP32Acc = false;
+    try
+    {
+        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enableContextFMHAFP32Acc");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("enableContextFMHAFP32Acc is not specified, will be set to false");
+    }
+
+    return executor::ExtendedRuntimePerfKnobConfig(multiBlockMode, enableContextFMHAFP32Acc);
+}
+
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
 {
     executor::ParallelConfig parallelConfig;
@@ -359,6 +386,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     auto parallelConfig = getParallelConfigFromParams();
 
+    auto extendedRuntimePerfKnobConfig = getExtendedRuntimePerfKnobConfigFromParams();
+
     std::optional<executor::DecodingMode> decodingMode = std::nullopt;
     try
     {
@@ -448,7 +477,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize);
+        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
+        extendedRuntimePerfKnobConfig);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)

@@ -190,7 +190,6 @@ if [ "$MODEL" = "gpt-ib" ]; then
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
         --paged_kv_cache enable \
-        --context_fmha_fp32_acc enable \
         --use_paged_context_fmha enable \
         --gemm_plugin float16 \
         --max_batch_size 8 \

@@ -483,6 +483,16 @@ class TritonPythonModel:
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.DecodingConfig(**kwargs)
 
+    def get_extended_runtime_perf_knob_config(self, model_config):
+        kwargs = {
+            "multi_block_mode":
+            get_parameter(model_config, "multi_block_mode", bool),
+            "enable_context_fmha_fp32_acc":
+            get_parameter(model_config, "enable_context_fmha_fp32_acc", bool)
+        }
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        return trtllm.ExtendedRuntimePerfKnobConfig(**kwargs)
+
     def get_executor_config(self, model_config):
         kwargs = {
             "max_beam_width":
@@ -512,6 +522,8 @@ class TritonPythonModel:
                 "default_queue_policy",
                 {},
             ).get("max_queue_size"),
+            "extended_runtime_perf_knob_config":
+            self.get_extended_runtime_perf_knob_config(model_config)
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)

@@ -636,6 +636,7 @@ def model_config() -> Dict:
         "lora_cache_max_adapter_size": "2",
         "lora_cache_gpu_memory_fraction": "0.5",
         "lora_cache_host_memory_bytes": "4",
+        "enable_context_fmha_fp32_acc": "true"
     }
     return {"parameters": {k: {"string_value": v} for k, v in config.items()}}
 
@@ -666,6 +667,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+    assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == True
     del os.environ["TRTLLM_ORCHESTRATOR"]
 
 
@@ -705,6 +707,8 @@ def test_get_executor_config_minimal():
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+    assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == False
+    assert config.extended_runtime_perf_knob_config.multi_block_mode == False
 
 
 def test_convert_timestamp_to_seconds():
