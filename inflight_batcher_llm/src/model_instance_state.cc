@@ -457,7 +457,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
 {
 
     mInstanceIndex = model_state->getAndIncrementInstanceIndex();
-    if (model_state_->getDeviceIds())
+    if (model_state_->getDeviceIds() && model_state_->getDeviceIds().value().size())
     {
         mGpuDeviceIds
             = model_state_->getDeviceIds().value()[mInstanceIndex % model_state_->getDeviceIds().value().size()];
