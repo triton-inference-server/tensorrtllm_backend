@@ -653,7 +653,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
     assert config.kv_cache_config.enable_block_reuse == True
     assert config.kv_cache_config.max_tokens == 1
-    assert config.kv_cache_config.max_attention_window == 2
+    assert config.kv_cache_config.max_attention_window == [2]
     assert config.kv_cache_config.sink_token_length == 3
     assert config.kv_cache_config.free_gpu_memory_fraction == 0.5
     assert config.kv_cache_config.host_cache_size == 4

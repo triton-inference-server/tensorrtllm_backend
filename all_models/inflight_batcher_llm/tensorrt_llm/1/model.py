@@ -418,8 +418,6 @@ class TritonPythonModel:
             get_parameter(model_config, "max_tokens_in_paged_kv_cache", int),
             "sink_token_length":
             get_parameter(model_config, "sink_token_length", int),
-            "max_attention_window":
-            get_parameter(model_config, "max_attention_window_size", int),
             "free_gpu_memory_fraction":
             get_parameter(model_config, "kv_cache_free_gpu_mem_fraction",
                           float),
@@ -428,6 +426,12 @@ class TritonPythonModel:
             "onboard_blocks":
             get_parameter(model_config, "kv_cache_onboard_blocks", bool),
         }
+        max_attention_window_size = get_parameter(model_config,
+                                                  "max_attention_window_size")
+        if max_attention_window_size:
+            kwargs["max_attention_window"] = [
+                int(x) for x in max_attention_window_size.split(",")
+            ]
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.KvCacheConfig(**kwargs)
 

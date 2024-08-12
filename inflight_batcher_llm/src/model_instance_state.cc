@@ -121,10 +121,10 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("kv_cache_onboard_blocks not set, defaulting to true");
     }
 
-    std::optional<int32_t> maxAttentionWindow = std::nullopt;
+    std::optional<std::vector<int32_t>> maxAttentionWindow = std::nullopt;
     try
     {
-        maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
+        maxAttentionWindow = model_state_->GetParameter<std::vector<int32_t>>("max_attention_window_size");
     }
     catch (std::exception const& e)
     {
@@ -158,14 +158,15 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<SizeType32> maxAttentionWindowSizeType = std::nullopt;
+    std::optional<std::vector<SizeType32>> maxAttentionWindowVec = std::nullopt;
     if (maxAttentionWindow.has_value())
     {
-        maxAttentionWindowSizeType = static_cast<SizeType32>(maxAttentionWindow.value());
+        maxAttentionWindowVec
+            = std::vector<SizeType32>(maxAttentionWindow.value().begin(), maxAttentionWindow.value().end());
     }
 
-    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
-        sinkTokenLength, kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowVec, sinkTokenLength,
+        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
 }
 
 executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
@@ -477,8 +478,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig);
+        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, true, decodingConfig, gpuWeightsPercent,
+        maxQueueSize, extendedRuntimePerfKnobConfig);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
