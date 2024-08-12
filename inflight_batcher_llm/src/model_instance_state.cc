@@ -776,10 +776,10 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
     {
         if (!response.hasError())
         {
-            auto const& result = response.getResult();
+            auto result = response.getResult();
             isFinal = result.isFinal;
             error = nullptr;
-            auto outputIds = result.outputTokenIds;
+            auto& outputIds = result.outputTokenIds;
             std::vector<int32_t> beamLength(outputIds.size());
             int32_t maxBeamLength = -1;
             for (size_t i = 0; i < outputIds.size(); ++i)
@@ -872,12 +872,22 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             {
                 if (result.logProbs.has_value())
                 {
-                    std::vector<int64_t> outputLogProbsShape{1, static_cast<int64_t>(result.logProbs.value().size()),
-                        static_cast<int64_t>(result.logProbs.value()[0].size())};
+                    auto& logProbs = result.logProbs.value();
+                    size_t maxLogProbs = 0;
+                    for (auto const& vec : logProbs)
+                    {
+                        maxLogProbs = std::max(maxLogProbs, vec.size());
+                    }
+                    for (auto& vec : logProbs)
+                    {
+                        vec.resize(maxLogProbs, -1);
+                    }
+                    std::vector<int64_t> outputLogProbsShape{
+                        1, static_cast<int64_t>(logProbs.size()), static_cast<int64_t>(logProbs[0].size())};
                     auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
                     auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
                         tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-                    utils::flatten<float>(result.logProbs.value(), outputLogProbsBuffer, outputLogProbsShape);
+                    utils::flatten<float>(logProbs, outputLogProbsBuffer, outputLogProbsShape);
                 }
                 else
                 {
