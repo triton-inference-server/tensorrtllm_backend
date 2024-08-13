@@ -11,6 +11,13 @@ from trt_test.misc import check_call, check_output, print_info
 from .conftest import venv_check_call, venv_check_output
 
 
+def query_gpu_name():
+    cmd = r"nvidia-smi --query-gpu=name --format=csv,noheader"
+    gpu_name = check_output(f"{cmd}", shell=True).strip()
+
+    return gpu_name
+
+
 def check_server_ready(http_port="8000"):
     timeout = 300
     timer = 0
@@ -34,7 +41,7 @@ def check_server_ready(http_port="8000"):
             )
 
     print_info(
-        f"Trion server launched successfully! Cost {timer} seconds to launch server."
+        f"Triton server launched successfully! Cost {timer} seconds to launch server."
     )
 
 
@@ -287,13 +294,19 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
                     shell=True)
 
 
-def run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
+def run_cpp_streaming_backend_tests(feature_name,
+                                    llm_backend_venv,
                                     inflight_batcher_llm_client_root,
-                                    tokenizer_dir):
+                                    tokenizer_dir,
+                                    model_name="",
+                                    e2e_model=""):
     # Chooses script
     script_name = ""
     if feature_name in ["test_basic"]:
         script_name = f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py"
+    elif feature_name in ["batched_inputs"
+                          ] and e2e_model == "tensorrt_llm_bls":
+        script_name = f"{inflight_batcher_llm_client_root}/end_to_end_grpc_client.py"
 
     # Run command
     if "inflight_batcher_llm_client.py" in script_name:
@@ -304,4 +317,29 @@ def run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
         ]
 
         if feature_name == "test_basic":
+            venv_check_call(llm_backend_venv, run_cmd)
+    elif "end_to_end_grpc_client.py" in script_name:
+        raw_input = """["This is a test","I want you to","The cat is"]"""
+        raw_output = ""
+        gpu_name = query_gpu_name()
+        run_cmd = [
+            f"{script_name}",
+            "--streaming",
+            "-o=5",
+            f"--model-name={e2e_model}",
+            f"-p={raw_input}",
+            "--batch-inputs",
+            "--overwrite-output-text",
+        ]
+        if "H100" in gpu_name:
+            if "gpt" in model_name.lower():
+                raw_output = """[" of the power of the"," know that I am not"," a very good cat."]"""
+            elif "llama" in model_name.lower():
+                raw_output = """["of the emergency alert","know that I am not", "out of the bag."]"""
+            if raw_output != "":
+                run_cmd += [
+                    f"--expected-outputs={raw_output}",
+                    "--check-outputs",
+                ]
+        if feature_name == "batched_inputs":
             venv_check_call(llm_backend_venv, run_cmd)

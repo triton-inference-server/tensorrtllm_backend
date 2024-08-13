@@ -47,8 +47,8 @@ def stop_triton_server():
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("FEATURE_NAME", [
-    "test_basic", "test_log_probs", "test_request_id", "test_stop_words",
-    "test_embedding_bias"
+    "test_basic", "batched_inputs", "test_log_probs", "test_request_id",
+    "test_stop_words", "test_embedding_bias"
 ])
 def test_llama_v2_7b_ifb(
     E2E_MODEL_NAME,
@@ -124,6 +124,8 @@ def test_llama_v2_7b_ifb(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        TENSORRT_LLM_TARGET_MODEL_NAME="tensorrt_llm",
+        TENSORRT_LLM_DRAFT_MODEL_NAME="",
     )
 
     # Launch Triton Server
@@ -141,9 +143,16 @@ def test_llama_v2_7b_ifb(
         run_cpp_backend_tests(feature_name, llm_backend_venv,
                               inflight_batcher_llm_client_root, tokenizer_dir)
     else:
-        run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
+        test_model_name = ""
+        if ACCUMULATE_TOKEN == "True" and E2E_MODEL_NAME == "tensorrt_llm_bls":
+            test_model_name = "llama_v2_7b"
+
+        run_cpp_streaming_backend_tests(feature_name,
+                                        llm_backend_venv,
                                         inflight_batcher_llm_client_root,
-                                        tokenizer_dir)
+                                        tokenizer_dir,
+                                        model_name=test_model_name,
+                                        e2e_model=E2E_MODEL_NAME)
 
 
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
@@ -796,8 +805,8 @@ def test_gpt_350m_python_backend(
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("FEATURE_NAME", [
-    "test_basic", "test_log_probs", "test_request_id", "test_stop_words",
-    "test_embedding_bias"
+    "test_basic", "batched_inputs", "test_log_probs", "test_request_id",
+    "test_stop_words", "test_embedding_bias"
 ])
 def test_gpt_350m_ifb(
     E2E_MODEL_NAME,
@@ -874,6 +883,8 @@ def test_gpt_350m_ifb(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        TENSORRT_LLM_TARGET_MODEL_NAME="tensorrt_llm",
+        TENSORRT_LLM_DRAFT_MODEL_NAME="",
     )
 
     # Launch Triton Server
@@ -891,9 +902,16 @@ def test_gpt_350m_ifb(
         run_cpp_backend_tests(feature_name, llm_backend_venv,
                               inflight_batcher_llm_client_root, tokenizer_dir)
     else:
-        run_cpp_streaming_backend_tests(feature_name, llm_backend_venv,
+        test_model_name = ""
+        if ACCUMULATE_TOKEN == "True" and E2E_MODEL_NAME == "tensorrt_llm_bls":
+            test_model_name = "gpt_350m"
+
+        run_cpp_streaming_backend_tests(feature_name,
+                                        llm_backend_venv,
                                         inflight_batcher_llm_client_root,
-                                        tokenizer_dir)
+                                        tokenizer_dir,
+                                        model_name=test_model_name,
+                                        e2e_model=E2E_MODEL_NAME)
 
     if feature_name == "test_basic":
         check_server_metrics()
