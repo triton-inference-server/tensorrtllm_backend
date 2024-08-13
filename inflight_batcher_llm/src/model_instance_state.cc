@@ -121,10 +121,10 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("kv_cache_onboard_blocks not set, defaulting to true");
     }
 
-    std::optional<int32_t> maxAttentionWindow = std::nullopt;
+    std::optional<std::vector<int32_t>> maxAttentionWindow = std::nullopt;
     try
     {
-        maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
+        maxAttentionWindow = model_state_->GetParameter<std::vector<int32_t>>("max_attention_window_size");
     }
     catch (std::exception const& e)
     {
@@ -158,14 +158,42 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<SizeType32> maxAttentionWindowSizeType = std::nullopt;
+    std::optional<std::vector<SizeType32>> maxAttentionWindowVec = std::nullopt;
     if (maxAttentionWindow.has_value())
     {
-        maxAttentionWindowSizeType = static_cast<SizeType32>(maxAttentionWindow.value());
+        maxAttentionWindowVec
+            = std::vector<SizeType32>(maxAttentionWindow.value().begin(), maxAttentionWindow.value().end());
     }
 
-    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
-        sinkTokenLength, kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowVec, sinkTokenLength,
+        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+}
+
+executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
+{
+    bool multiBlockMode = false;
+    try
+    {
+        multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to false");
+    }
+
+    bool enableContextFMHAFP32Acc = false;
+    try
+    {
+        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enableContextFMHAFP32Acc");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("enableContextFMHAFP32Acc is not specified, will be set to false");
+    }
+
+    return executor::ExtendedRuntimePerfKnobConfig(multiBlockMode, enableContextFMHAFP32Acc);
 }
 
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
@@ -359,6 +387,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     auto parallelConfig = getParallelConfigFromParams();
 
+    auto extendedRuntimePerfKnobConfig = getExtendedRuntimePerfKnobConfigFromParams();
+
     std::optional<executor::DecodingMode> decodingMode = std::nullopt;
     try
     {
@@ -448,7 +478,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize);
+        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, true, decodingConfig, gpuWeightsPercent,
+        maxQueueSize, extendedRuntimePerfKnobConfig);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -745,10 +776,10 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
     {
         if (!response.hasError())
         {
-            auto const& result = response.getResult();
+            auto result = response.getResult();
             isFinal = result.isFinal;
             error = nullptr;
-            auto outputIds = result.outputTokenIds;
+            auto& outputIds = result.outputTokenIds;
             std::vector<int32_t> beamLength(outputIds.size());
             int32_t maxBeamLength = -1;
             for (size_t i = 0; i < outputIds.size(); ++i)
@@ -841,12 +872,22 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             {
                 if (result.logProbs.has_value())
                 {
-                    std::vector<int64_t> outputLogProbsShape{1, static_cast<int64_t>(result.logProbs.value().size()),
-                        static_cast<int64_t>(result.logProbs.value()[0].size())};
+                    auto& logProbs = result.logProbs.value();
+                    size_t maxLogProbs = 0;
+                    for (auto const& vec : logProbs)
+                    {
+                        maxLogProbs = std::max(maxLogProbs, vec.size());
+                    }
+                    for (auto& vec : logProbs)
+                    {
+                        vec.resize(maxLogProbs, -1);
+                    }
+                    std::vector<int64_t> outputLogProbsShape{
+                        1, static_cast<int64_t>(logProbs.size()), static_cast<int64_t>(logProbs[0].size())};
                     auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
                     auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
                         tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-                    utils::flatten<float>(result.logProbs.value(), outputLogProbsBuffer, outputLogProbsShape);
+                    utils::flatten<float>(logProbs, outputLogProbsBuffer, outputLogProbsShape);
                 }
                 else
                 {

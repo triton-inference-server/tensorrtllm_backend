@@ -161,6 +161,9 @@ private:
     /// @brief Get parallel config
     executor::ParallelConfig getParallelConfigFromParams();
 
+    /// @brief Get extended runtime perf knob config
+    executor::ExtendedRuntimePerfKnobConfig getExtendedRuntimePerfKnobConfigFromParams();
+
     /// @brief Get executor config
     executor::ExecutorConfig getExecutorConfigFromParams();
 

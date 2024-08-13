@@ -548,3 +548,15 @@ parameters: {
       string_value: "${gpu_weights_percent}"
   }
 }
+parameters: {
+  key: "enable_context_fmha_fp32_acc"
+  value: {
+    string_value: "${enable_context_fmha_fp32_acc}"
+  }
+}
+parameters: {
+  key: "multi_block_mode"
+  value: {
+    string_value: "${multi_block_mode}"
+  }
+}
