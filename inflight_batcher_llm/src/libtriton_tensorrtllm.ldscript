@@ -26,5 +26,7 @@
 {
   global:
     TRITONBACKEND_*;
+    *ModelState*;
+    *utils*;
   local: *;
 };
