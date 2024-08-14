@@ -332,6 +332,7 @@ class TritonDecoder(Decoder):
             "beam_width": "beam_width",
             "top_k": "runtime_top_k",
             "top_p": "runtime_top_p",
+            "temperature": "temperature",
             "length_penalty": "len_penalty",
             "repetition_penalty": "repetition_penalty",
             "min_length": "min_length",
