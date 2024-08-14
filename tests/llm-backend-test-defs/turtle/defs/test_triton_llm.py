@@ -2030,6 +2030,10 @@ def test_gpt_next_ptuning_ifb(
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
     )
+    # WAR for https://nvbugspro.nvidia.com/bug/4742149
+    gpu_name = query_gpu_name()
+    if "NVIDIA H20" == gpu_name:
+        check_call("pip3 install -U nvidia-cublas-cu12", shell=True)
 
     # Generate reference output
     run_py_path = os.path.join(tensorrt_llm_example_root, "run.py")

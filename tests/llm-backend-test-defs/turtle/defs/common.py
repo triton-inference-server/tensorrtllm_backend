@@ -12,7 +12,7 @@ from .conftest import venv_check_call, venv_check_output
 
 
 def query_gpu_name():
-    cmd = r"nvidia-smi --query-gpu=name --format=csv,noheader"
+    cmd = r"nvidia-smi --query-gpu=name --format=csv,noheader | head -n1"
     gpu_name = check_output(f"{cmd}", shell=True).strip()
 
     return gpu_name
