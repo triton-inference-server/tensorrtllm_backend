@@ -16,6 +16,7 @@ MEDUSA_VICUNA=/home/scratch.trt_llm_data/llm-models/medusa-vicuna-7b-v1.3/
 BART=/home/scratch.trt_llm_data/llm-models/bart-large-cnn/
 T5=/home/scratch.trt_llm_data/llm-models/t5-small/
 BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
+LLAVA_7B=/home/scratch.trt_llm_data/llm-models/llava-1.5-7b-hf
 
 set -e
 
@@ -449,6 +450,29 @@ if [ "$MODEL" = "blip2-opt" ]; then
                 --output_dir trt_engines/opt-2.7b/fp16/1-gpu
 
     python build_visual_engine.py --model_type blip2 --model_path ${BLIP2_OPT_2_7B} --max_batch_size 8
+
+    popd # tensorrt_llm/examples/multimodal
+
+fi
+
+if [ "$MODEL" = "llava" ]; then
+
+    pushd tensorrt_llm/examples/multimodal
+
+    echo "Convert LLaMA from HF"
+    python3 ../llama/convert_checkpoint.py --model_dir ${LLAVA_7B} --dtype float16 --output_dir ./c-model/llava-7b/fp16
+
+    echo "LLAVA builder"
+    trtllm-build --checkpoint_dir ./c-model/llava-7b/fp16 \
+                --gemm_plugin float16 \
+                --use_fused_mlp \
+                --max_batch_size 8 \
+                --max_input_len 2048 \
+                --max_seq_len 2560 \
+                --max_multimodal_len 4608
+                --output_dir trt_engines/llava-7b/fp16/1-gpu
+
+    python build_visual_engine.py --model_path ${LLAVA_7B} --model_type llava --max_batch_size 8
 
     popd # tensorrt_llm/examples/multimodal
 

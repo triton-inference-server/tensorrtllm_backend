@@ -394,6 +394,18 @@ def blip2_opt_model_root():
 
 
 @pytest.fixture(scope="session")
+def llava_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    llava_model_root = os.path.join(models_root, "llava-1.5-7b-hf")
+
+    assert os.path.exists(
+        llava_model_root
+    ), f"{llava_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return llava_model_root
+
+
+@pytest.fixture(scope="session")
 def vicuna_7b_model_root():
     models_root = llm_models_root()
     assert models_root, "Did you set LLM_MODELS_ROOT?"

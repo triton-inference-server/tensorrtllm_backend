@@ -69,6 +69,14 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        '--multimodal_gpu0_cuda_mem_pool_bytes',
+        type=int,
+        default=0,
+        help=
+        'For multimodal usage, model instances need to transfer GPU tensors which requires to have enough cuda pool memory. We currently assume al multimodal_encoderss are on GPU 0.'
+    )
+
+    parser.add_argument(
         '--oversubscribe',
         action='store_true',
         help=
@@ -79,7 +87,8 @@ def parse_arguments():
 
 
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
-            model_repo, log, log_file, tensorrt_llm_model_name, oversubscribe):
+            model_repo, log, log_file, tensorrt_llm_model_name, oversubscribe,
+            multimodal_gpu0_cuda_mem_pool_bytes):
     cmd = ['mpirun', '--allow-run-as-root']
     if oversubscribe:
         cmd += ['--oversubscribe']
@@ -93,6 +102,10 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             model_names = tensorrt_llm_model_name.split(',')
             for name in model_names:
                 cmd += [f'--load-model={name}']
+        elif i == 0 and multimodal_gpu0_cuda_mem_pool_bytes != 0:
+            cmd += [
+                f'--cuda-memory-pool-byte-size=0:{multimodal_gpu0_cuda_mem_pool_bytes}'
+            ]
         cmd += [
             f'--grpc-port={grpc_port}', f'--http-port={http_port}',
             f'--metrics-port={metrics_port}', '--disable-auto-complete-config',
@@ -116,7 +129,7 @@ if __name__ == '__main__':
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
                   args.log_file, args.tensorrt_llm_model_name,
-                  args.oversubscribe)
+                  args.oversubscribe, args.multimodal_gpu0_cuda_mem_pool_bytes)
     env = os.environ.copy()
     if args.multi_model:
         assert args.world_size == 1, 'World size must be 1 when using multi-model. Processes will be spawned automatically to run the multi-GPU models'

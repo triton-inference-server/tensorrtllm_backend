@@ -191,7 +191,11 @@ fill_triton_repo () {
     fi
 
     if [ "${VISUAL_ENGINE_PATH}" != "" ] && [ "${VISUAL_ENGINE_PATH}" != "skip" ]; then
+        cp all_models/multimodal/ensemble ${TRITON_REPO} -r
+        cp all_models/multimodal/multimodal_encoders ${TRITON_REPO} -r
+        python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
         python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${DECODER_ENGINE_PATH}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/multimodal_encoders/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},visual_model_path:${VISUAL_ENGINE_PATH}
     fi
 }
 
@@ -209,6 +213,7 @@ launch_triton_server () {
     /opt/tritonserver/bin/tritonserver \
         --model-repository=${TRITON_REPO} --http-port ${TRITON_HTTP_PORT} --grpc-port ${TRITON_GRPC_PORT} --metrics-port ${TRITON_METRICS_PORT} &
     export SERVER_PID=$!
+
     wait_for_server_ready ${SERVER_PID} 1200 ${TRITON_HTTP_PORT}
 }
 
@@ -1193,7 +1198,7 @@ if [ "$MODEL" = "blip2-opt" ]; then
     DECOUPLED_MODE="False"
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
         launch_triton_server
-        python3 tools/multimodal/blip2_opt2.7b_client.py
+        python3 tools/multimodal/client.py --model_type blip2
         kill_triton_server
     done
 
@@ -1201,7 +1206,7 @@ if [ "$MODEL" = "blip2-opt" ]; then
     DECOUPLED_MODE="True"
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
         launch_triton_server
-        python3 tools/multimodal/blip2_opt2.7b_client.py --streaming
+        python3 tools/multimodal/client.py --model_type blip2 --streaming
         kill_triton_server
     done
     DECOUPLED_MODE="False"
@@ -1218,7 +1223,7 @@ if [ "$MODEL" = "blip2-opt" ]; then
             continue
         fi
         launch_triton_server
-        python3 tools/multimodal/blip2_opt2.7b_client.py --use_bls --streaming
+        python3 tools/multimodal/client.py --model_type blip2 --use_bls --streaming
         kill_triton_server
     done
     done

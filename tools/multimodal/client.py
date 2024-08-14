@@ -13,7 +13,7 @@ import numpy as np
 import requests
 import tritonclient.grpc as grpcclient
 from PIL import Image
-from transformers import Blip2Processor
+from transformers import AutoProcessor, Blip2Processor
 from utils import utils
 
 
@@ -156,13 +156,22 @@ if __name__ == "__main__":
         default=False,
         help="Use BLS model instead of ensemble.",
     )
-
+    parser.add_argument("--model_type",
+                        required=True,
+                        choices=['blip2', 'llava'],
+                        help="Model type")
     FLAGS = parser.parse_args()
 
     raw_image = Image.open(requests.get(FLAGS.image, stream=True).raw)
-    processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
-    image = processor(raw_image, FLAGS.text,
-                      return_tensors="pt")['pixel_values']
+    if 'blip2' in FLAGS.model_type:
+        processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        image = processor(raw_image, FLAGS.text,
+                          return_tensors="pt")['pixel_values']
+    elif 'llava' in FLAGS.model_type:
+        processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+        image = processor(text=FLAGS.text,
+                          images=raw_image,
+                          return_tensors="pt")['pixel_values']
     image_data = image.numpy().astype(np.float16)
 
     text_data = np.array([[FLAGS.text.encode("utf8")]], dtype=np.object_)

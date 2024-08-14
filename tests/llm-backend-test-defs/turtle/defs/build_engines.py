@@ -329,6 +329,69 @@ def prepare_blip2_opt_engine(tensorrt_llm_multimodal_example_root,
     return engine_dir, visual_engine_dir
 
 
+def prepare_llava_engine(tensorrt_llm_multimodal_example_root,
+                         tensorrt_llm_llama_example_root, llava_model_root):
+    # Convert LLAMA from HF
+    ckpt_dir = os.path.join(tensorrt_llm_multimodal_example_root, "model_dir",
+                            "llava")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_llama_example_root}/convert_checkpoint.py",
+        f"--model_dir={llava_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
+    ]
+
+    # Build LLAVA
+    engine_dir = os.path.join(tensorrt_llm_multimodal_example_root,
+                              "engine_dir", "llava")
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gemm_plugin=float16",
+        "--use_fused_mlp",
+        "--max_batch_size=8",
+        "--max_multimodal_len=4608",
+        "--max_input_len=2048",
+        "--max_seq_len=2560",
+        f"--output_dir={engine_dir}",
+    ]
+
+    build_visual_engine_cmd = [
+        "python3",
+        "build_visual_engine.py",
+        "--model_type=llava",
+        f"--model_path={llava_model_root}",
+        "--max_batch_size=8",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    build_visual_engine_cmd = " ".join(build_visual_engine_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(convert_cmd, shell=True)
+        check_call(build_cmd, shell=True)
+        check_call(build_visual_engine_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_multimodal_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+        print_info(f"Skipped: {build_visual_engine_cmd}")
+
+    visual_engine_dir = os.path.join(tensorrt_llm_multimodal_example_root,
+                                     "tmp", "trt_engines", "llava-1.5-7b-hf",
+                                     "vision_encoder")
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    assert os.path.exists(
+        visual_engine_dir), f"{visual_engine_dir} does not exists."
+    return engine_dir, visual_engine_dir
+
+
 def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
                                      gpt_tokenizer_model_root):
     # Convert GPT weights from HF

@@ -89,6 +89,13 @@ def prepare_custom_config(llm_backend_repo_root, new_model_repo,
     check_call(f"cp -R {tensorrt_llm_config} {new_config}", shell=True)
 
 
+def prepare_multimodal_model_repo(llm_backend_repo_root, new_model_repo,
+                                  dir_name):
+    origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
+                                     "multimodal", dir_name)
+    check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
+
+
 def modify_ib_config_pbtxt(
         REPO_PATH,
         DECODER_ENGINE_PATH,
@@ -135,6 +142,16 @@ def modify_ib_config_pbtxt(
                                    "ensemble", "config.pbtxt")
     tensorrt_llm_bls_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                            "tensorrt_llm_bls", "config.pbtxt")
+
+    if VISUAL_ENGINE_PATH != "":
+        multimodal_enc_config = os.path.join(llm_backend_repo_root, REPO_PATH,
+                                             "multimodal_encoders",
+                                             "config.pbtxt")
+
+        check_call(
+            f"python3 {fill_template_py} -i {multimodal_enc_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
+            f"visual_model_path:{VISUAL_ENGINE_PATH}",
+            shell=True)
 
     if DRAFT_ENGINE_PATH != "":
         llm_draft_config = os.path.join(llm_backend_repo_root, REPO_PATH,
