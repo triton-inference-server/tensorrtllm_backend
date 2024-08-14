@@ -31,6 +31,11 @@ import triton_python_backend_utils as pb_utils
 from lib.triton_decoder import TritonDecoder
 
 
+def get_valid_param_value(param, default_value=''):
+    value = param.get('string_value', '')
+    return default_value if value.startswith('${') or value == '' else value
+
+
 class TritonPythonModel:
 
     def initialize(self, args):
@@ -40,10 +45,8 @@ class TritonPythonModel:
 
         params = model_config['parameters']
 
-        accumulate_tokens_str = ''
-        if 'accumulate_tokens' in params:
-            accumulate_tokens_str = params['accumulate_tokens']['string_value']
-
+        accumulate_tokens_str = get_valid_param_value(
+            params.get('accumulate_tokens', {}))
         self.accumulate_tokens = accumulate_tokens_str.lower() in [
             'true', 'yes', '1', 't'
         ]
@@ -53,14 +56,13 @@ class TritonPythonModel:
 
         self.logger = pb_utils.Logger
 
-        self.llm_model_name = "tensorrt_llm"
-        if "tensorrt_llm_model_name" in params:
-            self.llm_model_name = params["tensorrt_llm_model_name"][
-                "string_value"]
-        self.draft_llm_model_name = None
-        if "tensorrt_llm_draft_model_name" in params:
-            self.draft_llm_model_name = params[
-                "tensorrt_llm_draft_model_name"]["string_value"]
+        default_tensorrt_llm_model_name = 'tensorrt_llm'
+        self.llm_model_name = get_valid_param_value(
+            params.get('tensorrt_llm_model_name', {}),
+            default_tensorrt_llm_model_name)
+
+        self.draft_llm_model_name = get_valid_param_value(
+            params.get('tensorrt_llm_draft_model_name', {}), None)
 
         self.decoder = TritonDecoder(
             streaming=self.decoupled,
