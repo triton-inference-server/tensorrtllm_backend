@@ -433,6 +433,7 @@ parameters: {
     string_value: "${kv_cache_host_memory_bytes}"
   }
 }
+# kv_cache_onboard_blocks is for internal implementation.
 parameters: {
   key: "kv_cache_onboard_blocks"
   value: {
