@@ -40,6 +40,12 @@ input [
     optional: true
   },
   {
+    name: "image_input"
+    data_type: TYPE_FP16
+    dims: [ 3, -1, -1 ]
+    optional: true
+  },
+  {
     name: "max_tokens"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -149,18 +155,6 @@ input [
   {
     name: "stream"
     data_type: TYPE_BOOL
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "prompt_embedding_table"
-    data_type: TYPE_FP16
-    dims: [ -1, -1 ]
-    optional: true
-  },
-  {
-    name: "prompt_vocab_size"
-    data_type: TYPE_INT32
     dims: [ 1 ]
     optional: true
   },
@@ -292,6 +286,22 @@ ensemble_scheduling {
       }
     },
     {
+      model_name: "multimodal_encoders"
+      model_version: -1
+      input_map {
+        key: "IMAGE"
+        value: "image_input"
+      }
+      output_map {
+        key: "OUT_PROMPT_EMBEDDING_TABLE"
+        value: "out_prompt_embedding_table"
+      }
+      output_map {
+        key: "OUT_PROMPT_VOCAB_SIZE"
+        value: "out_prompt_vocab_size"
+      }
+    },
+    {
       model_name: "tensorrt_llm"
       model_version: -1
       input_map {
@@ -384,11 +394,11 @@ ensemble_scheduling {
       }
       input_map {
         key: "prompt_embedding_table"
-        value: "prompt_embedding_table"
+        value: "out_prompt_embedding_table"
       }
       input_map {
         key: "prompt_vocab_size"
-        value: "prompt_vocab_size"
+        value: "out_prompt_vocab_size"
       }
       input_map {
         key: "stop_words_list"
