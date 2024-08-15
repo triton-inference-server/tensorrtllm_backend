@@ -675,7 +675,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.peft_cache_config.host_cache_size == 4
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
-    assert config.logits_post_processor_map is None
+    assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == True
     del os.environ["TRTLLM_ORCHESTRATOR"]
 
@@ -715,7 +715,7 @@ def test_get_executor_config_minimal():
     assert config.peft_cache_config.host_cache_size is None
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
-    assert config.logits_post_processor_map is None
+    assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == False
     assert config.extended_runtime_perf_knob_config.multi_block_mode == False
 
