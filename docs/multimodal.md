@@ -79,7 +79,6 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --checkpoint_dir ${UNIFIED_CKPT_PATH} \
         --output_dir ${ENGINE_PATH} \
         --gemm_plugin float16 \
-        --use_fused_mlp \
         --max_batch_size 8 \
         --max_input_len 2048 \
         --max_seq_len 2560 \

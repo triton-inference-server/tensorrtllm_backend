@@ -465,7 +465,6 @@ if [ "$MODEL" = "llava" ]; then
     echo "LLAVA builder"
     trtllm-build --checkpoint_dir ./c-model/llava-7b/fp16 \
                 --gemm_plugin float16 \
-                --use_fused_mlp \
                 --max_batch_size 8 \
                 --max_input_len 2048 \
                 --max_seq_len 2560 \
