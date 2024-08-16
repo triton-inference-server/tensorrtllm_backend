@@ -2099,6 +2099,7 @@ def test_llava(
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("VIRTUAL_TOKENS", ["True", "False"],
                          ids=["withVirtualTokens", "withoutVirtualTokens"])
+@pytest.mark.parametrize("ENABLE_CONTEXT_FMHA_FP32_ACC", ["True", "False"])
 def test_gpt_next_ptuning_ifb(
     E2E_MODEL_NAME,
     MAX_TOKENS_IN_KV_CACHE,
@@ -2122,6 +2123,7 @@ def test_gpt_next_ptuning_ifb(
     BLS_INSTANCE_COUNT,
     EXCLUDE_INPUT_IN_OUTPUT,
     VIRTUAL_TOKENS,
+    ENABLE_CONTEXT_FMHA_FP32_ACC,
     inflight_batcher_llm_client_root,
     gpt_tokenizer_model_root,
     tensorrt_llm_example_root,
@@ -2170,6 +2172,7 @@ def test_gpt_next_ptuning_ifb(
         POSTPROCESSING_INSTANCE_COUNT,
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
+        ENABLE_CONTEXT_FMHA_FP32_ACC=ENABLE_CONTEXT_FMHA_FP32_ACC,
     )
     # WAR for https://nvbugspro.nvidia.com/bug/4742149
     gpu_name = query_gpu_name()
@@ -2194,6 +2197,11 @@ def test_gpt_next_ptuning_ifb(
             f"--output_csv=output_w_prompt.csv",
             "--no_add_special_tokens",
         ]
+        if ENABLE_CONTEXT_FMHA_FP32_ACC == "True":
+            run_cmd += [
+                "--enable_context_fmha_fp32_acc",
+            ]
+
         venv_check_call(llm_backend_venv, run_cmd)
     # 2. Input w/o virtual tokens:
     elif VIRTUAL_TOKENS == "False":
@@ -2211,6 +2219,11 @@ def test_gpt_next_ptuning_ifb(
             f"--output_csv=output_wo_prompt.csv",
             "--no_add_special_tokens",
         ]
+        if ENABLE_CONTEXT_FMHA_FP32_ACC == "True":
+            run_cmd += [
+                "--enable_context_fmha_fp32_acc",
+            ]
+
         venv_check_call(llm_backend_venv, run_cmd)
 
     # Launch Triton Server
