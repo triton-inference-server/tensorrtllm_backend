@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from packaging import version
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -86,6 +88,22 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def number_of_gpus():
+    output = os.popen('nvidia-smi --list-gpus').read()
+    return len(output.strip().split('\n'))
+
+
+def check_triton_version(required_version):
+    try:
+        current_version = version.Version(
+            os.environ.get('NVIDIA_TRITON_SERVER_VERSION'))
+        required_version = version.Version(required_version)
+        return current_version > required_version
+    except version.InvalidVersion:
+        print("Invalid version format. Please use major.minor format.")
+        return False
+
+
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             model_repo, log, log_file, tensorrt_llm_model_name, oversubscribe,
             multimodal_gpu0_cuda_mem_pool_bytes):
@@ -106,6 +124,13 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             cmd += [
                 f'--cuda-memory-pool-byte-size=0:{multimodal_gpu0_cuda_mem_pool_bytes}'
             ]
+        if args.multi_model and check_triton_version('24.06'):
+            cmd += [
+                '--pinned-memory-pool-byte-size=0',
+                '--enable-peer-access=false'
+            ]
+            for j in range(number_of_gpus()):
+                cmd += [f'--cuda-memory-pool-byte-size={j}:0']
         cmd += [
             f'--grpc-port={grpc_port}', f'--http-port={http_port}',
             f'--metrics-port={metrics_port}', '--disable-auto-complete-config',
