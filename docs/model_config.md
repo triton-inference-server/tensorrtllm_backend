@@ -21,7 +21,7 @@ See
 [here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)
 to learn more about ensemble models.
 
-*Mandoatory parameters*
+*Mandatory parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
@@ -29,7 +29,7 @@ to learn more about ensemble models.
 
 ### preprocessing model
 
-*Mandoatory parameters*
+*Mandatory parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
@@ -47,7 +47,7 @@ to learn more about ensemble models.
 
 ### postprocessing model
 
-*Mandoatory parameters*
+*Mandatory parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
@@ -63,17 +63,17 @@ to learn more about ensemble models.
 
 ### tensorrt_llm model
 
-*Mandoatory parameters*
+*Mandatory parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
-| `triton_backend` | The backend to use for the model. |
+| `triton_backend` | The backend to use for the model. Set to `tensorrtllm` to utilize the C++ TRT-LLM backend implementation. Set to `python` to utlize the TRT-LLM Python runtime. |
 | `triton_max_batch_size` | The maximum batch size that the model can handle. |
 | `decoupled_mode` | Whether to use decoupled mode. |
 | `max_queue_delay_microseconds` | The maximum queue delay in microseconds. |
 | `max_queue_size` | The maximum queue size. |
 | `engine_dir` | The path to the engine for the model. |
-| `batching_strategy` | The batching strategy to use. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to V1 |
+| `batching_strategy` | The batching strategy to use. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
 
 *Optional parameters*
 
@@ -148,7 +148,7 @@ See
 [here](https://github.com/triton-inference-server/python_backend#business-logic-scripting)
 to learn more about BLS models.
 
-*Mandoatory parameters*
+*Mandatory parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
@@ -279,13 +279,15 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 
 - **Setting `instance_count` for models to utilize inflight batching**
 
-   The instance_count parameter in the config.pbtxt file specifies the number
+   The `instance_count` parameter in the config.pbtxt file specifies the number
    of instances of the model to run. Ideally, this should be set to match the
    maximum batch size supported by the TRT engine, as this allows for concurrent
    request execution and reduces performance bottlenecks. However, it will also
    consume more CPU memory resources. While the optimal value isn't something we
    can determine in advance, it generally shouldn't be set to a very small
    value, such as 1.
+   For most use cases, we have found that setting `instance_count` to 5 works
+   well across a variety of workloads in our experiments.
 
 <!--
 Contents to be added:

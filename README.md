@@ -61,7 +61,7 @@ repo. If you don't find your answer there you can ask questions on the
   - [Supported Models](#supported-models)
   - [Model Config](#model-config)
   - [Model Deployment](#model-deployment)
-    - [Multi-instance Support](#multi-instance-support)
+    - [TRT-LLM Multi-instance Support](#trt-llm-multi-instance-support)
       - [Leader Mode](#leader-mode)
       - [Orchestrator Mode](#orchestrator-mode)
       - [Running Multiple Instances of LLaMa Model](#running-multiple-instances-of-llama-model)
@@ -71,8 +71,10 @@ repo. If you don't find your answer there you can ask questions on the
     - [MIG Support](#mig-support)
     - [Scheduling](#scheduling)
     - [Key-Value Cache](#key-value-cache)
-    - [Optimization](#optimization)
-    - [Decoding Modes](#decoding-modes)
+    - [Decoding](#decoding)
+      - [Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search and Medusa](#decoding-modes---top-k-top-p-top-k-top-p-beam-search-and-medusa)
+      - [Speculative Decoding](#speculative-decoding)
+    - [Chunked Context](#chunked-context)
     - [Quantization](#quantization)
     - [LoRa](#lora)
   - [Launch Triton server *within Slurm based clusters*](#launch-triton-server-within-slurm-based-clusters)
@@ -444,11 +446,17 @@ the model configuration.
 
 ## Model Deployment
 
-### Multi-instance Support
+### TRT-LLM Multi-instance Support
 
 TensorRT-LLM backend relies on MPI to coordinate the execution of a model across
 multiple GPUs and nodes. Currently, there are two different modes supported to
 run a model across multiple GPUs, **Leader Mode** and **Orchestrator Mode**.
+
+> **Note**: This is different from the model multi-instance support from Triton
+> Server which allows multiple instances of a model to be run on the same or
+> different GPUs. For more information on Triton Server multi-instance support,
+> please refer to the
+> [Triton model config documentation](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups).
 
 #### Leader Mode
 
@@ -544,22 +552,69 @@ See the
 to learn more about how TensorRT-LLM expert parallelism works in Mixture of Experts (MoE).
 
 ### MIG Support
-TBD
+
+See the [MIG tutorial - placeholder]() for more details on how to run TRT-LLM
+models and Triton with MIG.
 
 ### Scheduling
-TBD
+
+The scheduler policy helps the batch manager adjust how requests are scheduled
+for execution. There are two scheduler policies supported in TensorRT-LLM,
+`MAX_UTILIZATION` and `GUARANTEED_NO_EVICT`. See the
+[batch manager design](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/batch-manager.md#gptmanager-design)
+to learn more about how scheduler policies work. You can specify the scheduler
+policy via the `batch_scheduler_policy` parameter in the
+[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
 
 ### Key-Value Cache
-TBD
 
-### Optimization
-TBD
+See the
+[KV Cache](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-attention.md#kv-cache)
+section for more details on how TensorRT-LLM supports KV cache. Also, check out
+the [KV Cache Reuse](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/kv_cache_reuse.md)
+documentation to learn more about how to enable KV cache reuse when building the
+TRT-LLM engine. Parameters for KV cache can be found in the
+[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
 
-### Decoding Modes
-TBD
+### Decoding
+
+#### Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search and Medusa
+
+TensorRT-LLM supports various decoding modes, including top-k, top-p,
+top-k top-p, beam search and Medusa. See the
+[Sampling Parameters](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md#sampling-parameters)
+section to learn more about top-k, top-p, top-k top-p and beam search decoding.
+For more details on Medusa, please refer to the
+[Medusa Decoding](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/medusa)
+documentation.
+
+Parameters for decoding modes can be found in the
+[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
+
+#### Speculative Decoding
+
+See the
+[Speculative Decoding](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/speculative_decoding.md)
+documentation to learn more about how TensorRT-LLM supports speculative decoding
+to improve the performance. The parameters for speculative decoding can be found
+in the [model config](./docs/model_config.md#tensorrt_llm_bls_model) of
+tensorrt_llm_bls model.
+
+### Chunked Context
+
+For more details on how to use chunked context, please refer to the
+[Chunked Context](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-attention.md#chunked-context)
+section. Parameters for chunked context can be found in the
+[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
 
 ### Quantization
-TBD
+
+Check out the
+[Quantization Guide](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/quantization/README.md)
+to learn more about how to install the quantization toolkit and quantize
+TensorRT-LLM models. Also, check out the blog post
+[Speed up inference with SOTA quantization techniques in TRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/blogs/quantization-in-TRT-LLM.md)
+to learn more about how to speed up inference with quantization.
 
 ### LoRa
 
