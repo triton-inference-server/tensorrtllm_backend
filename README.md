@@ -655,6 +655,12 @@ MODEL_REPO="/tensorrtllm_backend/triton_model_repo"
 ${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
 ```
 
+If srun initializes the mpi environment, you can use the following command to launch the Triton server:
+
+```bash
+srun --mpi pmix launch_triton_server.py --oversubscribe
+```
+
 ### Submit a Slurm job
 
 ```bash
