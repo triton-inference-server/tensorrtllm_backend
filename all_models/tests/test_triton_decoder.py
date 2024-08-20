@@ -26,11 +26,12 @@
 
 import sys
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import torch
 
 # Mock pb_utils
 sys.modules["triton_python_backend_utils"] = MagicMock()
@@ -43,13 +44,22 @@ from lib.triton_decoder import TritonDecoder
 @dataclass
 class MockTritonTensor:
     _name: str
-    _tensor: np.ndarray
+    _tensor: Union[np.ndarray, torch.Tensor]
 
     def name(self) -> str:
         return self._name
 
     def as_numpy(self) -> np.ndarray:
-        return self._tensor
+        if self.is_cpu():
+            return self._tensor
+        else:
+            return self._tensor.as_numpy()
+
+    def is_cpu(self) -> bool:
+        if isinstance(self._tensor, np.ndarray):
+            return True
+        else:
+            return False
 
 
 @dataclass

@@ -27,7 +27,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -46,13 +46,22 @@ import tensorrt_llm.bindings.executor as trtllm
 @dataclass
 class MockTritonTensor:
     _name: str
-    _tensor: np.ndarray
+    _tensor: Union[np.ndarray, torch.Tensor]
 
     def name(self) -> str:
         return self._name
 
     def as_numpy(self) -> np.ndarray:
-        return self._tensor
+        if self.is_cpu():
+            return self._tensor
+        else:
+            return self._tensor.as_numpy()
+
+    def is_cpu(self) -> bool:
+        if isinstance(self._tensor, np.ndarray):
+            return True
+        else:
+            return False
 
 
 @dataclass
@@ -666,7 +675,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.peft_cache_config.host_cache_size == 4
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
-    assert config.logits_post_processor_map is None
+    assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == True
     del os.environ["TRTLLM_ORCHESTRATOR"]
 
@@ -706,7 +715,7 @@ def test_get_executor_config_minimal():
     assert config.peft_cache_config.host_cache_size is None
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
-    assert config.logits_post_processor_map is None
+    assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == False
     assert config.extended_runtime_perf_knob_config.multi_block_mode == False
 

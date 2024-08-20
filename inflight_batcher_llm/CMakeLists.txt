@@ -109,13 +109,10 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
-set(COMMON_SRCS src/model_instance_state.cc src/model_state.cc src/utils.cc)
+set(SRCS src/libtensorrtllm.cc src/model_instance_state.cc src/model_state.cc
+         src/utils.cc)
 
-add_library(triton-tensorrt-llm-common SHARED ${COMMON_SRCS})
-
-set(BACKEND_SRCS src/libtensorrtllm.cc)
-
-add_library(triton-tensorrt-llm-backend SHARED ${BACKEND_SRCS})
+add_library(triton-tensorrt-llm-backend SHARED ${SRCS})
 
 enable_language(CUDA)
 
@@ -228,18 +225,17 @@ list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
 include_directories(${COMMON_HEADER_DIRS})
 
 target_include_directories(
-  triton-tensorrt-llm-common
-  PUBLIC ${TRTLLM_DIR}/cpp
-         ${TRTLLM_DIR}/cpp/include
-         ${CMAKE_CURRENT_SOURCE_DIR}/src
-         ${CUDA_INCLUDE_DIRS}
-         ${CUDNN_ROOT_DIR}/include
-         ${NCCL_INCLUDE_DIR}
-         ${3RDPARTY_DIR}/cutlass/include
-         ${MPI_INCLUDE_PATH}
-         ${COMMON_HEADER_DIR})
+  triton-tensorrt-llm-backend
+  PRIVATE ${TRTLLM_DIR}/cpp
+          ${TRTLLM_DIR}/cpp/include
+          ${CMAKE_CURRENT_SOURCE_DIR}/src
+          ${CUDA_INCLUDE_DIRS}
+          ${CUDNN_ROOT_DIR}/include
+          ${NCCL_INCLUDE_DIR}
+          ${3RDPARTY_DIR}/cutlass/include
+          ${MPI_INCLUDE_PATH}
+          ${COMMON_HEADER_DIR})
 
-target_compile_features(triton-tensorrt-llm-common PRIVATE cxx_std_17)
 target_compile_features(triton-tensorrt-llm-backend PRIVATE cxx_std_17)
 
 set(COMPILE_OPTIONS
@@ -253,7 +249,6 @@ set(COMPILE_OPTIONS
     /D_WIN32_WINNT=0x0A00
     /EHsc>)
 
-target_compile_options(triton-tensorrt-llm-common PRIVATE ${COMPILE_OPTIONS})
 target_compile_options(triton-tensorrt-llm-backend PRIVATE ${COMPILE_OPTIONS})
 
 if(TRITON_ENABLE_METRICS)
@@ -288,14 +283,14 @@ if(TRITON_ENABLE_METRICS)
            triton-backend-utils # from repo-backend
            ${tensorrt_llm})
 
-  target_compile_definitions(triton-tensorrt-llm-common
+  target_compile_definitions(triton-tensorrt-llm-backend
                              PRIVATE TRITON_ENABLE_METRICS=1)
-  target_link_libraries(triton-tensorrt-llm-common
+  target_link_libraries(triton-tensorrt-llm-backend
                         PRIVATE triton-custom-metrics-reporter-library)
 endif()
 
 target_link_libraries(
-  triton-tensorrt-llm-common
+  triton-tensorrt-llm-backend
   PUBLIC ${tensorrt_llm}
          triton-core-serverapi # from repo-core
          triton-core-backendapi # from repo-core
@@ -306,9 +301,6 @@ target_link_libraries(
          nvinfer
          ${nvinfer_plugin_tensorrt_llm})
 
-target_link_libraries(triton-tensorrt-llm-backend
-                      PRIVATE triton-tensorrt-llm-common)
-
 FetchContent_Declare(
   json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -316,16 +308,13 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json)
 
-target_link_libraries(triton-tensorrt-llm-common
+target_link_libraries(triton-tensorrt-llm-backend
                       PRIVATE nlohmann_json::nlohmann_json)
 
 if(WIN32)
   set_target_properties(
     triton-tensorrt-llm-backend PROPERTIES POSITION_INDEPENDENT_CODE ON
                                            OUTPUT_NAME triton_tensorrtllm)
-  set_target_properties(
-    triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
-                                          OUTPUT_NAME triton_tensorrtllm_common)
 else()
   set_target_properties(
     triton-tensorrt-llm-backend
@@ -336,9 +325,6 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
-  set_target_properties(
-    triton-tensorrt-llm-common PROPERTIES POSITION_INDEPENDENT_CODE ON
-                                          OUTPUT_NAME triton_tensorrtllm_common)
 endif()
 
 if(BUILD_TESTS)

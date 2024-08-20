@@ -77,7 +77,8 @@ class MockDecoder(Decoder):
         self,
         preproc: PreprocResponse,
         request: Request,
-        draft_request: Optional[DraftRequest] = None
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None
     ) -> Generator[GenerationResponse, None, None]:
         for idx, target_output in enumerate(self.data_dict["target_output"]):
             self.target_num_calls += 1
@@ -88,10 +89,11 @@ class MockDecoder(Decoder):
                                      sequence_length=np.array([[output_len]]))
 
     def _generate_non_streaming(
-            self,
-            preproc: PreprocResponse,
-            request: Request,
-            draft_request: Optional[DraftRequest] = None
+        self,
+        preproc: PreprocResponse,
+        request: Request,
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None
     ) -> GenerationResponse:
         self.target_num_calls += 1
         # Return the full completion (final step) if not using speculative decoding in non-streaming mode
