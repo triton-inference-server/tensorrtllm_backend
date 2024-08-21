@@ -240,7 +240,7 @@ class TritonPythonModel:
                 # Exclude fake ids in multimodal models
                 fake_id_len = 0
                 for i in range(seq_len):
-                    if tokens[i] < self.tokenizer.vocab_size:
+                    if tokens[i] < len(self.tokenizer.vocab):
                         fake_id_len = i
                         break
                 output = self.tokenizer.decode(
