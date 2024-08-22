@@ -771,7 +771,7 @@ Check out [GenAI-Perf](https://github.com/triton-inference-server/perf_analyzer/
 tool for benchmarking TensorRT-LLM models.
 
 You can also use the
-[benchmark_core_model script](../tools/inflight_batcher_llm/benchmark_core_model.py)
+[benchmark_core_model script](./tools/inflight_batcher_llm/benchmark_core_model.py)
 to benchmark the core model `tensosrrt_llm`. The script sends requests directly
 to deployed `tensorrt_llm` model. The benchmark core model latency indicates the
 inference latency of TensorRT-LLM, not including the pre/post-processing latency
