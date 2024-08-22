@@ -553,8 +553,9 @@ to learn more about how TensorRT-LLM expert parallelism works in Mixture of Expe
 
 ### MIG Support
 
-See the [MIG tutorial - placeholder]() for more details on how to run TRT-LLM
-models and Triton with MIG.
+See the
+[MIG tutorial](https://github.com/triton-inference-server/tutorials/tree/main/Deployment/Kubernetes)
+for more details on how to run TRT-LLM models and Triton with MIG.
 
 ### Scheduling
 
