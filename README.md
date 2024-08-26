@@ -476,6 +476,17 @@ generation_logits: [[[[-106.33096  -105.58956  -111.44852  ... -111.04858  -111.
       19.625107]]]]
 ```
 
+#### Requests with batch size > 1
+
+The TRT-LLM Triton backend supports requests with batch size greater than one. When sending a request with a batch size greater than one, the TRT-LLM Triton backend will return multiple batch size 1 responses, where each response will be associated with a given batch index. An output tensor named `batch_index` is associated with each response to indicate which batch index this response corresponds to.
+
+The client script [end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py) demonstrates how a client can send requests with batch size > 1 and consume the responses returned from Triton. When passing `--batch-inputs` to the client script, the client will create a request with multiple prompts, and use the `batch_index` output tensor to associate the responses to the original prompt. For example one could run:
+
+```
+python3 end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
+```
+
+to send a request with a batch size of 3 to the Triton server.
 
 ### Launch Triton server *within Slurm based clusters*
 
