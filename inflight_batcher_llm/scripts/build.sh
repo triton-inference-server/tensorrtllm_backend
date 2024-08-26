@@ -53,3 +53,7 @@ fi
 
 cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ${BUILD_TESTS_ARG} ..
 make install
+
+mkdir -p /opt/tritonserver/backends/tensorrtllm
+cp libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm
+cp trtllmExecutorWorker /opt/tritonserver/backends/tensorrtllm
