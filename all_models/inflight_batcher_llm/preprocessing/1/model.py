@@ -416,7 +416,7 @@ class TritonPythonModel:
         for words, weights in zip(embedding_bias_words,
                                   embedding_bias_weights):
 
-            vocab_size = self.tokenizer.vocab_size
+            vocab_size = len(self.tokenizer.vocab)
             embedding_bias = [0.] * vocab_size
 
             assert len(words) == len(
