@@ -878,7 +878,7 @@ class TritonPythonModel:
                             )
                             triton_request_final = True
                             del self.triton_req_id_to_req_ids[triton_req_id]
-                            if triton_user_id is not None and triton_user_id != "":
+                            if triton_user_id is not None and triton_user_id != "" and triton_user_id in self.triton_user_id_to_req_ids:
                                 del self.triton_user_id_to_req_ids[
                                     triton_user_id]
                         del self.req_id_to_request_data[req_id]
