@@ -25,7 +25,7 @@ BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
 LLAVA_7B=/home/scratch.trt_llm_data/llm-models/llava-1.5-7b-hf
 VILA1_5_3B=/home/scratch.trt_llm_data/llm-models/vila/VILA1.5-3b
 VILA_PATH=/home/scratch.trt_llm_data/llm-models/vila/VILA
-
+WHISPER_LAREGE_V3=/home/scratch.trt_llm_data/llm-models/whisper-models/large-v3
 set -e
 
 pkill -9 -f tritonserver || true
@@ -509,5 +509,38 @@ if [ "$MODEL" = "vila" ]; then
     python build_visual_engine.py --model_path ${VILA1_5_3B} --model_type vila --max_batch_size 32 --vila_path ${VILA_PATH}
 
     popd # tensorrt_llm/examples/multimodal
+fi
+
+if [ "$MODEL" = "whisper" ]; then
+
+    pushd tensorrt_llm/examples/whisper
+
+    echo "Convert OpenAI Whisper Checkpoint"
+    python3 convert_checkpoint.py --model_dir ${WHISPER_LAREGE_V3} --output_dir ./c-model/${MODEL}/tllm_checkpoint
+
+    echo "Build Whisper Encoder: "
+    trtllm-build --checkpoint_dir ./c-model/${MODEL}/tllm_checkpoint/encoder \
+                --output_dir trt_engine/${MODEL}/encoder \
+                --moe_plugin disable \
+                --enable_xqa disable \
+                --max_batch_size 8 \
+                --gemm_plugin disable \
+                --bert_attention_plugin float16 \
+                --max_input_len 3000 --max_seq_len=3000
+
+    echo "Build Whisper Decoder: "
+    trtllm-build  --checkpoint_dir ./c-model/${MODEL}/tllm_checkpoint/decoder \
+                --output_dir trt_engine/${MODEL}/decoder \
+                --moe_plugin disable \
+                --enable_xqa disable \
+                --max_beam_width 4 \
+                --max_batch_size 8 \
+                --max_seq_len 114 \
+                --max_input_len 14 \
+                --max_encoder_input_len 3000 \
+                --gemm_plugin float16 \
+                --bert_attention_plugin float16 \
+                --gpt_attention_plugin float16
+    popd
 
 fi

@@ -28,6 +28,9 @@ if [ "$MODEL" = "mistral" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mist
 elif [ "$MODEL" = "t5-ib" ] || [ "$MODEL" = "bart-ib" ]; then
     MAX_ATTENTION_WINDOW_SIZE=""
     MAX_SEQUENCE_LEN="4096" # for enc-dec, choose a sufficient size of max token in kv cache to avoid no free block error
+elif [ "$MODEL" = "whisper" ]; then
+    MAX_ATTENTION_WINDOW_SIZE=""
+    MAX_SEQUENCE_LEN="24000" # WAR to avoid no free block errors
 else
     MAX_ATTENTION_WINDOW_SIZE=""
     MAX_SEQUENCE_LEN="2048"
@@ -205,6 +208,13 @@ fill_triton_repo () {
         python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders
 
     fi
+    if [ "$MODEL" = "whisper" ]; then
+        cp all_models/whisper/whisper_bls ${TRITON_REPO} -r
+        rm -r ${TRITON_REPO}/preprocessing ${TRITON_REPO}/postprocessing ${TRITON_REPO}/ensemble ${TRITON_REPO}/tensorrt_llm_bls
+        python3 tools/fill_template.py -i ${TRITON_REPO}/whisper_bls/config.pbtxt engine_dir:${ENCODER_ENGINE_PATH},n_mels:128,zero_pad:false,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE}
+        wget -nc --directory-prefix=${TRITON_REPO}/whisper_bls/1 https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/multilingual.tiktoken
+        wget -nc --directory-prefix=${TRITON_REPO}/whisper_bls/1 https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/mel_filters.npz
+    fi
 }
 
 launch_triton_server () {
@@ -214,7 +224,6 @@ launch_triton_server () {
     rm -rf ${TRITON_REPO}
     cp -R all_models/inflight_batcher_llm ${TRITON_REPO}
 
-    # Modify config.pbtxt
     fill_triton_repo
 
     # Launch Triton Server
@@ -1265,4 +1274,33 @@ if [ "$MODEL" = "blip2-opt" ]; then
         kill_triton_server
     done
     ENABLE_KV_CACHE_REUSE="False"
+fi
+
+if [ "$MODEL" = "whisper" ]; then
+
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[1]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    # enc-dec models only support inflight_fused_batching, with chunked context disabled
+    BATCHING_STRATEGY="inflight_fused_batching"
+    ENABLE_CHUNKED_CONTEXT="false"
+    EXCLUDE_INPUT_IN_OUTPUT="true"
+    CROSS_KV_CACHE_FRACTION="0.5"
+    wget -nc https://raw.githubusercontent.com/yuekaizhang/Triton-ASR-Client/main/datasets/mini_en/wav/1221-135766-0002.wav
+    # Test none-streaming
+    DECOUPLED_MODE="False"
+    pip install tiktoken soundfile
+    launch_triton_server
+    python3 tools/whisper/client.py --audio-path 1221-135766-0002.wav
+    kill_triton_server
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    launch_triton_server
+    python3 tools/whisper/client.py --audio-path 1221-135766-0002.wav --streaming
+    kill_triton_server
+
+    EXCLUDE_INPUT_IN_OUTPUT="false"
+    DECOUPLED_MODE="False"
+    CROSS_KV_CACHE_FRACTION=""
 fi
