@@ -13,3 +13,5 @@ test_triton_llm.py::test_t5_small_enc_dec_ifb[test_basic-False-1-top_k_top_p-Fal
 test_triton_llm.py::test_gpt_speculative_decoding_bls[False-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
 perf/test_perf.py::TestPythonBackendPerf::test_perf[gptj_6b-bs:1-input_output_len:128,8-num_runs:10]
 perf/test_perf.py::TestInflightBatchingPerf::test_perf[llama_v2_7b-concurrency:16-max_input_len:300]
+test_triton_llm.py::test_gpt_speculative_decoding_bls[True-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-max_utilization-1-1-1-False-ensemble]
+test_triton_llm.py::test_gpt_speculative_decoding_bls[True-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
