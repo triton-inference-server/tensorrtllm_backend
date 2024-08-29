@@ -93,6 +93,7 @@ description of the parameters below.
 | `exclude_input_in_output` | Set to `true` to only return completion tokens in a response. Set to `false` to return the prompt tokens concatenated with the generated tokens. (default=`false`) |
 | `cancellation_check_period_ms` | The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. (default=100) |
 | `stats_check_period_ms` | The time for the statistics reporting thread to sleep before doing the next check. (default=100) |
+| `recv_poll_period_ms` | The time for the receiving thread in orchestrator mode to sleep before doing the next check. (default=0) |
 | `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=executor::kDefaultIterStatsMaxIterations) |
 | `request_stats_max_iterations` | The maximum number of iterations for which to keep per-request statistics. (default=executor::kDefaultRequestStatsMaxIterations) |
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
