@@ -32,18 +32,13 @@ Tests in this CI directory can be run manually to provide extensive testing.
 
 ## Run QA Tests
 
-Before the Triton 23.10 release, you can launch the Triton 23.09 container
-`nvcr.io/nvidia/tritonserver:23.09-py3` and add the directory
-`/opt/tritonserver/backends/tensorrtllm` within the container following the
-instructions in [Option 3 Build via CMake](../README.md#option-3-build-via-cmake).
-
 Run the testing within the Triton container.
 
 ```bash
-docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/opt/tritonserver/tensorrtllm_backend nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3 bash
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 --gpus all -v /path/to/tensorrtllm_backend:/opt/tritonserver/tensorrtllm_backend nvcr.io/nvidia/tritonserver:24.07-trtllm-python-py3 bash
 
 # Change directory to the test and run the test.sh script
-cd /opt/tritonserver/tensorrtllm_backend/ci/<test directory>
+cd /opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
 bash -x ./test.sh
 ```
 
@@ -55,7 +50,7 @@ test. Below are the instructions to run the tests manually.
 ### Generate the model repository
 
 Follow the instructions in the
-[Create the model repository](../README.md#create-the-model-repository)
+[Create the model repository](../README.md#prepare-the-model-repository)
 section to prepare the model repository.
 
 ### Modify the model configuration
