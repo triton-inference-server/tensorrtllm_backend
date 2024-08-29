@@ -721,3 +721,7 @@ test_triton_rcca.py::test_rcca_bug_4342666[False-1-False-True-False-0-128-disabl
 test_triton_rcca.py::test_rcca_bug_4342666[False-1-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_rcca.py::test_rcca_bug_4342666[False-4-False-True-False-0-128-disableDecoupleMode-V1-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_rcca.py::test_rcca_bug_4342666[False-4-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_llama_v3_speculative_decoding_bls[False-False-1-False-True-True-0-128-disableDecoupleMode-V1-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_llama_v3_speculative_decoding_bls[False-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_llama_v3_speculative_decoding_bls[True-False-1-False-True-True-0-128-disableDecoupleMode-V1-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
+test_triton_llm.py::test_llama_v3_speculative_decoding_bls[True-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
