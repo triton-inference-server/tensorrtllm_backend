@@ -476,10 +476,20 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_WARNING(e.what());
     }
 
+    SizeType32 recvPollPeriodMs = 0;
+    try
+    {
+        recvPollPeriodMs = model_state_->GetParameter<int>("recv_poll_period_ms");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
+    }
+
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
         parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig, std::nullopt);
+        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
