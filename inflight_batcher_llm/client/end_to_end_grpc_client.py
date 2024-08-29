@@ -7,6 +7,7 @@ from functools import partial
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import argparse
+import json
 import queue
 import sys
 
@@ -35,6 +36,103 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(result)
 
 
+def prepare_inputs(prompt,
+                   output_len,
+                   repetition_penalty,
+                   presence_penalty,
+                   frequency_penalty,
+                   temperature,
+                   stop_words,
+                   bad_words,
+                   embedding_bias_words,
+                   embedding_bias_weights,
+                   streaming,
+                   beam_width,
+                   return_context_logits_data,
+                   return_generation_logits_data,
+                   end_id,
+                   pad_id,
+                   num_draft_tokens=0,
+                   use_draft_logits=None):
+
+    input0 = [[prompt]]
+    input0_data = np.array(input0).astype(object)
+    output0_len = np.ones_like(input0).astype(np.int32) * output_len
+    streaming_data = np.array([[streaming]], dtype=bool)
+    beam_width_data = np.array([[beam_width]], dtype=np.int32)
+    temperature_data = np.array([[temperature]], dtype=np.float32)
+
+    inputs = {
+        "text_input": input0_data,
+        "max_tokens": output0_len,
+        "stream": streaming_data,
+        "beam_width": beam_width_data,
+        "temperature": temperature_data,
+    }
+
+    if num_draft_tokens > 0:
+        inputs["num_draft_tokens"] = np.array([[num_draft_tokens]],
+                                              dtype=np.int32)
+    if use_draft_logits is not None:
+        inputs["use_draft_logits"] = np.array([[use_draft_logits]], dtype=bool)
+
+    if bad_words:
+        bad_words_list = np.array([bad_words], dtype=object)
+        inputs["bad_words"] = bad_words_list
+
+    if stop_words:
+        stop_words_list = np.array([stop_words], dtype=object)
+        inputs["stop_words"] = stop_words_list
+
+    if repetition_penalty is not None:
+        repetition_penalty = [[repetition_penalty]]
+        repetition_penalty_data = np.array(repetition_penalty,
+                                           dtype=np.float32)
+        inputs["repetition_penalty"] = repetition_penalty_data
+
+    if presence_penalty is not None:
+        presence_penalty = [[presence_penalty]]
+        presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
+        inputs["presence_penalty"] = presence_penalty_data
+
+    if frequency_penalty is not None:
+        frequency_penalty = [[frequency_penalty]]
+        frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
+        inputs["frequency_penalty"] = frequency_penalty_data
+
+    if return_context_logits_data is not None:
+        inputs["return_context_logits"] = return_context_logits_data
+
+    if return_generation_logits_data is not None:
+        inputs["return_generation_logits"] = return_generation_logits_data
+
+    if (embedding_bias_words is not None and embedding_bias_weights is None
+        ) or (embedding_bias_words is None
+              and embedding_bias_weights is not None):
+        assert 0, "Both embedding bias words and weights must be specified"
+
+    if (embedding_bias_words is not None
+            and embedding_bias_weights is not None):
+        assert len(embedding_bias_words) == len(
+            embedding_bias_weights
+        ), "Embedding bias weights and words must have same length"
+        embedding_bias_words_data = np.array([embedding_bias_words],
+                                             dtype=object)
+        embedding_bias_weights_data = np.array([embedding_bias_weights],
+                                               dtype=np.float32)
+        inputs["embedding_bias_words"] = embedding_bias_words_data
+        inputs["embedding_bias_weights"] = embedding_bias_weights_data
+    if end_id is not None:
+        end_id_data = np.array([[end_id]], dtype=np.int32)
+        inputs["end_id"] = end_id_data
+
+    if pad_id is not None:
+        pad_id_data = np.array([[pad_id]], dtype=np.int32)
+        inputs["pad_id"] = pad_id_data
+
+    return inputs
+
+
 def run_inference(triton_client,
                   prompt,
                   output_len,
@@ -55,149 +153,111 @@ def run_inference(triton_client,
                   return_generation_logits_data,
                   end_id,
                   pad_id,
+                  batch_inputs,
                   verbose,
                   num_draft_tokens=0,
                   use_draft_logits=None):
 
-    input0 = [[prompt]]
-    input0_data = np.array(input0).astype(object)
-    output0_len = np.ones_like(input0).astype(np.int32) * output_len
-    streaming_data = np.array([[streaming]], dtype=bool)
-    beam_width_data = np.array([[beam_width]], dtype=np.int32)
-    temperature_data = np.array([[temperature]], dtype=np.float32)
+    try:
+        prompts = json.loads(prompt)
+    except:
+        prompts = [prompt]
 
-    inputs = [
-        prepare_tensor("text_input", input0_data),
-        prepare_tensor("max_tokens", output0_len),
-        prepare_tensor("stream", streaming_data),
-        prepare_tensor("beam_width", beam_width_data),
-        prepare_tensor("temperature", temperature_data),
-    ]
+    bs1_inputs = []
+    for prompt in prompts:
+        bs1_inputs.append(
+            prepare_inputs(prompt, output_len, repetition_penalty,
+                           presence_penalty, frequency_penalty, temperature,
+                           stop_words, bad_words, embedding_bias_words,
+                           embedding_bias_weights, streaming, beam_width,
+                           return_context_logits_data,
+                           return_generation_logits_data, end_id, pad_id,
+                           num_draft_tokens, use_draft_logits))
 
-    if num_draft_tokens > 0:
-        inputs.append(
-            prepare_tensor("num_draft_tokens",
-                           np.array([[num_draft_tokens]], dtype=np.int32)))
-    if use_draft_logits is not None:
-        inputs.append(
-            prepare_tensor("use_draft_logits",
-                           np.array([[use_draft_logits]], dtype=bool)))
+    if batch_inputs:
+        multiple_inputs = []
+        for key in bs1_inputs[0].keys():
+            stackable_values = [value[key] for value in bs1_inputs]
+            stacked_values = np.concatenate(tuple(stackable_values), axis=0)
+            multiple_inputs.append(prepare_tensor(key, stacked_values))
+        multiple_inputs = [multiple_inputs]
+    else:
+        multiple_inputs = []
+        for bs1_input in bs1_inputs:
+            multiple_inputs.append([
+                prepare_tensor(key, value)
+                for (key, value) in bs1_input.items()
+            ])
 
-    if bad_words:
-        bad_words_list = np.array([bad_words], dtype=object)
-        inputs += [prepare_tensor("bad_words", bad_words_list)]
+    if beam_width > 1 and FLAGS.check_outputs:
+        raise Exception(
+            "check_outputs flag only works with beam_width == 1 currently")
 
-    if stop_words:
-        stop_words_list = np.array([stop_words], dtype=object)
-        inputs += [prepare_tensor("stop_words", stop_words_list)]
-
-    if repetition_penalty is not None:
-        repetition_penalty = [[repetition_penalty]]
-        repetition_penalty_data = np.array(repetition_penalty,
-                                           dtype=np.float32)
-        inputs += [
-            prepare_tensor("repetition_penalty", repetition_penalty_data)
-        ]
-
-    if presence_penalty is not None:
-        presence_penalty = [[presence_penalty]]
-        presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
-        inputs += [prepare_tensor("presence_penalty", presence_penalty_data)]
-
-    if frequency_penalty is not None:
-        frequency_penalty = [[frequency_penalty]]
-        frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
-        inputs += [prepare_tensor("frequency_penalty", frequency_penalty_data)]
-
-    if return_context_logits_data is not None:
-        inputs += [
-            prepare_tensor("return_context_logits",
-                           return_context_logits_data),
-        ]
-
-    if return_generation_logits_data is not None:
-        inputs += [
-            prepare_tensor("return_generation_logits",
-                           return_generation_logits_data),
-        ]
-
-    if (embedding_bias_words is not None and embedding_bias_weights is None
-        ) or (embedding_bias_words is None
-              and embedding_bias_weights is not None):
-        assert 0, "Both embedding bias words and weights must be specified"
-
-    if (embedding_bias_words is not None
-            and embedding_bias_weights is not None):
-        assert len(embedding_bias_words) == len(
-            embedding_bias_weights
-        ), "Embedding bias weights and words must have same length"
-        embedding_bias_words_data = np.array([embedding_bias_words],
-                                             dtype=object)
-        embedding_bias_weights_data = np.array([embedding_bias_weights],
-                                               dtype=np.float32)
-        inputs.append(
-            prepare_tensor("embedding_bias_words", embedding_bias_words_data))
-        inputs.append(
-            prepare_tensor("embedding_bias_weights",
-                           embedding_bias_weights_data))
-    if end_id is not None:
-        end_id_data = np.array([[end_id]], dtype=np.int32)
-        inputs += [prepare_tensor("end_id", end_id_data)]
-
-    if pad_id is not None:
-        pad_id_data = np.array([[pad_id]], dtype=np.int32)
-        inputs += [prepare_tensor("pad_id", pad_id_data)]
-
+    output_texts = []
     user_data = UserData()
-    # Establish stream
-    triton_client.start_stream(callback=partial(callback, user_data))
-    # Send request
-    triton_client.async_stream_infer(model_name, inputs, request_id=request_id)
+    for inputs in multiple_inputs:
+        # Establish stream
+        triton_client.start_stream(callback=partial(callback, user_data))
 
-    #Wait for server to close the stream
-    triton_client.stop_stream()
+        # Send request
+        batch_size = inputs[0].shape()[0]
+        triton_client.async_stream_infer(model_name,
+                                         inputs,
+                                         request_id=request_id)
 
-    # Parse the responses
-    output_text = ""
-    while True:
-        try:
-            result = user_data._completed_requests.get(block=False)
-        except Exception:
-            break
+        #Wait for server to close the stream
+        triton_client.stop_stream()
 
-        if type(result) == InferenceServerException:
-            print("Received an error from server:")
-            print(result)
-        else:
-            output = result.as_numpy('text_output')
-            if streaming and beam_width == 1:
-                new_output = output[0].decode("utf-8")
-                if overwrite_output_text:
-                    output_text = new_output
-                else:
-                    output_text += new_output
+        # Parse the responses
+        batch_output_text = [''] * batch_size
+        while True:
+            try:
+                result = user_data._completed_requests.get(block=False)
+            except Exception:
+                break
+
+            if type(result) == InferenceServerException:
+                print("Received an error from server:")
+                print(result)
             else:
-                output_text = output[0].decode("utf-8")
-                if verbose:
-                    print(output, flush=True)
+                output = result.as_numpy('text_output')
+                batch_index = result.as_numpy('batch_index')[0][0]
+                if streaming and beam_width == 1:
+                    if verbose:
+                        print(batch_index, output, flush=True)
+                    new_output = output[0].decode("utf-8")
+                    if overwrite_output_text:
+                        batch_output_text[batch_index] = new_output
+                    else:
+                        batch_output_text[batch_index] += new_output
+                else:
+                    output_text = output[0].decode("utf-8")
+                    batch_output_text[batch_index] = output_text
+                    if verbose:
+                        print(f"{batch_index}: {output_text}", flush=True)
 
-            if return_context_logits_data is not None:
-                context_logits = result.as_numpy('context_logits')
-                if verbose:
-                    print(f"context_logits.shape: {context_logits.shape}")
-                    print(f"context_logits: {context_logits}")
-            if return_generation_logits_data is not None:
-                generation_logits = result.as_numpy('generation_logits')
-                if verbose:
-                    print(
-                        f"generation_logits.shape: {generation_logits.shape}")
-                    print(f"generation_logits: {generation_logits}")
+                if return_context_logits_data is not None:
+                    context_logits = result.as_numpy('context_logits')
+                    if verbose:
+                        print(f"context_logits.shape: {context_logits.shape}")
+                        print(f"context_logits: {context_logits}")
+                if return_generation_logits_data is not None:
+                    generation_logits = result.as_numpy('generation_logits')
+                    if verbose:
+                        print(
+                            f"generation_logits.shape: {generation_logits.shape}"
+                        )
+                        print(f"generation_logits: {generation_logits}")
 
-    if streaming and beam_width == 1:
-        if verbose:
-            print(output_text)
+        if streaming and beam_width == 1:
+            if verbose:
+                for output_text in batch_output_text:
+                    print(output_text)
 
-    return output_text
+        for output_text in batch_output_text:
+            output_texts.append(output_text)
+
+    return output_texts
 
 
 if __name__ == '__main__':
@@ -214,11 +274,31 @@ if __name__ == '__main__':
                         required=False,
                         help='Inference server URL.')
 
-    parser.add_argument('-p',
-                        '--prompt',
-                        type=str,
-                        required=True,
-                        help='Input prompt.')
+    parser.add_argument(
+        '--expected-outputs',
+        type=str,
+        required=False,
+        help=
+        'Expected outputs either a single string or a list of json encoded strings.'
+    )
+
+    parser.add_argument(
+        '--check-outputs',
+        action="store_true",
+        required=False,
+        default=False,
+        help=
+        'Boolean that indicates if outputs should be compared with expected outputs (passed via --expected-outputs)'
+    )
+
+    parser.add_argument(
+        '-p',
+        '--prompt',
+        type=str,
+        required=True,
+        help=
+        'Input prompt(s), either a single string or a list of json encoded strings.'
+    )
 
     parser.add_argument('--model-name',
                         type=str,
@@ -337,6 +417,13 @@ if __name__ == '__main__':
         "Return generation logits, the engine must be built with gather_ generation_logits or gather_all_token_logits",
     )
 
+    parser.add_argument(
+        '--batch-inputs',
+        action="store_true",
+        required=False,
+        default=False,
+        help='Whether inputs should be batched or processed individually.')
+
     parser.add_argument('--end-id',
                         type=int,
                         required=False,
@@ -370,11 +457,20 @@ if __name__ == '__main__':
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
-    output_text = run_inference(
+    output_texts = run_inference(
         client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
         FLAGS.repetition_penalty, FLAGS.presence_penalty,
         FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
         FLAGS.bad_words, embedding_bias_words, embedding_bias_weights,
         FLAGS.model_name, FLAGS.streaming, FLAGS.beam_width,
         FLAGS.overwrite_output_text, return_context_logits_data,
-        return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id, True)
+        return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id,
+        FLAGS.batch_inputs, True)
+
+    if FLAGS.check_outputs:
+        expected_outputs = json.loads(FLAGS.expected_outputs)
+        assert len(expected_outputs) == len(output_texts)
+        assert all([
+            output_text == expected_output for output_text, expected_output in
+            zip(output_texts, expected_outputs)
+        ])

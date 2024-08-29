@@ -89,6 +89,7 @@ def response(request) -> MockTritonResponse:
         "output_log_probs",
         "context_logits",
         "generation_logits",
+        "batch_index",
     ]
     response = Response()
     for output_name in output_names:
@@ -137,7 +138,8 @@ mock_reponse = {
     "cum_log_probs": [[0.0]],
     "output_log_probs": [[[0.1, 0.3]]],
     "context_logits": [[[-0.2, 0.2]]],
-    "generation_logits": [[[0.3, 1.1]]]
+    "generation_logits": [[[0.3, 1.1]]],
+    "batch_index": [[0]]
 }
 
 mock_request = {"text_input": [["Hello world"]], "max_tokens": [[24]]}
@@ -195,6 +197,7 @@ _generation_name_map = {
     "output_log_probs": "output_log_probs",
     "context_logits": "context_logits",
     "generation_logits": "generation_logits",
+    "batch_index": "batch_index"
 }
 
 convert_triton_response_testcases = [{

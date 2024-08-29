@@ -100,9 +100,56 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
     return nvinfer1::DataType(0);
 }
 
-std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Request* request)
+std::vector<InputTensors> splitBatchInputsTensors(InputTensors const& inputsTensors)
 {
-    std::unordered_map<std::string, NamedTensor> inputsTensors;
+    auto inputTokensIt = inputsTensors.find(InputFieldsNames::inputTokens);
+    TLLM_CHECK_WITH_INFO(inputTokensIt != inputsTensors.end(), "input tokens tensor not provided");
+    auto inputTokensTensor = inputTokensIt->second.tensor;
+    auto inputTokensShape = inputTokensTensor->getShape();
+    TLLM_CHECK_WITH_INFO(inputTokensShape.nbDims == 2, "Expected inputTokens tensors to have 2 dimensions");
+    auto batchSize = inputTokensShape.d[0];
+
+    if (batchSize > 1)
+    {
+        // Split tensors along batch dimension. All tensors have same batch size.
+        auto itrInputLengths = inputsTensors.find(InputFieldsNames::inputLengths);
+        TLLM_CHECK_WITH_INFO(itrInputLengths != inputsTensors.end(), "input lengths tensor not provided");
+        auto inputLengthsTensor = itrInputLengths->second.tensor;
+        auto inputLengthsShape = inputLengthsTensor->getShape();
+        TLLM_CHECK_WITH_INFO(inputLengthsShape.nbDims == 1, "Expected inputLengths tensors to have 1 dimension");
+
+        using typedPtr = typename runtime::DataTypeTraits<nvinfer1::DataType::kINT32>::type*;
+        auto inputLengths = static_cast<typedPtr>(inputLengthsTensor->data());
+        std::vector<InputTensors> rval(batchSize);
+        for (int batchIdx = 0; batchIdx < batchSize; ++batchIdx)
+        {
+            auto inputLength = inputLengths[batchIdx];
+            for (auto const& [name, batchedTensor] : inputsTensors)
+            {
+                std::shared_ptr<runtime::ITensor> slicedTensor
+                    = std::move(runtime::ITensor::slice(batchedTensor.tensor, batchIdx, 1));
+                // Use input_length to strip off padding for inputTokens
+                if (name == InputFieldsNames::inputTokens)
+                {
+                    slicedTensor->squeeze(0);
+                    slicedTensor = runtime::ITensor::slice(slicedTensor, 0, static_cast<int>(inputLength));
+                    slicedTensor->unsqueeze(0);
+                }
+                NamedTensor namedTensor(slicedTensor, name);
+                rval[batchIdx].insert({name, namedTensor});
+            }
+        }
+        return rval;
+    }
+    else
+    {
+        return {inputsTensors};
+    }
+}
+
+std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request)
+{
+    InputTensors inputsTensors;
     uint32_t num_inputs;
     LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
     for (uint32_t idx = 0; idx < num_inputs; ++idx)
@@ -135,6 +182,8 @@ std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Req
 
         NamedTensor t(utils::to_trt_datatype(data_type), shapev, input_name);
         uint64_t buffer_offset = 0;
+        auto stream = std::make_shared<tensorrt_llm::runtime::CudaStream>();
+        auto manager = tensorrt_llm::runtime::BufferManager{std::move(stream)};
         for (int64_t buffer_id = 0; buffer_id < buffer_count; ++buffer_id)
         {
             void const* buffer = nullptr;
@@ -144,14 +193,25 @@ std::unordered_map<std::string, NamedTensor> readInputsTensors(TRITONBACKEND_Req
             LOG_IF_ERROR(
                 TRITONBACKEND_InputBuffer(input, buffer_id, &buffer, &buffer_byte_size, &memory_type, &memory_type_id),
                 "failed to get input buffer");
-            assert((memory_type == TRITONSERVER_MEMORY_CPU) || (memory_type == TRITONSERVER_MEMORY_CPU_PINNED));
-            std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
+            if (memory_type == TRITONSERVER_MEMORY_GPU)
+            {
+                if (buffer_id == 0)
+                {
+                    t.tensor = manager.gpu(t.tensor->getShape(), utils::to_trt_datatype(data_type));
+                }
+                TLLM_CUDA_CHECK(cudaMemcpyAsync(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer,
+                    buffer_byte_size, cudaMemcpyDeviceToDevice, manager.getStream().get()));
+            }
+            else
+            {
+                std::memcpy(static_cast<char*>(t.tensor->data()) + buffer_offset, buffer, buffer_byte_size);
+            }
             buffer_offset += buffer_byte_size;
         }
-
+        manager.getStream().synchronize();
         inputsTensors.insert(make_pair(t.name, std::move(t)));
     }
-    return inputsTensors;
+    return splitBatchInputsTensors(inputsTensors);
 }
 
 uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_t, std::string>& requestIdStrMap)
@@ -360,6 +420,20 @@ std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str)
     return output;
 }
 
+std::vector<std::string> split(std::string const& str, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::string token;
+    std::stringstream ss(str);
+
+    while (std::getline(ss, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
 int64_t numElements(std::vector<int64_t> const& shape)
 {
     int64_t n = 1;
@@ -519,102 +593,110 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
     return loraConfig;
 }
 
-executor::Request createRequestFromInputTensors(std::unordered_map<std::string, NamedTensor> const& inputsTensors,
+std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType)
 {
-    executor::OutputConfig outConfig = utils::getOutputConfigFromTensors(inputsTensors);
-    outConfig.excludeInputFromOutput = excludeInputFromOutput;
-
-    executor::VecTokens inputTokens;
-    if (!utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::inputTokens, inputTokens))
+    if (!isDecoupled && inputsTensors.size() > 1)
     {
-        TLLM_THROW("%s is not present in the request.", InputFieldsNames::inputTokens);
-    }
-    executor::SizeType32 maxNewTokens;
-    if (!utils::extractSingleton<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
-    {
-        throw std::runtime_error("request_output_len is not present in the request");
-    }
-
-    std::optional<executor::SizeType32> endId{std::nullopt};
-    utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::endId, endId);
-
-    std::optional<executor::SizeType32> padId{std::nullopt};
-    utils::extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::padId, padId);
-
-    std::optional<executor::VecTokens> encoderInputTokens{std::nullopt};
-    if (modelType == executor::ModelType::kENCODER_ONLY || modelType == executor::ModelType::kENCODER_DECODER)
-    {
-        encoderInputTokens = inputTokens;
-
-        // If encoder-decoder, check if decoder tokens are specified
-        if (modelType == executor::ModelType::kENCODER_DECODER)
-        {
-            if (!utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::decoderInputTokens, inputTokens))
-            {
-                if (padId)
-                {
-                    TLLM_LOG_WARNING(
-                        "%s is not present in the request for encoder-decoder model. The decoder input tokens will be "
-                        "set to "
-                        "[padId]",
-                        InputFieldsNames::decoderInputTokens);
-                    inputTokens = {padId.value()};
-                }
-                else
-                {
-                    TLLM_LOG_WARNING("%s is not present in the request for encoder-decoder model",
-                        InputFieldsNames::decoderInputTokens);
-                    inputTokens.clear();
-                }
-            }
-        }
+        TLLM_THROW("Batch size > 1 requires the tensorrt_llm backend to be using decoupled transaction policy");
     }
 
     if (streaming && !isDecoupled)
     {
-        throw std::runtime_error(
-            "Streaming is only supported if model is "
-            "deployed using decoupled mode.");
+        TLLM_THROW("Streaming is only supported if model is deployed using decoupled mode.");
     }
-
-    auto samplingConfig = utils::getSamplingConfigFromTensors(inputsTensors);
-
-    std::optional<std::list<executor::VecTokens>> badWords = std::nullopt;
-    executor::VecTokens badWordsRaw;
-    if (utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::badWords, badWordsRaw))
+    std::vector<executor::Request> requests;
+    for (auto const& inputTensors : inputsTensors)
     {
-        badWords = utils::convertWordList(badWordsRaw);
-    }
+        executor::OutputConfig outConfig = utils::getOutputConfigFromTensors(inputTensors);
+        outConfig.excludeInputFromOutput = excludeInputFromOutput;
 
-    std::optional<std::list<executor::VecTokens>> stopWords = std::nullopt;
-    executor::VecTokens stopWordsRaw;
-    if (utils::extractVector<int32_t>(inputsTensors, InputFieldsNames::stopWords, stopWordsRaw))
-    {
-        stopWords = utils::convertWordList(stopWordsRaw);
-    }
-
-    std::optional<executor::Tensor> embeddingBias{std::nullopt};
-    if (inputsTensors.count(InputFieldsNames::embeddingBias))
-    {
-        std::shared_ptr<runtime::ITensor> originalTensor = inputsTensors.at(InputFieldsNames::embeddingBias).tensor;
-        utils::squeezeTensor(originalTensor, 1);
-        auto newShape = originalTensor->getShape();
-        if (!(newShape.nbDims == 1 && newShape.d[0] == 0))
+        executor::VecTokens inputTokens;
+        if (!utils::extractVector<int32_t>(inputTensors, InputFieldsNames::inputTokens, inputTokens))
         {
-            embeddingBias = executor::detail::ofITensor(originalTensor);
+            TLLM_THROW("%s is not present in the request.", InputFieldsNames::inputTokens);
         }
+        executor::SizeType32 maxNewTokens;
+        if (!utils::extractSingleton<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
+        {
+            throw std::runtime_error("request_output_len is not present in the request");
+        }
+
+        std::optional<executor::SizeType32> endId{std::nullopt};
+        utils::extractOptionalSingleton<int32_t>(inputTensors, InputFieldsNames::endId, endId);
+
+        std::optional<executor::SizeType32> padId{std::nullopt};
+        utils::extractOptionalSingleton<int32_t>(inputTensors, InputFieldsNames::padId, padId);
+
+        std::optional<executor::VecTokens> encoderInputTokens{std::nullopt};
+        if (modelType == executor::ModelType::kENCODER_ONLY || modelType == executor::ModelType::kENCODER_DECODER)
+        {
+            encoderInputTokens = inputTokens;
+
+            // If encoder-decoder, check if decoder tokens are specified
+            if (modelType == executor::ModelType::kENCODER_DECODER)
+            {
+                if (!utils::extractVector<int32_t>(inputTensors, InputFieldsNames::decoderInputTokens, inputTokens))
+                {
+                    if (padId)
+                    {
+                        TLLM_LOG_WARNING(
+                            "%s is not present in the request for encoder-decoder model. The decoder input tokens will "
+                            "be "
+                            "set to "
+                            "[padId]",
+                            InputFieldsNames::decoderInputTokens);
+                        inputTokens = {padId.value()};
+                    }
+                    else
+                    {
+                        TLLM_LOG_WARNING("%s is not present in the request for encoder-decoder model",
+                            InputFieldsNames::decoderInputTokens);
+                        inputTokens.clear();
+                    }
+                }
+            }
+        }
+
+        auto samplingConfig = utils::getSamplingConfigFromTensors(inputTensors);
+
+        std::optional<std::list<executor::VecTokens>> badWords = std::nullopt;
+        executor::VecTokens badWordsRaw;
+        if (utils::extractVector<int32_t>(inputTensors, InputFieldsNames::badWords, badWordsRaw))
+        {
+            badWords = utils::convertWordList(badWordsRaw);
+        }
+
+        std::optional<std::list<executor::VecTokens>> stopWords = std::nullopt;
+        executor::VecTokens stopWordsRaw;
+        if (utils::extractVector<int32_t>(inputTensors, InputFieldsNames::stopWords, stopWordsRaw))
+        {
+            stopWords = utils::convertWordList(stopWordsRaw);
+        }
+
+        std::optional<executor::Tensor> embeddingBias{std::nullopt};
+        if (inputTensors.count(InputFieldsNames::embeddingBias))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor = inputTensors.at(InputFieldsNames::embeddingBias).tensor;
+            utils::squeezeTensor(originalTensor, 1);
+            auto newShape = originalTensor->getShape();
+            if (!(newShape.nbDims == 1 && newShape.d[0] == 0))
+            {
+                embeddingBias = executor::detail::ofITensor(originalTensor);
+            }
+        }
+
+        auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputTensors);
+
+        auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
+
+        auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
+
+        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
+            stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt,
+            encoderInputTokens);
     }
-
-    auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputsTensors);
-
-    auto loraConfig = utils::getLoraConfigFromTensors(inputsTensors);
-
-    auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputsTensors);
-
-    return executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
-        stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt,
-        encoderInputTokens);
+    return requests;
 }
 
 } // namespace triton::backend::inflight_batcher_llm::utils

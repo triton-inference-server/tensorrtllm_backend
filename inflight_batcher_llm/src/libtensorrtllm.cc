@@ -45,6 +45,49 @@ namespace triton::backend::inflight_batcher_llm
 
 extern "C"
 {
+
+    TRITONSERVER_Error* TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
+    {
+        char const* cname;
+        RETURN_IF_ERROR(TRITONBACKEND_BackendName(backend, &cname));
+        std::string name(cname);
+
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("TRITONBACKEND_Initialize: ") + name).c_str());
+
+        // We should check the backend API version that Triton supports
+        // vs. what this backend was compiled against.
+        uint32_t api_version_major, api_version_minor;
+        RETURN_IF_ERROR(TRITONBACKEND_ApiVersion(&api_version_major, &api_version_minor));
+
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO,
+            (std::string("Triton TRITONBACKEND API version: ") + std::to_string(api_version_major) + "."
+                + std::to_string(api_version_minor))
+                .c_str());
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO,
+            (std::string("'") + name + "' TRITONBACKEND API version: " + std::to_string(TRITONBACKEND_API_VERSION_MAJOR)
+                + "." + std::to_string(TRITONBACKEND_API_VERSION_MINOR))
+                .c_str());
+
+        if ((api_version_major != TRITONBACKEND_API_VERSION_MAJOR)
+            || (api_version_minor < TRITONBACKEND_API_VERSION_MINOR))
+        {
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_UNSUPPORTED, "triton backend API version does not support this backend");
+        }
+
+        // The backend configuration may contain information needed by the
+        // backend, such as command-line arguments.
+        TRITONSERVER_Message* backend_config_message;
+        RETURN_IF_ERROR(TRITONBACKEND_BackendConfig(backend, &backend_config_message));
+
+        char const* buffer;
+        size_t byte_size;
+        RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(backend_config_message, &buffer, &byte_size));
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("backend configuration:\n") + buffer).c_str());
+
+        return nullptr; // success
+    }
+
     // Triton calls TRITONBACKEND_ModelInitialize when a model is loaded
     // to allow the backend to create any state associated with the model,
     // and to also examine the model configuration to determine if the
@@ -67,6 +110,10 @@ extern "C"
         ModelState* model_state;
         RETURN_IF_ERROR(ModelState::Create(model, name, version, &model_state));
         RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO,
+            (std::string("TRITONBACKEND_ModelInitialize: ") + name + " (version " + std::to_string(version) + ")")
+                .c_str());
 
         return nullptr; // success
     }
@@ -105,6 +152,37 @@ extern "C"
         ModelInstanceState* instance_state;
         RETURN_IF_ERROR(ModelInstanceState::Create(model_state, instance, &instance_state));
         RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(instance, reinterpret_cast<void*>(instance_state)));
+
+        char const* cname;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceName(instance, &cname));
+        std::string name(cname);
+
+        int32_t device_id;
+        RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceDeviceId(instance, &device_id));
+
+        std::string gpus = "";
+        if (instance_state->getGpuDeviceIds())
+        {
+            for (auto gpu : instance_state->getGpuDeviceIds().value())
+            {
+                gpus += std::to_string(gpu) + ",";
+            }
+            // Remove the last comma.
+            if (!gpus.empty())
+            {
+                gpus = gpus.substr(0, gpus.size() - 1);
+            }
+        }
+
+        if (!gpus.empty())
+        {
+            LOG_MESSAGE(TRITONSERVER_LOG_INFO,
+                (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (devices: " + gpus + ").").c_str());
+        }
+        else
+        {
+            LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name).c_str());
+        }
 
         return nullptr; // success
     }

@@ -45,6 +45,18 @@ repo. If you don't find your answer there you can ask questions on the
 
 There are several ways to access the TensorRT-LLM Backend.
 
+### Build the TensorRT-LLM Backend from source
+
+Make sure TensorRT-LLM is installed before building the backend. Since the
+version of TensorRT-LLM and the TensorRT-LLM backend has to be aligned, it is
+recommended to directly use the Triton TRT-LLM container from NGC or build the
+whole container from source as described below.
+
+```bash
+cd inflight_batcher_llm
+bash scripts/build.sh
+```
+
 ### Run the Pre-built Docker Container
 
 Starting with Triton 23.10 release, Triton includes a container with the TensorRT-LLM
@@ -54,62 +66,18 @@ TensorRT-LLM model. You can find this container on the
 
 ### Build the Docker Container
 
-#### Option 1. Build via the `build.py` Script in Server Repo
-
-Starting with Triton 23.10 release, you can follow steps described in the
-[Building With Docker](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md#building-with-docker)
-guide and use the
-[build.py](https://github.com/triton-inference-server/server/blob/main/build.py)
-script to build the TRT-LLM backend.
+#### Option 1. Build the NGC Triton TRT-LLM container
 
 The below commands will build the same Triton TRT-LLM container as the one on the NGC.
 
+You can update the arguments in the `build.sh` script to match the
+versions you want to use.
+
 ```bash
-# Prepare the TRT-LLM base image using the dockerfile from tensorrtllm_backend.
-cd tensorrtllm_backend
-git lfs install
-git submodule update --init --recursive
-
-# Specify the build args for the dockerfile.
-BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.05-py3-min
-# Use the PyTorch package shipped with the PyTorch NGC container.
-PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.05-py3
-TRT_VERSION=10.1.0.27
-TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.Linux.x86_64-gnu.cuda-12.4.tar.gz
-TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.1.0/tars/TensorRT-10.1.0.27.ubuntu-22.04.aarch64-gnu.cuda-12.4.tar.gz
-
-docker build -t trtllm_base \
-             --build-arg BASE_IMAGE="${BASE_IMAGE}" \
-             --build-arg PYTORCH_IMAGE="${PYTORCH_IMAGE}" \
-             --build-arg TRT_VER="${TRT_VERSION}" \
-             --build-arg RELEASE_URL_TRT_x86="${TRT_URL_x86}" \
-             --build-arg RELEASE_URL_TRT_ARM="${TRT_URL_ARM}" \
-             -f dockerfile/Dockerfile.triton.trt_llm_backend .
-
-# Run the build script from Triton Server repo. The flags for some features or
-# endpoints can be removed if not needed. Please refer to the support matrix to
-# see the aligned versions: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
-TRTLLM_BASE_IMAGE=trtllm_base
-TENSORRTLLM_BACKEND_REPO_TAG=rel
-PYTHON_BACKEND_REPO_TAG=r24.07
-
-cd server
-./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
-              --enable-metrics --enable-gpu-metrics --enable-cpu-metrics \
-              --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
-              --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
-              --backend=ensemble --enable-gpu --endpoint=http --endpoint=grpc \
-              --no-container-pull \
-              --image=base,${TRTLLM_BASE_IMAGE} \
-              --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
-              --backend=python:${PYTHON_BACKEND_REPO_TAG}
+./build.sh
 ```
 
-The `TRTLLM_BASE_IMAGE` is the base image that will be used to build the
-container. The `TENSORRTLLM_BACKEND_REPO_TAG` and `PYTHON_BACKEND_REPO_TAG` are
-the tags of the TensorRT-LLM backend and Python backend repositories that will
-be used to build the container. You can also remove the features or endpoints
-that you don't need by removing the corresponding flags.
+There should be a new image named `tritonserver` in your local Docker images.
 
 #### Option 2. Build via Docker
 
@@ -217,7 +185,7 @@ The BLS model has an optional parameter `accumulate_tokens` which can be used in
 postprocessing model with all accumulated tokens, instead of only one token.
 This might be necessary for certain tokenizers.
 
-The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding.
+The BLS model supports speculative decoding.  Target and draft triton models are set with the parameters `tensorrt_llm_model_name` `tensorrt_llm_draft_model_name`.  Speculative decoding is performed by setting `num_draft_tokens` in the request.  `use_draft_logits` may be set to use logits comparison speculative decoding. Note that `return_generation_logits` and `return_context_logits` are not supported when using speculative decoding. Also note that requests with batch size greater than 1 is not supported with speculative decoding right now.
 
 BLS Inputs
 
@@ -296,6 +264,7 @@ The following table shows the fields that may to be modified before deployment:
 | `gpt_model_type` | Mandatory. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
 | `gpt_model_path` | Mandatory. Path to the TensorRT-LLM engines for deployment. In this example, the path should be set to `/tensorrtllm_backend/triton_model_repo/tensorrt_llm/1` as the tensorrtllm_backend directory will be mounted to `/tensorrtllm_backend` within the container |
 | `batch_scheduler_policy` | Mandatory. Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused.|
+| `max_queue_size` | Mandatory. Set to 0 to allow an arbitrary number of requests in the queue (recommended). Set to a number above 0 to enforce a maximum number of requests to queue for execution before rejecting newer requests. |
 | `decoupled` | Optional (default=`false`). Controls streaming. Decoupled mode must be set to `true` if using the streaming option from the client. |
 | `max_beam_width` | Optional (default=1). The maximum beam width that any request may ask for when using beam search.|
 | `max_tokens_in_paged_kv_cache` | Optional (default=unspecified). The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. |

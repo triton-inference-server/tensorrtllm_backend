@@ -58,15 +58,13 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS",
             "OUT_PAD_ID",
             "OUT_END_ID",
+            "OUT_PROMPT_EMBEDDING_TABLE",
         ]
 
         self._llm_outputs = [
-            "output_ids",
-            "sequence_length",
-            "cum_log_probs",
-            "output_log_probs",
-            "context_logits",
-            "generation_logits",
+            "output_ids", "sequence_length", "cum_log_probs",
+            "output_log_probs", "context_logits", "generation_logits",
+            "batch_index"
         ]
 
         self._postproc_outputs = [
@@ -76,6 +74,7 @@ class TritonDecoder(Decoder):
         self.input_names = [
             "text_input",
             "decoder_text_input",
+            "image_input",
             "max_tokens",
             "bad_words",
             "stop_words",
@@ -145,7 +144,8 @@ class TritonDecoder(Decoder):
             "cum_log_probs": "cum_log_probs",
             "output_log_probs": "output_log_probs",
             "context_logits": "context_logits",
-            "generation_logits": "generation_logits"
+            "generation_logits": "generation_logits",
+            "batch_index": "batch_index"
         }
         tensors = self.create_triton_tensors(response, name_map)
         return pb_utils.InferenceResponse(output_tensors=tensors)
@@ -221,6 +221,7 @@ class TritonDecoder(Decoder):
         name_map = {
             "text_input": "QUERY",
             "decoder_text_input": "DECODER_QUERY",
+            "image_input": "IMAGE",
             "max_tokens": "REQUEST_OUTPUT_LEN",
             "bad_words": "BAD_WORDS_DICT",
             "stop_words": "STOP_WORDS_DICT",
@@ -242,6 +243,7 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS": "embedding_bias",
             "OUT_PAD_ID": "pad_id",
             "OUT_END_ID": "end_id",
+            "OUT_PROMPT_EMBEDDING_TABLE": "prompt_embedding_table",
         }
         return self.convert_triton_response(triton_output, PreprocResponse,
                                             name_map)
@@ -316,6 +318,7 @@ class TritonDecoder(Decoder):
             "embedding_bias": "embedding_bias",
             "pad_id": "pad_id",
             "end_id": "end_id",
+            "prompt_embedding_table": "prompt_embedding_table",
         }
         return self.create_triton_tensors(preproc, name_map)
 
@@ -340,23 +343,29 @@ class TritonDecoder(Decoder):
             "prompt_embedding_table": "prompt_embedding_table",
             "prompt_vocab_size": "prompt_vocab_size",
         }
+        batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)
+        out_len_tensor = None
+        if request.max_tokens is not None:
+            out_len_tensor = request.max_tokens
 
-        out_len = request.max_tokens[0][0] if request.max_tokens else None
+        out_len = None
         if num_output_tokens is not None:
             out_len = num_output_tokens
         elif draft_request:
-            if draft_request.draft_input_ids is not None:
-                out_len = len(draft_request.draft_input_ids[0]) + 1
-            else:
-                out_len = 1
+            out_len = len(
+                draft_request.draft_input_ids[0]
+            ) + 1 if draft_request.draft_input_ids is not None else 1
 
-        if out_len is None:
+        if out_len is not None:
+            out_len_tensor = [[out_len]] * batch_size
+
+        if out_len_tensor is None:
             raise Exception("Could not determine request_output_len")
         else:
             tensors.append(
                 pb_utils.Tensor("request_output_len",
-                                np.array([[out_len]], dtype=np.int32)))
+                                np.array(out_len_tensor, dtype=np.int32)))
 
         if draft_request:
             if draft_request.draft_input_ids is not None:
@@ -369,24 +378,35 @@ class TritonDecoder(Decoder):
                         pb_utils.Tensor("draft_logits",
                                         draft_request.draft_logits))
 
-        return_context_logits = False
-        return_generation_logits = False
+        return_context_logits_data = [False]
+        return_generation_logits_data = [False]
         if draft_request is None:
             if is_draft_model_request:
-                return_generation_logits = request.use_draft_logits[
-                    0] if request.use_draft_logits is not None else False
+                return_generation_logits_data = request.use_draft_logits if request.use_draft_logits is not None else [
+                    False
+                ]
             else:
-                return_context_logits = request.return_context_logits[
-                    0] if request.return_context_logits is not None else False
-                return_generation_logits = request.return_generation_logits[
-                    0] if request.return_generation_logits is not None else False
+                return_context_logits_data = request.return_context_logits if request.return_context_logits is not None else [
+                    False
+                ]
+                return_generation_logits_data = request.return_generation_logits if request.return_generation_logits is not None else [
+                    False
+                ]
+        return_context_logits = np.array([return_context_logits_data] *
+                                         batch_size,
+                                         dtype=bool)
+        return_generation_logits = np.array([return_generation_logits_data] *
+                                            batch_size,
+                                            dtype=bool)
+
+        assert len(return_context_logits.shape) == 2
+        assert len(return_generation_logits.shape) == 2
 
         tensors.append(
-            pb_utils.Tensor("return_context_logits",
-                            np.array([[return_context_logits]])))
+            pb_utils.Tensor("return_context_logits", return_context_logits))
         tensors.append(
             pb_utils.Tensor("return_generation_logits",
-                            np.array([[return_generation_logits]])))
+                            return_generation_logits))
         return tensors
 
     def _get_llm_response(self, triton_output):
@@ -397,6 +417,7 @@ class TritonDecoder(Decoder):
             "output_log_probs": "output_log_probs",
             "context_logits": "context_logits",
             "generation_logits": "generation_logits",
+            "batch_index": "batch_index",
         }
         return self.convert_triton_response(triton_output, GenerationResponse,
                                             name_map)
@@ -436,5 +457,6 @@ class TritonDecoder(Decoder):
                             cum_log_probs=gen_res.cum_log_probs,
                             output_log_probs=gen_res.output_log_probs,
                             context_logits=gen_res.context_logits,
-                            generation_logits=gen_res.generation_logits)
+                            generation_logits=gen_res.generation_logits,
+                            batch_index=gen_res.batch_index)
         return response

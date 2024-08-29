@@ -7,7 +7,7 @@ def main(file_path, substitutions, in_place):
     with open(file_path) as f:
         pbtxt = Template(f.read())
 
-    sub_dict = {}
+    sub_dict = {"max_queue_size": 0}
     for sub in substitutions.split(","):
         key, value = sub.split(":")
         sub_dict[key] = value
