@@ -121,9 +121,13 @@ class CustomMetricsTest(unittest.TestCase):
                                  int(metrics[metric_key]))
             else:
                 dt_log = datetime.strptime(stats[metric_key],
-                                           '%m-%d-%Y %H:%M:%S')
+                                           '%m-%d-%Y %H:%M:%S.%f')
+                # Function only supports input in seconds so extract timestamp in seconds
+                # then add microseconds
                 dt_curl = datetime.utcfromtimestamp(
                     int(metrics[metric_key]) // 1000000)
+                dt_curl += timedelta(
+                    microseconds=int(metrics[metric_key][-6:]))
                 difference = dt_log - dt_curl
                 self.assertTrue(
                     timedelta(seconds=-1) <= difference,

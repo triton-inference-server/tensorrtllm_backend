@@ -111,8 +111,8 @@ def apply_patches():
 def triton_request() -> MockTritonRequest:
     inputs = {
         "input_ids": [[28524, 287, 5093, 12]],
-        "request_output_len": [[16]],
-        "streaming": [[True]],
+        "request_output_len": [16],
+        "streaming": [True],
         "end_id": [50256],
         "pad_id": [50256],
         "stop_words_list": [[[14480, 326, 262, 1171], [1, 4, -1, -1]]],
@@ -140,20 +140,73 @@ def triton_request() -> MockTritonRequest:
         True,
         "return_generation_logits":
         True,
-        "draft_input_ids": [0, 1],
+        "draft_input_ids": [[0, 1]],
         "draft_logits":
-        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float32),
         "draft_acceptance_threshold":
         1.0,
         "prompt_embedding_table":
-        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float16),
+        np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float16),
         "lora_task_id": [1],
         "lora_weights":
-        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float16),
+        np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float16),
         "lora_config":
-        np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int32),
-        # Unused by executor backend but may still be in the request.
-        "input_lengths": [4],
+        np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.int32),
+        "prompt_vocab_size": [2],
+    }
+    return MockTritonRequest(
+        {k: MockTritonTensor(k, np.array(v))
+         for k, v in inputs.items()})
+
+
+@pytest.fixture
+def batched_triton_request() -> MockTritonRequest:
+    inputs = {
+        "input_ids": [[28524, 287, 5093, 12], [1, 2, 3, 4]],
+        "input_lengths": [4, 2],
+        "request_output_len": [16, 3],
+        "streaming": [True, False],
+        "end_id": [50256, 50257],
+        "pad_id": [50256, 50257],
+        "stop_words_list": [[[14480, 326, 262, 1171], [1, 4, -1, -1]],
+                            [[66, 77, -1, -1], [1, 2, -1, -1]]],
+        "bad_words_list": [[[24044, 76, 1230], [2, 3, -1]],
+                           [[88, 99, 111], [1, 3, -1]]],
+        "embedding_bias":
+        np.array([[0., 0., 0.], [1., 1., 1.]], dtype=np.float32),
+        "beam_width": [2, 3],
+        "runtime_top_k": [1, 2],
+        "runtime_top_p": [0., 1.],
+        "random_seed": [4, 7],
+        "temperature": [1., 0.5],
+        "min_length": [3, 10],
+        "repetition_penalty": [1.0, 1.1],
+        "presence_penalty": [2.0, 2.1],
+        "frequency_penalty": [4.0, 4.1],
+        "len_penalty": [8.0, 8.1],
+        "runtime_top_p_min": [1.0, 0.5],
+        "runtime_top_p_reset_ids": [1, 3],
+        "runtime_top_p_decay": [1.0, 0.1],
+        "beam_search_diversity_rate": [1.0, 0.7],
+        "early_stopping": [True, False],
+        "return_log_probs": [True, False],
+        "return_context_logits": [True, False],
+        "return_generation_logits": [True, False],
+        "draft_input_ids": [[0, 1], [2, 3]],
+        "draft_logits":
+        np.array([[[1.0, 2.0], [3.0, 4.0]], [[1.1, 2.1], [3.1, 4.1]]],
+                 dtype=np.float32),
+        "draft_acceptance_threshold": [1.0, 0.5],
+        "prompt_embedding_table":
+        np.array([[[1.0, 2.0], [3.0, 4.0]], [[2.0, 3.0], [4.0, 5.0]]],
+                 dtype=np.float16),
+        "lora_task_id": [1, 2],
+        "lora_weights":
+        np.array([[[1.0, 2.0], [3.0, 4.0]], [[3.0, 4.0], [5.0, 6.0]]],
+                 dtype=np.float16),
+        "lora_config":
+        np.array([[[1, 2, 3], [4, 5, 6]], [[11, 12, 13], [14, 15, 16]]],
+                 dtype=np.int32),
         "prompt_vocab_size": [2],
     }
     return MockTritonRequest(
@@ -276,10 +329,7 @@ def test_parse_medusa_choices():
             parse_medusa_choices(bad_format)
 
 
-def test_convert_request(triton_request: MockTritonRequest):
-    converted = convert_request(triton_request,
-                                exclude_input_from_output=True,
-                                decoupled=True)
+def check_converted_request(converted):
     assert isinstance(converted, trtllm.Request)
     assert converted.input_token_ids == [28524, 287, 5093, 12]
     assert converted.max_new_tokens == 16
@@ -332,10 +382,86 @@ def test_convert_request(triton_request: MockTritonRequest):
     assert converted.output_config.exclude_input_from_output == True
 
 
+def test_convert_batched_request(batched_triton_request: MockTritonRequest):
+    converted_reqs = convert_request(batched_triton_request,
+                                     exclude_input_from_output=True,
+                                     decoupled=True)
+    assert len(converted_reqs) == 2
+    converted0 = converted_reqs[0]
+    check_converted_request(converted0)
+
+    converted = converted_reqs[1]
+
+    assert isinstance(converted, trtllm.Request)
+    assert converted.input_token_ids == [1, 2]
+    assert converted.max_new_tokens == 3
+    assert converted.streaming == False
+    assert converted.end_id == 50257
+    assert converted.pad_id == 50257
+    assert converted.stop_words == [[66], [77]]
+    assert converted.bad_words == [[88], [99, 111]]
+    assert (converted.embedding_bias == torch.tensor([1., 1., 1.])).all()
+    assert converted.logits_post_processor_name is None
+
+    assert isinstance(converted.external_draft_tokens_config,
+                      trtllm.ExternalDraftTokensConfig)
+    assert converted.external_draft_tokens_config.tokens == [2, 3]
+    assert (converted.external_draft_tokens_config.logits == torch.tensor(
+        [[1.1, 2.1], [3.1, 4.1]])).all()
+    assert converted.external_draft_tokens_config.acceptance_threshold == 0.5
+
+    assert isinstance(converted.prompt_tuning_config,
+                      trtllm.PromptTuningConfig)
+    print(converted.prompt_tuning_config.embedding_table)
+    assert (converted.prompt_tuning_config.embedding_table == torch.tensor(
+        [[2.0, 3.0], [4.0, 5.0]])).all()
+
+    assert isinstance(converted.lora_config, trtllm.LoraConfig)
+    assert converted.lora_config.task_id == 2
+    assert (converted.lora_config.weights == torch.tensor([[3.0, 4.0],
+                                                           [5.0, 6.0]])).all()
+    assert (converted.lora_config.config == torch.tensor([[11, 12, 13],
+                                                          [14, 15,
+                                                           16]])).all()
+
+    assert converted.sampling_config.beam_width == 3
+    assert converted.sampling_config.top_k == 2
+    assert converted.sampling_config.top_p == 1.
+    assert converted.sampling_config.top_p_min == 0.5
+    assert converted.sampling_config.top_p_reset_ids == 3
+    assert converted.sampling_config.top_p_decay == pytest.approx(0.1)
+    assert converted.sampling_config.random_seed == 7
+    assert converted.sampling_config.temperature == 0.5
+    assert converted.sampling_config.min_length == 10
+    assert converted.sampling_config.beam_search_diversity_rate == pytest.approx(
+        0.7)
+    assert converted.sampling_config.repetition_penalty == pytest.approx(1.1)
+    assert converted.sampling_config.presence_penalty == pytest.approx(2.1)
+    assert converted.sampling_config.frequency_penalty == pytest.approx(4.1)
+    assert converted.sampling_config.length_penalty == pytest.approx(8.1)
+    assert converted.sampling_config.early_stopping == False
+
+    assert converted.output_config.return_log_probs == False
+    assert converted.output_config.return_context_logits == False
+    assert converted.output_config.return_generation_logits == False
+    assert converted.output_config.exclude_input_from_output == True
+
+
+def test_convert_request(triton_request: MockTritonRequest):
+    converted_reqs = convert_request(triton_request,
+                                     exclude_input_from_output=True,
+                                     decoupled=True)
+    assert len(converted_reqs) == 1
+    converted = converted_reqs[0]
+    check_converted_request(converted)
+
+
 def test_convert_request_minimal(triton_request_minimal: MockTritonRequest):
-    converted = convert_request(triton_request_minimal,
-                                exclude_input_from_output=False,
-                                decoupled=False)
+    converted_reqs = convert_request(triton_request_minimal,
+                                     exclude_input_from_output=False,
+                                     decoupled=False)
+    assert len(converted_reqs) == 1
+    converted = converted_reqs[0]
     assert converted.input_token_ids == [28524, 287, 5093, 12]
     assert converted.max_new_tokens == 16
     assert converted.streaming == False
@@ -403,7 +529,8 @@ def test_convert_request_invalid():
 
 
 def test_convert_response(trtllm_response: trtllm.Response):
-    response, is_final = convert_response(trtllm_response)
+    batch_index = 2
+    response, is_final = convert_response(trtllm_response, batch_index)
     assert is_final == True
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -417,10 +544,13 @@ def test_convert_response(trtllm_response: trtllm.Response):
         (3, 10), dtype=np.float32)).all()
     assert (response.tensors["generation_logits"].as_numpy() == np.ones(
         (1, 5, 10), dtype=np.float32)).all()
+    assert (response.tensors["batch_index"].as_numpy() == np.array(
+        [[batch_index]])).all()
 
 
 def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
-    response, is_final = convert_response(trtllm_response_minimal)
+    batch_index = 2
+    response, is_final = convert_response(trtllm_response_minimal, batch_index)
     assert is_final == False
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -434,10 +564,13 @@ def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
         (1, 1, 1), np.float32)).all()
     assert (response.tensors["generation_logits"].as_numpy() == np.zeros(
         (1, 1, 1, 1), np.float32)).all()
+    assert (response.tensors["batch_index"].as_numpy() == np.array(
+        [[batch_index]])).all()
 
 
 def test_convert_response_error(trtllm_response_error: trtllm.Response):
-    response, is_final = convert_response(trtllm_response_error)
+    batch_index = 2
+    response, is_final = convert_response(trtllm_response_error, batch_index)
     assert is_final == True
     assert response.has_error() and response.error.message == "internal error"
 
@@ -503,6 +636,7 @@ def model_config() -> Dict:
         "lora_cache_max_adapter_size": "2",
         "lora_cache_gpu_memory_fraction": "0.5",
         "lora_cache_host_memory_bytes": "4",
+        "enable_context_fmha_fp32_acc": "true"
     }
     return {"parameters": {k: {"string_value": v} for k, v in config.items()}}
 
@@ -533,6 +667,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+    assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == True
     del os.environ["TRTLLM_ORCHESTRATOR"]
 
 
@@ -572,8 +707,11 @@ def test_get_executor_config_minimal():
     assert config.iter_stats_max_iterations == 1000
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_map is None
+    assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == False
+    assert config.extended_runtime_perf_knob_config.multi_block_mode == False
 
 
 def test_convert_timestamp_to_seconds():
-    assert convert_timestamp_to_seconds("01-01-1970 00:00:00") == 0
-    assert convert_timestamp_to_seconds("05-17-2024 23:28:39") == 1715988519
+    assert convert_timestamp_to_seconds("01-01-1970 00:00:00.000000") == 0
+    assert convert_timestamp_to_seconds(
+        "05-17-2024 23:28:39.000000") == 1715988519

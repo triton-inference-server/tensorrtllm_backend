@@ -142,6 +142,10 @@ class TritonPythonModel:
             generation_logits = pb_utils.get_input_tensor_by_name(
                 request, 'GENERATION_LOGITS')
 
+            # Get the batch index
+            batch_index = pb_utils.get_input_tensor_by_name(
+                request, 'BATCH_INDEX')
+
             # Reshape Input
             # tokens_batch = tokens_batch.reshape([-1, tokens_batch.shape[0]])
             # tokens_batch = tokens_batch.T
@@ -197,6 +201,15 @@ class TritonPythonModel:
                     np.array([[[[0.0]]]], dtype=np.float32))
                 outputs.append(out_generation_logits)
 
+            if batch_index:
+                out_batch_index = pb_utils.Tensor('OUT_BATCH_INDEX',
+                                                  batch_index.as_numpy())
+                outputs.append(out_batch_index)
+            else:
+                out_batch_index = pb_utils.Tensor(
+                    'OUT_BATCH_INDEX', np.array([[0]], dtype=np.int32))
+                outputs.append(out_batch_index)
+
             # Create InferenceResponse. You can set an error here in case
             # there was a problem with handling this inference request.
             # Below is an example of how you can set errors in inference
@@ -224,8 +237,14 @@ class TritonPythonModel:
         for batch_idx, beam_tokens in enumerate(tokens_batch):
             for beam_idx, tokens in enumerate(beam_tokens):
                 seq_len = sequence_lengths[batch_idx][beam_idx]
+                # Exclude fake ids in multimodal models
+                fake_id_len = 0
+                for i in range(seq_len):
+                    if tokens[i] < self.tokenizer.vocab_size:
+                        fake_id_len = i
+                        break
                 output = self.tokenizer.decode(
-                    tokens[:seq_len],
+                    tokens[fake_id_len:seq_len],
                     skip_special_tokens=self.skip_special_tokens)
                 outputs.append(output.encode('utf8'))
         return outputs

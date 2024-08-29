@@ -29,6 +29,7 @@
 #include "NvInfer.h"
 #include "tensorrt_llm/batch_manager/inferenceRequest.h"
 #include "tensorrt_llm/common/logger.h"
+#include "tensorrt_llm/runtime/iTensor.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
@@ -46,6 +47,7 @@ namespace triton::backend::inflight_batcher_llm
 struct InputFieldsNames
 {
     static constexpr char const* inputTokens = "input_ids";
+    static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
     static constexpr char const* endId = "end_id";
@@ -99,6 +101,7 @@ struct OutputFieldsNames
     static constexpr char const* generationLogits = "generation_logits";
     static constexpr char const* outputLogProbs = "output_log_probs";
     static constexpr char const* cumLogProbs = "cum_log_probs";
+    static constexpr char const* batchIndex = "batch_index";
 };
 
 inline static std::string const kStopInputTensorName = "stop";
@@ -112,9 +115,13 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type);
 
 using InputTensors = std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor>;
 
+/// @brief Split batched input tensors into bs==1 tensors.
+/// @return Vector of maps of bs==1 tensors keyed on tensor name.
+std::vector<InputTensors> splitBatchInputsTensors(InputTensors const& inputsTensors);
+
 /// @brief Gather input tenors in a Triton request
-/// @return An unordered map with key being input name and value being input tensor
-InputTensors readInputsTensors(TRITONBACKEND_Request* request);
+/// @return An unordered map with key being input name and value being input tensor for each batch sample
+std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request);
 
 /// @brief Construct executor::SampleConfig from input tensors
 executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputsTensors);
@@ -133,8 +140,7 @@ std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(Inp
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors);
 
 /// @brief Construct executor::Request from input tensors
-executor::Request createRequestFromInputTensors(
-    std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> const& inputsTensors,
+std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType);
 
 /// @brief get the requestId of the request and update requestIdStrMap
@@ -150,8 +156,7 @@ bool getRequestBooleanInputTensor(TRITONBACKEND_Request* request, std::string co
 /// @brief Get a single value tensor from the input tensors
 /// @return true if the value is found else false
 template <typename Value>
-bool extractSingleton(std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> const& params,
-    std::string const& name, Value& value)
+bool extractSingleton(InputTensors const& params, std::string const& name, Value& value)
 {
     if (!params.count(name))
     {
@@ -166,8 +171,7 @@ bool extractSingleton(std::unordered_map<std::string, tensorrt_llm::batch_manage
 /// @brief Get a single value tensor from the input tensors and put it into an optional. Set to std::nullopt if it's not
 /// found.
 template <typename Value>
-void extractOptionalSingleton(std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> const& params,
-    std::string const& name, std::optional<Value>& optionalValue)
+void extractOptionalSingleton(InputTensors const& params, std::string const& name, std::optional<Value>& optionalValue)
 {
     Value value;
     if (extractSingleton<Value>(params, name, value))
@@ -183,8 +187,7 @@ void extractOptionalSingleton(std::unordered_map<std::string, tensorrt_llm::batc
 /// @brief Get a 1d tensor from the input tensors
 /// @return true if the tensor is found else false
 template <typename Value>
-bool extractVector(std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor> const& params,
-    std::string const& name, std::vector<Value>& value)
+bool extractVector(InputTensors const& params, std::string const& name, std::vector<Value>& value)
 {
     if (!params.count(name))
     {
@@ -282,6 +285,9 @@ std::vector<int32_t> csvStrToVecInt(std::string const& str);
 
 /// Helper functions to parse a csv delimited string to a vector of vector ints
 std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str);
+
+/// Split a string by a delimiter and return the tokens in a vector of strings.
+std::vector<std::string> split(std::string const& str, char delimiter);
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm

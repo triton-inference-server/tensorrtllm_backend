@@ -31,18 +31,24 @@ input [
     {
         name: "QUERY"
         data_type: TYPE_STRING
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "DECODER_QUERY"
         data_type: TYPE_STRING
-        dims: [ -1 ]
+        dims: [ 1 ]
+        optional: true
+    },
+    {
+        name: "IMAGE"
+        data_type: TYPE_FP16
+        dims: [ 3, 224, 224 ]
         optional: true
     },
     {
         name: "REQUEST_OUTPUT_LEN"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "BAD_WORDS_DICT"
@@ -71,14 +77,21 @@ input [
     {
         name: "END_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
         optional: true
     },
     {
         name: "PAD_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
         optional: true
+    },
+    {
+        name: "PROMPT_EMBEDDING_TABLE"
+        data_type: TYPE_FP16
+        dims: [ -1, -1 ]
+        optional: true
+        allow_ragged_batch: true
     }
 ]
 output [
@@ -125,12 +138,17 @@ output [
     {
         name: "OUT_END_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
     },
     {
         name: "OUT_PAD_ID"
         data_type: TYPE_INT32
-        dims: [ -1 ]
+        dims: [ 1 ]
+    },
+    {
+        name: "OUT_PROMPT_EMBEDDING_TABLE"
+        data_type: TYPE_FP16
+        dims: [ -1, -1 ]
     }
 ]
 
@@ -145,6 +163,20 @@ parameters {
   key: "add_special_tokens"
   value: {
     string_value: "${add_special_tokens}"
+  }
+}
+
+parameters {
+  key: "visual_model_path"
+  value: {
+    string_value: "${visual_model_path}"
+  }
+}
+
+parameters: {
+  key: "gpt_model_path"
+  value: {
+    string_value: "${engine_dir}"
   }
 }
 
