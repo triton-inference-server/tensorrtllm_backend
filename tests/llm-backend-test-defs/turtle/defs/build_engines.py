@@ -758,6 +758,131 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
     return engine_dir
 
 
+def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
+                               llama_v3_8b_model_root):
+    engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
+                              "llama_v3_8b_ifb")
+    ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                            "llama_v3_8b_ifb")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--model_dir={llama_v3_8b_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=bfloat16",
+        "--tp_size=8",
+        "--workers=8",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--gemm_plugin=bfloat16",
+        "--moe_plugin=auto",
+        "--lookup_plugin=auto",
+        "--nccl_plugin=auto",
+        "--gpt_attention_plugin=auto",
+        "--use_paged_context_fmha=enable",
+        "--remove_input_padding=enable",
+        "--use_fused_mlp=enable",
+        "--multiple_profiles=enable",
+        "--paged_kv_cache=enable",
+        "--max_seq_len=4096",
+        "--max_batch_size=96",
+        "--workers=8",
+        "--gather_generation_logits",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
+def prepare_llama_v3_70b_engine(type, tensorrt_llm_llama_example_root,
+                                llama_v3_70b_model_root):
+    if type == "control_ifb":
+        engine_dir = os.path.join(tensorrt_llm_llama_example_root,
+                                  "engine_dir", "llama_v3_70b_control_ifb")
+    elif type == "target_ifb":
+        engine_dir = os.path.join(tensorrt_llm_llama_example_root,
+                                  "engine_dir", "llama_v3_70b_target_ifb")
+    ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                            "llama_v3_70b_ifb")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--model_dir={llama_v3_70b_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=bfloat16",
+        "--tp_size=8",
+        "--workers=8",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--gemm_plugin=bfloat16",
+        "--moe_plugin=auto",
+        "--lookup_plugin=auto",
+        "--nccl_plugin=auto",
+        "--gpt_attention_plugin=auto",
+        "--use_paged_context_fmha=enable",
+        "--remove_input_padding=enable",
+        "--use_fused_mlp=enable",
+        "--multiple_profiles=enable",
+        "--paged_kv_cache=enable",
+        "--max_seq_len=4096",
+        "--max_batch_size=96",
+        "--workers=8",
+        "--gather_generation_logits",
+    ]
+    if type == "target_ifb":
+        build_cmd += [
+            "--max_draft_len=10",
+            "--speculative_decoding_mode=draft_tokens_external",
+        ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
                                 llama_v2_tokenizer_model_root):
     if type == "python_backend":
