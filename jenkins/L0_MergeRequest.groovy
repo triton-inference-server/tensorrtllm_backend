@@ -1,5 +1,8 @@
+@Library('bloom-jenkins-shared-lib@main') _
+
 import java.lang.InterruptedException
 import groovy.transform.Field
+import com.nvidia.bloom.Constants
 
 // LLM repository configuration
 BACKEND_REPO = "https://gitlab-master.nvidia.com/ftp/tekit_backend.git"
@@ -172,7 +175,7 @@ def createKubernetesPodConfig(image, type)
         def gpuCount =  hasMultipleGPUs? "8" : "1"
         def memorySize = hasMultipleGPUs ? "960Gi" : "${TESTER_MEMORY}"
         def storageSize = hasMultipleGPUs ? "2000Gi" : "300Gi"
-        def driverVersion = "560.25"
+        def driverVersion = Constants.DEFAULT_NVIDIA_DRIVER_VERSION
 
         targetCould = "kubernetes"
         selectors = """
