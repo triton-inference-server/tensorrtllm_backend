@@ -97,7 +97,7 @@ description of the parameters below.
 | `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=executor::kDefaultIterStatsMaxIterations) |
 | `request_stats_max_iterations` | The maximum number of iterations for which to keep per-request statistics. (default=executor::kDefaultRequestStatsMaxIterations) |
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
-| `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. If not provided, the model will use all visible GPUs. (default=unspecified) |
+| `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. Use semicolons to separate multiple instances of the model. If not provided, the model will use all visible GPUs. (default=unspecified) |
 | `gpu_weights_percent` | Set to a number between 0.0 and 1.0 to specify the percentage of weights that reside on GPU instead of CPU and streaming load during runtime. Values less than 1.0 are only supported for an engine built with `weight_streaming` on. (default=1.0) |
 
 - KV cache
