@@ -1696,6 +1696,7 @@ def test_gpt_speculative_decoding_bls(
 
 
 @pytest.mark.skip_less_device(8)
+@pytest.mark.skip_less_device_memory(80000)
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
