@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import os
+import shutil
 import tempfile
 
 import pytest
 # Conftest imports require defs root. This is not the case inside test defines however.
-from trt_test.misc import call, check_call, check_output, print_info
+from trt_test.misc import check_call, check_output, print_info
 from trt_test.session_data_writer import SessionDataWriter
 
 pytest_plugins = ["pytester", "trt_test.pytest_plugin"]
@@ -229,17 +230,6 @@ def inflight_batcher_llm_client_root(llm_backend_root):
         inflight_batcher_llm_client_root
     ), f"{inflight_batcher_llm_client_root} does not exists."
     return inflight_batcher_llm_client_root
-
-
-@pytest.fixture(scope="function")
-def engine_dir(llm_backend_venv):
-    "Get engine dir"
-    engine_path = os.path.join(llm_backend_venv.get_working_directory(),
-                               "engines")
-
-    yield engine_path
-
-    call(f"rm -rf {engine_path}", shell=True)
 
 
 @pytest.fixture(autouse=True)
@@ -479,3 +469,43 @@ def total_gpu_memory_mib():
     lines = [l[:-4] for l in lines]  # remove MiB suffix
     lines = [int(l) for l in lines]
     return lines
+
+
+# Pytset cache mechanism can be used to store and retrieve data across test runs.
+@pytest.fixture(scope="session", autouse=True)
+def setup_cache_data(request, tensorrt_llm_example_root):
+    # This variable will be used in hook function: pytest_runtest_teardown since
+    # fixtures cannot be directly used in hooks.
+    request.config.cache.set('example_root', tensorrt_llm_example_root)
+
+
+def cleanup_engine_outputs(output_dir_root):
+    for dirpath, dirnames, _ in os.walk(output_dir_root, topdown=False):
+        for dirname in dirnames:
+            if "engine_dir" in dirname or "model_dir" in dirname or "ckpt_dir" in dirname:
+                folder_path = os.path.join(dirpath, dirname)
+                try:
+                    shutil.rmtree(folder_path)
+                    print_info(f"Deleted folder: {folder_path}")
+                except Exception as e:
+                    print_info(f"Error deleting {folder_path}: {e}")
+
+
+# Teardown hook to clean up engine outputs after each group of test cases are finished
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    current_test_basename = item.name.split(
+        "[")[0] if '[' in item.name else item.name
+
+    if nextitem:
+        next_test_basename = nextitem.name.split(
+            "[")[0] if '[' in nextitem.name else nextitem.name
+    else:
+        next_test_basename = None
+
+    if next_test_basename != current_test_basename:
+        print_info("Cleaning up engine outputs:")
+        engine_outputs_root = item.config.cache.get('example_root', None)
+        cleanup_engine_outputs(engine_outputs_root)
+
+    yield
