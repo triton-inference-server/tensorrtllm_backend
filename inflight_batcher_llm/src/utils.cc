@@ -692,9 +692,9 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
 
-        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
-            stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt, std::nullopt,
-            encoderInputTokens);
+        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
+            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
+            std::nullopt, std::nullopt, encoderInputTokens);
     }
     return requests;
 }
