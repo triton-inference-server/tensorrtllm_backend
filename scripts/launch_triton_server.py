@@ -159,4 +159,4 @@ if __name__ == '__main__':
     if args.multi_model:
         assert args.world_size == 1, 'World size must be 1 when using multi-model. Processes will be spawned automatically to run the multi-GPU models'
         env['TRTLLM_ORCHESTRATOR'] = '1'
-    subprocess.Popen(cmd, env=env)
+    subprocess.run(cmd, env=env, check=True)
