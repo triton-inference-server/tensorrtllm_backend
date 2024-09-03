@@ -132,6 +132,7 @@ class TritonPythonModel:
             # Get input tensors
             img_tensor = pb_utils.get_input_tensor_by_name(request, 'IMAGE')
             img_tensor = from_dlpack(img_tensor.to_dlpack()).pin_memory()
+            batch_size = img_tensor.shape[0]
             vit_output_info = self.image_session.infer_shapes([
                 TensorInfo('input', str_dtype_to_trt(self.vision_dtype_str),
                            img_tensor.shape)
@@ -153,6 +154,9 @@ class TritonPythonModel:
             self.vision_stream.synchronize()
             vision_prompt_vocab_size = np.array(
                 [[vision_prompt_table.shape[1]]])
+            vision_prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
+                                                 batch_size,
+                                                 axis=0)
 
             # NOTE
             # User can concat the prompt table and prompt vocab size after another session

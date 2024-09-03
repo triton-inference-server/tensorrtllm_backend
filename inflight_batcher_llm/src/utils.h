@@ -80,6 +80,7 @@ struct InputFieldsNames
 
     // PromptTuningConfig
     static constexpr char const* promptEmbeddingTable = "prompt_embedding_table";
+    static constexpr char const* InputTokenExtraIds = "prompt_table_extra_ids";
 
     // LoraConfig
     static constexpr char const* loraTaskId = "lora_task_id";

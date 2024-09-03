@@ -179,6 +179,12 @@ input [
     optional: true
   },
   {
+    name: "prompt_table_extra_id"
+    data_type: TYPE_UINT64
+    dims: [ 1 ]
+    optional: true
+  },
+  {
       name: "embedding_bias_words"
       data_type: TYPE_STRING
       dims: [ -1 ]

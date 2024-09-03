@@ -160,7 +160,7 @@ class TritonPythonModel:
             sampling_config.output_log_probs = inputs['output_log_probs']
             sampling_config.return_dict = True
 
-            outputs = self.runner.generate(input_ids, sampling_config)
+            outputs = self.runner.generate(input_ids, None, sampling_config)
             output_ids = outputs["output_ids"]
 
             if self.rank == 0:
