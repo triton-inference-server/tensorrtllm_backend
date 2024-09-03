@@ -173,7 +173,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
 
 executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
 {
-    bool multiBlockMode = false;
+    bool multiBlockMode = true;
     try
     {
         multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
@@ -181,7 +181,7 @@ executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePe
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to false");
+        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to true");
     }
 
     bool enableContextFMHAFP32Acc = false;
