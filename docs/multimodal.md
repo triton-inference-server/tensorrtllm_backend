@@ -102,7 +102,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     cp all_models/multimodal/ensemble multimodal_ifb -r
     cp all_models/multimodal/multimodal_encoders multimodal_ifb -r
 
-    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,exclude_input_in_output:True
+    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False
 
     python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH}
 
@@ -120,6 +120,8 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     > You can set the `decoupled_mode` option to True to use streaming mode.
     >
     > You can set the `accumulate_tokens` option to True in streaming mode to call the postprocessing model with all accumulated tokens.
+    >
+    > You can set the `enable_kv_cache_reuse` option to True to enable kv cache reuse. Requests with the same image/prompt table/input tokens will reuse the KV cache, which will help reduce latency. The specific performance improvement depends on the length of reuse.
 
 4. Launch Tritonserver
 
@@ -169,10 +171,22 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     [INFO] Latency: 45.48 ms
     ```
 
+5. Send request with `enable_kv_cache_reuse` set to True
+    ```bash
+    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --prompt_table_extra_id ${id}
+
+    [beam 0 ]:
+    Question: which city is this? Answer: singapore
+    [INFO] Latency: 42.514 ms
+    ```
+
 > **NOTE**:
 > Please ignore any exception thrown with the output. It's a known issue to be fixed.
 >
 > If there is an error associated with 'MPI_Init_thread', please do `export PMIX_MCA_gds=hash`'
+>
+> When `enable_kv_cache_reuse` is set to true, the `prompt_table_extra_id` must be specified in the requests. The `prompt_table_extra_id` is a unique identifier representing the image (or prompt table), the same image uses the same id. The data type is `uint64`, and the minimum value is 1.
+
 ### Kill the server
 ```bash
 pkill tritonserver

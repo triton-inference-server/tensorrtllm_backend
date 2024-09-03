@@ -159,6 +159,12 @@ input [
     optional: true
   },
   {
+    name: "prompt_table_extra_id"
+    data_type: TYPE_UINT64
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "prompt_vocab_size"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -250,6 +256,10 @@ ensemble_scheduling {
         key: "PAD_ID"
         value: "pad_id"
       }
+      input_map {
+        key: "PROMPT_TABLE_EXTRA_ID"
+        value: "prompt_table_extra_id"
+      }
       output_map {
         key: "REQUEST_INPUT_LEN"
         value: "_REQUEST_INPUT_LEN"
@@ -289,6 +299,10 @@ ensemble_scheduling {
       output_map {
         key: "OUT_PAD_ID"
         value: "_PREPROCESSOR_PAD_ID"
+      }
+      output_map {
+        key: "OUT_PROMPT_TABLE_EXTRA_IDS"
+        value: "_OUT_PROMPT_TABLE_EXTRA_IDS"
       }
     },
     {
@@ -397,6 +411,10 @@ ensemble_scheduling {
       input_map {
         key: "bad_words_list"
         value: "_BAD_WORDS_IDS"
+      }
+      input_map {
+        key: "prompt_table_extra_ids"
+        value: "_OUT_PROMPT_TABLE_EXTRA_IDS"
       }
       output_map {
         key: "output_ids"
