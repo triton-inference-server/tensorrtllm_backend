@@ -71,6 +71,12 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        '--disable-spawn-processes',
+        action='store_true',
+        help=
+        'Disable dynamic spawning of child processes when using multi-model')
+
+    parser.add_argument(
         '--multimodal_gpu0_cuda_mem_pool_bytes',
         type=int,
         default=0,
@@ -124,7 +130,8 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             cmd += [
                 f'--cuda-memory-pool-byte-size=0:{multimodal_gpu0_cuda_mem_pool_bytes}'
             ]
-        if args.multi_model and check_triton_version('24.06'):
+        if args.multi_model and check_triton_version(
+                '24.06') and not args.disable_spawn_processes:
             cmd += [
                 '--pinned-memory-pool-byte-size=0',
                 '--enable-peer-access=false'
@@ -157,6 +164,8 @@ if __name__ == '__main__':
                   args.oversubscribe, args.multimodal_gpu0_cuda_mem_pool_bytes)
     env = os.environ.copy()
     if args.multi_model:
-        assert args.world_size == 1, 'World size must be 1 when using multi-model. Processes will be spawned automatically to run the multi-GPU models'
+        if not args.disable_spawn_processes:
+            assert args.world_size == 1, 'World size must be 1 when using multi-model without disable-spawn-processes. Processes will be spawned automatically to run the multi-GPU models'
         env['TRTLLM_ORCHESTRATOR'] = '1'
+        env['TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES'] = '0' if args.disable_spawn_processes else '1'
     subprocess.Popen(cmd, env=env)

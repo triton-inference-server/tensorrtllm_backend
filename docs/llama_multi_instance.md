@@ -237,6 +237,21 @@ sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_2"/g' llama_ifb/tensorrt_llm_
 python3 scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/
 ```
 
+Alternatively, you can start all MPI ranks at once and avoid dynamic process spawning
+by using the `--disable-spawn-processes`. The config file must specify which ranks each
+model should use:
+
+```bash
+sed -i 's/\${participant_ids}/1,2/g' llama_ifb/tensorrt_llm/config.pbtxt
+sed -i 's/\${participant_ids}/3,4/g' llama_ifb/tensorrt_llm_2/config.pbtxt
+```
+
+Note that rank 0 is reserved for the orchestrator rank.
+
+```bash
+python3 scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/ --disable-spawn-processes --world_size=5
+```
+
 6b. Run the test client to measure performance:
 
 ```bash
