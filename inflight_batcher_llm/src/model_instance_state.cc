@@ -27,6 +27,8 @@
 #include "model_instance_state.h"
 #include "utils.h"
 
+#include "tensorrt_llm/common/mpiUtils.h"
+
 #include <nlohmann/json.hpp>
 
 using executor::SizeType32;
@@ -208,9 +210,30 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     if (str && std::atoi(str) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
-        auto workerExecutablePath = model_state_->GetExecutorWorkerPath();
-        auto orchestratorConfig = executor::OrchestratorConfig(true, workerExecutablePath);
+        auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
+        auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
+        auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
+        auto const isOrchestrator = spawnProcesses || (tensorrt_llm::mpi::MpiComm::world().getRank() == 0);
+        auto orchestratorConfig
+            = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
+
+        if (!spawnProcesses)
+        {
+            try
+            {
+                auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
+                // TODO: validate participantIds?
+                parallelConfig.setParticipantIds(participantIds);
+            }
+            catch (std::exception const& e)
+            {
+                TLLM_THROW(
+                    "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
+                    "obtained from the config.pbtxt due to the following error: %s",
+                    e.what());
+            }
+        }
     }
     return parallelConfig;
 }

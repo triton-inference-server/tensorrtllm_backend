@@ -15,6 +15,15 @@ from torch.utils.dlpack import from_dlpack
 import tensorrt_llm.bindings.executor as trtllm
 
 
+def mpi_comm():
+    from mpi4py import MPI
+    return MPI.COMM_WORLD
+
+
+def mpi_rank():
+    return mpi_comm().Get_rank()
+
+
 def get_input_tensor_by_name(request,
                              name,
                              expected_batch_size=None,
@@ -468,6 +477,13 @@ class TritonPythonModel:
             kwargs[
                 "communication_mode"] = trtllm.CommunicationMode.ORCHESTRATOR
             worker_path = get_parameter(model_config, "worker_path")
+            spawn_processes = os.environ.get(
+                "TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES", "1") == "1"
+            if not spawn_processes:
+                raise pb_utils.TritonModelException(
+                    "Orchestrator mode with --disable-spawn-processes is not supported in the Python backend."
+                )
+            is_orchestrator = (mpi_rank() == 0) if spawn_processes else True
             if worker_path is not None:
                 raise pb_utils.TritonModelException(
                     "worker_path parameter is specified, but this is no longer supported. Please specify executor_worker_path instead to specify the location of the trtllmExecutorWorker executable."
@@ -475,7 +491,7 @@ class TritonPythonModel:
             executor_worker_path = get_parameter(model_config,
                                                  "executor_worker_path")
             kwargs["orchestrator_config"] = trtllm.OrchestratorConfig(
-                True, executor_worker_path)
+                is_orchestrator, executor_worker_path)
         if len(kwargs) > 0:
             return trtllm.ParallelConfig(**kwargs)
         return None
