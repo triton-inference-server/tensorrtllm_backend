@@ -204,18 +204,26 @@ def get_external_draft_tokens_config_from_request(request,
 
 def get_prompt_tuning_config_from_request(request,
                                           batch_size=1,
-                                          batch_index=0):
+                                          batch_index=0,
+                                          input_length=0):
     # prompt_vocab_size is unused by executor.
     kwargs = {}
     prompt_embedding_table = get_input_tensor_by_name(
         request, 'prompt_embedding_table', batch_size, batch_index)
+    prompt_table_extra_ids = get_input_tensor_by_name(
+        request, 'prompt_table_extra_ids', batch_size, batch_index)
     if prompt_embedding_table is not None:
         if isinstance(prompt_embedding_table, np.ndarray):
             kwargs["embedding_table"] = from_numpy(
                 prompt_embedding_table).squeeze()
         elif isinstance(prompt_embedding_table, torch.Tensor):
-            kwargs["embedding_table"] = from_dlpack(
-                prompt_embedding_table.to_dlpack()).squeeze(dim=0)
+            kwargs["embedding_table"] = prompt_embedding_table.squeeze(dim=0)
+
+        if prompt_table_extra_ids is not None:
+            prompt_table_extra_ids = prompt_table_extra_ids[0].tolist()
+            if len(prompt_table_extra_ids) != 0:
+                kwargs["input_token_extra_ids"] = prompt_table_extra_ids[
+                    0:input_length]
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.PromptTuningConfig(**kwargs)
@@ -300,7 +308,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         external_draft_tokens_config = get_external_draft_tokens_config_from_request(
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
-            request, batch_size, batch_index)
+            request, batch_size, batch_index, input_length)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
 
