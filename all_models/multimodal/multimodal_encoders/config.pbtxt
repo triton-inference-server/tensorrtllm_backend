@@ -1,4 +1,4 @@
-# Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -23,10 +23,47 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-{
-  global:
-    TRITONBACKEND_*;
-    *ModelState*;
-    *utils*;
-  local: *;
-};
+
+name: "multimodal_encoders"
+backend: "python"
+max_batch_size: ${triton_max_batch_size}
+input [
+    {
+        name: "IMAGE"
+        data_type: TYPE_FP16
+        dims: [ -1, -1, -1 ]
+    }
+]
+
+# The supported datatype in trtion's python backend is written
+# https://github.com/triton-inference-server/python_backend/blob/bfabfdbf4aa1e3db36aaf9e640b1ce5e0a720f48/src/pb_stub_utils.cc#L124
+# NOTE
+# TYPE_BF16, TYPE_FP8 is not supported
+output [
+    {
+        name: "OUT_PROMPT_EMBEDDING_TABLE"
+        data_type: TYPE_FP16
+        dims: [ -1, -1 ]
+    },
+    {
+        name: "OUT_PROMPT_VOCAB_SIZE"
+        data_type: TYPE_INT32
+        dims: [ 1 ]
+    }
+]
+
+# USER can add another modal's model as parameters and also as inputs here.
+
+parameters {
+  key: "visual_model_path"
+  value: {
+    string_value: "${visual_model_path}"
+  }
+}
+
+instance_group [
+    {
+        count: 1
+        kind: KIND_CPU
+    }
+]

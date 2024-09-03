@@ -47,7 +47,7 @@ input [
   {
     name: "image_input"
     data_type: TYPE_FP16
-    dims: [ 3, 224, 224 ]
+    dims: [ 3, -1, -1 ]
     optional: true
   },
   {
@@ -179,6 +179,12 @@ input [
     optional: true
   },
   {
+    name: "prompt_table_extra_id"
+    data_type: TYPE_UINT64
+    dims: [ 1 ]
+    optional: true
+  },
+  {
       name: "embedding_bias_words"
       data_type: TYPE_STRING
       dims: [ -1 ]
@@ -253,6 +259,12 @@ parameters: {
   key: "tensorrt_llm_draft_model_name"
   value: {
     string_value: "${tensorrt_llm_draft_model_name}"
+  }
+}
+parameters: {
+  key: "multimodal_encoders_name"
+  value: {
+    string_value: "${multimodal_encoders_name}"
   }
 }
 

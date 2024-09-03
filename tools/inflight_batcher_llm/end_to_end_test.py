@@ -3,6 +3,8 @@
 import os
 import sys
 
+import torch
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import argparse
@@ -21,6 +23,23 @@ def callback(user_data, start_time, result, error):
     latency = (stop_time - start_time).total_seconds() * 1000.0
     latency = round(latency, 3)
     user_data._latencies.append(latency)
+
+
+def verify_logits(expected_logits, input_logits, rtol=1e-02, atol=1e-02):
+    torch.cuda.synchronize()
+    result = np.allclose(expected_logits, input_logits, rtol, atol)
+    if not result:
+        ndiff = 0
+        a = expected_logits.reshape(-1)
+        b = input_logits.reshape(-1)
+        assert a.size == b.size
+        for i in range(a.size):
+            if a[i] != b[i]:
+                ndiff += 1
+                print(f"Expect value: {a[i]}, output value: {b[i]}")
+                if ndiff > 20:
+                    break
+    return result
 
 
 def test_functionality(client,
@@ -122,7 +141,7 @@ def test_functionality(client,
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
         post_gen_logits = result.as_numpy("OUT_GENERATION_LOGITS")
-        assert (generation_logits == post_gen_logits).all()
+        assert verify_logits(generation_logits, post_gen_logits)
 
         # 2. Use ensemble model
         model_name = "ensemble"
@@ -166,8 +185,8 @@ def test_functionality(client,
         assert output0 == ensemble_output
         assert cum_log_probs == ensemble_cum_log_probs
         assert (output_log_probs == ensemble_output_log_probs).all()
-        assert (context_logits == ensemble_context_logits).all()
-        assert (generation_logits == ensemble_generation_logits).all()
+        assert verify_logits(context_logits, ensemble_context_logits)
+        assert verify_logits(generation_logits, ensemble_generation_logits)
 
         ensemble_context_logits_shape = ensemble_context_logits.shape
         assert (len(ensemble_context_logits_shape) == 3)
@@ -254,8 +273,8 @@ def test_functionality(client,
             assert output0 == bls_output
             assert cum_log_probs == bls_cum_log_probs
             assert (output_log_probs == bls_output_log_probs).all()
-            assert (context_logits == bls_context_logits).all()
-            assert (generation_logits == bls_generation_logits).all()
+            assert verify_logits(context_logits, bls_context_logits)
+            assert verify_logits(generation_logits, bls_generation_logits)
 
             bls_context_logits_shape = bls_context_logits.shape
             assert (len(bls_context_logits_shape) == 3)

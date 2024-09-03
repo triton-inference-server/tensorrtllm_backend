@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+import torch
 
 
 class RequestValidationError(Exception):
@@ -41,7 +42,10 @@ def _validate_that(condition: bool, msg: str):
 
 
 def _validate_non_empty(data, msg: str):
-    _validate_that(data is not None and data.size > 0, msg)
+    if isinstance(data, torch.Tensor):
+        _validate_that(data is not None and data.numel() > 0, msg)
+    else:
+        _validate_that(data is not None and data.size > 0, msg)
 
 
 def _validate_single_gt_0(data, msg: str):
@@ -74,6 +78,7 @@ class Request:
     return_log_probs: Optional[np.ndarray] = None
     prompt_embedding_table: Optional[np.ndarray] = None
     prompt_vocab_size: Optional[np.ndarray] = None
+    prompt_table_extra_id: Optional[np.ndarray] = None
     embedding_bias_words: Optional[np.ndarray] = None
     embedding_bias_weights: Optional[np.ndarray] = None
     num_draft_tokens: Optional[np.ndarray] = None
@@ -121,7 +126,7 @@ class PreprocResponse:
     embedding_bias: Optional[np.ndarray] = None
     end_id: Optional[np.ndarray] = None
     pad_id: Optional[np.ndarray] = None
-    prompt_embedding_table: Optional[np.ndarray] = None
+    prompt_table_extra_ids: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
@@ -138,7 +143,13 @@ class PreprocResponse:
                    stop_words_list=other.stop_words_list,
                    end_id=other.end_id,
                    pad_id=other.pad_id,
-                   prompt_embedding_table=other.prompt_embedding_table)
+                   prompt_table_extra_ids=other.prompt_table_extra_ids)
+
+
+@dataclass
+class MultimodalEncResponse:
+    prompt_embedding_table: Optional[torch.Tensor] = None
+    prompt_vocab_size: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -183,11 +194,16 @@ class Decoder:
 
     def decode(self,
                request: Request,
-               speculative_decoding=False) -> Generator[Response, None, None]:
+               speculative_decoding=False,
+               is_multimodal=False) -> Generator[Response, None, None]:
 
         batch_size = request.text_input.shape[0]
         self._accumulated_tokens = [None] * batch_size
         preproc_response = self.preprocess(request)
+
+        multimodal_enc_response = None
+        if is_multimodal:
+            multimodal_enc_response = self._multimodal_enc_generate(request)
 
         if speculative_decoding:
             if batch_size > 1:
@@ -199,10 +215,15 @@ class Decoder:
         else:
             if not self._streaming and batch_size == 1:
                 gen_response = self._generate_non_streaming(
-                    preproc_response, request)
+                    preproc_response,
+                    request,
+                    multimodal_enc_response=multimodal_enc_response)
                 yield self.postprocess(gen_response, batch_size)
             else:
-                for gen_response in self._generate(preproc_response, request):
+                for gen_response in self._generate(
+                        preproc_response,
+                        request,
+                        multimodal_enc_response=multimodal_enc_response):
                     yield self.postprocess(gen_response, batch_size)
 
     def encountered_stop_words(self, input_ids, stop_words_ids):
@@ -296,19 +317,27 @@ class Decoder:
             num_draft_tokens: int) -> GenerationResponse:
         raise NotImplementedError()
 
+    def _multimodal_enc_generate(
+        self,
+        request: Request,
+    ) -> MultimodalEncResponse:
+        raise NotImplementedError()
+
     def _generate(
         self,
         preproc: PreprocResponse,
         request: Request,
-        draft_request: Optional[DraftRequest] = None
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None,
     ) -> Generator[GenerationResponse, None, None]:
         raise NotImplementedError()
 
     def _generate_non_streaming(
-            self,
-            preproc: PreprocResponse,
-            request: Request,
-            draft_request: Optional[DraftRequest] = None
+        self,
+        preproc: PreprocResponse,
+        request: Request,
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None,
     ) -> GenerationResponse:
         raise NotImplementedError()
 

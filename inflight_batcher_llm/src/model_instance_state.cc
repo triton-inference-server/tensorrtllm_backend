@@ -476,10 +476,20 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_WARNING(e.what());
     }
 
+    SizeType32 recvPollPeriodMs = 0;
+    try
+    {
+        recvPollPeriodMs = model_state_->GetParameter<int>("recv_poll_period_ms");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
+    }
+
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, true, decodingConfig, gpuWeightsPercent,
-        maxQueueSize, extendedRuntimePerfKnobConfig);
+        parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
+        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -488,7 +498,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
 {
 
     mInstanceIndex = model_state->getAndIncrementInstanceIndex();
-    if (model_state_->getDeviceIds())
+    if (model_state_->getDeviceIds() && model_state_->getDeviceIds().value().size())
     {
         mGpuDeviceIds
             = model_state_->getDeviceIds().value()[mInstanceIndex % model_state_->getDeviceIds().value().size()];
@@ -610,6 +620,12 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         // Shutdown the worker ranks which will cause them to wait for leader/orchestrator to terminate
         mExecutor->shutdown();
+
+        // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
+        // we still don't want to return from initialize since Triton server would appear as ready
+        // So exit
+        TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
+        exit(0);
     }
 }
 

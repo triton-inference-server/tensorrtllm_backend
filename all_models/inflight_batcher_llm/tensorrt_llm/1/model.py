@@ -7,8 +7,10 @@ from random import randint
 from threading import Lock, Thread
 
 import numpy as np
+import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
+from torch.utils.dlpack import from_dlpack
 
 import tensorrt_llm.bindings.executor as trtllm
 
@@ -20,7 +22,12 @@ def get_input_tensor_by_name(request,
     tensor = pb_utils.get_input_tensor_by_name(request, name)
     if tensor is None:
         return None
-    tensor = tensor.as_numpy()
+
+    if tensor.is_cpu():
+        tensor = tensor.as_numpy()
+    else:
+        tensor = from_dlpack(tensor.to_dlpack())
+
     if expected_batch_size is not None and tensor.shape[
             0] != expected_batch_size:
         raise pb_utils.TritonModelException(
@@ -33,7 +40,10 @@ def get_input_tensor_by_name(request,
 
     if batch_index is not None:
         # Add leading 1 batch dimension
-        return np.expand_dims(tensor[batch_index], axis=0)
+        if isinstance(tensor, np.ndarray):
+            return np.expand_dims(tensor[batch_index], axis=0)
+        elif isinstance(tensor, torch.Tensor):
+            return torch.unsqueeze(tensor[batch_index], dim=0)
     else:
         return tensor
 
@@ -194,14 +204,26 @@ def get_external_draft_tokens_config_from_request(request,
 
 def get_prompt_tuning_config_from_request(request,
                                           batch_size=1,
-                                          batch_index=0):
+                                          batch_index=0,
+                                          input_length=0):
     # prompt_vocab_size is unused by executor.
     kwargs = {}
     prompt_embedding_table = get_input_tensor_by_name(
         request, 'prompt_embedding_table', batch_size, batch_index)
+    prompt_table_extra_ids = get_input_tensor_by_name(
+        request, 'prompt_table_extra_ids', batch_size, batch_index)
     if prompt_embedding_table is not None:
-        kwargs["embedding_table"] = from_numpy(
-            prompt_embedding_table).squeeze()
+        if isinstance(prompt_embedding_table, np.ndarray):
+            kwargs["embedding_table"] = from_numpy(
+                prompt_embedding_table).squeeze()
+        elif isinstance(prompt_embedding_table, torch.Tensor):
+            kwargs["embedding_table"] = prompt_embedding_table.squeeze(dim=0)
+
+        if prompt_table_extra_ids is not None:
+            prompt_table_extra_ids = prompt_table_extra_ids[0].tolist()
+            if len(prompt_table_extra_ids) != 0:
+                kwargs["input_token_extra_ids"] = prompt_table_extra_ids[
+                    0:input_length]
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.PromptTuningConfig(**kwargs)
@@ -286,7 +308,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         external_draft_tokens_config = get_external_draft_tokens_config_from_request(
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
-            request, batch_size, batch_index)
+            request, batch_size, batch_index, input_length)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
 
