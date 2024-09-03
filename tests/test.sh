@@ -196,6 +196,8 @@ fill_triton_repo () {
         python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
         python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${DECODER_ENGINE_PATH}
         python3 tools/fill_template.py -i ${TRITON_REPO}/multimodal_encoders/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},visual_model_path:${VISUAL_ENGINE_PATH}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders
+
     fi
 }
 
@@ -1234,4 +1236,13 @@ if [ "$MODEL" = "blip2-opt" ]; then
     ACCUMULATE_TOKEN="false"
     DECOUPLED_MODE="False"
 
+    # Test kv cache reuse
+    ENABLE_KV_CACHE_REUSE="True"
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+        launch_triton_server
+        python3 tools/multimodal/client.py --text "Question: Can you identify which city is depicted in this image based on the landmarks, architecture, and overall scenery? Please provide the name of the city along with any notable features that led you to your conclusion. Answer:" --model_type blip2 --prompt_table_extra_id 1
+        python3 tools/multimodal/client.py --text "Question: Can you identify which city is depicted in this image based on the landmarks, architecture, and overall scenery? Please provide the name of the city along with any notable features that led you to your conclusion. Answer:" --model_type blip2 --prompt_table_extra_id 1
+        kill_triton_server
+    done
+    ENABLE_KV_CACHE_REUSE="False"
 fi

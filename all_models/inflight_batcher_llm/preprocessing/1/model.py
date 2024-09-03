@@ -98,6 +98,7 @@ class TritonPythonModel:
             self.tokenizer.eos_token, add_special_tokens=False)[0]
         self.tokenizer_pad_id = self.tokenizer.encode(
             self.tokenizer.pad_token, add_special_tokens=False)[0]
+        self.vocab_size = self.tokenizer.vocab_size
 
         self.is_multimodal = False
         if visual_model_path is not None:
@@ -125,7 +126,7 @@ class TritonPythonModel:
         output_names = [
             "INPUT_ID", "DECODER_INPUT_ID", "REQUEST_INPUT_LEN",
             "REQUEST_DECODER_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
-            "OUT_END_ID", "OUT_PAD_ID"
+            "OUT_END_ID", "OUT_PAD_ID", "OUT_PROMPT_TABLE_EXTRA_IDS"
         ]
         input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
         for input_name in input_names:
@@ -228,6 +229,17 @@ class TritonPythonModel:
             else:
                 pad_id = [[self.tokenizer_pad_id]] * batch_size
 
+            # Take the extra_id from the input tensors
+            # Extra id is used in kv cache reuse for p-tuning
+            prompt_table_extra_id = pb_utils.get_input_tensor_by_name(
+                request, 'PROMPT_TABLE_EXTRA_ID')
+            if prompt_table_extra_id is not None:
+                prompt_table_extra_id = prompt_table_extra_id.as_numpy()
+                assert prompt_table_extra_id.shape[
+                    0] == batch_size, "Prompt table extra id must have the same batch size as Query"
+                assert prompt_table_extra_id.shape[
+                    1] == 1, "Multiple IDs cannot be provided for a single image"
+
             # Preprocessing input data.
             input_id, request_input_len = self._create_request(query)
             if decoder_query is not None:
@@ -244,6 +256,13 @@ class TritonPythonModel:
             embedding_bias = self._get_embedding_bias(
                 embedding_bias_words, embedding_bias_weights,
                 self.embedding_bias_weights_dtype, batch_size)
+
+            if prompt_table_extra_id is not None:
+                prompt_table_extra_ids = np.zeros_like(input_id)
+                for i in range(batch_size):
+                    prompt_table_extra_ids[i] = np.where(
+                        input_id[i] >= self.vocab_size,
+                        prompt_table_extra_id[i], 0)
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -271,12 +290,31 @@ class TritonPythonModel:
             pad_id_tensor = pb_utils.Tensor('OUT_PAD_ID',
                                             np.array(pad_id, dtype=np.int32))
 
-            inference_response = pb_utils.InferenceResponse(output_tensors=[
-                input_id_tensor, decoder_input_id_tensor, bad_words_ids_tensor,
-                stop_words_ids_tensor, request_input_len_tensor,
-                request_decoder_input_len_tensor, request_output_len_tensor,
-                embedding_bias_tensor, end_id_tensor, pad_id_tensor
-            ])
+            if prompt_table_extra_id is not None:
+                prompt_table_extra_ids_tensor = pb_utils.Tensor(
+                    'OUT_PROMPT_TABLE_EXTRA_IDS',
+                    np.array(prompt_table_extra_ids,
+                             dtype=self.out_prompt_table_extra_ids_dtype))
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=[
+                        input_id_tensor, decoder_input_id_tensor,
+                        bad_words_ids_tensor, stop_words_ids_tensor,
+                        request_input_len_tensor,
+                        request_decoder_input_len_tensor,
+                        request_output_len_tensor, embedding_bias_tensor,
+                        end_id_tensor, pad_id_tensor,
+                        prompt_table_extra_ids_tensor
+                    ])
+            else:
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=[
+                        input_id_tensor, decoder_input_id_tensor,
+                        bad_words_ids_tensor, stop_words_ids_tensor,
+                        request_input_len_tensor,
+                        request_decoder_input_len_tensor,
+                        request_output_len_tensor, embedding_bias_tensor,
+                        end_id_tensor, pad_id_tensor
+                    ])
             responses.append(inference_response)
 
         # You should return a list of pb_utils.InferenceResponse. Length

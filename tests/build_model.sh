@@ -447,6 +447,7 @@ if [ "$MODEL" = "blip2-opt" ]; then
                 --max_multimodal_len 256 \
                 --max_input_len 924 \
                 --max_seq_len 1024 \
+                --use_paged_context_fmha enable \
                 --output_dir trt_engines/opt-2.7b/fp16/1-gpu
 
     python build_visual_engine.py --model_type blip2 --model_path ${BLIP2_OPT_2_7B} --max_batch_size 8

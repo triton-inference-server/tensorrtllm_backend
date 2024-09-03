@@ -78,6 +78,7 @@ class Request:
     return_log_probs: Optional[np.ndarray] = None
     prompt_embedding_table: Optional[np.ndarray] = None
     prompt_vocab_size: Optional[np.ndarray] = None
+    prompt_table_extra_id: Optional[np.ndarray] = None
     embedding_bias_words: Optional[np.ndarray] = None
     embedding_bias_weights: Optional[np.ndarray] = None
     num_draft_tokens: Optional[np.ndarray] = None
@@ -125,6 +126,7 @@ class PreprocResponse:
     embedding_bias: Optional[np.ndarray] = None
     end_id: Optional[np.ndarray] = None
     pad_id: Optional[np.ndarray] = None
+    prompt_table_extra_ids: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
@@ -140,7 +142,8 @@ class PreprocResponse:
                    bad_words_list=other.bad_words_list,
                    stop_words_list=other.stop_words_list,
                    end_id=other.end_id,
-                   pad_id=other.pad_id)
+                   pad_id=other.pad_id,
+                   prompt_table_extra_ids=other.prompt_table_extra_ids)
 
 
 @dataclass

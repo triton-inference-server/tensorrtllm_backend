@@ -61,6 +61,7 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS",
             "OUT_PAD_ID",
             "OUT_END_ID",
+            "OUT_PROMPT_TABLE_EXTRA_IDS",
         ]
 
         self._multimodal_enc_outputs = [
@@ -102,6 +103,7 @@ class TritonDecoder(Decoder):
             "stream",
             "prompt_embedding_table",
             "prompt_vocab_size",
+            "prompt_table_extra_id",
             "embedding_bias_words",
             "embedding_bias_weights",
             "num_draft_tokens",
@@ -243,6 +245,7 @@ class TritonDecoder(Decoder):
             "embedding_bias_weights": "EMBEDDING_BIAS_WEIGHTS",
             "pad_id": "PAD_ID",
             "end_id": "END_ID",
+            "prompt_table_extra_id": "PROMPT_TABLE_EXTRA_ID",
         }
         return self.create_triton_tensors(request, name_map)
 
@@ -257,6 +260,7 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS": "embedding_bias",
             "OUT_PAD_ID": "pad_id",
             "OUT_END_ID": "end_id",
+            "OUT_PROMPT_TABLE_EXTRA_IDS": "prompt_table_extra_ids",
         }
         return self.convert_triton_response(triton_output, PreprocResponse,
                                             name_map)
@@ -371,6 +375,7 @@ class TritonDecoder(Decoder):
             "embedding_bias": "embedding_bias",
             "pad_id": "pad_id",
             "end_id": "end_id",
+            "prompt_table_extra_ids": "prompt_table_extra_ids",
         }
         return self.create_triton_tensors(preproc, name_map)
 
