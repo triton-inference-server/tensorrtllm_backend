@@ -68,7 +68,7 @@ For the specific models supported by encoder-decoder family, please visit [Tenso
 
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/encoder \
         --output_dir ${ENGINE_PATH}/encoder \
-        --paged_kv_cache disable \
+        --kv_cache_type paged \
         --moe_plugin disable \
         --enable_xqa disable \
         --max_batch_size 64 \
@@ -202,7 +202,7 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
 
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/encoder \
         --output_dir ${ENGINE_PATH}/encoder \
-        --paged_kv_cache disable \
+        --kv_cache_type disabled \
         --moe_plugin disable \
         --enable_xqa disable \
         --max_batch_size 64 \

@@ -142,7 +142,7 @@ if [ "$MODEL" = "mistral-ib" ]; then
     trtllm-build --model_config ./c-model/mistral-7b/fp16/config.json  \
         --context_fmha=enable \
         --remove_input_padding=enable \
-        --paged_kv_cache=enable \
+        --kv_cache_type=paged \
         --gpt_attention_plugin float16 \
         --gemm_plugin float16 \
         --max_batch_size 1 \
@@ -190,7 +190,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --use_paged_context_fmha enable \
         --gemm_plugin float16 \
         --max_batch_size 8 \
@@ -219,7 +219,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     echo "Build Encoder: "
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/encoder \
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/encoder \
-    --paged_kv_cache disable --moe_plugin disable \
+    --kv_cache_type disabled --moe_plugin disable \
     --enable_xqa disable --max_beam_width 1 \
     --max_batch_size 8 --max_input_len 512 --max_seq_len 512 \
     --gemm_plugin float16 \
@@ -258,7 +258,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
     trtllm-build --checkpoint_dir ./c-model/gpt2-medium/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --context_fmha enable \
         --use_paged_context_fmha enable \
@@ -271,7 +271,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
     trtllm-build --checkpoint_dir ./c-model/gpt2-medium/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --context_fmha enable \
         --use_paged_context_fmha enable \
@@ -305,7 +305,7 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     trtllm-build --checkpoint_dir ./c-model/email_composition/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --context_fmha enable \
         --max_batch_size 4 --max_seq_len 256 --max_beam_width 1 \
@@ -331,7 +331,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     trtllm-build --checkpoint_dir ./c-model/gpt-2b-lora/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --lora_plugin float16 \
         --lora_dir ${GPT_2B_LORA}/gpt2b_lora-900.nemo \
@@ -366,7 +366,7 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
     trtllm-build --checkpoint_dir ./c-model/gpt2/fp16 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --context_fmha enable \
         --max_batch_size 128 --max_seq_len 600 \
@@ -421,7 +421,7 @@ if [ "$MODEL" = "gpt-gather-generation-logits" ]; then
         --max_seq_len 640 \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --context_fmha enable \
         --max_num_tokens 38400 \
         --use_paged_context_fmha enable \

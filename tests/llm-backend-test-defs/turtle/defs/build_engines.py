@@ -83,7 +83,7 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}/encoder",
         f"--output_dir={encoder_engine_dir}",
-        "--paged_kv_cache=disable",
+        "--kv_cache_type=disabled",
         "--moe_plugin=disable",
         "--enable_xqa=disable",
         "--max_beam_width=1",
@@ -188,7 +188,7 @@ def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
 
     if type in ["ifb", "medium_target_ifb", "medium_control_ifb"]:
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -242,7 +242,7 @@ def prepare_gptj_6b_engine(type, tensorrt_llm_gptj_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -422,7 +422,7 @@ def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -475,7 +475,7 @@ def prepare_gpt_return_logits_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -560,7 +560,7 @@ def prepare_gpt_2b_lora_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -624,7 +624,7 @@ def prepare_gpt_175b_engine(type, tensorrt_llm_gpt_example_root):
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -678,7 +678,7 @@ def prepare_gpt_multi_node_engine(type, tensorrt_llm_gpt_example_root):
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     convert_cmd = " ".join(convert_cmd)
@@ -734,7 +734,7 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -788,7 +788,7 @@ def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
         "--remove_input_padding=enable",
         "--use_fused_mlp=enable",
         "--multiple_profiles=enable",
-        "--paged_kv_cache=enable",
+        "--kv_cache_type=paged",
         "--max_seq_len=4096",
         "--max_batch_size=96",
         "--workers=8",
@@ -850,7 +850,7 @@ def prepare_llama_v3_70b_engine(type, tensorrt_llm_llama_example_root,
         "--remove_input_padding=enable",
         "--use_fused_mlp=enable",
         "--multiple_profiles=enable",
-        "--paged_kv_cache=enable",
+        "--kv_cache_type=paged",
         "--max_seq_len=4096",
         "--max_batch_size=96",
         "--workers=8",
@@ -918,7 +918,7 @@ def prepare_llama_v2_70b_engine(type, tensorrt_llm_llama_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -982,7 +982,7 @@ def prepare_gpt_next_ptuning_engine(type, tensorrt_llm_gpt_example_root,
         f"--checkpoint_dir={ckpt_dir}",
         "--gpt_attention_plugin=float16",
         "--remove_input_padding=enable",
-        "--paged_kv_cache=enable",
+        "--kv_cache_type=paged",
         "--gemm_plugin=float16",
         "--context_fmha=enable",
         "--max_batch_size=8",
@@ -1053,7 +1053,7 @@ def prepare_mistral_v1_7b_engine(type, tensorrt_llm_llama_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
     elif type == "python_backend":
         build_cmd += [
@@ -1113,7 +1113,7 @@ def prepare_rcca_nvbug_4323566_engine(type, tensorrt_llm_gpt_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
@@ -1171,7 +1171,7 @@ def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
 
     if type == "ifb":
         build_cmd += [
-            "--paged_kv_cache=enable",
+            "--kv_cache_type=paged",
         ]
 
     append_timing_cache_args(build_cmd)
