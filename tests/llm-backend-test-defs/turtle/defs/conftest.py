@@ -503,9 +503,17 @@ def pytest_runtest_teardown(item, nextitem):
     else:
         next_test_basename = None
 
-    if next_test_basename != current_test_basename:
-        print_info("Cleaning up engine outputs:")
-        engine_outputs_root = item.config.cache.get('example_root', None)
-        cleanup_engine_outputs(engine_outputs_root)
+    # User can set SKIP_CLEANUP_ENGINES=True to skip clean up engines.
+    skip_cleanup_engines = os.getenv("SKIP_CLEANUP_ENGINES", "false")
+    if skip_cleanup_engines.lower() != "true":
+        if next_test_basename != current_test_basename:
+            print_info(
+                "SKIP_CLEANUP_ENGINES is not set to True. Cleaning up engine outputs:"
+            )
+            engine_outputs_root = item.config.cache.get('example_root', None)
+            cleanup_engine_outputs(engine_outputs_root)
+    else:
+        print_info(
+            "SKIP_CLEANUP_ENGINES is set to True, will not clean up engines.")
 
     yield
