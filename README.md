@@ -154,7 +154,7 @@ python3 convert_checkpoint.py --model_dir gpt2 \
 trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
         --gpt_attention_plugin float16 \
         --remove_input_padding enable \
-        --paged_kv_cache enable \
+        --kv_cache_type paged \
         --gemm_plugin float16 \
         --output_dir /engines/gpt/fp16/4-gpu
 ```
