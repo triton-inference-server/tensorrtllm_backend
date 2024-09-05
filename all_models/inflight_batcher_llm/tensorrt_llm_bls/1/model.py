@@ -131,11 +131,12 @@ class TritonPythonModel:
                     responses.append(error_response)
 
             self.decoder.reset_decoder()
-            if self.decoupled:
-                return None
-            else:
-                assert len(responses) == len(requests)
-                return responses
+
+        if self.decoupled:
+            return None
+        else:
+            assert len(responses) == len(requests)
+            return responses
 
     def finalize(self):
         """`finalize` is called only once when the model is being unloaded.
