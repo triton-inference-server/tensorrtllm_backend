@@ -546,7 +546,7 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
 }
 
 std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
-    InputTensors const& inputsTensors, int inputlen)
+    InputTensors const& inputsTensors, size_t inputlen)
 {
     std::optional<executor::PromptTuningConfig> pTuningConfig = std::nullopt;
     if (inputsTensors.count(InputFieldsNames::promptEmbeddingTable))
