@@ -1973,13 +1973,14 @@ def test_gpt_175b_ifb(
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
 @pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
-@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["True", "False"])
 @pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
 @pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
 @pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
 @pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
+@pytest.mark.parametrize("FEATURE_NAME", ["test_basic", "test_kv_cache_reuse"])
 def test_blip2_opt(
     E2E_MODEL_NAME,
     MAX_TOKENS_IN_KV_CACHE,
@@ -2002,6 +2003,7 @@ def test_blip2_opt(
     ACCUMULATE_TOKEN,
     BLS_INSTANCE_COUNT,
     EXCLUDE_INPUT_IN_OUTPUT,
+    FEATURE_NAME,
     tensorrt_llm_multimodal_example_root,
     tensorrt_llm_opt_example_root,
     blip2_opt_model_root,
@@ -2077,13 +2079,41 @@ def test_blip2_opt(
         run_cmd += [
             "--streaming",
         ]
+    if FEATURE_NAME == "test_kv_cache_reuse":
+        if ENABLE_KV_CACHE_REUSE == "True":
+            contend = """
+"Question: Can you identify which city is depicted in this image based on the landmarks, architecture, and overall scenery? Please provide the name of the city along with any notable features that led you to your conclusion. Answer:"
+"""
+            run_cmd += [
+                "--prompt_table_extra_id=1",
+                f"--text={contend}",
+            ]
+        else:
+            pytest.skip("Not supported.")
 
+        first_run_log = venv_check_output(llm_backend_venv, run_cmd)
+        print_info(f"{first_run_log}")
+        first_run_latency_value = retrieve_latency_value(first_run_log)
+        second_run_log = venv_check_output(llm_backend_venv, run_cmd)
+        print_info(f"{second_run_log}")
+        second_run_latency_value = retrieve_latency_value(second_run_log)
+
+        assert second_run_latency_value < first_run_latency_value, \
+            f"The second run latency value: {second_run_latency_value} " + \
+            f"is expected to be less than the first run latency value: {first_run_latency_value}."
+
+    elif FEATURE_NAME == "test_basic":
         if E2E_MODEL_NAME == "tensorrt_llm_bls":
             run_cmd += [
                 "--use_bls",
             ]
 
-    venv_check_call(llm_backend_venv, run_cmd)
+        if ENABLE_KV_CACHE_REUSE == "True":
+            run_cmd += [
+                "--prompt_table_extra_id=1",
+            ]
+
+        venv_check_call(llm_backend_venv, run_cmd)
 
 
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble", "tensorrt_llm_bls"])
