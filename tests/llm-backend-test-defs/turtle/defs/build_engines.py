@@ -292,6 +292,7 @@ def prepare_blip2_opt_engine(tensorrt_llm_multimodal_example_root,
         "--max_multimodal_len=256",
         "--max_input_len=924",
         "--max_seq_len=1024",
+        "--use_paged_context_fmha=enable",
         f"--output_dir={engine_dir}",
     ]
 

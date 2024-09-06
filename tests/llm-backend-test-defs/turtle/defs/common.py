@@ -153,6 +153,10 @@ def modify_ib_config_pbtxt(
             f"python3 {fill_template_py} -i {multimodal_enc_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
             f"visual_model_path:{VISUAL_ENGINE_PATH}",
             shell=True)
+        check_call(
+            f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} tensorrt_llm_model_name:tensorrt_llm," \
+            f"multimodal_encoders_name:multimodal_encoders",
+            shell=True)
 
     if DRAFT_ENGINE_PATH != "":
         llm_draft_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -362,3 +366,13 @@ def run_cpp_streaming_backend_tests(feature_name,
                 ]
         if feature_name == "batched_inputs":
             venv_check_call(llm_backend_venv, run_cmd)
+
+
+def retrieve_latency_value(log):
+    m = re.search(r"Latency: (\d+\.\d+) ms", log)
+    latency_value = None
+    if m is not None:
+        latency_value = m.group(1).strip()
+
+    assert latency_value is not None, f"Did not find latency value in log: {log}."
+    return float(latency_value)
