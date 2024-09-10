@@ -12,7 +12,7 @@ python build.py --model_dir ${HF_BAICHUAN_MODEL} \
                 --enable_context_fmha \
                 --use_gemm_plugin float16 \
                 --output_dir /tmp/baichuan/13B/trt_engines/fp16/1-gpu/ \
-                --paged_kv_cache \
+                --kv_cache_type paged \
                 --max_batch_size 64
 
 [11/29/2023-08:20:34] [TRT] [I] Total Host Persistent Memory: 77008

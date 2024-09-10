@@ -677,6 +677,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == True
+    assert config.extended_runtime_perf_knob_config.multi_block_mode == True
     del os.environ["TRTLLM_ORCHESTRATOR"]
 
 
@@ -717,7 +718,7 @@ def test_get_executor_config_minimal():
     assert config.request_stats_max_iterations == 0
     assert config.logits_post_processor_config is None
     assert config.extended_runtime_perf_knob_config.enable_context_fmha_fp32_acc == False
-    assert config.extended_runtime_perf_knob_config.multi_block_mode == False
+    assert config.extended_runtime_perf_knob_config.multi_block_mode == True
 
 
 def test_convert_timestamp_to_seconds():
