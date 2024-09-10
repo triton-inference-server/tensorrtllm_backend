@@ -135,7 +135,8 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
     InputTensors const& inputsTensors);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
-std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(InputTensors const& inputsTensors);
+std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
+    InputTensors const& inputsTensors, size_t inputLen);
 
 /// @brief Construct executor::LoraConfig from input tensors
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors);

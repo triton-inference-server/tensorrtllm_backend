@@ -43,7 +43,7 @@ trtllm-build --checkpoint_dir ./c-model/llama/fp16/1-gpu \
             --max_batch_size 8 \
             --max_seq_len 562 \
             --gpt_attention_plugin float16 \
-            --paged_kv_cache enable \
+            --kv_cache_type paged \
             --remove_input_padding enable \
             --use_paged_context_fmha enable \
             --lora_plugin float16 \

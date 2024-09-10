@@ -509,6 +509,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "participant_ids"
+  value: {
+    string_value: "${participant_ids}"
+  }
+}
+parameters: {
   key: "lora_cache_optimal_adapter_size"
   value: {
     string_value: "${lora_cache_optimal_adapter_size}"

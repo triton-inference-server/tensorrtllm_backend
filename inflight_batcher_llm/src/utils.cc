@@ -152,6 +152,8 @@ std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request)
     InputTensors inputsTensors;
     uint32_t num_inputs;
     LOG_IF_ERROR(TRITONBACKEND_RequestInputCount(request, &num_inputs), "Error getting input count");
+    auto const stream = std::make_shared<tensorrt_llm::runtime::CudaStream>();
+    auto const manager = tensorrt_llm::runtime::BufferManager{std::move(stream)};
     for (uint32_t idx = 0; idx < num_inputs; ++idx)
     {
         TRITONBACKEND_Input* input = nullptr;
@@ -182,8 +184,6 @@ std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request)
 
         NamedTensor t(utils::to_trt_datatype(data_type), shapev, input_name);
         uint64_t buffer_offset = 0;
-        auto stream = std::make_shared<tensorrt_llm::runtime::CudaStream>();
-        auto manager = tensorrt_llm::runtime::BufferManager{std::move(stream)};
         for (int64_t buffer_id = 0; buffer_id < buffer_count; ++buffer_id)
         {
             void const* buffer = nullptr;
@@ -208,9 +208,9 @@ std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request)
             }
             buffer_offset += buffer_byte_size;
         }
-        manager.getStream().synchronize();
         inputsTensors.insert(make_pair(t.name, std::move(t)));
     }
+    manager.getStream().synchronize();
     return splitBatchInputsTensors(inputsTensors);
 }
 
@@ -546,7 +546,7 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
 }
 
 std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
-    InputTensors const& inputsTensors, int inputlen)
+    InputTensors const& inputsTensors, size_t inputlen)
 {
     std::optional<executor::PromptTuningConfig> pTuningConfig = std::nullopt;
     if (inputsTensors.count(InputFieldsNames::promptEmbeddingTable))
