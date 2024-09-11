@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "utils.h"
+#include "tensorrt_llm/executor/serialization.h"
 
 using namespace tensorrt_llm::batch_manager;
 
@@ -246,6 +247,28 @@ uint64_t getRequestId(TRITONBACKEND_Request* request, std::unordered_map<uint64_
     }
 
     return requestId;
+}
+
+executor::RequestType getRequestType(TRITONBACKEND_Request* request)
+{
+    executor::RequestType requestType = executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION;
+    auto requestTypeStr = getRequestParameter<std::string>(request, kRequestTypeParameterName);
+    if (requestTypeStr)
+    {
+        if (stringToRequestType.count(requestTypeStr.value()) > 0)
+        {
+            requestType = stringToRequestType.at(requestTypeStr.value());
+        }
+        else
+        {
+            LOG_MESSAGE(TRITONSERVER_LOG_ERROR,
+                (std::string("Unexpected parameter value for 'triton_trtllm_request_type'. Found: ")
+                    + requestTypeStr.value())
+                    .c_str());
+        }
+    }
+
+    return requestType;
 }
 
 std::unordered_set<std::string> getRequestOutputNames(TRITONBACKEND_Request* request)
@@ -605,7 +628,8 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 }
 
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
-    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType)
+    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
+    executor::RequestType requestType)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
     {
@@ -706,8 +730,31 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
             std::nullopt, std::nullopt, encoderInputTokens);
+        requests.back().setRequestType(requestType);
+        auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);
+        if (contextPhaseParamsIt != inputTensors.end())
+        {
+            auto& contextPhaseParams = contextPhaseParamsIt->second();
+            InMemoryStreamBuffer buffer(
+                reinterpret_cast<char*>(contextPhaseParams->data()), contextPhaseParams->getSize());
+
+            auto requestContextPhase = executor::Serialization::deserializeContextPhaseParams(buffer);
+            requests.back().setContextPhaseParams(requestContextPhase);
+        }
     }
     return requests;
 }
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<int32_t>::parameter_type = TRITONSERVER_PARAMETER_INT;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<std::string>::parameter_type = TRITONSERVER_PARAMETER_STRING;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<bool>::parameter_type = TRITONSERVER_PARAMETER_BOOL;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<double>::parameter_type = TRITONSERVER_PARAMETER_DOUBLE;
 
 } // namespace triton::backend::inflight_batcher_llm::utils

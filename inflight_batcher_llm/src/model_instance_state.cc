@@ -28,6 +28,7 @@
 #include "utils.h"
 
 #include "tensorrt_llm/common/mpiUtils.h"
+#include "tensorrt_llm/executor/serialization.h"
 
 #include <nlohmann/json.hpp>
 
@@ -206,8 +207,8 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
         parallelConfig.setDeviceIds(mGpuDeviceIds.value());
     }
 
-    char const* str = std::getenv("TRTLLM_ORCHESTRATOR");
-    if (str && std::atoi(str) != 0)
+    char const* useOrchestratorMode = std::getenv("TRTLLM_ORCHESTRATOR");
+    if (useOrchestratorMode && std::atoi(useOrchestratorMode) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
         auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
@@ -706,8 +707,10 @@ std::vector<executor::Request> ModelInstanceState::createExecutorRequests(
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
+    executor::RequestType requestType = utils::getRequestType(request);
+
     return utils::createRequestsFromInputTensors(
-        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType);
+        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -770,7 +773,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        requestIdsSet});
+                        requestIdsSet, executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
             {
@@ -967,6 +970,29 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                     tritonResponse, batchIndexShape, batchIndexType, OutputFieldsNames::batchIndex);
                 std::vector<int32_t> batchIndexVec = {requestData.batchIndex};
                 utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
+            }
+
+            if (requestData.requestType == executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY)
+            {
+                if (response.getResult().contextPhaseParams.has_value())
+                {
+                    size_t contextPhaseParamsSize
+                        = executor::Serialization::serializedSize(response.getResult().contextPhaseParams.value());
+                    std::vector<int64_t> contextPhaseParamsShape{1, contextPhaseParamsSize};
+                    TRITONSERVER_DataType contextPhaseParamsType = TRITONSERVER_TYPE_UINT8;
+                    auto contextPhaseParamsBuffer = utils::getResponseBuffer<uint8_t>(tritonResponse,
+                        contextPhaseParamsShape, contextPhaseParamsType, OutputFieldsNames::contextPhaseParams);
+
+                    std::stringbuf contextPhaseSerializationBuffer(std::ios_base::out | std::ios_base::in);
+                    contextPhaseSerializationBuffer.pubsetbuf(
+                        reinterpret_cast<char*>(contextPhaseParamsBuffer), contextPhaseParamsSize);
+                    std::ostream os(&contextPhaseSerializationBuffer);
+                    executor::Serialization::serialize(response.getResult().contextPhaseParams.value(), os);
+                }
+                else
+                {
+                    TLLM_THROW("contextParams must be present in the response");
+                }
             }
         }
         else
