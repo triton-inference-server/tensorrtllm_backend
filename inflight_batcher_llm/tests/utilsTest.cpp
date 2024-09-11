@@ -410,7 +410,9 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
     std::optional<executor::Request> request;
     try
     {
-        request = createRequestsFromInputTensors({inputsTensors}, true, true, true, modelType).at(0);
+        request = createRequestsFromInputTensors(
+            {inputsTensors}, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION)
+                      .at(0);
         if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
         {
             EXPECT_TRUE(false) << "Should have failed";
@@ -620,7 +622,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS1)
 
         // Create requests from batch size 1 tensor
         {
-            auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType);
+            auto requests = createRequestsFromInputTensors(
+                inputsTensors, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION);
 
             EXPECT_EQ(requests.size(), 1);
             EXPECT_EQ(requests.at(0).getInputTokenIds(), inputTokens);
@@ -688,7 +691,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
 
     // Get the requests
     {
-        auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType);
+        auto requests = createRequestsFromInputTensors(
+            inputsTensors, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION);
         EXPECT_EQ(requests.size(), 3);
         for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
         {
