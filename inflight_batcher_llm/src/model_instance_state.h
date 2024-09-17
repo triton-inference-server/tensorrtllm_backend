@@ -88,6 +88,7 @@ struct RequestData
     Timestamps timestamps;
     int32_t batchIndex;
     std::shared_ptr<std::set<executor::IdType>> pendingBatchedRequestIds;
+    executor::RequestType requestType;
 };
 
 //
