@@ -62,6 +62,7 @@ struct InputFieldsNames
     static constexpr char const* returnLogProbs = "return_log_probs";
     static constexpr char const* returnGenerationLogits = "return_generation_logits";
     static constexpr char const* returnContextLogits = "return_context_logits";
+    static constexpr char const* excludeInputFromOutput = "exclude_input_in_output";
 
     // SamplingConfig
     static constexpr char const* beamWidth = "beam_width";

@@ -175,10 +175,7 @@ def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
     return trtllm.SamplingConfig(**kwargs)
 
 
-def get_output_config_from_request(request,
-                                   exclude_input_from_output,
-                                   batch_size=1,
-                                   batch_index=0):
+def get_output_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
     kwargs["return_log_probs"] = get_input_scalar_by_name(
         request, 'return_log_probs', batch_size, batch_index)
@@ -186,7 +183,6 @@ def get_output_config_from_request(request,
         request, 'return_context_logits', batch_size, batch_index)
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
         request, 'return_generation_logits', batch_size, batch_index)
-    kwargs["exclude_input_from_output"] = exclude_input_from_output
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
@@ -312,8 +308,18 @@ def convert_request(request, exclude_input_from_output, decoupled):
 
         sampling_config = get_sampling_config_from_request(
             request, batch_size, batch_index)
-        output_config = get_output_config_from_request(
-            request, exclude_input_from_output, batch_size, batch_index)
+        output_config = get_output_config_from_request(request, batch_size,
+                                                       batch_index)
+        req_exclude_input_from_output = get_input_scalar_by_name(
+            request, 'exclude_input_in_output', batch_size, batch_index)
+        if req_exclude_input_from_output is None:
+            # if request doesn't specify exclude_input_from_output, try to use the parameter
+            output_config.exclude_input_from_output = (
+                exclude_input_from_output
+                if exclude_input_from_output is not None else false)
+        else:
+            output_config.exclude_input_from_output = req_exclude_input_from_output
+
         external_draft_tokens_config = get_external_draft_tokens_config_from_request(
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
