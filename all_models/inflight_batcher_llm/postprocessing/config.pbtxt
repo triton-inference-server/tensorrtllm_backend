@@ -27,6 +27,7 @@
 name: "postprocessing"
 backend: "python"
 max_batch_size: ${triton_max_batch_size}
+dynamic_batching {}
 input [
   {
     name: "TOKENS_BATCH"
