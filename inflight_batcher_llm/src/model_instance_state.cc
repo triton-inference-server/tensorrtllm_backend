@@ -978,7 +978,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                 {
                     size_t contextPhaseParamsSize
                         = executor::Serialization::serializedSize(response.getResult().contextPhaseParams.value());
-                    std::vector<int64_t> contextPhaseParamsShape{1, contextPhaseParamsSize};
+                    std::vector<int64_t> contextPhaseParamsShape{1, static_cast<int64_t>(contextPhaseParamsSize)};
                     TRITONSERVER_DataType contextPhaseParamsType = TRITONSERVER_TYPE_UINT8;
                     auto contextPhaseParamsBuffer = utils::getResponseBuffer<uint8_t>(tritonResponse,
                         contextPhaseParamsShape, contextPhaseParamsType, OutputFieldsNames::contextPhaseParams);
