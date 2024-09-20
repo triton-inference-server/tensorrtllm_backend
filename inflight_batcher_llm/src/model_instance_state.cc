@@ -211,6 +211,9 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     if (useOrchestratorMode && std::atoi(useOrchestratorMode) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
+
+        tensorrt_llm::mpi::initialize(tensorrt_llm::mpi::MpiThreadSupport::THREAD_MULTIPLE);
+
         auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
         auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
         auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
