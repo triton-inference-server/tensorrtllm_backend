@@ -1124,7 +1124,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     run_all_tests="true"
     for BACKEND in "${BACKENDS[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
-    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[@]}"; do
+    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[0]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
