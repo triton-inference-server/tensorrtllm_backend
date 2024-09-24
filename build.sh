@@ -42,6 +42,7 @@ PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.08}
               --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
               --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
               --backend=ensemble --enable-gpu --no-container-pull \
+              --repoagent=checksum --cache=local --cache=redis \
               --image=base,${TRTLLM_BASE_IMAGE} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
               --backend=python:${PYTHON_BACKEND_REPO_TAG}

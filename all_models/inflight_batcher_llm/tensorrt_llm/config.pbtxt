@@ -254,6 +254,13 @@ input [
     optional: true
   },
   {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "stop"
     data_type: TYPE_BOOL
     dims: [ 1 ]

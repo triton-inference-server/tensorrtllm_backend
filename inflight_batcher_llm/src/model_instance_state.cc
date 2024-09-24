@@ -211,6 +211,9 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     if (useOrchestratorMode && std::atoi(useOrchestratorMode) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
+
+        tensorrt_llm::mpi::initialize(tensorrt_llm::mpi::MpiThreadSupport::THREAD_MULTIPLE);
+
         auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
         auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
         auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
@@ -978,7 +981,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                 {
                     size_t contextPhaseParamsSize
                         = executor::Serialization::serializedSize(response.getResult().contextPhaseParams.value());
-                    std::vector<int64_t> contextPhaseParamsShape{1, contextPhaseParamsSize};
+                    std::vector<int64_t> contextPhaseParamsShape{1, static_cast<int64_t>(contextPhaseParamsSize)};
                     TRITONSERVER_DataType contextPhaseParamsType = TRITONSERVER_TYPE_UINT8;
                     auto contextPhaseParamsBuffer = utils::getResponseBuffer<uint8_t>(tritonResponse,
                         contextPhaseParamsShape, contextPhaseParamsType, OutputFieldsNames::contextPhaseParams);

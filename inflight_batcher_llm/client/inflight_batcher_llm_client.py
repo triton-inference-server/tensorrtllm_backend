@@ -123,7 +123,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    lora_weights_data, lora_config_data, return_log_probs_data,
                    top_k_data, top_p_data, draft_ids_data,
                    return_context_logits_data, return_generation_logits_data,
-                   decoder_input_ids_data, prompt_table_extra_id_data):
+                   decoder_input_ids_data, prompt_table_extra_id_data,
+                   exclude_input_in_output):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -184,6 +185,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("prompt_table_extra_ids",
                            prompt_table_extra_id_data),
+        ]
+    if exclude_input_in_output is not None:
+        inputs += [
+            prepare_tensor("exclude_input_in_output", exclude_input_in_output),
         ]
     return inputs
 
@@ -665,6 +670,11 @@ if __name__ == "__main__":
     if decoder_input_ids is not None:
         decoder_input_ids_data = np.array(decoder_input_ids, dtype=np.int32)
 
+    exclude_input_in_output = None
+    if FLAGS.exclude_input_in_output:
+        exclude_input_in_output = np.array([[FLAGS.exclude_input_in_output]],
+                                           dtype=bool)
+
     if not FLAGS.vocab_size and tokenizer:
         FLAGS.vocab_size = tokenizer.vocab_size
     prompt_table_extra_id_data = None
@@ -690,7 +700,7 @@ if __name__ == "__main__":
         lora_config_data, return_log_probs_data, top_k_data, top_p_data,
         draft_ids_data, return_context_logits_data,
         return_generation_logits_data, decoder_input_ids_data,
-        prompt_table_extra_id_data)
+        prompt_table_extra_id_data, exclude_input_in_output)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
