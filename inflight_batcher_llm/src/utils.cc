@@ -535,7 +535,6 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
     bool returnContextLogits{false};
     extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
 
-    // Note that currently excludeInputFromOutput is set from the backend parameters.
     return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits);
 }
 
@@ -628,7 +627,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 }
 
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
-    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
+    bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
     executor::RequestType requestType)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
@@ -644,7 +643,20 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
     for (auto const& inputTensors : inputsTensors)
     {
         executor::OutputConfig outConfig = utils::getOutputConfigFromTensors(inputTensors);
-        outConfig.excludeInputFromOutput = excludeInputFromOutput;
+
+        std::optional<bool> reqExcludeInputFromOutput{std::nullopt};
+        extractOptionalSingleton<bool>(
+            inputTensors, InputFieldsNames::excludeInputFromOutput, reqExcludeInputFromOutput);
+
+        // If specified in request, set from request
+        if (reqExcludeInputFromOutput != std::nullopt)
+        {
+            outConfig.excludeInputFromOutput = reqExcludeInputFromOutput.value();
+        }
+        else // Set from parameter
+        {
+            outConfig.excludeInputFromOutput = paramExcludeInputFromOutput;
+        }
 
         executor::VecTokens inputTokens;
         if (!utils::extractVector<int32_t>(inputTensors, InputFieldsNames::inputTokens, inputTokens))
