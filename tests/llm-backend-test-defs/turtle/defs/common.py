@@ -18,8 +18,8 @@ def query_gpu_name():
     return gpu_name
 
 
-def check_server_ready(http_port="8000"):
-    timeout = 300
+def check_server_ready(http_port="8000", timeout_timer=300, sleep_interval=5):
+    timeout = timeout_timer
     timer = 0
     while True:
         if http_port == "8000":
@@ -33,8 +33,8 @@ def check_server_ready(http_port="8000"):
         if status == "200":
             break
         elif timer <= timeout:
-            time.sleep(5)
-            timer += 5
+            time.sleep(sleep_interval)
+            timer += sleep_interval
         elif timer > timeout:
             raise TimeoutError(
                 f"Error: Launch Triton server timed out, timer is {timeout} seconds."

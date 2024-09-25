@@ -759,6 +759,62 @@ def prepare_llama_v2_7b_engine(type, tensorrt_llm_llama_example_root,
     return engine_dir
 
 
+def prepare_llama_v2_13b_engine(tensorrt_llm_llama_example_root,
+                                llama_v2_tokenizer_model_root):
+    engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
+                              "llama_v2_13b_ifb")
+    ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                            "llama_v2_13b_ifb")
+    # The path of weights in data server
+    meta_ckpt_dir = os.path.join(llama_v2_tokenizer_model_root, "13B")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--meta_ckpt_dir={meta_ckpt_dir}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=bfloat16",
+        "--tp_size=2",
+        "--workers=2",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--workers=2",
+        "--max_batch_size=64",
+        "--enable_xqa=enable",
+        "--tokens_per_block=64",
+        "--use_paged_context_fmha=enable",
+        "--context_fmha=enable",
+        "--paged_kv_cache=enable",
+        "--max_num_tokens=8192",
+        "--max_input_len=4096",
+        "--max_seq_len=4096",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
                                llama_v3_8b_model_root):
     engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
