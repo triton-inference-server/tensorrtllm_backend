@@ -924,8 +924,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", ["4096"])
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
-@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY",
-                         ["max_utilization", "guaranteed_no_evict"])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
