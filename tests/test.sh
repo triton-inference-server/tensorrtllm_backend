@@ -1116,6 +1116,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     # enc-dec models only support inflight_fused_batching, with chunked context disabled
     CHECK_PERF_JSON_ARGS=""
     BATCHING_STRATEGY="inflight_fused_batching"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     ENABLE_CHUNKED_CONTEXT="false"
 
     # -------------------------------
@@ -1124,7 +1125,6 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     run_all_tests="true"
     for BACKEND in "${BACKENDS[@]}"; do
     for MAX_TOKENS_IN_KV_CACHE in "${MAX_TOKENS_IN_KV_CACHES[@]}"; do
-    for BATCH_SCHEDULER_POLICY in "${BATCH_SCHEDULER_POLICIES[0]}"; do
     for KV_CACHE_FREE_GPU_MEM_FRACTION in "${KV_CACHE_FREE_GPU_MEM_FRACTIONS[@]}"; do
         # Because the runners are shared, the default value of 0.9 doesn't work, so skip
         # if max_tokens_in_kv_cache is also empty
@@ -1141,7 +1141,6 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
         run_cpp_e2e_backend_tests
         kill_triton_server
         run_all_tests="false"
-    done
     done
     done
     done
