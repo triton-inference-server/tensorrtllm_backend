@@ -410,8 +410,8 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
     std::optional<executor::Request> request;
     try
     {
-        request = createRequestsFromInputTensors(
-            {inputsTensors}, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION)
+        request = createRequestsFromInputTensors({inputsTensors}, true, true, true, modelType,
+            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */)
                       .at(0);
         if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
         {
@@ -622,8 +622,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS1)
 
         // Create requests from batch size 1 tensor
         {
-            auto requests = createRequestsFromInputTensors(
-                inputsTensors, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION);
+            auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType,
+                executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
 
             EXPECT_EQ(requests.size(), 1);
             EXPECT_EQ(requests.at(0).getInputTokenIds(), inputTokens);
@@ -691,8 +691,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
 
     // Get the requests
     {
-        auto requests = createRequestsFromInputTensors(
-            inputsTensors, true, true, true, modelType, executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION);
+        auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType,
+            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
         EXPECT_EQ(requests.size(), 3);
         for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
         {
@@ -702,6 +702,51 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
                     inputTokens.begin() + batchId * 3, inputTokens.begin() + batchId * 3 + inputLengths[batchId]));
             EXPECT_EQ(request.getMaxNewTokens(), maxTokens[batchId]);
         }
+    }
+}
+
+TEST(UtilsTest, orchestratorError)
+{
+    std::vector<int32_t> const& inputTokens = {1, 2, 3, 4, 5};
+    InputTensors inputTensors;
+    auto modelType = executor::ModelType::kDECODER_ONLY;
+    pushTensor<int32_t>(inputTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32,
+        {1, static_cast<int64_t>(inputTokens.size())}, inputTokens);
+    pushTensor<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
+
+    auto requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
+    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+        executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, false /* isOrchestrator */);
+    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+        executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, false /* isOrchestrator */);
+    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, true /* isOrchestrator */);
+
+    try
+    {
+        requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+            executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, true /* isOrchestrator */);
+        FAIL() << "Expected exception";
+    }
+    catch (tensorrt_llm::common::TllmException const& e)
+    {
+        EXPECT_THAT(e.what(),
+            testing::HasSubstr(
+                "Context-only and generation-only requests are NOT currently supported in orchestrator mode."));
+    }
+
+    try
+    {
+        requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
+            executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, true /* isOrchestrator */);
+        FAIL() << "Expected exception";
+    }
+    catch (tensorrt_llm::common::TllmException const& e)
+    {
+        EXPECT_THAT(e.what(),
+            testing::HasSubstr(
+                "Context-only and generation-only requests are NOT currently supported in orchestrator mode."));
     }
 }
 
