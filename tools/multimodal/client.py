@@ -13,14 +13,14 @@ import numpy as np
 import requests
 import tritonclient.grpc as grpcclient
 from PIL import Image
-from transformers import Blip2Processor
+from transformers import AutoProcessor, Blip2Processor
 from utils import utils
 
 
 def prepare_inputs(text_data, image_data, request_output_len_data,
                    beam_width_data, temperature_data, repetition_penalty_data,
                    presence_penalty_data, end_id, pad_id, top_k_data,
-                   top_p_data, streaming_data):
+                   top_p_data, streaming_data, prompt_table_extra_id_data):
     inputs = [
         utils.prepare_tensor("text_input", text_data, grpcclient),
         utils.prepare_tensor("image_input", image_data, grpcclient),
@@ -43,6 +43,11 @@ def prepare_inputs(text_data, image_data, request_output_len_data,
         inputs += [
             utils.prepare_tensor("presence_penalty", presence_penalty_data,
                                  grpcclient),
+        ]
+    if prompt_table_extra_id_data is not None:
+        inputs += [
+            utils.prepare_tensor("prompt_table_extra_id",
+                                 prompt_table_extra_id_data, grpcclient),
         ]
     return inputs
 
@@ -156,13 +161,30 @@ if __name__ == "__main__":
         default=False,
         help="Use BLS model instead of ensemble.",
     )
-
+    parser.add_argument(
+        "--prompt_table_extra_id",
+        type=int,
+        required=False,
+        default=None,
+        help=
+        "When enable kv cache reuse, we need a unique id to determine whether the images are the same. The type of extra id is uint64, and its range is from 1 to the maximum value of uint64.",
+    )
+    parser.add_argument("--model_type",
+                        required=True,
+                        choices=['blip2', 'llava'],
+                        help="Model type")
     FLAGS = parser.parse_args()
 
     raw_image = Image.open(requests.get(FLAGS.image, stream=True).raw)
-    processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
-    image = processor(raw_image, FLAGS.text,
-                      return_tensors="pt")['pixel_values']
+    if 'blip2' in FLAGS.model_type:
+        processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        image = processor(raw_image, FLAGS.text,
+                          return_tensors="pt")['pixel_values']
+    elif 'llava' in FLAGS.model_type:
+        processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+        image = processor(text=FLAGS.text,
+                          images=raw_image,
+                          return_tensors="pt")['pixel_values']
     image_data = image.numpy().astype(np.float16)
 
     text_data = np.array([[FLAGS.text.encode("utf8")]], dtype=np.object_)
@@ -195,11 +217,17 @@ if __name__ == "__main__":
         presence_penalty = [[FLAGS.presence_penalty]]
         presence_penalty_data = np.array(presence_penalty, dtype=np.float32)
 
+    prompt_table_extra_id_data = None
+    if FLAGS.prompt_table_extra_id is not None:
+        prompt_table_extra_id = [[FLAGS.prompt_table_extra_id]]
+        prompt_table_extra_id_data = np.array(prompt_table_extra_id,
+                                              dtype=np.uint64)
+
     inputs = prepare_inputs(text_data, image_data, request_output_len_data,
                             beam_width_data, temperature_data,
                             repetition_penalty_data, presence_penalty_data,
                             end_id_data, pad_id_data, top_k_data, top_p_data,
-                            streaming_data)
+                            streaming_data, prompt_table_extra_id_data)
 
     start_time = datetime.now()
 

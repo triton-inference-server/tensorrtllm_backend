@@ -44,6 +44,7 @@ metric_to_stat_dict = {
     "kv_cache_block_type=used": "Used KV cache blocks",
     "kv_cache_block_type=free": "Free KV cache blocks",
     "kv_cache_block_type=max": "Max KV cache blocks",
+    "kv_cache_block_type=reused": "Reused KV cache blocks",
     "inflight_batcher_specific_metric=total_context_tokens":
     "Total Context Tokens",
     "inflight_batcher_specific_metric=micro_batch_id": "MicroBatch ID",

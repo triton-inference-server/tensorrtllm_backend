@@ -30,6 +30,7 @@ from typing import Dict, Optional
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from lib.decode import *
+from torch.utils.dlpack import from_dlpack, to_dlpack
 from typing_extensions import override
 
 
@@ -41,12 +42,14 @@ class TritonDecoder(Decoder):
                  preproc_model_name="preprocessing",
                  postproc_model_name="postprocessing",
                  llm_model_name="tensorrt_llm",
-                 draft_llm_model_name: Optional[str] = None):
+                 draft_llm_model_name: Optional[str] = None,
+                 multimodal_encoders_name: Optional[str] = None):
         super().__init__(streaming=streaming, accumulate=accumulate)
         self.preproc_model_name = preproc_model_name
         self.postproc_model_name = postproc_model_name
         self.llm_model_name = llm_model_name
         self.draft_llm_model_name = draft_llm_model_name
+        self.multimodal_encoders_name = multimodal_encoders_name
 
         self._preproc_outputs = [
             "INPUT_ID",
@@ -58,7 +61,11 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS",
             "OUT_PAD_ID",
             "OUT_END_ID",
-            "OUT_PROMPT_EMBEDDING_TABLE",
+            "OUT_PROMPT_TABLE_EXTRA_IDS",
+        ]
+
+        self._multimodal_enc_outputs = [
+            "OUT_PROMPT_EMBEDDING_TABLE", "OUT_PROMPT_VOCAB_SIZE"
         ]
 
         self._llm_outputs = [
@@ -96,6 +103,7 @@ class TritonDecoder(Decoder):
             "stream",
             "prompt_embedding_table",
             "prompt_vocab_size",
+            "prompt_table_extra_id",
             "embedding_bias_words",
             "embedding_bias_weights",
             "num_draft_tokens",
@@ -173,7 +181,11 @@ class TritonDecoder(Decoder):
             if tensor is None:
                 continue
             triton_name = tensor.name()
-            value = tensor.as_numpy()
+            if tensor.is_cpu():
+                value = tensor.as_numpy()
+            else:
+                # If the tensor is in GPU memory make it torch.Tensor type
+                value = from_dlpack(tensor.to_dlpack())
             target_name = triton_name
             if name_map and triton_name in name_map:
                 target_name = name_map[triton_name]
@@ -203,7 +215,12 @@ class TritonDecoder(Decoder):
             value = getattr(obj, name)
             if value is None:
                 continue
-            t = pb_utils.Tensor(triton_name, self.__undo_reshape(value, name))
+            if isinstance(value, np.ndarray):
+                t = pb_utils.Tensor(triton_name,
+                                    self.__undo_reshape(value, name))
+            elif isinstance(value, torch.Tensor):
+                t = pb_utils.Tensor.from_dlpack(
+                    triton_name, to_dlpack(self.__undo_reshape(value, name)))
             tensors.append(t)
         return tensors
 
@@ -221,7 +238,6 @@ class TritonDecoder(Decoder):
         name_map = {
             "text_input": "QUERY",
             "decoder_text_input": "DECODER_QUERY",
-            "image_input": "IMAGE",
             "max_tokens": "REQUEST_OUTPUT_LEN",
             "bad_words": "BAD_WORDS_DICT",
             "stop_words": "STOP_WORDS_DICT",
@@ -229,6 +245,7 @@ class TritonDecoder(Decoder):
             "embedding_bias_weights": "EMBEDDING_BIAS_WEIGHTS",
             "pad_id": "PAD_ID",
             "end_id": "END_ID",
+            "prompt_table_extra_id": "PROMPT_TABLE_EXTRA_ID",
         }
         return self.create_triton_tensors(request, name_map)
 
@@ -243,10 +260,35 @@ class TritonDecoder(Decoder):
             "EMBEDDING_BIAS": "embedding_bias",
             "OUT_PAD_ID": "pad_id",
             "OUT_END_ID": "end_id",
-            "OUT_PROMPT_EMBEDDING_TABLE": "prompt_embedding_table",
+            "OUT_PROMPT_TABLE_EXTRA_IDS": "prompt_table_extra_ids",
         }
         return self.convert_triton_response(triton_output, PreprocResponse,
                                             name_map)
+
+    @override
+    def _multimodal_enc_generate(self,
+                                 request: Request) -> MultimodalEncResponse:
+        input_tensors = self._get_multimodal_enc_tensors(request)
+        triton_req = pb_utils.InferenceRequest(
+            model_name=self.multimodal_encoders_name,
+            inputs=input_tensors,
+            requested_output_names=self._multimodal_enc_outputs)
+        triton_output = self._exec_triton_request_single(triton_req)
+        return self._get_multimodal_enc_response(triton_output)
+
+    def _get_multimodal_enc_tensors(self, preproc: PreprocResponse):
+        name_map = {
+            "image_input": "IMAGE",
+        }
+        return self.create_triton_tensors(preproc, name_map)
+
+    def _get_multimodal_enc_response(self, triton_output):
+        name_map = {
+            "OUT_PROMPT_EMBEDDING_TABLE": "prompt_embedding_table",
+            "OUT_PROMPT_VOCAB_SIZE": "prompt_vocab_size",
+        }
+        return self.convert_triton_response(triton_output,
+                                            MultimodalEncResponse, name_map)
 
     @override
     def _draft_generate_non_streaming(
@@ -267,10 +309,15 @@ class TritonDecoder(Decoder):
         self,
         preproc: PreprocResponse,
         request: Request,
-        draft_request: Optional[DraftRequest] = None
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None
     ) -> Generator[GenerationResponse, None, None]:
-        input_tensors = self._get_llm_tensors(preproc, request, None,
-                                              draft_request)
+        input_tensors = self._get_llm_tensors(
+            preproc,
+            request,
+            None,
+            draft_request,
+            multimodal_enc_response=multimodal_enc_response)
         triton_req = pb_utils.InferenceRequest(
             model_name=self.llm_model_name,
             inputs=input_tensors,
@@ -280,13 +327,18 @@ class TritonDecoder(Decoder):
 
     @override
     def _generate_non_streaming(
-            self,
-            preproc: PreprocResponse,
-            request: Request,
-            draft_request: Optional[DraftRequest] = None
+        self,
+        preproc: PreprocResponse,
+        request: Request,
+        draft_request: Optional[DraftRequest] = None,
+        multimodal_enc_response: Optional[MultimodalEncResponse] = None
     ) -> GenerationResponse:
-        input_tensors = self._get_llm_tensors(preproc, request, None,
-                                              draft_request)
+        input_tensors = self._get_llm_tensors(
+            preproc,
+            request,
+            None,
+            draft_request,
+            multimodal_enc_response=multimodal_enc_response)
         triton_req = pb_utils.InferenceRequest(
             model_name=self.llm_model_name,
             inputs=input_tensors,
@@ -294,14 +346,19 @@ class TritonDecoder(Decoder):
         r = self._exec_triton_request_single(triton_req)
         return self._get_llm_response(r)
 
-    def _get_llm_tensors(self,
-                         preproc: PreprocResponse,
-                         request: Request,
-                         num_output_tokens: Optional[int] = None,
-                         draft_request: Optional[DraftRequest] = None,
-                         is_draft_model_request: bool = False):
+    def _get_llm_tensors(
+            self,
+            preproc: PreprocResponse,
+            request: Request,
+            num_output_tokens: Optional[int] = None,
+            draft_request: Optional[DraftRequest] = None,
+            is_draft_model_request: bool = False,
+            multimodal_enc_response: MultimodalEncResponse = None):
         tensors = []
         tensors.extend(self._get_tensors_from_preproc(preproc))
+        if multimodal_enc_response is not None:
+            tensors.extend(
+                self._get_tensors_from_multimodal_enc(multimodal_enc_response))
         tensors.extend(
             self._get_llm_tensors_from_request(request, num_output_tokens,
                                                draft_request,
@@ -318,9 +375,17 @@ class TritonDecoder(Decoder):
             "embedding_bias": "embedding_bias",
             "pad_id": "pad_id",
             "end_id": "end_id",
-            "prompt_embedding_table": "prompt_embedding_table",
+            "prompt_table_extra_ids": "prompt_table_extra_ids",
         }
         return self.create_triton_tensors(preproc, name_map)
+
+    def _get_tensors_from_multimodal_enc(
+            self, multimodal_enc_response: MultimodalEncResponse):
+        name_map = {
+            "prompt_embedding_table": "prompt_embedding_table",
+            "prompt_vocab_size": "prompt_vocab_size",
+        }
+        return self.create_triton_tensors(multimodal_enc_response, name_map)
 
     def _get_llm_tensors_from_request(
             self,
@@ -332,6 +397,7 @@ class TritonDecoder(Decoder):
             "beam_width": "beam_width",
             "top_k": "runtime_top_k",
             "top_p": "runtime_top_p",
+            "temperature": "temperature",
             "length_penalty": "len_penalty",
             "repetition_penalty": "repetition_penalty",
             "min_length": "min_length",

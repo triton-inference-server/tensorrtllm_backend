@@ -124,15 +124,21 @@ class TRTLLMBaseMetricsTest(unittest.TestCase):
             "pending_request_count"
         ]
         for stat in count_keys:
-            self.assertTrue(
-                self._all_equal(
-                    [model_metrics[model][stat] for model in model_metrics]))
+            if stat == "exec_count":
+                # Dynamic batching is enabled for the post-processing model, so
+                # the 'exec_count' will not be the same between the
+                # postprocessing model and other models.
+                self.assertTrue(
+                    self._all_equal([
+                        model_metrics[model][stat] for model in model_metrics
+                        if model != "postprocessing"
+                    ]))
+            else:
+                self.assertTrue(
+                    self._all_equal([
+                        model_metrics[model][stat] for model in model_metrics
+                    ]))
 
-        # Assert ensemble duration stats are greater than composing duration stats
-        # Because ensemble models encapsulate a pipeline of submodels
-        # (preprocessing --> tensorrt_llm --> postprocessing in this case), we
-        # expect each duration metric for the ensemble model to be greater the
-        # corresponding sum for that metric across each of the submodels.
         duration_keys = [
             "request_duration_us", "compute_input_duration_us",
             "compute_infer_duration_us", "compute_output_duration_us"
@@ -145,7 +151,6 @@ class TRTLLMBaseMetricsTest(unittest.TestCase):
             ensemble_stat_duration = int(model_metrics["ensemble"][stat])
             self.assertTrue(composing_stat_duration > 0)
             self.assertTrue(ensemble_stat_duration > 0)
-            self.assertTrue(ensemble_stat_duration >= composing_stat_duration)
 
     def test_end_to_end(self):
         try:

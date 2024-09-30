@@ -123,7 +123,7 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    lora_weights_data, lora_config_data, return_log_probs_data,
                    top_k_data, top_p_data, draft_ids_data,
                    return_context_logits_data, return_generation_logits_data,
-                   decoder_input_ids_data):
+                   decoder_input_ids_data, prompt_table_extra_id_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -179,6 +179,11 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
     if decoder_input_ids_data is not None:
         inputs += [
             prepare_tensor("decoder_input_ids", decoder_input_ids_data),
+        ]
+    if prompt_table_extra_id_data is not None:
+        inputs += [
+            prepare_tensor("prompt_table_extra_ids",
+                           prompt_table_extra_id_data),
         ]
     return inputs
 
@@ -512,6 +517,20 @@ if __name__ == "__main__":
                         required=False,
                         default='tensorrt_llm',
                         help='Specify model name')
+    parser.add_argument(
+        "--prompt_table_extra_id",
+        type=int,
+        required=False,
+        default=None,
+        help=
+        "When enable kv cache reuse, we need a unique id to determine whether the prompt tables are the same. The type of extra id is uint64, and its range is from 1 to the maximum value of uint64.",
+    )
+    parser.add_argument(
+        "--vocab_size",
+        type=int,
+        required=False,
+        default=None,
+    )
 
     FLAGS = parser.parse_args()
 
@@ -646,6 +665,22 @@ if __name__ == "__main__":
     if decoder_input_ids is not None:
         decoder_input_ids_data = np.array(decoder_input_ids, dtype=np.int32)
 
+    if not FLAGS.vocab_size and tokenizer:
+        FLAGS.vocab_size = tokenizer.vocab_size
+    prompt_table_extra_id_data = None
+    if FLAGS.prompt_table_extra_id is not None:
+        if not FLAGS.vocab_size:
+            raise Exception(
+                "To use the prompt table extra id, you need to specify the vocab size."
+            )
+
+        prompt_table_extra_id_data = np.zeros_like(input_ids_data,
+                                                   dtype=np.uint64)
+        for i in range(input_ids_data.shape[0]):
+            prompt_table_extra_id_data[i] = np.where(
+                input_ids_data[i] >= FLAGS.vocab_size,
+                FLAGS.prompt_table_extra_id, 0)
+
     inputs = prepare_inputs(
         input_ids_data, input_lengths_data, request_output_len_data,
         beam_width_data, temperature_data, repetition_penalty_data,
@@ -654,7 +689,8 @@ if __name__ == "__main__":
         prompt_vocab_size_data, lora_task_id_data, lora_weights_data,
         lora_config_data, return_log_probs_data, top_k_data, top_p_data,
         draft_ids_data, return_context_logits_data,
-        return_generation_logits_data, decoder_input_ids_data)
+        return_generation_logits_data, decoder_input_ids_data,
+        prompt_table_extra_id_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
