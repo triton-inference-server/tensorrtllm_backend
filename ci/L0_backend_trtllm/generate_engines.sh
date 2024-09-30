@@ -49,7 +49,7 @@ function build_tensorrt_engine_inflight_batcher {
     trtllm-build --checkpoint_dir "${GPT_MODEL_DIR}" \
             --gpt_attention_plugin float16 \
             --remove_input_padding enable \
-            --paged_kv_cache enable \
+            --kv_cache_type paged \
             --gemm_plugin float16 \
             --workers "${NUM_GPUS}" \
             --output_dir "${OUTPUT_DIR}" \

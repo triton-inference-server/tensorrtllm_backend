@@ -27,6 +27,8 @@
 #include "model_instance_state.h"
 #include "utils.h"
 
+#include "tensorrt_llm/common/mpiUtils.h"
+
 #include <nlohmann/json.hpp>
 
 using executor::SizeType32;
@@ -121,10 +123,10 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("kv_cache_onboard_blocks not set, defaulting to true");
     }
 
-    std::optional<int32_t> maxAttentionWindow = std::nullopt;
+    std::optional<std::vector<int32_t>> maxAttentionWindow = std::nullopt;
     try
     {
-        maxAttentionWindow = model_state_->GetParameter<int32_t>("max_attention_window_size");
+        maxAttentionWindow = model_state_->GetParameter<std::vector<int32_t>>("max_attention_window_size");
     }
     catch (std::exception const& e)
     {
@@ -158,19 +160,20 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
         TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
     }
 
-    std::optional<SizeType32> maxAttentionWindowSizeType = std::nullopt;
+    std::optional<std::vector<SizeType32>> maxAttentionWindowVec = std::nullopt;
     if (maxAttentionWindow.has_value())
     {
-        maxAttentionWindowSizeType = static_cast<SizeType32>(maxAttentionWindow.value());
+        maxAttentionWindowVec
+            = std::vector<SizeType32>(maxAttentionWindow.value().begin(), maxAttentionWindow.value().end());
     }
 
-    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowSizeType,
-        sinkTokenLength, kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+    return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowVec, sinkTokenLength,
+        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
 }
 
 executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
 {
-    bool multiBlockMode = false;
+    bool multiBlockMode = true;
     try
     {
         multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
@@ -178,7 +181,7 @@ executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePe
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to false");
+        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to true");
     }
 
     bool enableContextFMHAFP32Acc = false;
@@ -207,9 +210,30 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     if (str && std::atoi(str) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
-        auto workerExecutablePath = model_state_->GetExecutorWorkerPath();
-        auto orchestratorConfig = executor::OrchestratorConfig(true, workerExecutablePath);
+        auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
+        auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
+        auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
+        auto const isOrchestrator = spawnProcesses || (tensorrt_llm::mpi::MpiComm::world().getRank() == 0);
+        auto orchestratorConfig
+            = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
+
+        if (!spawnProcesses)
+        {
+            try
+            {
+                auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
+                // TODO: validate participantIds?
+                parallelConfig.setParticipantIds(participantIds);
+            }
+            catch (std::exception const& e)
+            {
+                TLLM_THROW(
+                    "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
+                    "obtained from the config.pbtxt due to the following error: %s",
+                    e.what());
+            }
+        }
     }
     return parallelConfig;
 }
@@ -475,10 +499,20 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_WARNING(e.what());
     }
 
+    SizeType32 recvPollPeriodMs = 0;
+    try
+    {
+        recvPollPeriodMs = model_state_->GetParameter<int>("recv_poll_period_ms");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
+    }
+
     return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig);
+        parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
+        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs);
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -609,6 +643,12 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         // Shutdown the worker ranks which will cause them to wait for leader/orchestrator to terminate
         mExecutor->shutdown();
+
+        // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
+        // we still don't want to return from initialize since Triton server would appear as ready
+        // So exit
+        TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
+        exit(0);
     }
 }
 
@@ -775,10 +815,10 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
     {
         if (!response.hasError())
         {
-            auto const& result = response.getResult();
+            auto result = response.getResult();
             isFinal = result.isFinal;
             error = nullptr;
-            auto outputIds = result.outputTokenIds;
+            auto& outputIds = result.outputTokenIds;
             std::vector<int32_t> beamLength(outputIds.size());
             int32_t maxBeamLength = -1;
             for (size_t i = 0; i < outputIds.size(); ++i)
@@ -871,12 +911,22 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             {
                 if (result.logProbs.has_value())
                 {
-                    std::vector<int64_t> outputLogProbsShape{1, static_cast<int64_t>(result.logProbs.value().size()),
-                        static_cast<int64_t>(result.logProbs.value()[0].size())};
+                    auto& logProbs = result.logProbs.value();
+                    size_t maxLogProbs = 0;
+                    for (auto const& vec : logProbs)
+                    {
+                        maxLogProbs = std::max(maxLogProbs, vec.size());
+                    }
+                    for (auto& vec : logProbs)
+                    {
+                        vec.resize(maxLogProbs, -1);
+                    }
+                    std::vector<int64_t> outputLogProbsShape{
+                        1, static_cast<int64_t>(logProbs.size()), static_cast<int64_t>(logProbs[0].size())};
                     auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
                     auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
                         tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-                    utils::flatten<float>(result.logProbs.value(), outputLogProbsBuffer, outputLogProbsShape);
+                    utils::flatten<float>(logProbs, outputLogProbsBuffer, outputLogProbsShape);
                 }
                 else
                 {
@@ -1057,6 +1107,7 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Max KV cache blocks\":" + std::to_string(kvStats.maxNumBlocks) + ",");
                 statJson.append("\"Tokens per KV cache block\":" + std::to_string(kvStats.tokensPerBlock) + ",");
                 statJson.append("\"Used KV cache blocks\":" + std::to_string(kvStats.usedNumBlocks) + ",");
+                statJson.append("\"Reused KV cache blocks\":" + std::to_string(kvStats.reusedBlocks) + ",");
             }
 
             statJson.back() = '}';

@@ -545,7 +545,8 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
     return externalDraftTokensConfig;
 }
 
-std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(InputTensors const& inputsTensors)
+std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
+    InputTensors const& inputsTensors, int inputlen)
 {
     std::optional<executor::PromptTuningConfig> pTuningConfig = std::nullopt;
     if (inputsTensors.count(InputFieldsNames::promptEmbeddingTable))
@@ -554,7 +555,17 @@ std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(Inp
             = inputsTensors.at(InputFieldsNames::promptEmbeddingTable).tensor;
         utils::squeezeTensor(originalTensor, 2);
         auto const& executorTensor = executor::detail::ofITensor(originalTensor);
-        pTuningConfig = executor::PromptTuningConfig(executorTensor);
+
+        std::optional<executor::VecTokenExtraIds> optionalInputTokenExtraIds{std::nullopt};
+        executor::VecTokenExtraIds InputTokenExtraIds;
+        if (utils::extractVector<uint64_t>(inputsTensors, InputFieldsNames::InputTokenExtraIds, InputTokenExtraIds)
+            && InputTokenExtraIds.size() == inputlen)
+        {
+            optionalInputTokenExtraIds = InputTokenExtraIds;
+            pTuningConfig = executor::PromptTuningConfig(executorTensor, optionalInputTokenExtraIds);
+        }
+        else
+            pTuningConfig = executor::PromptTuningConfig(executorTensor);
     }
     return pTuningConfig;
 }
@@ -686,15 +697,15 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
             }
         }
 
-        auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputTensors);
+        auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputTensors, inputTokens.size());
 
         auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
 
         auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
 
-        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId, badWords,
-            stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig, std::nullopt,
-            encoderInputTokens);
+        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
+            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
+            std::nullopt, std::nullopt, encoderInputTokens);
     }
     return requests;
 }
