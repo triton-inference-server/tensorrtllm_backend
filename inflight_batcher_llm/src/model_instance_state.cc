@@ -208,35 +208,35 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     }
 
     char const* useOrchestratorMode = std::getenv("TRTLLM_ORCHESTRATOR");
+    auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
+    auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
     if (useOrchestratorMode && std::atoi(useOrchestratorMode) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
+        mIsOrchestratorMode = true;
 
         tensorrt_llm::mpi::initialize(tensorrt_llm::mpi::MpiThreadSupport::THREAD_MULTIPLE);
 
         auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
-        auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
-        auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
         auto const isOrchestrator = spawnProcesses || (tensorrt_llm::mpi::MpiComm::world().getRank() == 0);
         auto orchestratorConfig
             = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
-
-        if (!spawnProcesses)
+    }
+    try
+    {
+        auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
+        // TODO: validate participantIds?
+        parallelConfig.setParticipantIds(participantIds);
+    }
+    catch (std::exception const& e)
+    {
+        if (!spawnProcesses && mIsOrchestratorMode)
         {
-            try
-            {
-                auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
-                // TODO: validate participantIds?
-                parallelConfig.setParticipantIds(participantIds);
-            }
-            catch (std::exception const& e)
-            {
-                TLLM_THROW(
-                    "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
-                    "obtained from the config.pbtxt due to the following error: %s",
-                    e.what());
-            }
+            TLLM_THROW(
+                "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
+                "obtained from the config.pbtxt due to the following error: %s",
+                e.what());
         }
     }
     return parallelConfig;
@@ -534,6 +534,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         mGpuDeviceIds = std::nullopt;
     }
+    mIsOrchestratorMode = false;
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
@@ -705,15 +706,15 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 }
 
 // Split batched TRITONBACKEND_Request into one executor:Request object per sample.
-std::vector<executor::Request> ModelInstanceState::createExecutorRequests(
-    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType)
+std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITONBACKEND_Request* request,
+    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
     executor::RequestType requestType = utils::getRequestType(request);
 
     return utils::createRequestsFromInputTensors(
-        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType);
+        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType, isOrchestrator);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -741,8 +742,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequests = createExecutorRequests(
-                request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(), mModelType);
+            auto executorRequests = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput,
+                isDecoupled(), mModelType, mIsOrchestratorMode);
 
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             TRITONBACKEND_ResponseFactory* factory;

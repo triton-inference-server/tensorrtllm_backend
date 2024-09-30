@@ -153,7 +153,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType);
+    executor::RequestType requestType, bool isOrchestrator);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t

@@ -181,8 +181,8 @@ private:
     bool handleStopRequest(TRITONBACKEND_Request* request, std::string const& tritonRequestId);
 
     /// @brief Create an executor::Request from input tensors for each sample in batch
-    static std::vector<executor::Request> createExecutorRequests(
-        TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType);
+    static std::vector<executor::Request> createExecutorRequests(TRITONBACKEND_Request* request,
+        bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
@@ -236,6 +236,9 @@ private:
 
     /// @brief GPU device ids for this instance
     std::optional<std::vector<int32_t>> mGpuDeviceIds;
+
+    /// @brief Boolean indicating whether it is using orchestrator mode or not
+    bool mIsOrchestratorMode;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;
