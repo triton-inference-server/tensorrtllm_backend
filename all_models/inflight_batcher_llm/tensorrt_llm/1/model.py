@@ -291,6 +291,10 @@ def convert_request(request, exclude_input_from_output, decoupled):
         if inputs['streaming'] and not decoupled:
             raise pb_utils.TritonModelException(
                 "Streaming is only supported in decoupled mode.")
+
+        inputs['num_return_sequences'] = get_input_scalar_by_name(
+            request, 'num_return_sequences', batch_size, batch_index) or 1
+
         inputs['end_id'] = get_input_scalar_by_name(request, 'end_id',
                                                     batch_size, batch_index)
         inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id',
@@ -382,6 +386,10 @@ def convert_response(response, batch_index):
     output_tensors.append(
         pb_utils.Tensor("batch_index",
                         np.expand_dims(np.array([batch_index], np.int32), 0)))
+    output_tensors.append(
+        pb_utils.Tensor(
+            "sequence_index",
+            np.expand_dims(np.array([result.sequence_index], np.int32), 0)))
 
     return pb_utils.InferenceResponse(output_tensors), result.is_final
 

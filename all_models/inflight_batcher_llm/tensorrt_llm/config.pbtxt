@@ -58,6 +58,13 @@ input [
     reshape: { shape: [ ] }
   },
   {
+    name: "num_return_sequences"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "draft_input_ids"
     data_type: TYPE_INT32
     dims: [ -1 ]
@@ -378,6 +385,11 @@ output [
   },
   {
     name: "batch_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "sequence_index"
     data_type: TYPE_INT32
     dims: [ 1 ]
   },

@@ -747,10 +747,17 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
 
-        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
+        auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
             std::nullopt, std::nullopt, encoderInputTokens);
-        requests.back().setRequestType(requestType);
+
+        executor::SizeType32 numReturnSequences;
+        if (utils::extractSingleton<int32_t>(inputTensors, InputFieldsNames::numReturnSequences, numReturnSequences))
+        {
+            request.setNumReturnSequences(numReturnSequences);
+        }
+
+        request.setRequestType(requestType);
         auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);
         if (contextPhaseParamsIt != inputTensors.end())
         {
@@ -759,8 +766,10 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
                 reinterpret_cast<char*>(contextPhaseParams->data()), contextPhaseParams->getSize());
 
             auto requestContextPhase = executor::Serialization::deserializeContextPhaseParams(buffer);
-            requests.back().setContextPhaseParams(requestContextPhase);
+            request.setContextPhaseParams(requestContextPhase);
         }
+
+        requests.emplace_back(std::move(request));
     }
     return requests;
 }

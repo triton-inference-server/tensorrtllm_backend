@@ -45,6 +45,12 @@ input [
     dims: [ 1 ]
   },
   {
+    name: "num_return_sequences"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
    name: "bad_words"
    data_type: TYPE_STRING
    dims: [ -1 ]
@@ -211,6 +217,11 @@ output [
   },
   {
     name: "batch_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "sequence_index"
     data_type: TYPE_INT32
     dims: [ 1 ]
   }
@@ -389,6 +400,10 @@ ensemble_scheduling {
           value: "return_generation_logits"
       }
       input_map {
+          key: "num_return_sequences"
+          value: "num_return_sequences"
+      }
+      input_map {
           key: "beam_width"
           value: "beam_width"
       }
@@ -443,6 +458,10 @@ ensemble_scheduling {
       output_map {
         key: "batch_index"
         value: "batch_index"
+      },
+      output_map {
+        key: "sequence_index"
+        value: "sequence_index"
       }
     },
     {

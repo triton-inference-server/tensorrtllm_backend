@@ -48,7 +48,7 @@ def stop_triton_server():
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
 @pytest.mark.parametrize("FEATURE_NAME", [
     "test_basic", "batched_inputs", "test_log_probs", "test_request_id",
-    "test_stop_words", "test_embedding_bias"
+    "test_stop_words", "test_embedding_bias", "test_n_returns"
 ])
 def test_llama_v2_7b_ifb(
     E2E_MODEL_NAME,
