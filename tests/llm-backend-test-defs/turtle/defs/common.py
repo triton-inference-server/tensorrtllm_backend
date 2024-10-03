@@ -253,7 +253,9 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
                           inflight_batcher_llm_client_root, tokenizer_dir):
     # Chooses script
     script_name = ""
-    if feature_name in ["test_basic", "test_log_probs", "test_request_id"]:
+    if feature_name in [
+            "test_basic", "test_log_probs", "test_request_id", "test_n_returns"
+    ]:
         script_name = f"{inflight_batcher_llm_client_root}/inflight_batcher_llm_client.py"
     elif feature_name in ["test_stop_words", "test_embedding_bias"]:
         script_name = f"{inflight_batcher_llm_client_root}/end_to_end_grpc_client.py"
@@ -274,6 +276,10 @@ def run_cpp_backend_tests(feature_name, llm_backend_venv,
         elif feature_name == "test_request_id":
             run_cmd += [
                 "--request-id=my_request",
+            ]
+        elif feature_name == "test_n_returns":
+            run_cmd += [
+                "--num-return-sequences=3",
             ]
 
         venv_check_call(llm_backend_venv, run_cmd)

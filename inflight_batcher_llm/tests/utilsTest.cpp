@@ -354,6 +354,7 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
             {static_cast<int64_t>(decoderInputTokens.size())}, decoderInputTokens);
     }
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
+    pushTensor<int32_t>(inputsTensors, InputFieldsNames::numReturnSequences, nvinfer1::DataType::kINT32, {1}, {29});
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::endId, nvinfer1::DataType::kINT32, {1}, {11});
     if (padId)
     {
@@ -484,6 +485,7 @@ void checkRequest(tensorrt_llm::executor::Request const& request,
         }
     }
     EXPECT_EQ(request.getMaxNewTokens(), 8);
+    EXPECT_EQ(request.getNumReturnSequences(), 29);
     EXPECT_EQ(request.getEndId().value(), 11);
     if (padId)
     {

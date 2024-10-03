@@ -352,6 +352,16 @@ run_cpp_trtllm_backend_tests () {
             --tokenizer-dir ${TOKENIZER_PATH} \
             --request-id my_request 2>&1 | tee output_str_request
 
+        # n-return requires the decoupled mode.
+        if [[ "${DECOUPLED_MODE}" == "True" ]]; then
+            #test with n returns
+            python3 inflight_batcher_llm_client.py \
+                ${STREAMING_FLAG} \
+                ${CHECK_OUTPUT_FLAG} \
+                --tokenizer-dir ${TOKENIZER_PATH} \
+                --num-return-sequences 2 2>&1 | tee output_n_return
+        fi
+
         # Test triton metrics are present and have non-zero values (when applicable).
         TRITON_METRICS_LOG="triton_metrics.out"
         curl localhost:${TRITON_METRICS_PORT}/metrics -o ${TRITON_METRICS_LOG}

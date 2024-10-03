@@ -207,6 +207,11 @@ output [
     name: "batch_index"
     data_type: TYPE_INT32
     dims: [ 1 ]
+  },
+  {
+    name: "sequence_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
   }
 ]
 ensemble_scheduling {
@@ -453,6 +458,10 @@ ensemble_scheduling {
       output_map {
         key: "batch_index"
         value: "batch_index"
+      }
+      output_map {
+        key: "sequence_index"
+        value: "sequence_index"
       }
     },
     {

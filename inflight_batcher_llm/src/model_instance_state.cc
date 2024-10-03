@@ -825,6 +825,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             auto result = response.getResult();
             isFinal = result.isFinal;
             error = nullptr;
+            auto sequenceIndex = result.sequenceIndex;
             auto& outputIds = result.outputTokenIds;
             std::vector<int32_t> beamLength(outputIds.size());
             int32_t maxBeamLength = -1;
@@ -974,6 +975,16 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                     tritonResponse, batchIndexShape, batchIndexType, OutputFieldsNames::batchIndex);
                 std::vector<int32_t> batchIndexVec = {requestData.batchIndex};
                 utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0)
+            {
+                std::vector<int64_t> sequenceIndexShape{1, 1};
+                auto sequenceIndexType = TRITONSERVER_TYPE_INT32;
+                auto sequenceIndexBuffer = utils::getResponseBuffer<int32_t>(
+                    tritonResponse, sequenceIndexShape, sequenceIndexType, OutputFieldsNames::sequenceIndex);
+                std::vector<int32_t> sequenceIndexVec = {sequenceIndex};
+                utils::flatten<int32_t>(sequenceIndexVec, sequenceIndexBuffer, sequenceIndexShape);
             }
 
             if (requestData.requestType == executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY)

@@ -155,6 +155,13 @@ input [
     optional: true
   },
   {
+    name: "num_return_sequences"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "beam_width"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -238,6 +245,11 @@ output [
   },
   {
     name: "batch_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "sequence_index"
     data_type: TYPE_INT32
     dims: [ 1 ]
   }
