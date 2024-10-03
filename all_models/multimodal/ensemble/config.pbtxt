@@ -436,23 +436,23 @@ ensemble_scheduling {
       },
       output_map {
         key: "cum_log_probs"
-        value: "_CUM_LOG_PROBS"
+        value: "cum_log_probs"
       }
       output_map {
         key: "output_log_probs"
-        value: "_OUTPUT_LOG_PROBS"
+        value: "output_log_probs"
       },
       output_map {
         key: "context_logits"
-        value: "_CONTEXT_LOGITS"
+        value: "context_logits"
       },
       output_map {
         key: "generation_logits"
-        value: "_GENERATION_LOGITS"
+        value: "generation_logits"
       },
       output_map {
         key: "batch_index"
-        value: "_BATCH_INDEX"
+        value: "batch_index"
       }
     },
     {
@@ -463,52 +463,12 @@ ensemble_scheduling {
         value: "_TOKENS_BATCH"
       }
       input_map {
-        key: "CUM_LOG_PROBS"
-        value: "_CUM_LOG_PROBS"
-      }
-      input_map {
-        key: "OUTPUT_LOG_PROBS"
-        value: "_OUTPUT_LOG_PROBS"
-      }
-      input_map {
-        key: "CONTEXT_LOGITS"
-        value: "_CONTEXT_LOGITS"
-      }
-      input_map {
-        key: "GENERATION_LOGITS"
-        value: "_GENERATION_LOGITS"
-      }
-      input_map {
         key: "SEQUENCE_LENGTH"
         value: "_SEQUENCE_LENGTH"
-      }
-      input_map {
-        key: "BATCH_INDEX"
-        value: "_BATCH_INDEX"
       }
       output_map {
         key: "OUTPUT"
         value: "text_output"
-      }
-      output_map {
-        key: "OUT_OUTPUT_LOG_PROBS"
-        value: "output_log_probs"
-      }
-      output_map {
-        key: "OUT_CUM_LOG_PROBS"
-        value: "cum_log_probs"
-      }
-      output_map {
-        key: "OUT_CONTEXT_LOGITS"
-        value: "context_logits"
-      }
-      output_map {
-        key: "OUT_GENERATION_LOGITS"
-        value: "generation_logits"
-      }
-      output_map {
-        key: "OUT_BATCH_INDEX"
-        value: "batch_index"
       }
     }
   ]
