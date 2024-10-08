@@ -628,7 +628,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType)
+    executor::RequestType requestType, bool isOrchestrator)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
     {
@@ -639,6 +639,14 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
     {
         TLLM_THROW("Streaming is only supported if model is deployed using decoupled mode.");
     }
+
+    if ((requestType == executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY
+            || requestType == executor::RequestType::REQUEST_TYPE_GENERATION_ONLY)
+        && isOrchestrator)
+    {
+        TLLM_THROW("Context-only and generation-only requests are NOT currently supported in orchestrator mode.");
+    }
+
     std::vector<executor::Request> requests;
     for (auto const& inputTensors : inputsTensors)
     {
@@ -739,10 +747,17 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
 
-        requests.emplace_back(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
+        auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
             std::nullopt, std::nullopt, encoderInputTokens);
-        requests.back().setRequestType(requestType);
+
+        executor::SizeType32 numReturnSequences;
+        if (utils::extractSingleton<int32_t>(inputTensors, InputFieldsNames::numReturnSequences, numReturnSequences))
+        {
+            request.setNumReturnSequences(numReturnSequences);
+        }
+
+        request.setRequestType(requestType);
         auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);
         if (contextPhaseParamsIt != inputTensors.end())
         {
@@ -751,8 +766,10 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
                 reinterpret_cast<char*>(contextPhaseParams->data()), contextPhaseParams->getSize());
 
             auto requestContextPhase = executor::Serialization::deserializeContextPhaseParams(buffer);
-            requests.back().setContextPhaseParams(requestContextPhase);
+            request.setContextPhaseParams(requestContextPhase);
         }
+
+        requests.emplace_back(std::move(request));
     }
     return requests;
 }

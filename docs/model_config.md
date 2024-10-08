@@ -201,6 +201,7 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output |
 | `return_context_logits` | [1] | `bool` | When `true`, include context logits in the output |
 | `return_generation_logits` | [1] | `bool` | When `true`, include generation logits in the output |
+| `num_return_sequences` | [1] | `int32_t` | Number of generated sequences per request. (Default=1) |
 | `beam_width` | [1] | `int32_t` | Beam width for this request; set to 1 for greedy sampling (Default=1) |
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |

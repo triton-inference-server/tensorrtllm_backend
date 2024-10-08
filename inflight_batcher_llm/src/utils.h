@@ -51,6 +51,7 @@ struct InputFieldsNames
     static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
+    static constexpr char const* numReturnSequences = "num_return_sequences";
     static constexpr char const* endId = "end_id";
     static constexpr char const* padId = "pad_id";
     static constexpr char const* badWords = "bad_words_list";
@@ -106,6 +107,7 @@ struct OutputFieldsNames
     static constexpr char const* outputLogProbs = "output_log_probs";
     static constexpr char const* cumLogProbs = "cum_log_probs";
     static constexpr char const* batchIndex = "batch_index";
+    static constexpr char const* sequenceIndex = "sequence_index";
     static constexpr char const* contextPhaseParams = "context_phase_params";
 };
 
@@ -153,7 +155,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType);
+    executor::RequestType requestType, bool isOrchestrator);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t

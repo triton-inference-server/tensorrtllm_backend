@@ -71,7 +71,7 @@ class TritonDecoder(Decoder):
         self._llm_outputs = [
             "output_ids", "sequence_length", "cum_log_probs",
             "output_log_probs", "context_logits", "generation_logits",
-            "batch_index"
+            "batch_index", "sequence_index"
         ]
 
         self._postproc_outputs = [
@@ -153,7 +153,8 @@ class TritonDecoder(Decoder):
             "output_log_probs": "output_log_probs",
             "context_logits": "context_logits",
             "generation_logits": "generation_logits",
-            "batch_index": "batch_index"
+            "batch_index": "batch_index",
+            "sequence_index": "sequence_index",
         }
         tensors = self.create_triton_tensors(response, name_map)
         return pb_utils.InferenceResponse(output_tensors=tensors)
@@ -484,6 +485,7 @@ class TritonDecoder(Decoder):
             "context_logits": "context_logits",
             "generation_logits": "generation_logits",
             "batch_index": "batch_index",
+            "sequence_index": "sequence_index",
         }
         return self.convert_triton_response(triton_output, GenerationResponse,
                                             name_map)
@@ -524,5 +526,6 @@ class TritonDecoder(Decoder):
                             output_log_probs=gen_res.output_log_probs,
                             context_logits=gen_res.context_logits,
                             generation_logits=gen_res.generation_logits,
-                            batch_index=gen_res.batch_index)
+                            batch_index=gen_res.batch_index,
+                            sequence_index=gen_res.sequence_index)
         return response

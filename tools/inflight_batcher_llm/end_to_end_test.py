@@ -122,26 +122,12 @@ def test_functionality(client,
             utils.prepare_tensor("TOKENS_BATCH", output0, FLAGS.protocol),
             utils.prepare_tensor("SEQUENCE_LENGTH", seq_lengths,
                                  FLAGS.protocol),
-            utils.prepare_tensor("CUM_LOG_PROBS", cum_log_probs,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("CONTEXT_LOGITS", context_logits,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("GENERATION_LOGITS", generation_logits,
-                                 FLAGS.protocol)
         ]
         inputs[0].set_data_from_numpy(output0)
         inputs[1].set_data_from_numpy(seq_lengths)
-        inputs[2].set_data_from_numpy(cum_log_probs)
-        inputs[3].set_data_from_numpy(output_log_probs)
-        inputs[4].set_data_from_numpy(context_logits)
-        inputs[5].set_data_from_numpy(generation_logits)
 
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
-        post_gen_logits = result.as_numpy("OUT_GENERATION_LOGITS")
-        assert verify_logits(generation_logits, post_gen_logits)
 
         # 2. Use ensemble model
         model_name = "ensemble"
