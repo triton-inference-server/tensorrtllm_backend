@@ -649,11 +649,14 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         // Shutdown the worker ranks which will cause them to wait for leader/orchestrator to terminate
         mExecutor->shutdown();
 
-        // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
-        // we still don't want to return from initialize since Triton server would appear as ready
-        // So exit
-        TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
-        exit(0);
+        if (mExecutor->isParticipant())
+        {
+            // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
+            // we still don't want to return from initialize since Triton server would appear as ready
+            // So exit
+            TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
+            exit(0);
+        }
     }
 }
 
