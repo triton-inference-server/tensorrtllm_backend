@@ -195,10 +195,6 @@ def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs,
         prepare_tensor("TOKENS_BATCH", output_ids_data),
         prepare_tensor("SEQUENCE_LENGTH",
                        np.array([[len(output_ids)]], dtype=np.int32)),
-        prepare_tensor("CUM_LOG_PROBS", cum_log_probs),
-        prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs),
-        prepare_tensor("CONTEXT_LOGITS", context_logits),
-        prepare_tensor("GENERATION_LOGITS", generation_logits)
     ]
 
     return inputs
