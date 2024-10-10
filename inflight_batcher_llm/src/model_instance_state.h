@@ -165,6 +165,10 @@ private:
     /// @brief Get extended runtime perf knob config
     executor::ExtendedRuntimePerfKnobConfig getExtendedRuntimePerfKnobConfigFromParams();
 
+    /// @brief Get speculative decoding config
+    executor::SpeculativeDecodingConfig getSpeculativeDecodingConfigFromParams(
+        std::optional<executor::OrchestratorConfig> orchConfig);
+
     /// @brief Get executor config
     executor::ExecutorConfig getExecutorConfigFromParams();
 
@@ -182,7 +186,8 @@ private:
 
     /// @brief Create an executor::Request from input tensors for each sample in batch
     static std::vector<executor::Request> createExecutorRequests(TRITONBACKEND_Request* request,
-        bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode);
+        bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode,
+        bool specDecFastLogits);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
@@ -239,6 +244,9 @@ private:
 
     /// @brief Boolean indicating whether it is using orchestrator mode or not
     bool mIsOrchestratorMode;
+
+    /// @brief Is speculative decoding fast logits transfer enabled
+    bool mSpeculativeDecodingFastLogits;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

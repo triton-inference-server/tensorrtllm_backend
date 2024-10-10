@@ -605,3 +605,9 @@ parameters: {
     string_value: "${multi_block_mode}"
   }
 }
+parameters: {
+  key: "speculative_decoding_fast_logits"
+  value: {
+    string_value: "${speculative_decoding_fast_logits}"
+  }
+}

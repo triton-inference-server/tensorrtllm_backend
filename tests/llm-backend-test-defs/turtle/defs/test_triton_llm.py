@@ -1777,6 +1777,10 @@ def test_llama_v3_speculative_decoding_bls(
 
     # Modify config.pbtxt
     ENABLE_KV_CACHE_REUSE = "True"
+    PARTICIPANT_IDS_DRAFT = "1,2,3,4,5,6,7,8"
+    PARTICIPANT_IDS_TARGET = "9,10,11,12,13,14,15,16"
+    PARTICIPANT_IDS = "17,18,19,20,21,22,23,24"
+    SPEC_DEC_FAST_LOGITS = "1"
     TOKENIZER_PATH = llama_v3_8b_model_root
     modify_ib_config_pbtxt(
         new_model_repo,
@@ -1805,13 +1809,18 @@ def test_llama_v3_speculative_decoding_bls(
         BLS_INSTANCE_COUNT,
         DRAFT_ENGINE_PATH=DRAFT_ENGINE_DIR,
         TARGET_ENGINE_PATH=TARGET_ENGINE_DIR,
+        PARTICIPANT_IDS_DRAFT=PARTICIPANT_IDS_DRAFT,
+        PARTICIPANT_IDS_TARGET=PARTICIPANT_IDS_TARGET,
+        PARTICIPANT_IDS=PARTICIPANT_IDS,
+        SPEC_DEC_FAST_LOGITS=SPEC_DEC_FAST_LOGITS,
     )
 
     # Launch Triton server
     launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
                                     "launch_triton_server.py")
+    model_names = "tensorrt_llm,tensorrt_llm_draft,tensorrt_llm_target"
     check_call(
-        f"python3 {launch_server_py} --model_repo={new_model_repo} --multi-model",
+        f"python3 {launch_server_py} --model_repo={new_model_repo} --tensorrt_llm_model_name {model_names} --multi-model --disable-spawn-processes --world_size=25",
         shell=True)
     check_server_ready(http_port="8000")
 
