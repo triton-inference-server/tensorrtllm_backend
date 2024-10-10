@@ -412,7 +412,8 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
     try
     {
         request = createRequestsFromInputTensors({inputsTensors}, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */)
+            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */,
+            false /* specDecFastLogits */)
                       .at(0);
         if (modelType == executor::ModelType::kENCODER_DECODER && decoderInputTokens.empty() && !padId)
         {
@@ -625,7 +626,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS1)
         // Create requests from batch size 1 tensor
         {
             auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType,
-                executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
+                executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */,
+                false /* specDecFastLogits */);
 
             EXPECT_EQ(requests.size(), 1);
             EXPECT_EQ(requests.at(0).getInputTokenIds(), inputTokens);
@@ -694,7 +696,8 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
     // Get the requests
     {
         auto requests = createRequestsFromInputTensors(inputsTensors, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
+            executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */,
+            false /* specDecFastLogits */);
         EXPECT_EQ(requests.size(), 3);
         for (int batchId = 0; batchId < inputsTensors.size(); batchId++)
         {
@@ -717,18 +720,20 @@ TEST(UtilsTest, orchestratorError)
     pushTensor<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
 
     auto requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */);
+        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */,
+        false /* specDecFastLogits */);
     createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, false /* isOrchestrator */);
+        executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, false /* isOrchestrator */, false /* specDecFastLogits */);
     createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, false /* isOrchestrator */);
+        executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, false /* isOrchestrator */, false /* specDecFastLogits */);
     createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, true /* isOrchestrator */);
+        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, true /* isOrchestrator */,
+        false /* specDecFastLogits */);
 
     try
     {
         requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, true /* isOrchestrator */);
+            executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, true /* isOrchestrator */, false /* specDecFastLogits */);
         FAIL() << "Expected exception";
     }
     catch (tensorrt_llm::common::TllmException const& e)
@@ -741,7 +746,8 @@ TEST(UtilsTest, orchestratorError)
     try
     {
         requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, true /* isOrchestrator */);
+            executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, true /* isOrchestrator */,
+            false /* specDecFastLogits */);
         FAIL() << "Expected exception";
     }
     catch (tensorrt_llm::common::TllmException const& e)

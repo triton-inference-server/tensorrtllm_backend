@@ -328,6 +328,32 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
     return executor::SchedulerConfig(schedulerPolicy);
 }
 
+executor::SpeculativeDecodingConfig ModelInstanceState::getSpeculativeDecodingConfigFromParams(
+    std::optional<executor::OrchestratorConfig> orchConfig)
+{
+    bool fastLogits = false;
+    try
+    {
+        fastLogits = model_state_->GetParameter<bool>("speculative_decoding_fast_logits");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("speculative_decoding_fast_logits is not specified, will be set to false");
+    }
+
+    if (fastLogits && (!orchConfig.has_value() || orchConfig.value().getSpawnProcesses()))
+    {
+        TLLM_LOG_WARNING(
+            "speculative_decoding_fast_logits is set, but requires orchestrator with spawn_processes disabled."
+            "Disabling fast logits.");
+        fastLogits = false;
+    }
+
+    mSpeculativeDecodingFastLogits = fastLogits;
+
+    return executor::SpeculativeDecodingConfig(fastLogits);
+}
+
 executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 {
     auto batchingType = getBatchingTypeFromParams();
@@ -415,6 +441,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     auto parallelConfig = getParallelConfigFromParams();
 
     auto extendedRuntimePerfKnobConfig = getExtendedRuntimePerfKnobConfigFromParams();
+
+    auto specDecConfig = getSpeculativeDecodingConfigFromParams(parallelConfig.getOrchestratorConfig());
 
     std::optional<executor::DecodingMode> decodingMode = std::nullopt;
     try
@@ -513,10 +541,12 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
     }
 
-    return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
+    auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
         parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs);
+        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs};
+    execConfig.setSpecDecConfig(specDecConfig);
+    return execConfig;
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -710,14 +740,15 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 
 // Split batched TRITONBACKEND_Request into one executor:Request object per sample.
 std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITONBACKEND_Request* request,
-    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator)
+    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator,
+    bool specDecFastLogits)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
     executor::RequestType requestType = utils::getRequestType(request);
 
-    return utils::createRequestsFromInputTensors(
-        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType, isOrchestrator);
+    return utils::createRequestsFromInputTensors(inputsTensors, excludeInputFromOutput, isDecoupled, streaming,
+        modelType, requestType, isOrchestrator, specDecFastLogits);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -746,7 +777,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             }
 
             auto executorRequests = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput,
-                isDecoupled(), mModelType, mIsOrchestratorMode);
+                isDecoupled(), mModelType, mIsOrchestratorMode, mSpeculativeDecodingFastLogits);
 
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             TRITONBACKEND_ResponseFactory* factory;
@@ -907,6 +938,18 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(
                         result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                }
+                else if (result.specDecFastLogitsInfo.has_value())
+                {
+                    auto const& logitsInfo = result.specDecFastLogitsInfo.value();
+                    size_t const numLogitsNeeded = (sizeof(logitsInfo) + 1) / sizeof(float);
+                    std::vector<int64_t> generationLogitsShape{1, 1, 1, numLogitsNeeded};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    std::vector<float> data(numLogitsNeeded);
+                    std::memcpy(data.data(), &logitsInfo, sizeof(logitsInfo));
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(data, generationLogitsBuffer, generationLogitsShape);
                 }
                 else
                 {

@@ -143,7 +143,7 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
 
 /// @brief Construct executor::ExternalDraftTokensConfig from input tensors
 std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
-    InputTensors const& inputsTensors);
+    InputTensors const& inputsTensors, bool const fastLogits);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
 std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
@@ -155,7 +155,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator);
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t
