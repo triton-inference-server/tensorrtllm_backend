@@ -17,7 +17,7 @@ BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:trit
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
-TURTLE_BRANCH = "main"
+TURTLE_BRANCH = "v6.4.7"
 TURTLE_ROOT = "turtle"
 
 // TODO: Move common variables to an unified location
