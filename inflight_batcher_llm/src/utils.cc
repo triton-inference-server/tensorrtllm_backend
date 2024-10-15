@@ -539,7 +539,7 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
 }
 
 std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
-    InputTensors const& inputsTensors)
+    InputTensors const& inputsTensors, bool const fastLogits)
 {
     std::optional<executor::ExternalDraftTokensConfig> externalDraftTokensConfig = std::nullopt;
 
@@ -562,7 +562,7 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
             inputsTensors, InputFieldsNames::draftAcceptanceThreshold, draftAcceptanceThreshold);
 
         externalDraftTokensConfig
-            = executor::ExternalDraftTokensConfig(draftInputs, draftLogits, draftAcceptanceThreshold);
+            = executor::ExternalDraftTokensConfig(draftInputs, draftLogits, draftAcceptanceThreshold, fastLogits);
     }
     return externalDraftTokensConfig;
 }
@@ -628,7 +628,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator)
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
     {
@@ -745,7 +745,8 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
 
-        auto externalDraftTokensConfig = utils::getExternalDraftTokensConfigFromTensors(inputTensors);
+        auto externalDraftTokensConfig
+            = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
