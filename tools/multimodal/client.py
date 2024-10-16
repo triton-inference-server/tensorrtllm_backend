@@ -52,6 +52,15 @@ def prepare_inputs(text_data, image_data, request_output_len_data,
     return inputs
 
 
+def load_image(image_path):
+    if image_path.startswith("http") or image_path.startswith("https"):
+        image = Image.open(requests.get(image_path,
+                                        stream=True).raw).convert("RGB")
+    else:
+        image = Image.open(image_path).convert("RGB")
+    return image
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -171,11 +180,23 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model_type",
                         required=True,
-                        choices=['blip2', 'llava'],
+                        choices=['blip2', 'llava', 'vila'],
                         help="Model type")
+    parser.add_argument("--hf_model_dir",
+                        required=False,
+                        type=str,
+                        default=None,
+                        help="path to the model directory")
     FLAGS = parser.parse_args()
+    # load and process images
+    if 'vila' in FLAGS.model_type:
+        image_paths = FLAGS.image.split(",")
+        raw_image = []
+        for image_path in image_paths:
+            raw_image.append(load_image(image_path))
+    else:
+        raw_image = load_image(FLAGS.image)
 
-    raw_image = Image.open(requests.get(FLAGS.image, stream=True).raw)
     if 'blip2' in FLAGS.model_type:
         processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
         image = processor(raw_image, FLAGS.text,
@@ -185,8 +206,25 @@ if __name__ == "__main__":
         image = processor(text=FLAGS.text,
                           images=raw_image,
                           return_tensors="pt")['pixel_values']
-    image_data = image.numpy().astype(np.float16)
+    elif 'vila' in FLAGS.model_type:
+        # vila support multiple images input
+        sys.path.append(FLAGS.hf_model_dir + "/../VILA")
+        from llava.model import LlavaLlamaConfig  # noqa
+        from transformers import AutoModel
+        model = AutoModel.from_pretrained(
+            FLAGS.hf_model_dir,
+            device_map='auto',
+            trust_remote_code=True,
+        )
+        vision_tower = model.get_vision_tower()
+        image_processor = vision_tower.image_processor
+        from llava.mm_utils import process_images
+        if not isinstance(raw_image, list):
+            raw_image = [raw_image]
+        image = process_images(raw_image, image_processor, model.config)
 
+    image = image.unsqueeze(0)
+    image_data = image.numpy().astype(np.float16)
     text_data = np.array([[FLAGS.text.encode("utf8")]], dtype=np.object_)
     end_id_data = np.array([[FLAGS.end_id]], dtype=np.int32)
     pad_id_data = np.array([[FLAGS.pad_id]], dtype=np.int32)
