@@ -17,6 +17,8 @@ BART=/home/scratch.trt_llm_data/llm-models/bart-large-cnn/
 T5=/home/scratch.trt_llm_data/llm-models/t5-small/
 BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
 LLAVA_7B=/home/scratch.trt_llm_data/llm-models/llava-1.5-7b-hf
+VILA1_5_3B=/home/scratch.trt_llm_data/llm-models/vila/VILA1.5-3b
+VILA_PATH=/home/scratch.trt_llm_data/llm-models/vila/VILA
 
 set -e
 
@@ -473,6 +475,31 @@ if [ "$MODEL" = "llava" ]; then
                 --output_dir trt_engines/llava-7b/fp16/1-gpu
 
     python build_visual_engine.py --model_path ${LLAVA_7B} --model_type llava --max_batch_size 8
+
+    popd # tensorrt_llm/examples/multimodal
+
+fi
+
+if [ "$MODEL" = "vila" ]; then
+
+    echo "Install vila requirements"
+    pip install -r all_models/multimodal/requirements-vila.txt
+
+    pushd tensorrt_llm/examples/multimodal
+
+    echo "Convert LLaMA from HF"
+    python3 ../llama/convert_checkpoint.py --model_dir ${VILA1_5_3B} --dtype float16 --output_dir ./c-model/vila1.5-3b/fp16
+
+    echo "LLAVA builder"
+    trtllm-build --checkpoint_dir ./c-model/vila1.5-3b/fp16 \
+                --gemm_plugin float16 \
+                --max_batch_size 8 \
+                --max_input_len 2048 \
+                --max_seq_len 2560 \
+                --max_multimodal_len 6272 \
+                --output_dir trt_engines/vila1.5-3b/fp16/1-gpu
+
+    python build_visual_engine.py --model_path ${VILA1_5_3B} --model_type vila --max_batch_size 32 --vila_path ${VILA_PATH}
 
     popd # tensorrt_llm/examples/multimodal
 

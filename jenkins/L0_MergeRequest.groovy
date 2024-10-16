@@ -413,6 +413,9 @@ def runTRTLLMBackendTest(caseName)
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*decode*.py"
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm/1 python3 -m pytest all_models/tests/test_python_backend.py"
     }
+    else if (caseName.contains("python-preproc-unit-tests")){
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/preprocessing/1 python3 -m pytest all_models/tests/test_multi_image_preprocess.py"
+    }
     else if (caseName.contains("bart-ib") || caseName.contains("t5-ib")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
@@ -706,6 +709,11 @@ pipeline {
               stage("Test BLS python unit tests") {
                 steps {
                   runTRTLLMBackendTest("python-bls-unit-tests")
+                }
+              }
+              stage("Test preprocessing python unit tests") {
+                steps {
+                  runTRTLLMBackendTest("python-preproc-unit-tests")
                 }
               }
               stage("Test blip2-opt") {
