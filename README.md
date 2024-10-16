@@ -738,6 +738,10 @@ nv_trt_llm_inflight_batcher_metrics{inflight_batcher_specific_metric="total_cont
 # TYPE nv_trt_llm_general_metrics gauge
 nv_trt_llm_general_metrics{general_type="iteration_counter",model="tensorrt_llm",version="1"} 0
 nv_trt_llm_general_metrics{general_type="timestamp",model="tensorrt_llm",version="1"} 1700074049
+# HELP nv_trt_llm_disaggregated_serving_metrics TRT LLM disaggregated serving metrics
+# TYPE nv_trt_llm_disaggregated_serving_metrics counter
+nv_trt_llm_disaggregated_serving_metrics{disaggregated_serving_type="kv_cache_transfer_ms",model="tensorrt_llm",version="1"} 0
+nv_trt_llm_disaggregated_serving_metrics{disaggregated_serving_type="request_count",model="tensorrt_llm",version="1"} 0
 ```
 
 If, instead, you launched a V1 model, your output will look similar to the

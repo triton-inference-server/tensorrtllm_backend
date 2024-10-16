@@ -27,6 +27,7 @@
 
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -57,7 +58,8 @@ public:
     /// \param version The version of the model to provide a metrics
     /// group for.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* CreateGroup(std::string const& model_name, const uint64_t version);
+    TRITONSERVER_Error* CreateGroup(std::string const& model_name, const uint64_t version,
+        TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE);
 
     /// Update the Triton metrics associated with this group using
     /// the parsed TRT LLM backend statistics values.
@@ -65,7 +67,7 @@ public:
     /// \param values Values parsed from the TRT LLM backend
     /// statistics output, filtered by this group's JSON keys.
     /// \return a TRITONSERVER_Error indicating success or failure.
-    TRITONSERVER_Error* UpdateGroup(std::vector<uint64_t>& values);
+    TRITONSERVER_Error* UpdateGroup(std::vector<double>& values);
 
     /// Return a list of JSON keys that correspond to the TRT LLM
     /// statistics handled by this metric group.
@@ -113,6 +115,7 @@ public:
 private:
     std::unique_ptr<TRITONSERVER_MetricFamily, MetricFamilyDeleter> metric_family_;
     std::vector<std::unique_ptr<TRITONSERVER_Metric, MetricDeleter>> metrics_;
+    std::function<struct TRITONSERVER_Error*(struct TRITONSERVER_Metric*, double)> update_function_;
     std::string metric_family_label_;
     std::string metric_family_description_;
     std::string category_label_;
@@ -158,6 +161,9 @@ public:
     static const std::vector<std::string> kv_cache_keys_;
     static const std::vector<std::string> kv_cache_labels_;
 
+    static const std::vector<std::string> dis_serving_keys_;
+    static const std::vector<std::string> dis_serving_labels_;
+
     static const std::vector<std::string> v1_specific_keys_;
     static const std::vector<std::string> v1_specific_labels_;
 
@@ -172,6 +178,7 @@ private:
     std::unique_ptr<TritonMetricGroup> request_metric_family_;
     std::unique_ptr<TritonMetricGroup> runtime_memory_metric_family_;
     std::unique_ptr<TritonMetricGroup> kv_cache_metric_family_;
+    std::unique_ptr<TritonMetricGroup> dis_serving_metric_family_;
     std::unique_ptr<TritonMetricGroup> model_type_metric_family_;
     std::unique_ptr<TritonMetricGroup> general_metric_family_;
 };
