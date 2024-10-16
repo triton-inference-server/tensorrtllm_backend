@@ -46,6 +46,9 @@ const std::vector<std::string> CustomMetricsReporter::kv_cache_keys_{"Max KV cac
     "Used KV cache blocks", "Tokens per KV cache block", "Reused KV cache blocks"};
 const std::vector<std::string> CustomMetricsReporter::kv_cache_labels_{"max", "free", "used", "tokens_per", "reused"};
 
+const std::vector<std::string> CustomMetricsReporter::dis_serving_keys_{"KV cache transfer time", "Request count"};
+const std::vector<std::string> CustomMetricsReporter::dis_serving_labels_{"kv_cache_transfer_ms", "request_count"};
+
 const std::vector<std::string> CustomMetricsReporter::v1_specific_keys_{
     "Total Context Tokens", "Total Generation Tokens", "Empty Generation Slots"};
 const std::vector<std::string> CustomMetricsReporter::v1_specific_labels_{
@@ -85,12 +88,23 @@ TritonMetricGroup::TritonMetricGroup(std::string const& metric_family_label,
 {
 }
 
-TRITONSERVER_Error* TritonMetricGroup::CreateGroup(std::string const& model_name, const uint64_t version)
+TRITONSERVER_Error* TritonMetricGroup::CreateGroup(
+    std::string const& model_name, const uint64_t version, TRITONSERVER_MetricKind kind)
 {
     TRITONSERVER_MetricFamily* metric_family = nullptr;
-    RETURN_IF_ERROR(TRITONSERVER_MetricFamilyNew(&metric_family, TRITONSERVER_METRIC_KIND_GAUGE,
-        metric_family_label_.c_str(), metric_family_description_.c_str()));
+    RETURN_IF_ERROR(TRITONSERVER_MetricFamilyNew(
+        &metric_family, kind, metric_family_label_.c_str(), metric_family_description_.c_str()));
     metric_family_.reset(metric_family);
+
+    // overloading metris kind to determine update action as well
+    switch (kind)
+    {
+    case TRITONSERVER_METRIC_KIND_GAUGE: update_function_ = decltype(update_function_){TRITONSERVER_MetricSet}; break;
+    case TRITONSERVER_METRIC_KIND_COUNTER:
+        update_function_ = decltype(update_function_){TRITONSERVER_MetricIncrement};
+        break;
+    default: return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_UNSUPPORTED, "unsupported Triton metrics kind"); break;
+    }
 
     std::vector<TRITONSERVER_Parameter const*> labels;
     std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_label(
@@ -115,11 +129,11 @@ TRITONSERVER_Error* TritonMetricGroup::CreateGroup(std::string const& model_name
     return nullptr; // success
 }
 
-TRITONSERVER_Error* TritonMetricGroup::UpdateGroup(std::vector<uint64_t>& values)
+TRITONSERVER_Error* TritonMetricGroup::UpdateGroup(std::vector<double>& values)
 {
     for (size_t i = 0; i < values.size(); ++i)
     {
-        RETURN_IF_ERROR(TRITONSERVER_MetricSet(metrics_[i].get(), values[i]));
+        RETURN_IF_ERROR(update_function_(metrics_[i].get(), values[i]));
     }
     return nullptr; // success
 }
@@ -152,6 +166,14 @@ TRITONSERVER_Error* CustomMetricsReporter::InitializeReporter(
 
     RETURN_IF_ERROR(kv_cache_metric_family_->CreateGroup(model_name, version));
     metric_groups_.push_back(std::move(kv_cache_metric_family_));
+
+    /* DISAGGREGATED SERVING METRIC GROUP */
+    dis_serving_metric_family_ = std::make_unique<TritonMetricGroup>("nv_trt_llm_disaggregated_serving_metrics",
+        "TRT LLM disaggregated serving metrics", "disaggregated_serving_type", dis_serving_keys_, dis_serving_labels_);
+
+    // This group is created as counter because it is aggregation on request statistics
+    RETURN_IF_ERROR(dis_serving_metric_family_->CreateGroup(model_name, version, TRITONSERVER_METRIC_KIND_COUNTER));
+    metric_groups_.push_back(std::move(dis_serving_metric_family_));
 
     /* MODEL-TYPE METRIC GROUP (V1 / IFB) */
     std::string model = (is_v1_model) ? "v1" : "inflight_batcher";
@@ -193,11 +215,11 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const
     for (auto const& metric_group : metric_groups_)
     {
         std::vector<std::string> metric_group_keys = metric_group->JsonKeys();
-        std::vector<uint64_t> metric_group_values;
+        std::vector<double> metric_group_values;
         for (auto const& key : metric_group_keys)
         {
             triton::common::TritonJson::Value value_json;
-            uint64_t value;
+            double value;
             if (!metrics.Find(key.c_str(), &value_json))
             {
                 std::string errStr = std::string("Failed to find " + key + " in metrics.");
@@ -211,7 +233,7 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const
             }
             else
             {
-                value_json.AsUInt(&value);
+                value_json.AsDouble(&value);
             }
 
             metric_group_values.push_back(value);

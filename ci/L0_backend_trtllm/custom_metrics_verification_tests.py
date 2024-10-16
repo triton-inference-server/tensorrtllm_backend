@@ -56,6 +56,9 @@ metric_to_stat_dict = {
     "v1_specific_metric=empty_generation_slots": "Empty Generation Slots",
     "general_type=iteration_counter": "Iteration Counter",
     "general_type=timestamp": "Timestamp",
+    "disaggregated_serving_type=kv_cache_transfer_ms":
+    "KV cache transfer time",
+    "disaggregated_serving_type=request_count": "Request count",
 }
 
 
@@ -118,8 +121,13 @@ class CustomMetricsTest(unittest.TestCase):
             list(metrics.keys()).sort())
         for metric_key in stats.keys():
             if metric_key != "Timestamp":
-                self.assertEqual(int(stats[metric_key]),
-                                 int(metrics[metric_key]))
+                # [FIXME] The current parsing logic only returns the latest reported
+                # values, which is insufficient for accumulated metrics as the
+                # latest metrics value is already accumulated whereas the log
+                # only reports the value in one measurement.
+                self.assertEqual(
+                    int(stats[metric_key]), int(metrics[metric_key]),
+                    f"{metric_key} stats value doesn't match metrics value")
             else:
                 dt_log = datetime.strptime(stats[metric_key],
                                            '%m-%d-%Y %H:%M:%S.%f')
