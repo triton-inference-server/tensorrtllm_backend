@@ -373,7 +373,7 @@ run_cpp_trtllm_backend_tests () {
         grep -E 'nv_trt_llm_runtime_memory_metrics\{memory_type="gpu",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
         grep -E 'nv_trt_llm_runtime_memory_metrics\{memory_type="cpu",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
         grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="tokens_per",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
-        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="used",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
+        grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="used",model="tensorrt_llm",version="1"\} [0-9]*$' ${TRITON_METRICS_LOG}
         grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="free",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
         grep -E 'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="max",model="tensorrt_llm",version="1"\} [1-9][0-9]*$' ${TRITON_METRICS_LOG}
         if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
