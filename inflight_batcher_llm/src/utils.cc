@@ -519,9 +519,15 @@ executor::SamplingConfig getSamplingConfigFromTensors(InputTensors const& inputs
     std::optional<uint64_t> randomSeed{std::nullopt};
     extractOptionalSingleton<uint64_t>(inputsTensors, InputFieldsNames::randomSeed, randomSeed);
 
+    std::optional<int32_t> noRepeatNgramSize{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::noRepeatNgramSize, noRepeatNgramSize);
+
+    std::optional<int32_t> numReturnSequences{std::nullopt};
+    extractOptionalSingleton<int32_t>(inputsTensors, InputFieldsNames::numReturnSequences, numReturnSequences);
+
     return executor::SamplingConfig(beamWidth, topK, topP, topPMin, topPResetIds, topPDecay, randomSeed, temperature,
         minLength, beamSearchDiversityRate, repetitionPenalty, presencePenalty, frequencyPenalty, lengthPenalty,
-        earlyStopping);
+        earlyStopping, noRepeatNgramSize, numReturnSequences);
 }
 
 executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTensors)
@@ -751,12 +757,6 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
             std::nullopt, std::nullopt, encoderInputTokens);
-
-        executor::SizeType32 numReturnSequences;
-        if (utils::extractSingleton<int32_t>(inputTensors, InputFieldsNames::numReturnSequences, numReturnSequences))
-        {
-            request.setNumReturnSequences(numReturnSequences);
-        }
 
         request.setRequestType(requestType);
         auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);

@@ -486,7 +486,6 @@ void checkRequest(tensorrt_llm::executor::Request const& request,
         }
     }
     EXPECT_EQ(request.getMaxNewTokens(), 8);
-    EXPECT_EQ(request.getNumReturnSequences(), 29);
     EXPECT_EQ(request.getEndId().value(), 11);
     if (padId)
     {
@@ -537,6 +536,7 @@ void checkRequest(tensorrt_llm::executor::Request const& request,
     EXPECT_EQ(samplingConfig.getPresencePenalty().value(), 0.2f);
     EXPECT_EQ(samplingConfig.getFrequencyPenalty().value(), 0.3f);
     EXPECT_EQ(samplingConfig.getRandomSeed().value(), 3456);
+    EXPECT_EQ(samplingConfig.getNumReturnSequences().value(), 29);
 }
 
 TEST(UtilsTest, createRequestFromInputTensors)

@@ -2082,6 +2082,7 @@ def test_blip2_opt(
     run_cmd = [
         f"{llm_backend_multimodal_example_root}/client.py",
         "--model_type=blip2",
+        f"--hf_model_dir={blip2_opt_model_root}",
     ]
     if DECOUPLED_MODE == "True":
         run_cmd += [
@@ -2242,6 +2243,7 @@ def test_llava(
     run_cmd = [
         f"{llm_backend_multimodal_example_root}/client.py",
         "--model_type=llava",
+        f"--hf_model_dir={llava_model_root}",
     ]
     if DECOUPLED_MODE == "True":
         run_cmd += [

@@ -198,11 +198,22 @@ if __name__ == "__main__":
         raw_image = load_image(FLAGS.image)
 
     if 'blip2' in FLAGS.model_type:
-        processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        if FLAGS.hf_model_dir is not None and os.path.exists(
+                FLAGS.hf_model_dir):
+            processor = Blip2Processor.from_pretrained(FLAGS.hf_model_dir)
+        else:
+            processor = Blip2Processor.from_pretrained(
+                "Salesforce/blip2-opt-2.7b")
         image = processor(raw_image, FLAGS.text,
                           return_tensors="pt")['pixel_values']
     elif 'llava' in FLAGS.model_type:
-        processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+        if FLAGS.hf_model_dir is not None and os.path.exists(
+                FLAGS.hf_model_dir):
+            processor = AutoProcessor.from_pretrained(FLAGS.hf_model_dir)
+        else:
+            processor = AutoProcessor.from_pretrained(
+                "llava-hf/llava-1.5-7b-hf")
+
         image = processor(text=FLAGS.text,
                           images=raw_image,
                           return_tensors="pt")['pixel_values']
