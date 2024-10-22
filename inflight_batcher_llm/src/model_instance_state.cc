@@ -1197,6 +1197,32 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Reused KV cache blocks\":" + std::to_string(kvStats.reusedBlocks) + ",");
             }
 
+            // requestStats is a list where each item is associated with an iteration,
+            // currently the metrics related to request stats only concern with aggregated
+            // results so that we can retrieve request stats and process all of them
+            // whenever metrics is to be reported.
+            auto requestStats = mExecutor->getLatestRequestStats();
+            double totalKvCacheTransferMS = 0;
+            size_t requestCount = 0;
+            for (auto const& iteration : requestStats)
+            {
+                for (auto const& request : iteration.requestStats)
+                {
+                    // only check and aggregate results when request is completed
+                    if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
+                    {
+                        if (request.disServingStats.has_value())
+                        {
+                            auto const& disServingStats = request.disServingStats.value();
+                            totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
+                            requestCount++;
+                        }
+                    }
+                }
+            }
+            statJson.append("\"KV cache transfer time\":" + std::to_string(totalKvCacheTransferMS) + ",");
+            statJson.append("\"Request count\":" + std::to_string(requestCount) + ",");
+
             statJson.back() = '}';
 
             LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, statJson.c_str());

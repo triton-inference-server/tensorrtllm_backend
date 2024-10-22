@@ -62,6 +62,22 @@ class TritonPythonModel:
             'add_special_tokens')
         visual_model_path = model_config['parameters']['visual_model_path'][
             'string_value']
+        max_num_images = model_config['parameters'].get('max_num_images')
+
+        if max_num_images is not None:
+            max_num_images_str = max_num_images['string_value']
+            if max_num_images_str.isdigit():
+                self.max_num_images = int(max_num_images_str)
+            else:
+                print(
+                    f"[TensorRT-LLM][WARNING] 'max_num_images' parameter is not set correctly (value is {max_num_images_str}). Will be set to None"
+                )
+                self.max_num_images = None
+        else:
+            print(
+                f"[TensorRT-LLM][WARNING] Don't setup 'max_num_images'. Set it as None by default."
+            )
+            self.max_num_images = None
         if visual_model_path == "${visual_model_path}" or visual_model_path == "":
             visual_model_path = None
 
@@ -88,6 +104,7 @@ class TritonPythonModel:
                                                        legacy=False,
                                                        padding_side='left',
                                                        trust_remote_code=True)
+
         if isinstance(self.tokenizer, T5Tokenizer):
             self.tokenizer_bos_id = self.tokenizer.sp_model.bos_id()
 
@@ -101,6 +118,8 @@ class TritonPythonModel:
         self.vocab_size = self.tokenizer.vocab_size
 
         self.is_multimodal = False
+        self.model_type = None
+
         if visual_model_path is not None:
             self.is_multimodal = True
             visual_model_path = os.path.join(visual_model_path, 'config.json')
@@ -110,8 +129,8 @@ class TritonPythonModel:
                 'model_type']
 
             assert self.model_type in [
-                'llava', 'blip2-opt'
-            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava and blip2-opt"
+                'llava', 'blip2-opt', 'vila'
+            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt and vila. Got {self.model_type}."
 
             llm_model_path = model_config['parameters']['gpt_model_path'][
                 'string_value']
@@ -152,6 +171,8 @@ class TritonPythonModel:
 
         num_visual_features = max_prompt_embedding_table_size // max_batch_size
         hidden_size = llm_model_config['pretrained_config']['hidden_size']
+        if self.max_num_images is not None:
+            num_visual_features = num_visual_features // self.max_num_images
 
         self.ptable_shape = (-1, num_visual_features, hidden_size)
 
@@ -328,6 +349,122 @@ class TritonPythonModel:
         """
         print('Cleaning up...')
 
+    def _split_prompt_by_images(self,
+                                concatenated_ids,
+                                image_token_index=-200):
+        """
+        Splits tokenized prompts by image placeholders for each sample in the batch.
+
+        Args:
+            concatenated_ids (np.ndarray): A batch of concatenated token IDs, where image placeholders are indicated by `image_token_index`.
+
+        Returns:
+            List[List[np.ndarray]]: A list containing lists of token ID arrays for each prompt segment, per batch sample.
+        """
+        batch_splits = []
+        for batch in concatenated_ids:
+            zero_indices = np.where(batch == image_token_index)[0]
+            start_idx = 0
+            splits = []
+            for idx in zero_indices:
+                if start_idx != idx:
+                    splits.append(batch[start_idx:idx].reshape(1, -1))
+                start_idx = idx + 1
+            if start_idx < len(batch):
+                splits.append(batch[start_idx:].reshape(1, -1))
+
+            splits = [split for split in splits if split.size > 0]
+            batch_splits.append(splits)
+
+        return batch_splits
+
+    def _setup_fake_prompts(self, batch_size, batch_split_prompts):
+        """
+        Replaces image placeholders with unique fake prompt IDs for multi-image inputs.
+
+        Args:
+            batch_size (int): The number of samples in the batch.
+            batch_split_prompts (List[List[np.ndarray]]): Tokenized prompt segments for each batch sample.
+
+        Returns:
+            np.ndarray: An array of input IDs with image placeholders replaced by fake prompt IDs.
+        """
+
+        num_visual_features = self.ptable_shape[1]
+        input_ids_list = []
+
+        for batch_idx in range(batch_size):
+            splits = batch_split_prompts[batch_idx]
+            sample_input_ids = [splits[0]]
+            sample_fake_prompt_counter = self.vocab_size
+
+            for split_idx in range(len(splits) - 1):
+                fake_prompt_id = np.arange(
+                    sample_fake_prompt_counter,
+                    sample_fake_prompt_counter + num_visual_features)
+                sample_fake_prompt_counter += num_visual_features
+                fake_prompt_id = np.expand_dims(fake_prompt_id, axis=0)
+                sample_input_ids.append(fake_prompt_id)
+                sample_input_ids.append(splits[split_idx + 1])
+
+            sample_input_ids = np.concatenate(sample_input_ids, axis=1)
+            input_ids_list.append(sample_input_ids)
+
+        # Pad the input_ids to the same length for bs > 1
+        max_seq_len = max(
+            [sample_input_ids.shape[1] for sample_input_ids in input_ids_list])
+        input_ids_padded = []
+        for sample_input_ids in input_ids_list:
+            seq_len = sample_input_ids.shape[1]
+            pad_width = max_seq_len - seq_len
+            if pad_width > 0:
+                sample_input_ids_padded = np.pad(
+                    sample_input_ids, ((0, 0), (0, pad_width)),
+                    'constant',
+                    constant_values=self.tokenizer_pad_id)
+            else:
+                sample_input_ids_padded = sample_input_ids
+            input_ids_padded.append(sample_input_ids_padded)
+
+        input_ids = np.stack(input_ids_padded)
+        input_ids = input_ids.reshape(batch_size, -1).astype(np.int32)
+
+        return input_ids
+
+    def _process_multi_image_inputs(self, query, image_token_index=-200):
+        """
+        Processes input queries that contain multiple images by tokenizing the input strings and inserting image_token_index between the parts.
+
+        Args:
+            query (np.ndarray): Batch of input strings.
+
+        Returns:
+            List[np.ndarray]: List of tokenized input IDs for each sample.
+        """
+        start_ids = []
+        for s in query:
+            parts = s[0].decode().split('<image>')
+            num_images = len(parts) - 1
+            if num_images > self.max_num_images:
+                raise ValueError(
+                    f"The number of images in the request ({num_images}) exceeds the maximum allowed ({self.max_num_images})."
+                )
+            tokenized_parts = [
+                self.tokenizer.encode(part, add_special_tokens=False)
+                for part in parts
+            ]
+
+            # Insert `image_token_index` between the parts to represent <image>
+            final_ids = []
+            for i, part in enumerate(tokenized_parts):
+                final_ids.extend(part)
+                if i < len(tokenized_parts) - 1:
+                    final_ids.append(image_token_index)
+
+            start_ids.append(np.array(final_ids).astype(int))
+
+        return start_ids
+
     def _create_request(self, query):
         """
             query : batch string (2D numpy array)
@@ -339,13 +476,17 @@ class TritonPythonModel:
                          ).astype(int) for s in query
             ]
         else:
-            start_ids = [
-                np.array(
-                    self.tokenizer.encode(
-                        s[0].decode(),
-                        add_special_tokens=self.add_special_tokens)).astype(
-                            int) for s in query
-            ]
+            if self.is_multimodal and self.max_num_images and self.max_num_images > 1:
+                start_ids = self._process_multi_image_inputs(query)
+
+            else:
+                start_ids = [
+                    np.array(
+                        self.tokenizer.encode(s[0].decode(),
+                                              add_special_tokens=self.
+                                              add_special_tokens)).astype(int)
+                    for s in query
+                ]
 
         if self.is_multimodal:
             if 'blip2' in self.model_type:
@@ -354,35 +495,43 @@ class TritonPythonModel:
             elif 'llava' == self.model_type:
                 pre_prompt = "USER:\n"
                 post_prompt = " ASSISTANT:"
+            elif 'vila' == self.model_type:
+                pre_prompt = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: "
+                post_prompt = " ASSISTANT:"
 
             fake_prompt_id = np.arange(self.vocab_size,
                                        self.vocab_size + self.ptable_shape[1])
 
-            if pre_prompt is not None:
-                pre_prompt_id = np.array(
-                    self.tokenizer.encode(
-                        pre_prompt,
-                        add_special_tokens=self.add_special_tokens,
-                        padding=True))
+            pre_prompt_id = np.array(
+                self.tokenizer.encode(
+                    pre_prompt,
+                    add_special_tokens=self.add_special_tokens,
+                    padding=True)) if pre_prompt is not None else np.array(
+                        [], dtype=int)
 
-            if post_prompt is not None:
-                post_prompt_id = np.array(
-                    self.tokenizer.encode(
-                        post_prompt,
-                        add_special_tokens=self.add_special_tokens,
-                        padding=True))
+            post_prompt_id = np.array(
+                self.tokenizer.encode(
+                    post_prompt,
+                    add_special_tokens=self.add_special_tokens,
+                    padding=True)) if post_prompt is not None else np.array(
+                        [], dtype=int)
 
-            if post_prompt is None:
-                start_ids = [
-                    np.concatenate((fake_prompt_id, ids), axis=0)
-                    for ids in start_ids
+            if self.max_num_images and self.max_num_images > 1:
+                concatenated_ids = [
+                    np.concatenate((pre_prompt_id, ids, post_prompt_id),
+                                   axis=0) for ids in start_ids
                 ]
+                batch_split_prompts = self._split_prompt_by_images(
+                    concatenated_ids)
+                start_ids = self._setup_fake_prompts(query.shape[0],
+                                                     batch_split_prompts)
             else:
                 start_ids = [
                     np.concatenate(
                         (pre_prompt_id, fake_prompt_id, ids, post_prompt_id),
                         axis=0) for ids in start_ids
                 ]
+
         start_lengths = np.array([[len(ids)] for ids in start_ids]).astype(int)
 
         max_len = 0
