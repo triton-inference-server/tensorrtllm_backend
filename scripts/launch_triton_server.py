@@ -48,7 +48,7 @@ def parse_arguments():
     parser.add_argument(
         '--log-file',
         type=str,
-        help='path to triton log gile',
+        help='path to triton log file',
         default='triton_log.txt',
     )
 
