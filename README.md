@@ -224,6 +224,9 @@ python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/postprocessing/config.pbtxt t
 python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT}
 ```
 
+> **NOTE**:
+It is recommended to match the number of pre/post_instance_counts with triton_max_batch_size for better performance.
+
 #### Serving with Triton
 
 Now, you're ready to launch the Triton server with the TensorRT-LLM model.
@@ -457,6 +460,7 @@ to the [support matrix](https://nvidia.github.io/TensorRT-LLM/reference/support-
   - [Build and run a Mixtral model in TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/mixtral/README.md)
 
 - Multi-modal
+  - [End to end workflow to run multimodal models(e.g. BLIP2-OPT, LLava1.5-7B, VILA) with Triton](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/multimodal.md)
   - [Deploying Hugging Face Llava1.5-7b Model in Triton](https://github.com/triton-inference-server/tutorials/blob/main/Popular_Models_Guide/Llava1.5/llava_trtllm_guide.md)
 
 - Encoder-Decoder
