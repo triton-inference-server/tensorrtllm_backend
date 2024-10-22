@@ -51,6 +51,7 @@ struct InputFieldsNames
     static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
+    static constexpr char const* noRepeatNgramSize = "no_repeat_ngram_size";
     static constexpr char const* numReturnSequences = "num_return_sequences";
     static constexpr char const* endId = "end_id";
     static constexpr char const* padId = "pad_id";

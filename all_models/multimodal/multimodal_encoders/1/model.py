@@ -133,6 +133,13 @@ class TritonPythonModel:
             img_tensor = pb_utils.get_input_tensor_by_name(request, 'IMAGE')
             img_tensor = from_dlpack(img_tensor.to_dlpack()).pin_memory()
             batch_size = img_tensor.shape[0]
+            num_images = img_tensor.shape[1]
+
+            img_tensor = img_tensor.view(batch_size * num_images,
+                                         img_tensor.shape[2],
+                                         img_tensor.shape[3],
+                                         img_tensor.shape[4])
+
             vit_output_info = self.image_session.infer_shapes([
                 TensorInfo('input', str_dtype_to_trt(self.vision_dtype_str),
                            img_tensor.shape)
@@ -154,14 +161,21 @@ class TritonPythonModel:
             self.vision_stream.synchronize()
             vision_prompt_vocab_size = np.array(
                 [[vision_prompt_table.shape[1]]])
-            vision_prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
-                                                 batch_size,
-                                                 axis=0)
 
-            # NOTE
-            # User can concat the prompt table and prompt vocab size after another session
-            prompt_table = vision_prompt_table
-            prompt_vocab_size = vision_prompt_vocab_size
+            # Concatenate the prompt tables if there are multiple images in single request
+            if num_images > 1:
+                prompt_table = vision_prompt_table.view(
+                    batch_size, -1, vision_prompt_table.shape[-1])
+                prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
+                                              batch_size,
+                                              axis=0)
+            else:
+                # Use the single prompt table directly
+                vision_prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
+                                                     batch_size,
+                                                     axis=0)
+                prompt_table = vision_prompt_table
+                prompt_vocab_size = vision_prompt_vocab_size
 
             prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
                 'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
