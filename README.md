@@ -599,7 +599,7 @@ policy via the `batch_scheduler_policy` parameter in the
 See the
 [KV Cache](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-attention.md#kv-cache)
 section for more details on how TensorRT-LLM supports KV cache. Also, check out
-the [KV Cache Reuse](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/kv_cache_reuse.md)
+the [KV Cache Reuse](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/kv-cache-reuse.md)
 documentation to learn more about how to enable KV cache reuse when building the
 TRT-LLM engine. Parameters for KV cache can be found in the
 [model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
@@ -622,7 +622,7 @@ Parameters for decoding modes can be found in the
 #### Speculative Decoding
 
 See the
-[Speculative Decoding](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/speculative_decoding.md)
+[Speculative Decoding](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/speculative-decoding.md)
 documentation to learn more about how TensorRT-LLM supports speculative decoding
 to improve the performance. The parameters for speculative decoding can be found
 in the [model config](./docs/model_config.md#tensorrt_llm_bls_model) of
