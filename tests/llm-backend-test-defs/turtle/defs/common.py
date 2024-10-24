@@ -52,17 +52,28 @@ def assert_pattern_match_target(pattern, content, target_value):
     assert num_match == target_value, f"'{pattern}' check failed, {num_match} does not equal to target {target_value}"
 
 
-def check_server_metrics(metrics_port="8002", target_value=1):
+def check_server_metrics(metrics_port="8002",
+                         batching_strategy="",
+                         kv_cache_reuse=""):
     metrics = check_output(f"curl 0.0.0.0:{metrics_port}/metrics 2>&1",
                            shell=True).strip()
     print_info(metrics)
 
     pattern_request_success = r'nv_inference_request_success\{model="tensorrt_llm",version="1"\} (\d)'
-    assert_pattern_match_target(pattern_request_success, metrics, target_value)
+    assert_pattern_match_target(pattern_request_success, metrics, 1)
     pattern_inference_count = r'nv_inference_count\{model="tensorrt_llm",version="1"\} (\d)'
-    assert_pattern_match_target(pattern_inference_count, metrics, target_value)
+    assert_pattern_match_target(pattern_inference_count, metrics, 1)
     pattern_exec_count = r'nv_inference_exec_count\{model="tensorrt_llm",version="1"\} (\d)'
-    assert_pattern_match_target(pattern_exec_count, metrics, target_value)
+    assert_pattern_match_target(pattern_exec_count, metrics, 1)
+    if kv_cache_reuse == "False":
+        pattern_kv_cache_block_used = r'nv_trt_llm_kv_cache_block_metrics\{kv_cache_block_type="used",model="tensorrt_llm",version="1"\} (\d)'
+        assert_pattern_match_target(pattern_kv_cache_block_used, metrics, 0)
+    if batching_strategy == "inflight_fused_batching":
+        pattern_generation_requests = (
+            r'nv_trt_llm_inflight_batcher_metrics'
+            r'\{inflight_batcher_specific_metric="generation_requests",model="tensorrt_llm",version="1"\} (\d)'
+        )
+        assert_pattern_match_target(pattern_generation_requests, metrics, 0)
 
 
 def search_and_replace(file_path, search_words, replace_words):
