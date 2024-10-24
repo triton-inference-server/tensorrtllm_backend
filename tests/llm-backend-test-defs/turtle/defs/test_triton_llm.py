@@ -914,7 +914,8 @@ def test_gpt_350m_ifb(
                                         e2e_model=E2E_MODEL_NAME)
 
     if feature_name == "test_basic":
-        check_server_metrics()
+        check_server_metrics(batching_strategy=BATCHING_STRATEGY,
+                             kv_cache_reuse=ENABLE_KV_CACHE_REUSE)
 
 
 @pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble", "tensorrt_llm_bls"])
