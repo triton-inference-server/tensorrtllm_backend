@@ -811,7 +811,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        requestIdsSet, executorRequest.getRequestType()});
+                        static_cast<int32_t>(requestIds.size()), executorRequest.getNumReturnSequences(), requestIdsSet,
+                        executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
             {
@@ -916,14 +917,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
                     utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> contextLogitsShape{1, 1, 1};
-                    auto contextLogitsType = TRITONSERVER_TYPE_FP32;
-                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-                    utils::flatten<float>(std::vector<float>{0}, contextLogitsBuffer, contextLogitsShape);
-                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::generationLogits) > 0)
@@ -951,14 +944,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(data, generationLogitsBuffer, generationLogitsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> generationLogitsShape{1, 1, 1, 1};
-                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
-                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
-                        generationLogitsType, OutputFieldsNames::generationLogits);
-                    utils::flatten<float>(std::vector<float>{0}, generationLogitsBuffer, generationLogitsShape);
-                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::outputLogProbs) > 0)
@@ -982,15 +967,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
                     utils::flatten<float>(logProbs, outputLogProbsBuffer, outputLogProbsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> outputLogProbsShape{1, 1, requestData.inputTokensSize};
-                    auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
-                    auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-                    utils::flatten<float>(
-                        std::vector<float>(requestData.inputTokensSize), outputLogProbsBuffer, outputLogProbsShape);
-                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::cumLogProbs) > 0)
@@ -1003,17 +979,9 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
                     utils::flatten<float>(result.cumLogProbs.value(), cumLogProbsBuffer, cumLogProbsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> cumLogProbsShape{1, 1};
-                    auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
-                    auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
-                    utils::flatten<float>(std::vector<float>{0}, cumLogProbsBuffer, cumLogProbsShape);
-                }
             }
 
-            if (requestData.outputNames.count(OutputFieldsNames::batchIndex) > 0)
+            if (requestData.outputNames.count(OutputFieldsNames::batchIndex) > 0 && requestData.batchSize > 1)
             {
                 std::vector<int64_t> batchIndexShape{1, 1};
                 auto batchIndexType = TRITONSERVER_TYPE_INT32;
@@ -1023,7 +991,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                 utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
             }
 
-            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0)
+            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0 && requestData.numReturnSequences)
             {
                 std::vector<int64_t> sequenceIndexShape{1, 1};
                 auto sequenceIndexType = TRITONSERVER_TYPE_INT32;

@@ -87,6 +87,8 @@ struct RequestData
     std::unordered_set<std::string> outputNames;
     Timestamps timestamps;
     int32_t batchIndex;
+    int32_t batchSize;
+    int32_t numReturnSequences;
     std::shared_ptr<std::set<executor::IdType>> pendingBatchedRequestIds;
     executor::RequestType requestType;
 };

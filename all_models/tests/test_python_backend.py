@@ -539,7 +539,10 @@ def test_convert_request_invalid():
 
 def test_convert_response(trtllm_response: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == True
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -559,27 +562,30 @@ def test_convert_response(trtllm_response: trtllm.Response):
 
 def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response_minimal, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response_minimal, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == False
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
     assert (response.tensors["sequence_length"].as_numpy() == np.array(
         [[3]])).all()
-    assert (response.tensors["cum_log_probs"].as_numpy() == np.zeros(
-        (1, 1), np.float32)).all()
-    assert (response.tensors["output_log_probs"].as_numpy() == np.zeros(
-        (1, 1, 1), np.float32)).all()
-    assert (response.tensors["context_logits"].as_numpy() == np.zeros(
-        (1, 1, 1), np.float32)).all()
-    assert (response.tensors["generation_logits"].as_numpy() == np.zeros(
-        (1, 1, 1, 1), np.float32)).all()
+    assert "cum_log_probs" not in response.tensors
+    assert "output_log_probs" not in response.tensors
+    assert "output_log_probs" not in response.tensors
+    assert "context_logits" not in response.tensors
+    assert "generation_logits" not in response.tensors
     assert (response.tensors["batch_index"].as_numpy() == np.array(
         [[batch_index]])).all()
 
 
 def test_convert_response_error(trtllm_response_error: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response_error, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response_error, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == True
     assert response.has_error() and response.error.message == "internal error"
 
