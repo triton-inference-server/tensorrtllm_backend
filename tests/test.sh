@@ -129,6 +129,7 @@ print_test_params () {
     echo "MAX_ATTENTION_WINDOW_SIZE: ${MAX_ATTENTION_WINDOW_SIZE}"
     echo "BATCH_SCHEDULER_POLICY: ${BATCH_SCHEDULER_POLICY}"
     echo "KV_CACHE_FREE_GPU_MEM_FRACTION: ${KV_CACHE_FREE_GPU_MEM_FRACTION}"
+    echo "CROSS_KV_CACHE_FRACTION: ${CROSS_KV_CACHE_FRACTION}"
     echo "EXCLUDE_INPUT_IN_OUTPUT: ${EXCLUDE_INPUT_IN_OUTPUT}"
     echo "TRITON_MAX_BATCH_SIZE: ${TRITON_MAX_BATCH_SIZE}"
     echo "MAX_QUEUE_DELAY_MICROSECONDS: ${MAX_QUEUE_DELAY_MICROSECONDS}"
@@ -184,6 +185,11 @@ fill_triton_repo () {
     if [ "${TARGET_ENGINE_PATH}" != "" ] && [ "${TARGET_ENGINE_PATH}" != "skip" ]; then
         echo "Filling triton repository at ${TRITON_REPO}/tensorrt_llm_target with engine ${TARGET_ENGINE_PATH}"
         python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_target/config.pbtxt triton_backend:${BACKEND},engine_dir:${TARGET_ENGINE_PATH},decoupled_mode:${DECOUPLED_MODE},max_tokens_in_paged_kv_cache:${MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:${MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:${BATCH_SCHEDULER_POLICY},batching_strategy:${BATCHING_STRATEGY},kv_cache_free_gpu_mem_fraction:${KV_CACHE_FREE_GPU_MEM_FRACTION},exclude_input_in_output:${EXCLUDE_INPUT_IN_OUTPUT},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},max_beam_width:${MAX_BEAM_WIDTH},enable_kv_cache_reuse:true,normalize_log_probs:${NORMALIZE_LOG_PROBS},enable_chunked_context:${ENABLE_CHUNKED_CONTEXT},gpu_device_ids:${GPU_DEVICE_IDS},decoding_mode:${DECODING_MODE},max_queue_size:${MAX_QUEUE_SIZE}
+    fi
+
+    # encoder-decoder model only
+    if [ "${CROSS_KV_CACHE_FRACTION}" != "" ]; then
+        python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt cross_kv_cache_fraction:${CROSS_KV_CACHE_FRACTION}
     fi
 
     if [ "${ENCODER_ENGINE_PATH}" != "" ] && [ "${ENCODER_ENGINE_PATH}" != "skip" ]; then
@@ -543,6 +549,7 @@ BATCHING_STRATEGIES=( "inflight_fused_batching" "v1" )
 MAX_TOKENS_IN_KV_CACHES=( "" $MAX_SEQUENCE_LEN )
 BATCH_SCHEDULER_POLICIES=( "guaranteed_no_evict" "max_utilization" )
 KV_CACHE_FREE_GPU_MEM_FRACTIONS=( "0.2" "" )
+CROSS_KV_CACHE_FRACTION=""
 ENABLE_CHUNKED_CONTEXTS=( "false" "true" )
 
 BACKEND="tensorrtllm"
@@ -1128,6 +1135,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     BATCHING_STRATEGY="inflight_fused_batching"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     ENABLE_CHUNKED_CONTEXT="false"
+    CROSS_KV_CACHE_FRACTION="0.5"
 
     # -------------------------------
     # Param sweep test
@@ -1199,6 +1207,9 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     done
     E2E_MODEL_NAME="ensemble"
     ACCUMULATE_TOKEN="false"
+
+    # Reset
+    CROSS_KV_CACHE_FRACTION=""
 fi
 
 if [ "$MODEL" = "blip2-opt" ]; then

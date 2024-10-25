@@ -643,6 +643,7 @@ def model_config() -> Dict:
         "max_attention_window_size": "2",
         "sink_token_length": "3",
         "kv_cache_free_gpu_mem_fraction": "0.5",
+        "cross_kv_cache_fraction": "0.5",
         "kv_cache_host_memory_bytes": "4",
         "kv_cache_onboard_blocks": "false",
         "gpu_device_ids": "0,1,2,3",
@@ -671,6 +672,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.kv_cache_config.max_attention_window == [2]
     assert config.kv_cache_config.sink_token_length == 3
     assert config.kv_cache_config.free_gpu_memory_fraction == 0.5
+    assert config.kv_cache_config.cross_kv_cache_fraction == 0.5
     assert config.kv_cache_config.host_cache_size == 4
     assert config.kv_cache_config.onboard_blocks == False
     assert config.parallel_config.device_ids == [0, 1, 2, 3]
@@ -713,6 +715,7 @@ def test_get_executor_config_minimal():
     assert config.kv_cache_config.max_attention_window is None
     assert config.kv_cache_config.sink_token_length is None
     assert config.kv_cache_config.free_gpu_memory_fraction is None
+    assert config.kv_cache_config.cross_kv_cache_fraction is None
     assert config.kv_cache_config.host_cache_size is None
     assert config.kv_cache_config.onboard_blocks == True
     assert config.parallel_config is None

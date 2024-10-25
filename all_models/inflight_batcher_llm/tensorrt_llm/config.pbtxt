@@ -466,6 +466,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "cross_kv_cache_fraction"
+  value: {
+    string_value: "${cross_kv_cache_fraction}"
+  }
+}
+parameters: {
   key: "kv_cache_host_memory_bytes"
   value: {
     string_value: "${kv_cache_host_memory_bytes}"

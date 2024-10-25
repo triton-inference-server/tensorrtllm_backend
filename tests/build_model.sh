@@ -1,5 +1,11 @@
 #!/usr/bin/bash
 
+install_requirements() {
+    pip install -r requirements.txt
+    #This is to WAR an issue with latest transformers package not being compatible with sentencepiece 0.1.99 apparently
+    pip install sentencepiece --upgrade
+}
+
 MODEL=$1
 
 GPT2=/home/scratch.trt_llm_data/llm-models/gpt2
@@ -24,6 +30,7 @@ set -e
 
 pkill -9 -f tritonserver || true
 
+
 # install deps
 pip3 install -r tensorrt_llm/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
 
@@ -32,7 +39,7 @@ if [ "$MODEL" = "gpt" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
@@ -58,7 +65,7 @@ if [ "$MODEL" = "opt" ]; then
 
     pushd tensorrt_llm/examples/opt
 
-    pip install -r requirements.txt
+    install_requirements
 
     echo "Convert OPT from HF"
     python3 convert_checkpoint.py --model_dir ${OPT_125M} --dtype float16 --output_dir ./c-model/opt-125m/fp16
@@ -82,7 +89,7 @@ if [ "$MODEL" = "llama" ]; then
 
     pushd tensorrt_llm/examples/llama
 
-    pip install -r requirements.txt
+    install_requirements
 
     echo "Convert LLaMA from HF"
     python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/llama-7b/fp16
@@ -105,7 +112,7 @@ if [ "$MODEL" = "mistral" ]; then
 
     pushd tensorrt_llm/examples/llama
 
-    pip install -r requirements.txt
+    install_requirements
 
     echo "Convert Mistral from HF"
     python3 convert_checkpoint.py --dtype float16 \
@@ -133,7 +140,7 @@ if [ "$MODEL" = "mistral-ib" ]; then
 
     pushd tensorrt_llm/examples/llama
 
-    pip install -r requirements.txt
+    install_requirements
 
     echo "Convert Mistral from HF"
     python3 convert_checkpoint.py --dtype float16 \
@@ -159,7 +166,7 @@ if [ "$MODEL" = "gptj" ]; then
 
     pushd tensorrt_llm/examples/gptj
 
-    pip install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT-J from HF"
     python3 convert_checkpoint.py --dtype float16 --n_layer 2 --output_dir ./c-model/gpt-j-6b/fp16
@@ -183,7 +190,7 @@ if [ "$MODEL" = "gpt-ib" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
@@ -251,7 +258,7 @@ if [ "$MODEL" = "gpt-medium-ib" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT2 medium from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2_MEDIUM} --dtype float16 --output_dir ./c-model/gpt2-medium/fp16
@@ -293,7 +300,7 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from NeMo"
     python3 convert_checkpoint.py --nemo_ckpt_path ${GPT2_NEXT_PTUNING}/megatron_converted_8b_tp4_pp1.nemo --dtype float16 --output_dir ./c-model/email_composition/fp16
@@ -324,7 +331,7 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
     # GPT-2B
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from NeMo"
     python3 convert_checkpoint.py --nemo_ckpt_path ${GPT_2B} --dtype float16 --output_dir ./c-model/gpt-2b-lora/fp16
@@ -359,7 +366,7 @@ if [ "$MODEL" = "gpt-gather-logits" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16
@@ -385,7 +392,7 @@ if [ "$MODEL" = "medusa" ]; then
     # Medusa
     pushd tensorrt_llm/examples/medusa
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert Medusa from HF"
     python convert_checkpoint.py --model_dir ${VICUNA} \
@@ -411,7 +418,7 @@ if [ "$MODEL" = "gpt-gather-generation-logits" ]; then
     # GPT2
     pushd tensorrt_llm/examples/gpt
 
-    pip3 install -r requirements.txt
+    install_requirements
 
     echo "Convert GPT from HF"
     python3 convert_checkpoint.py --model_dir ${GPT2} --dtype float16 --output_dir ./c-model/gpt2/fp16

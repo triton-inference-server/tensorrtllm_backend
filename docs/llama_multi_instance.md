@@ -205,10 +205,14 @@ pgrep mpirun | xargs kill
 
 ### Orchestrator Mode
 
-In this mode, we will create a copy of the TensorRT-LLM model and use the
-`gpu_device_ids` field to specify which GPU should be used by each model
-instance. Then, we need to modify the client to distribute the requests between
-different models.
+With orchestrator mode, there are two options for running multiple instances
+of a single model:
+
+1. Creating separate Triton models
+
+2. Starting from the 24.08 release, you can use Triton `instance_group` field to specify the number TRT-LLM model instances. With that option, the load balancing decision will be done in Triton core.
+
+#### 1. Creating Separate Triton Models
 
 3b. Create a copy of the `tensorrt_llm` model:
 
@@ -271,14 +275,52 @@ python3 tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
 pgrep mpirun | xargs kill
 ```
 
+#### 2. Using Triton Core's Load Balancing
+
+In order to use Triton core's load balancing for multiple instances, you can
+increase the number of instances in the `instance_group` field and use the
+`gpu_device_ids` parameter to specify which GPUs will be used by each model
+instance.
+
+For example, if you're running a TP=2 model on a 4-GPU system and you want
+to run one instance on GPUs 0 and 1 and the other instance on GPUs 2 and 3,
+you can use the following model configuration:
+
+```
+instance_group [
+    {kind: KIND_CPU, count: 2}
+]
+
+parameters: {
+  key: "gpu_device_ids"
+  value: {
+    string_value: "0,1;2,3"
+  }
+}
+```
+
+Please note that the number of set of GPU device ids must equal the number of instances.
+
 ### Orchestrator Mode vs Leader Mode Summary
 
 The table below summarizes the differences between the orchestrator mode and
 leader mode:
 
-|                                   | Orchestrator Mode  | Leader Mode |
-| ----------------------------------| :----------------: | :----------:|
-| Multi-node Support                |         ❌         |      ✅     |
-| Requires Reverse Proxy            |         ❌         |      ✅     |
-| Requires Client Changes           |         ✅         |      ❌     |
-| Requires `MPI_Comm_Spawn` Support |         ✅         |      ❌     |
+|                                   | Orchestrator Mode (Separate Models)  | Orchestrator Mode (Triton Load Balancing) |Leader Mode |
+| ----------------------------------| :----------------: | :----------------: |:----------:|
+| Requires Reverse Proxy            |         ❌         |           ❌        |     ✅     |
+| Requires Client Changes           |         ✅         |           ❌         |     ❌     |
+
+Orchestrator mode by default uses `MPI_Comm_Spawn` to create the child
+processes. If `MPI_Comm_Spawn` is used, it is not possible to distribute
+the model across multiple nodes.
+
+It is also possible to use orchestrator mode with MPI processes that have been
+pre-spawned. In order to do that, you need to set `--disable-spawn-processes`
+when using the [launch_triton_server.py](../scripts/launch_triton_server.py)
+script or `export TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES=0`. In this mode,
+it is possible to run the server across different nodes in orchestrator mode.
+
+In order to use the orchestrator mode itself, you need to set the `--multi-model`
+flag when using the [launch_triton_server.py](../scripts/launch_triton_server.py)
+script or `export TRTLLM_ORCHESTRATOR=1`.

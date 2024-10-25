@@ -477,6 +477,8 @@ class TritonPythonModel:
             "free_gpu_memory_fraction":
             get_parameter(model_config, "kv_cache_free_gpu_mem_fraction",
                           float),
+            "cross_kv_cache_fraction":
+            get_parameter(model_config, "cross_kv_cache_fraction", float),
             "host_cache_size":
             get_parameter(model_config, "kv_cache_host_memory_bytes", int),
             "onboard_blocks":

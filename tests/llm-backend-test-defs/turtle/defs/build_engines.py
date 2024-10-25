@@ -2,7 +2,7 @@ import os
 
 from trt_test.misc import check_call, print_info
 
-install_requirement_cmd = "pip3 install -r requirements.txt"
+install_requirement_cmd = "pip3 install -r requirements.txt; pip install sentencepiece --upgrade"
 
 
 def append_timing_cache_args(build_cmd):
