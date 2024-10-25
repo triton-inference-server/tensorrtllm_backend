@@ -113,6 +113,7 @@ additional benefits.
 | :----------------------: | :-----------------------------: |
 | `max_tokens_in_paged_kv_cache` | The maximum size of the KV cache in number of tokens. If unspecified, value is interpreted as 'infinite'. KV cache allocation is the min of max_tokens_in_paged_kv_cache and value derived from kv_cache_free_gpu_mem_fraction below. (default=unspecified) |
 | `kv_cache_free_gpu_mem_fraction` | Set to a number between 0 and 1 to indicate the maximum fraction of GPU memory (after loading the model) that may be used for KV cache. (default=0.9) |
+| `cross_kv_cache_fraction` | Set to a number between 0 and 1 to indicate the maximum fraction of KV cache that may be used for cross attention, and the rest will be used for self attention. Optional param and should be set for encoder-decoder models ONLY. (default=0.5) |
 | `kv_cache_host_memory_bytes` |  Enable offloading to host memory for the given byte size. |
 | `enable_kv_cache_reuse` | Set to `true` to reuse previously computed KV cache values (e.g. for system prompt) |
 

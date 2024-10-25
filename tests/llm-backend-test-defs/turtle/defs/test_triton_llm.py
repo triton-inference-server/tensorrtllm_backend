@@ -926,6 +926,7 @@ def test_gpt_350m_ifb(
 @pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", ["4096"])
 @pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
 @pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
+@pytest.mark.parametrize("CROSS_KV_CACHE_FRACTION", [""])
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
@@ -949,6 +950,7 @@ def test_t5_small_enc_dec_ifb(
     MAX_ATTENTION_WINDOW_SIZE,
     BATCH_SCHEDULER_POLICY,
     KV_CACHE_FREE_GPU_MEM_FRACTION,
+    CROSS_KV_CACHE_FRACTION,
     ENABLE_TRT_OVERLAP,
     BATCHING_STRATEGY,
     DECOUPLED_MODE,
@@ -989,6 +991,8 @@ def test_t5_small_enc_dec_ifb(
 
     # Modify config.pbtxt
     TOKENIZER_PATH = t5_small_model_root
+    if CROSS_KV_CACHE_FRACTION == "":
+        CROSS_KV_CACHE_FRACTION = "0.5"
     modify_ib_config_pbtxt(
         new_model_repo,
         ENGINE_DIR,
@@ -1015,6 +1019,7 @@ def test_t5_small_enc_dec_ifb(
         ACCUMULATE_TOKEN,
         BLS_INSTANCE_COUNT,
         ENCODER_ENGINE_PATH=ENCODER_ENGINE_DIR,
+        CROSS_KV_CACHE_FRACTION=CROSS_KV_CACHE_FRACTION,
     )
 
     # Launch Triton Server
