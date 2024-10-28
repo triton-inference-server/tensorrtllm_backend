@@ -162,7 +162,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     > **NOTE**:
     > When launching the server, since the prompt_embedding_table is in GPU memory, we need to set the CUDA pool memory for inter-step communication. For example, when we have a shape of (1, 576, 4096) promp_embedding table, we would need 300MB of CUDA pool memory, so we set 30MB to have some GPU buffers. (2(fp16=>2bytes) * 576 * 4096 * 8(max_batch_size) = 18,874,368)
     >
-    > Also, the tensorrt_llm initialization assumes using another GPU, we need to initialize it but not use thenm.
+    > Also, the tensorrt_llm initialization assumes using another GPU, we need to initialize it but not use them.
 
 ### Send requests
 1. Send request with `decoupled_mode` set to False
