@@ -756,7 +756,7 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
-            std::nullopt, std::nullopt, encoderInputTokens);
+            std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
 
         request.setRequestType(requestType);
         auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);
