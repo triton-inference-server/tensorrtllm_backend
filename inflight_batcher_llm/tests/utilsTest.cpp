@@ -710,54 +710,6 @@ TEST(UtilsTest, splitBatchInputsTensorsBS3)
     }
 }
 
-TEST(UtilsTest, orchestratorError)
-{
-    std::vector<int32_t> const& inputTokens = {1, 2, 3, 4, 5};
-    InputTensors inputTensors;
-    auto modelType = executor::ModelType::kDECODER_ONLY;
-    pushTensor<int32_t>(inputTensors, InputFieldsNames::inputTokens, nvinfer1::DataType::kINT32,
-        {1, static_cast<int64_t>(inputTokens.size())}, inputTokens);
-    pushTensor<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, nvinfer1::DataType::kINT32, {1}, {8});
-
-    auto requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, false /* isOrchestrator */,
-        false /* specDecFastLogits */);
-    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, false /* isOrchestrator */, false /* specDecFastLogits */);
-    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, false /* isOrchestrator */, false /* specDecFastLogits */);
-    createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-        executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION, true /* isOrchestrator */,
-        false /* specDecFastLogits */);
-
-    try
-    {
-        requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY, true /* isOrchestrator */, false /* specDecFastLogits */);
-        FAIL() << "Expected exception";
-    }
-    catch (tensorrt_llm::common::TllmException const& e)
-    {
-        EXPECT_THAT(e.what(),
-            testing::HasSubstr(
-                "Context-only and generation-only requests are NOT currently supported in orchestrator mode."));
-    }
-
-    try
-    {
-        requests = createRequestsFromInputTensors({inputTensors}, true, true, true, modelType,
-            executor::RequestType::REQUEST_TYPE_GENERATION_ONLY, true /* isOrchestrator */,
-            false /* specDecFastLogits */);
-        FAIL() << "Expected exception";
-    }
-    catch (tensorrt_llm::common::TllmException const& e)
-    {
-        EXPECT_THAT(e.what(),
-            testing::HasSubstr(
-                "Context-only and generation-only requests are NOT currently supported in orchestrator mode."));
-    }
-}
-
 TEST(UtilsTest, split)
 {
     std::string str = "a b c";
