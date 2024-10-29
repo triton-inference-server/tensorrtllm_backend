@@ -25,13 +25,16 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import json
+import os
 import sys
 from collections import defaultdict
 
 import numpy as np
 import requests
 
-sys.path.append("/opt/tritonserver/tensorrtllm_backend/tools/utils")
+BACKEND_ROOT = os.environ.get('BACKEND_ROOT',
+                              "/opt/tritonserver/tensorrtllm_backend")
+sys.path.append(os.path.join(BACKEND_ROOT, "tools/utils"))
 import unittest
 
 import utils
@@ -75,9 +78,14 @@ class TRTLLMBaseMetricsTest(unittest.TestCase):
                 utils.prepare_tensor("bad_words", bad_words_list, "http"),
                 utils.prepare_tensor("stop_words", stop_words_list, "http"),
             ]
+            # Request minimal outputs
+            outputs = utils.prepare_outputs("http")
 
             async_requests.append(
-                client.async_infer(model_name, inputs, request_id=str(i)))
+                client.async_infer(model_name,
+                                   inputs,
+                                   outputs=outputs,
+                                   request_id=str(i)))
 
         try:
             utils.get_http_results(async_requests)
