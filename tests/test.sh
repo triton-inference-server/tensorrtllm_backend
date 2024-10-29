@@ -935,8 +935,35 @@ if [ "$MODEL" = "gpt-2b-ib-lora" ]; then
             --check-output --request-output-len 8 \
             --lora-task-id 12345
 
+        ACCUMULATE_TOKENS=( "false" "true" )
+        E2E_MODEL_NAMES=( "ensemble" "tensorrt_llm_bls" )
+        for E2E_MODEL_NAME in "${E2E_MODEL_NAMES[@]}"; do
+        for ACCUMULATE_TOKEN in "${ACCUMULATE_TOKENS[@]}"; do
+
+            if [[ "${E2E_MODEL_NAME}" == "ensemble" && "${ACCUMULATE_TOKEN}" == "true" ]]; then
+                continue
+            fi
+            python3 end_to_end_grpc_client.py \
+                ${STREAMING_FLAG} \
+                --output-len 100 --prompt "After Washington had returned to Williamsburg, Dinwiddie ordered him to lead a larger force to assist Trent in his work. While en route, Washington learned of Trent's retreat. Since Tanaghrisson had promised support to the British, Washington continued toward Fort Duquesne and met with the Mingo leader. Learning of a French scouting party in the area, Washington, with Tanaghrisson and his party, surprised the Canadians on May 28 in what became known as the Battle of Jumonville Glen. They killed many of the Canadians, including their commanding officer, Joseph Coulon de Jumonville, whose head was reportedly split open by Tanaghrisson with a tomahawk. The historian Fred Anderson suggests that Tanaghrisson was acting to gain the support of the British and regain authority over his own people. They had been inclined to support the French, with whom they had long trading relationships. One of Tanaghrisson's men told Contrecoeur that Jumonville had been killed by British musket fire. Question: Upon learning of a French scounting party in the area, what did Washington do? Answer:" \
+                ${OVERWRITE_OUTPUT_TEXT_FLAG} \
+                --lora-path ../../tensorrt_llm/examples/gpt/gpt-2b-lora-train-900 \
+                --lora-task-id 12345 \
+                --model-name "$E2E_MODEL_NAME" | tee "output_e2e_${E2E_MODEL_NAME}_${ACCUMULATE_TOKENS}"
+
+            grep "Answer: Washington, with Tanaghrisson and his party, surprised the Canadians on May 28 in what became known as the Battle of Jumonville Glen." "output_e2e_${E2E_MODEL_NAME}_${ACCUMULATE_TOKENS}"
+            rt=$?
+            if [ ${rt} -ne 0 ]; then
+                echo "FAIL"
+                exit 1
+            else
+                echo "PASS"
+            fi
+        done
+        done
         popd # inflight_batcher_llm/client
 
+        #run_cpp_e2e_backend_tests
         kill_triton_server
     done
 fi

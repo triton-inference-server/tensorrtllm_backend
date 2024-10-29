@@ -90,6 +90,9 @@ class Request:
     random_seed: Optional[np.ndarray] = None
     presence_penalty: Optional[np.ndarray] = None
     frequency_penalty: Optional[np.ndarray] = None
+    lora_task_id: Optional[np.ndarray] = None
+    lora_weights: Optional[np.ndarray] = None
+    lora_config: Optional[np.ndarray] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")
