@@ -55,7 +55,9 @@ def prepare_inputs(prompt,
                    pad_id,
                    num_draft_tokens=0,
                    use_draft_logits=None,
-                   num_return_sequences=1):
+                   num_return_sequences=1,
+                   lora_dir=None,
+                   lora_task_id=None):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -143,6 +145,18 @@ def prepare_inputs(prompt,
         pad_id_data = np.array([[pad_id]], dtype=np.int32)
         inputs["pad_id"] = pad_id_data
 
+    if lora_dir and lora_task_id:
+        inputs["lora_weights"] = np.load(
+            os.path.join(lora_dir, "model.lora_weights.npy"))
+        try:
+            inputs["lora_config"] = np.load(
+                os.path.join(lora_dir, "model.lora_config.npy"))
+        except Exception:
+            inputs["lora_config"] = np.load(
+                os.path.join(lora_dir, "model.lora_keys.npy"))
+
+        inputs["lora_task_id"] = np.array([[lora_task_id]], dtype=np.uint64)
+
     return inputs
 
 
@@ -171,7 +185,9 @@ def run_inference(triton_client,
                   verbose,
                   num_draft_tokens=0,
                   use_draft_logits=None,
-                  num_return_sequences=None):
+                  num_return_sequences=None,
+                  lora_dir=None,
+                  lora_task_id=None):
 
     try:
         prompts = json.loads(prompt)
@@ -191,7 +207,7 @@ def run_inference(triton_client,
                            return_log_probs_data, return_context_logits_data,
                            return_generation_logits_data, end_id, pad_id,
                            num_draft_tokens, use_draft_logits,
-                           num_return_sequences))
+                           num_return_sequences, lora_dir, lora_task_id))
 
     if batch_inputs:
         multiple_inputs = []
@@ -501,12 +517,24 @@ if __name__ == '__main__':
                         required=False,
                         help='The token id for pad token.')
 
+    parser.add_argument("--lora-path",
+                        type=str,
+                        required=False,
+                        help="path to LoRA dir")
+    parser.add_argument("--lora-task-id",
+                        type=int,
+                        required=False,
+                        help="LoRA task ID")
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8001"
 
     embedding_bias_words = FLAGS.embedding_bias_words if FLAGS.embedding_bias_words else None
     embedding_bias_weights = FLAGS.embedding_bias_weights if FLAGS.embedding_bias_weights else None
+
+    lora_dir = FLAGS.lora_path if FLAGS.lora_path else None
+    lora_id = FLAGS.lora_task_id if FLAGS.lora_task_id else None
 
     try:
         client = grpcclient.InferenceServerClient(url=FLAGS.url)
