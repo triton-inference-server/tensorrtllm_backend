@@ -660,13 +660,6 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         TLLM_THROW("Streaming is only supported if model is deployed using decoupled mode.");
     }
 
-    if ((requestType == executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY
-            || requestType == executor::RequestType::REQUEST_TYPE_GENERATION_ONLY)
-        && isOrchestrator)
-    {
-        TLLM_THROW("Context-only and generation-only requests are NOT currently supported in orchestrator mode.");
-    }
-
     std::vector<executor::Request> requests;
     for (auto const& inputTensors : inputsTensors)
     {
