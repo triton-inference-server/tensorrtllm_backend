@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver
-ARG BASE_TAG=24.07-py3
+ARG BASE_TAG=24.09-py3
 
 FROM ${BASE_IMAGE}:${BASE_TAG} as base
 

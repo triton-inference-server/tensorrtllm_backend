@@ -358,14 +358,16 @@ class Decoder:
                 )
 
             batch_index = gen_response.batch_index
-            if batch_index.ndim != 2:
-                raise Exception("Expected batch_index tensor to have 2 dims.")
-            if batch_index.shape[0] != 1:
-                raise Exception("Expected batch size of 1")
-            if batch_index.shape[1] != 1:
-                raise Exception("Expected only one batch_index")
+            if batch_index is not None:
+                if batch_index.ndim != 2:
+                    raise Exception(
+                        "Expected batch_index tensor to have 2 dims.")
+                if batch_index.shape[0] != 1:
+                    raise Exception("Expected batch size of 1")
+                if batch_index.shape[1] != 1:
+                    raise Exception("Expected only one batch_index")
 
-            batch_index = batch_index[0][0]
+            batch_index = batch_index[0][0] if batch_index is not None else 0
 
             self._accumulated_tokens[batch_index] = new_tokens if (
                 self._accumulated_tokens[batch_index] is None

@@ -104,11 +104,25 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
 std::vector<InputTensors> splitBatchInputsTensors(InputTensors const& inputsTensors)
 {
     auto inputTokensIt = inputsTensors.find(InputFieldsNames::inputTokens);
-    TLLM_CHECK_WITH_INFO(inputTokensIt != inputsTensors.end(), "input tokens tensor not provided");
-    auto inputTokensTensor = inputTokensIt->second.tensor;
-    auto inputTokensShape = inputTokensTensor->getShape();
-    TLLM_CHECK_WITH_INFO(inputTokensShape.nbDims == 2, "Expected inputTokens tensors to have 2 dimensions");
-    auto batchSize = inputTokensShape.d[0];
+    auto encoderInputFeaturesIt = inputsTensors.find(InputFieldsNames::encoderInputFeatures);
+    auto batchSize = 1;
+    if (inputTokensIt != inputsTensors.end())
+    {
+        auto inputTokensTensor = inputTokensIt->second.tensor;
+        auto inputTokensShape = inputTokensTensor->getShape();
+        TLLM_CHECK_WITH_INFO(inputTokensShape.nbDims == 2, "Expected inputTokens tensors to have 2 dimensions");
+        batchSize = inputTokensShape.d[0];
+    }
+    else if (encoderInputFeaturesIt != inputsTensors.end())
+    {
+        auto encoderInputFeaturesTensor = encoderInputFeaturesIt->second.tensor;
+        auto encoderInputFeaturesShape = encoderInputFeaturesTensor->getShape();
+        batchSize = encoderInputFeaturesShape.d[0];
+    }
+    else
+    {
+        TLLM_THROW("inputTokens or encoderInputFeatures tensor not provided");
+    }
 
     if (batchSize > 1)
     {
@@ -130,7 +144,7 @@ std::vector<InputTensors> splitBatchInputsTensors(InputTensors const& inputsTens
                 std::shared_ptr<runtime::ITensor> slicedTensor
                     = std::move(runtime::ITensor::slice(batchedTensor.tensor, batchIdx, 1));
                 // Use input_length to strip off padding for inputTokens
-                if (name == InputFieldsNames::inputTokens)
+                if (name == InputFieldsNames::inputTokens || name == InputFieldsNames::encoderInputFeatures)
                 {
                     slicedTensor->squeeze(0);
                     slicedTensor = runtime::ITensor::slice(slicedTensor, 0, static_cast<int>(inputLength));
@@ -673,9 +687,22 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         }
 
         executor::VecTokens inputTokens;
+        std::optional<executor::Tensor> encoderInputFeatures{std::nullopt};
         if (!utils::extractVector<int32_t>(inputTensors, InputFieldsNames::inputTokens, inputTokens))
         {
-            TLLM_THROW("%s is not present in the request.", InputFieldsNames::inputTokens);
+
+            if (inputTensors.count(InputFieldsNames::encoderInputFeatures))
+            {
+                std::shared_ptr<runtime::ITensor> originalTensor
+                    = inputTensors.at(InputFieldsNames::encoderInputFeatures).tensor;
+                utils::squeezeTensor(originalTensor, 2);
+                encoderInputFeatures = executor::detail::ofITensor(originalTensor);
+            }
+            else
+            {
+                TLLM_THROW("%s or %s is not present in the request.", InputFieldsNames::inputTokens,
+                    InputFieldsNames::encoderInputFeatures);
+            }
         }
         executor::SizeType32 maxNewTokens;
         if (!utils::extractSingleton<int32_t>(inputTensors, InputFieldsNames::maxNewTokens, maxNewTokens))
@@ -692,8 +719,10 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         std::optional<executor::VecTokens> encoderInputTokens{std::nullopt};
         if (modelType == executor::ModelType::kENCODER_ONLY || modelType == executor::ModelType::kENCODER_DECODER)
         {
-            encoderInputTokens = inputTokens;
-
+            if (inputTensors.count(InputFieldsNames::inputTokens))
+            {
+                encoderInputTokens = inputTokens;
+            }
             // If encoder-decoder, check if decoder tokens are specified
             if (modelType == executor::ModelType::kENCODER_DECODER)
             {
@@ -756,7 +785,20 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
-            std::nullopt, std::nullopt, encoderInputTokens);
+            std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
+
+        if (encoderInputFeatures.has_value())
+        {
+            executor::Tensor encoderInputFeaturesTensor = encoderInputFeatures.value();
+            request.setEncoderInputFeatures(encoderInputFeaturesTensor);
+        }
+
+        executor::SizeType32 encoderOutputLengths;
+        if (utils::extractSingleton<int32_t>(
+                inputTensors, InputFieldsNames::encoderOutputLengths, encoderOutputLengths))
+        {
+            request.setEncoderOutputLength(encoderOutputLengths);
+        }
 
         request.setRequestType(requestType);
         auto contextPhaseParamsIt = inputTensors.find(InputFieldsNames::contextPhaseParams);

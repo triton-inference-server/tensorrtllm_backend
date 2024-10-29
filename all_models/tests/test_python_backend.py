@@ -539,7 +539,10 @@ def test_convert_request_invalid():
 
 def test_convert_response(trtllm_response: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == True
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -559,27 +562,30 @@ def test_convert_response(trtllm_response: trtllm.Response):
 
 def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response_minimal, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response_minimal, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == False
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
     assert (response.tensors["sequence_length"].as_numpy() == np.array(
         [[3]])).all()
-    assert (response.tensors["cum_log_probs"].as_numpy() == np.zeros(
-        (1, 1), np.float32)).all()
-    assert (response.tensors["output_log_probs"].as_numpy() == np.zeros(
-        (1, 1, 1), np.float32)).all()
-    assert (response.tensors["context_logits"].as_numpy() == np.zeros(
-        (1, 1, 1), np.float32)).all()
-    assert (response.tensors["generation_logits"].as_numpy() == np.zeros(
-        (1, 1, 1, 1), np.float32)).all()
+    assert "cum_log_probs" not in response.tensors
+    assert "output_log_probs" not in response.tensors
+    assert "output_log_probs" not in response.tensors
+    assert "context_logits" not in response.tensors
+    assert "generation_logits" not in response.tensors
     assert (response.tensors["batch_index"].as_numpy() == np.array(
         [[batch_index]])).all()
 
 
 def test_convert_response_error(trtllm_response_error: trtllm.Response):
     batch_index = 2
-    response, is_final = convert_response(trtllm_response_error, batch_index)
+    batch_size = 3
+    num_return_sequences = 1
+    response, is_final = convert_response(trtllm_response_error, batch_index,
+                                          batch_size, num_return_sequences)
     assert is_final == True
     assert response.has_error() and response.error.message == "internal error"
 
@@ -637,6 +643,7 @@ def model_config() -> Dict:
         "max_attention_window_size": "2",
         "sink_token_length": "3",
         "kv_cache_free_gpu_mem_fraction": "0.5",
+        "cross_kv_cache_fraction": "0.5",
         "kv_cache_host_memory_bytes": "4",
         "kv_cache_onboard_blocks": "false",
         "gpu_device_ids": "0,1,2,3",
@@ -665,6 +672,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.kv_cache_config.max_attention_window == [2]
     assert config.kv_cache_config.sink_token_length == 3
     assert config.kv_cache_config.free_gpu_memory_fraction == 0.5
+    assert config.kv_cache_config.cross_kv_cache_fraction == 0.5
     assert config.kv_cache_config.host_cache_size == 4
     assert config.kv_cache_config.onboard_blocks == False
     assert config.parallel_config.device_ids == [0, 1, 2, 3]
@@ -707,6 +715,7 @@ def test_get_executor_config_minimal():
     assert config.kv_cache_config.max_attention_window is None
     assert config.kv_cache_config.sink_token_length is None
     assert config.kv_cache_config.free_gpu_memory_fraction is None
+    assert config.kv_cache_config.cross_kv_cache_fraction is None
     assert config.kv_cache_config.host_cache_size is None
     assert config.kv_cache_config.onboard_blocks == True
     assert config.parallel_config is None

@@ -280,6 +280,10 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
 
+    #Only include needed outputs
+    outputs = []
+    outputs.append(grpcclient.InferRequestedOutput("text_output"))
+
     with utils.create_inference_server_client('grpc',
                                               FLAGS.url,
                                               concurrency=None,
@@ -291,7 +295,7 @@ if __name__ == "__main__":
                 callback=partial(utils.completion_callback, user_data),
                 stream_timeout=None,
             )
-            client.async_stream_infer(model_name, inputs)
+            client.async_stream_infer(model_name, inputs, outputs=outputs)
             client.stop_stream(cancel_requests=False)
 
             results = []
@@ -306,8 +310,10 @@ if __name__ == "__main__":
                     break
 
         else:
-            client.async_infer(model_name, inputs,
-                               partial(utils.completion_callback, user_data))
+            client.async_infer(model_name,
+                               inputs,
+                               partial(utils.completion_callback, user_data),
+                               outputs=outputs)
             results = utils.get_grpc_results(user_data, request_parallelism=1)
 
     stop_time = datetime.now()

@@ -48,6 +48,8 @@ namespace triton::backend::inflight_batcher_llm
 struct InputFieldsNames
 {
     static constexpr char const* inputTokens = "input_ids";
+    static constexpr char const* encoderInputFeatures = "encoder_input_features";
+    static constexpr char const* encoderOutputLengths = "encoder_output_lengths";
     static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
