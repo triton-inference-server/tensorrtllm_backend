@@ -819,10 +819,12 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                         "wrong in TRT-LLM runtime.");
                 }
                 auto requestOutputNames = utils::getRequestOutputNames(request);
+                int32_t const numReturnSequences
+                    = executorRequest.getSamplingConfig().getNumReturnSequences().value_or(1);
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        static_cast<int32_t>(requestIds.size()), executorRequest.getNumReturnSequences(), requestIdsSet,
+                        static_cast<int32_t>(requestIds.size()), numReturnSequences, requestIdsSet,
                         executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
@@ -1180,21 +1182,25 @@ void ModelInstanceState::WaitForStats()
             // currently the metrics related to request stats only concern with aggregated
             // results so that we can retrieve request stats and process all of them
             // whenever metrics is to be reported.
-            auto requestStats = mExecutor->getLatestRequestStats();
             double totalKvCacheTransferMS = 0;
             size_t requestCount = 0;
-            for (auto const& iteration : requestStats)
+            if (!mIsOrchestratorMode)
             {
-                for (auto const& request : iteration.requestStats)
+                // TODO: implement orchestrator mode support: https://jirasw.nvidia.com/browse/TRTLLM-1581
+                auto requestStats = mExecutor->getLatestRequestStats();
+                for (auto const& iteration : requestStats)
                 {
-                    // only check and aggregate results when request is completed
-                    if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
+                    for (auto const& request : iteration.requestStats)
                     {
-                        if (request.disServingStats.has_value())
+                        // only check and aggregate results when request is completed
+                        if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
                         {
-                            auto const& disServingStats = request.disServingStats.value();
-                            totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
-                            requestCount++;
+                            if (request.disServingStats.has_value())
+                            {
+                                auto const& disServingStats = request.disServingStats.value();
+                                totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
+                                requestCount++;
+                            }
                         }
                     }
                 }
