@@ -44,6 +44,21 @@ input [
     data_type: TYPE_INT32
     dims: [ -1 ]
     allow_ragged_batch: true
+    optional: true
+  },
+  {
+    name: "encoder_input_features"
+    data_type: TYPE_FP16
+    dims: [ -1, -1 ]
+    allow_ragged_batch: true
+    optional: true
+  },
+  {
+    name: "encoder_output_lengths"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
   },
   {
     name: "input_lengths"
@@ -463,6 +478,12 @@ parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: {
     string_value: "${kv_cache_free_gpu_mem_fraction}"
+  }
+}
+parameters: {
+  key: "cross_kv_cache_fraction"
+  value: {
+    string_value: "${cross_kv_cache_fraction}"
   }
 }
 parameters: {

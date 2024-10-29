@@ -48,6 +48,7 @@ def prepare_inputs(prompt,
                    embedding_bias_weights,
                    streaming,
                    beam_width,
+                   return_log_probs_data,
                    return_context_logits_data,
                    return_generation_logits_data,
                    end_id,
@@ -109,6 +110,9 @@ def prepare_inputs(prompt,
         frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
         inputs["frequency_penalty"] = frequency_penalty_data
 
+    if return_log_probs_data is not None:
+        inputs["return_log_probs"] = return_log_probs_data
+
     if return_context_logits_data is not None:
         inputs["return_context_logits"] = return_context_logits_data
 
@@ -158,6 +162,7 @@ def run_inference(triton_client,
                   streaming,
                   beam_width,
                   overwrite_output_text,
+                  return_log_probs_data,
                   return_context_logits_data,
                   return_generation_logits_data,
                   end_id,
@@ -183,7 +188,7 @@ def run_inference(triton_client,
                            presence_penalty, frequency_penalty, temperature,
                            stop_words, bad_words, embedding_bias_words,
                            embedding_bias_weights, streaming, beam_width,
-                           return_context_logits_data,
+                           return_log_probs_data, return_context_logits_data,
                            return_generation_logits_data, end_id, pad_id,
                            num_draft_tokens, use_draft_logits,
                            num_return_sequences))
@@ -207,6 +212,21 @@ def run_inference(triton_client,
         raise Exception(
             "check_outputs flag only works with beam_width == 1 currently")
 
+    #Only include needed outputs
+    outputs = []
+    outputs.append(grpcclient.InferRequestedOutput("text_output"))
+    if return_log_probs_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("cum_log_probs"))
+        outputs.append(grpcclient.InferRequestedOutput("output_log_probs"))
+    if return_context_logits_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("context_logits"))
+    if return_generation_logits_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("generation_logits"))
+    if num_return_sequences > 1:
+        outputs.append(grpcclient.InferRequestedOutput("sequence_index"))
+    if batch_inputs:
+        outputs.append(grpcclient.InferRequestedOutput("batch_index"))
+
     output_texts = []
     user_data = UserData()
     for inputs in multiple_inputs:
@@ -217,6 +237,7 @@ def run_inference(triton_client,
         batch_size = inputs[0].shape()[0]
         triton_client.async_stream_infer(model_name,
                                          inputs,
+                                         outputs=outputs,
                                          request_id=request_id)
 
         #Wait for server to close the stream
@@ -236,8 +257,13 @@ def run_inference(triton_client,
                 print(result)
             else:
                 output = result.as_numpy('text_output')
-                batch_index = result.as_numpy('batch_index')[0][0]
-                seq_index = result.as_numpy('sequence_index')[0][0]
+
+                batch_index = result.as_numpy('batch_index')
+                batch_index = 0 if batch_index is None else batch_index[0][0]
+
+                seq_index = result.as_numpy('sequence_index')
+                seq_index = 0 if seq_index is None else seq_index[0][0]
+
                 if streaming and beam_width == 1:
                     if verbose and seq_index == 0:
                         print(batch_index, output, flush=True)
@@ -257,18 +283,21 @@ def run_inference(triton_client,
                         else:
                             print(f"{batch_index}: {output_text}", flush=True)
 
-                if return_context_logits_data is not None:
-                    context_logits = result.as_numpy('context_logits')
-                    if verbose:
-                        print(f"context_logits.shape: {context_logits.shape}")
-                        print(f"context_logits: {context_logits}")
-                if return_generation_logits_data is not None:
-                    generation_logits = result.as_numpy('generation_logits')
-                    if verbose:
-                        print(
-                            f"generation_logits.shape: {generation_logits.shape}"
-                        )
-                        print(f"generation_logits: {generation_logits}")
+                output_log_probs = result.as_numpy('output_log_probs')
+                if output_log_probs is not None and verbose:
+                    print(f"output_log_probs.shape: {output_log_probs.shape}")
+                    print(f"output_log_probs: {output_log_probs}")
+
+                context_logits = result.as_numpy('context_logits')
+                if context_logits is not None and verbose:
+                    print(f"context_logits.shape: {context_logits.shape}")
+                    print(f"context_logits: {context_logits}")
+
+                generation_logits = result.as_numpy("generation_logits")
+                if generation_logits is not None and verbose:
+                    print(
+                        f"generation_logits.shape: {generation_logits.shape}")
+                    print(f"generation_logits: {generation_logits}")
 
         if streaming and beam_width == 1:
             if verbose:
@@ -430,6 +459,14 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "--return-log-probs",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Return log probs",
+    )
+
+    parser.add_argument(
         "--return-context-logits",
         action="store_true",
         required=False,
@@ -477,6 +514,11 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
+    return_log_probs_data = None
+    if FLAGS.return_log_probs:
+        return_log_probs_data = np.array([[FLAGS.return_log_probs]],
+                                         dtype=bool)
+
     return_context_logits_data = None
     if FLAGS.return_context_logits:
         return_context_logits_data = np.array([[FLAGS.return_context_logits]],
@@ -504,6 +546,7 @@ if __name__ == '__main__':
         FLAGS.streaming,
         FLAGS.beam_width,
         FLAGS.overwrite_output_text,
+        return_log_probs_data,
         return_context_logits_data,
         return_generation_logits_data,
         FLAGS.end_id,

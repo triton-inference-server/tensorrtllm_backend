@@ -135,7 +135,6 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("streaming", streaming_data),
         prepare_tensor("end_id", end_id),
         prepare_tensor("pad_id", pad_id),
-        prepare_tensor("return_log_probs", return_log_probs_data),
         prepare_tensor("runtime_top_k", top_k_data),
         prepare_tensor("runtime_top_p", top_p_data),
     ]
@@ -167,6 +166,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
     if draft_ids_data is not None:
         inputs += [
             prepare_tensor("draft_input_ids", draft_ids_data),
+        ]
+    if return_log_probs_data is not None:
+        inputs += [
+            prepare_tensor("return_log_probs", return_log_probs_data),
         ]
     if return_context_logits_data is not None:
         inputs += [
@@ -224,6 +227,8 @@ def callback(user_data, result, error):
         if FLAGS.streaming:
             # Print the first sequence only in streaming.
             seq_idx = result.as_numpy('sequence_index')
+            seq_idx = seq_idx[0][0] if seq_idx is not None else 0
+
             if seq_idx == 0 and result.get_output('output_ids') is not None:
                 output_ids = result.as_numpy('output_ids')
                 seq_lens = result.as_numpy('sequence_length')
@@ -662,8 +667,10 @@ if __name__ == "__main__":
     top_p_data = np.array(top_p, dtype=np.float32)
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
-    return_log_probs = [[FLAGS.return_log_probs]]
-    return_log_probs_data = np.array(return_log_probs, dtype=bool)
+    return_log_probs_data = None
+    if FLAGS.return_log_probs:
+        return_log_probs_data = np.array([[FLAGS.return_log_probs]],
+                                         dtype=bool)
 
     return_context_logits_data = None
     if FLAGS.return_context_logits:
@@ -844,7 +851,27 @@ if __name__ == "__main__":
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         if output_ids is not None:
-                            seq_idx = result.as_numpy('sequence_index')[0][0]
+                            seq_idx = result.as_numpy('sequence_index')
+                            seq_idx = seq_idx[0][
+                                0] if seq_idx is not None else 0
+
+                            if FLAGS.return_log_probs:
+                                set_output(cum_log_probs,
+                                           result.as_numpy('cum_log_probs')[0],
+                                           seq_idx)
+                                set_output(
+                                    output_log_probs,
+                                    result.as_numpy('output_log_probs')[0],
+                                    seq_idx)
+                            if FLAGS.return_context_logits:
+                                context_logits = result.as_numpy(
+                                    'context_logits')
+                            if FLAGS.return_generation_logits:
+                                set_output(
+                                    generation_logits,
+                                    result.as_numpy('generation_logits')[0],
+                                    seq_idx)
+
                             sequence_lengths[seq_idx] = result.as_numpy(
                                 'sequence_length')[0][0]
                             if FLAGS.streaming:
@@ -906,8 +933,8 @@ if __name__ == "__main__":
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
                         seq_idx = result.as_numpy('sequence_index')
-                        if seq_idx is not None:
-                            seq_idx = seq_idx[0][0]
+                        seq_idx = seq_idx[0][0] if seq_idx is not None else 0
+
                         if FLAGS.return_log_probs:
                             set_output(cum_log_probs,
                                        result.as_numpy('cum_log_probs')[0],

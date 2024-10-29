@@ -38,6 +38,29 @@ def prepare_tensor(name, input, protocol):
     return t
 
 
+def prepare_outputs(protocol,
+                    return_log_probs=False,
+                    return_context_logits=False,
+                    return_generation_logits=False):
+
+    client_util = httpclient if protocol == "http" else grpcclient
+
+    outputs = []
+    outputs.append(client_util.InferRequestedOutput("text_output"))
+
+    if return_log_probs:
+        outputs.append(client_util.InferRequestedOutput("cum_log_probs"))
+        outputs.append(client_util.InferRequestedOutput("output_log_probs"))
+
+    if return_context_logits:
+        outputs.append(client_util.InferRequestedOutput("context_logits"))
+
+    if return_generation_logits:
+        outputs.append(client_util.InferRequestedOutput("generation_logits"))
+
+    return outputs
+
+
 def prepare_inputs(input_start_ids, input_len, pad_id, end_id, flags):
     output_len = np.ones([input_start_ids.shape[0], 1]).astype(
         np.int32) * flags.output_len
