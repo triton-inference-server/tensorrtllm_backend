@@ -375,7 +375,7 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("blip2-opt") || caseName.contains("whisper")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("blip2-opt") || caseName.contains("whisper") || caseName.contains("triton-extensive")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/trtllmExecutorWorker /opt/tritonserver/backends/tensorrtllm"
@@ -419,6 +419,9 @@ def runTRTLLMBackendTest(caseName)
     else if (caseName.contains("python-preproc-unit-tests")){
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/preprocessing/1 python3 -m pytest all_models/tests/test_multi_image_preprocess.py"
     }
+    else if (caseName.contains("triton-extensive")){
+      sh "cd ${BACKEND_ROOT}/ci/L0_backend_trtllm && BACKEND_ROOT=${backendPath} bash -ex test.sh"
+    }
     else if (caseName.contains("bart-ib") || caseName.contains("t5-ib")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
@@ -434,6 +437,9 @@ def runTRTLLMBackendTest(caseName)
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
       sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath}/decoder ${modelPath} ${tokenizerType} skip skip ${enginePath}/encoder"
+    }
+    else if (caseName.contains("triton-extensive")){
+      sh "cd ${BACKEND_ROOT}/ci/L0_backend_trtllm && bash -ex test.sh"
     }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
@@ -727,6 +733,11 @@ pipeline {
               stage("Test preprocessing python unit tests") {
                 steps {
                   runTRTLLMBackendTest("python-preproc-unit-tests")
+                }
+              }
+              stage("Test Triton extensive") {
+                steps {
+                  runTRTLLMBackendTest("triton-extensive")
                 }
               }
               stage("Test blip2-opt") {
