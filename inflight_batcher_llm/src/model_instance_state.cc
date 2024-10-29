@@ -943,6 +943,18 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                     utils::flatten<float>(
                         result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
                 }
+                else if (result.specDecFastLogitsInfo.has_value())
+                {
+                    auto const& logitsInfo = result.specDecFastLogitsInfo.value();
+                    size_t const numLogitsNeeded = (sizeof(logitsInfo) + 1) / sizeof(float);
+                    std::vector<int64_t> generationLogitsShape{1, 1, 1, numLogitsNeeded};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    std::vector<float> data(numLogitsNeeded);
+                    std::memcpy(data.data(), &logitsInfo, sizeof(logitsInfo));
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(data, generationLogitsBuffer, generationLogitsShape);
+                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::outputLogProbs) > 0)
