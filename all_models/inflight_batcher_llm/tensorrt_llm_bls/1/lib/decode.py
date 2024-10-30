@@ -266,6 +266,8 @@ class Decoder:
 
             draft_request = None
             if num_draft_tokens > 0:
+                request.min_length = np.array([num_draft_tokens],
+                                              dtype=np.int32)
                 draft_response: GenerationResponse = self._draft_generate_non_streaming(
                     cur_preproc, request, num_draft_tokens)
                 seq_len: int = draft_response.sequence_length[0][0]
@@ -278,12 +280,16 @@ class Decoder:
                         draft_logits = draft_response.generation_logits[0][0]
 
                 input_draft_tokens = draft_output_ids[len(input_ids):seq_len]
-                draft_request = DraftRequest(
-                    draft_input_ids=np.expand_dims(input_draft_tokens, 0))
-                if request.use_draft_logits is not None and request.use_draft_logits[
-                        0]:
-                    draft_request.draft_logits = np.expand_dims(
-                        draft_logits[-len(input_draft_tokens):], 0)
+                if len(input_draft_tokens) > 0:
+                    draft_request = DraftRequest(
+                        draft_input_ids=np.expand_dims(input_draft_tokens, 0))
+                    if request.use_draft_logits is not None and request.use_draft_logits[
+                            0]:
+                        draft_request.draft_logits = np.expand_dims(
+                            draft_logits[-len(input_draft_tokens):], 0)
+                else:
+                    draft_request = DraftRequest()
+                request.min_length = None
             else:
                 draft_request = DraftRequest()
             target_response = self._generate_non_streaming(
