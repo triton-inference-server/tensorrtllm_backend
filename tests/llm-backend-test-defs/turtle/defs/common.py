@@ -85,11 +85,18 @@ def search_and_replace(file_path, search_words, replace_words):
         file.write(updated_contents)
 
 
-def prepare_ib_model_repo(llm_backend_repo_root, new_model_repo):
+def prepare_ib_model_repo(llm_backend_repo_root,
+                          new_model_repo,
+                          model_name=""):
     origin_model_repo = os.path.join(llm_backend_repo_root, "all_models",
                                      "inflight_batcher_llm")
     check_call(f"rm -rf {new_model_repo}", shell=True)
     check_call(f"cp -R {origin_model_repo} {new_model_repo}", shell=True)
+
+    if model_name == "whisper":
+        whisper_model_repo = os.path.join(llm_backend_repo_root, "all_models",
+                                          "whisper", "whisper_bls")
+        check_call(f"cp -R {whisper_model_repo} {new_model_repo}", shell=True)
 
 
 def prepare_custom_config(llm_backend_repo_root, new_model_repo,
@@ -160,6 +167,8 @@ def modify_ib_config_pbtxt(
                                    "ensemble", "config.pbtxt")
     tensorrt_llm_bls_config = os.path.join(llm_backend_repo_root, REPO_PATH,
                                            "tensorrt_llm_bls", "config.pbtxt")
+    whisper_bls_config = os.path.join(llm_backend_repo_root, REPO_PATH,
+                                      "whisper_bls", "config.pbtxt")
 
     if VISUAL_ENGINE_PATH != "":
         multimodal_enc_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -248,6 +257,12 @@ def modify_ib_config_pbtxt(
         f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC} " \
         f"{f'--participant_ids {PARTICIPANT_IDS}' if PARTICIPANT_IDS else ''}",
         shell=True)
+
+    if os.path.exists(whisper_bls_config):
+        check_call(
+            f"python3 {fill_template_py} -i {whisper_bls_config} engine_dir:{ENCODER_ENGINE_PATH}," \
+            f"n_mels:128,zero_pad:false,triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},decoupled_mode:{DECOUPLED_MODE}",
+            shell=True)
 
 
 def validate_by_sequence_matcher(output_result, golden_results, threshold):

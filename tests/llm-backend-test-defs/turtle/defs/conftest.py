@@ -143,6 +143,13 @@ def llm_backend_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def llm_backend_whisper_example_root(llm_backend_root):
+    backend_whisper_example_root = os.path.join(llm_backend_root, "tools",
+                                                "whisper")
+    return backend_whisper_example_root
+
+
+@pytest.fixture(scope="session")
 def llm_backend_multimodal_example_root(llm_backend_root):
     backend_multimodal_example_root = os.path.join(llm_backend_root, "tools",
                                                    "multimodal")
@@ -211,6 +218,13 @@ def tensorrt_llm_enc_dec_example_root(llm_backend_root):
     llm_enc_dec_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                             "examples", "enc_dec")
     return llm_enc_dec_example_root
+
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_whisper_example_root(llm_backend_root):
+    llm_whisper_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                            "examples", "whisper")
+    return llm_whisper_example_root
 
 
 @pytest.fixture(scope="session")
@@ -480,6 +494,19 @@ def t5_small_model_root():
         t5_small_model_root
     ), f"{t5_small_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return t5_small_model_root
+
+
+@pytest.fixture(scope="session")
+def whisper_large_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    whisper_large_model_root = os.path.join(models_root, "whisper-models",
+                                            "large-v3")
+
+    assert os.path.exists(
+        whisper_large_model_root
+    ), f"{whisper_large_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return whisper_large_model_root
 
 
 # Returns an array of total memory for each available device

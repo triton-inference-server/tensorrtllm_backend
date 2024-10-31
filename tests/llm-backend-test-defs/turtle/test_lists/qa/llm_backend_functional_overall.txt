@@ -780,3 +780,7 @@ test_triton_rcca.py::test_rcca_bug_4342666[False-4-False-True-False-0-128-disabl
 test_triton_rcca.py::test_rcca_bug_4342666[False-4-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_memleak.py::test_valgrind_gpt_350m[False-1-top_k_top_p-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-True-tensorrt_llm_bls]
 test_triton_memleak.py::test_valgrind_llama_v2_13b[test_basic-True-1-False-True-True-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-4096-1-1-1-False-ensemble]
+test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-False-ensemble]
+test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-True-ensemble]
+test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-False-ensemble]
+test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-True-ensemble]
