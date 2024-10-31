@@ -244,6 +244,9 @@ private:
     /// @brief GPU device ids for this instance
     std::optional<std::vector<int32_t>> mGpuDeviceIds;
 
+    /// @brief Participant ids for this instance
+    std::optional<std::vector<int32_t>> mParticipantIds;
+
     /// @brief Boolean indicating whether it is using orchestrator mode or not
     bool mIsOrchestratorMode;
 
