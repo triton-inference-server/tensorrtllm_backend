@@ -1041,6 +1041,147 @@ def test_t5_small_enc_dec_ifb(
                                         TOKENIZER_PATH)
 
 
+@pytest.mark.parametrize("E2E_MODEL_NAME", ["ensemble"])
+@pytest.mark.parametrize("ACCUMULATE_TOKEN", ["True", "False"])
+@pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("PREPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("POSTPROCESSING_INSTANCE_COUNT", ["1"])
+@pytest.mark.parametrize("MAX_TOKENS_IN_KV_CACHE", ["24000"])
+@pytest.mark.parametrize("MAX_ATTENTION_WINDOW_SIZE", [""])
+@pytest.mark.parametrize("BATCH_SCHEDULER_POLICY", ["guaranteed_no_evict"])
+@pytest.mark.parametrize("CROSS_KV_CACHE_FRACTION", ["0.5"])
+@pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", ["0.2"])
+@pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
+                         ids=["disableTrtOverlap"])
+@pytest.mark.parametrize("BATCHING_STRATEGY", ["inflight_fused_batching"])
+@pytest.mark.parametrize("DECOUPLED_MODE", ["True", "False"],
+                         ids=["enableDecoupleMode", "disableDecoupleMode"])
+@pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
+@pytest.mark.parametrize("MAX_QUEUE_DELAY_MICROSECONDS", ["0"])
+@pytest.mark.parametrize("ENABLE_KV_CACHE_REUSE", ["False"])
+@pytest.mark.parametrize("NORMALIZE_LOG_PROBS", ["True"])
+@pytest.mark.parametrize("ENABLE_CHUNKED_CONTEXT", ["False"])
+@pytest.mark.parametrize("GPU_DEVICE_IDS", [""])
+@pytest.mark.parametrize("DECODING_MODE", ["top_k_top_p"])
+@pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
+@pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["True"])
+def test_whisper_large_v3_ifb(
+    E2E_MODEL_NAME,
+    MAX_TOKENS_IN_KV_CACHE,
+    MAX_ATTENTION_WINDOW_SIZE,
+    BATCH_SCHEDULER_POLICY,
+    KV_CACHE_FREE_GPU_MEM_FRACTION,
+    CROSS_KV_CACHE_FRACTION,
+    ENABLE_TRT_OVERLAP,
+    BATCHING_STRATEGY,
+    DECOUPLED_MODE,
+    TRITON_MAX_BATCH_SIZE,
+    MAX_QUEUE_DELAY_MICROSECONDS,
+    MAX_BEAM_WIDTH,
+    ENABLE_KV_CACHE_REUSE,
+    NORMALIZE_LOG_PROBS,
+    ENABLE_CHUNKED_CONTEXT,
+    GPU_DEVICE_IDS,
+    DECODING_MODE,
+    PREPROCESSING_INSTANCE_COUNT,
+    POSTPROCESSING_INSTANCE_COUNT,
+    ACCUMULATE_TOKEN,
+    BLS_INSTANCE_COUNT,
+    EXCLUDE_INPUT_IN_OUTPUT,
+    llm_backend_whisper_example_root,
+    tensorrt_llm_whisper_example_root,
+    whisper_large_model_root,
+    llm_backend_venv,
+):
+    if BATCHING_STRATEGY == "V1" and BATCH_SCHEDULER_POLICY == "max_utilization":
+        pytest.skip("Skipping. V1 doesn't support max_utilization.")
+
+    if BATCHING_STRATEGY == "V1" and FEATURE_NAME == "test_embedding_bias":
+        pytest.skip("Skipping. V1 doesn't support embedding_bias tensor yet.")
+
+    if E2E_MODEL_NAME == "ensemble" and ACCUMULATE_TOKEN == "True":
+        pytest.skip("Skipping.")
+
+    llm_backend_repo_root = os.environ["LLM_BACKEND_ROOT"]
+    # Build engine
+    ENCODER_ENGINE_DIR, ENGINE_DIR = prepare_whisper_large_engine(
+        tensorrt_llm_whisper_example_root, whisper_large_model_root)
+    # Prepare model repo
+    new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
+    prepare_ib_model_repo(llm_backend_repo_root,
+                          new_model_repo,
+                          model_name="whisper")
+
+    # Modify config.pbtxt
+    TOKENIZER_PATH = whisper_large_model_root
+
+    modify_ib_config_pbtxt(
+        new_model_repo,
+        ENGINE_DIR,
+        TOKENIZER_PATH,
+        llm_backend_repo_root,
+        DECOUPLED_MODE,
+        MAX_TOKENS_IN_KV_CACHE,
+        MAX_ATTENTION_WINDOW_SIZE,
+        BATCH_SCHEDULER_POLICY,
+        BATCHING_STRATEGY,
+        KV_CACHE_FREE_GPU_MEM_FRACTION,
+        EXCLUDE_INPUT_IN_OUTPUT,
+        ENABLE_TRT_OVERLAP,
+        TRITON_MAX_BATCH_SIZE,
+        MAX_QUEUE_DELAY_MICROSECONDS,
+        MAX_BEAM_WIDTH,
+        ENABLE_KV_CACHE_REUSE,
+        NORMALIZE_LOG_PROBS,
+        ENABLE_CHUNKED_CONTEXT,
+        GPU_DEVICE_IDS,
+        DECODING_MODE,
+        PREPROCESSING_INSTANCE_COUNT,
+        POSTPROCESSING_INSTANCE_COUNT,
+        ACCUMULATE_TOKEN,
+        BLS_INSTANCE_COUNT,
+        ENCODER_ENGINE_PATH=ENCODER_ENGINE_DIR,
+        CROSS_KV_CACHE_FRACTION=CROSS_KV_CACHE_FRACTION,
+    )
+
+    #####Whisper Specific#####
+    # Delete useless triton repo
+    check_call(f"rm -rf {new_model_repo}/preprocessing", shell=True)
+    check_call(f"rm -rf {new_model_repo}/postprocessing", shell=True)
+    check_call(f"rm -rf {new_model_repo}/ensemble", shell=True)
+    check_call(f"rm -rf {new_model_repo}/tensorrt_llm_bls", shell=True)
+
+    # Copy tiktoken and npz to triton repo
+    check_call(
+        f"cp -vf {whisper_large_model_root}/multilingual.tiktoken {new_model_repo}/whisper_bls/1",
+        shell=True)
+    check_call(
+        f"cp -vf {whisper_large_model_root}/mel_filters.npz {new_model_repo}/whisper_bls/1",
+        shell=True)
+
+    # Install 3rd party libs
+    check_call(f"pip3 install tiktoken soundfile", shell=True)
+    ##########################
+
+    # Launch Triton Server
+    launch_server_py = os.path.join(llm_backend_repo_root, "scripts",
+                                    "launch_triton_server.py")
+    check_call(
+        f"python3 {launch_server_py} --world_size=1 --model_repo={new_model_repo}",
+        shell=True)
+    check_server_ready()
+    # Run Test
+    run_cmd = [
+        f"{llm_backend_whisper_example_root}/client.py",
+        f"--audio-path={whisper_large_model_root}/1221-135766-0002.wav",
+    ]
+    if DECOUPLED_MODE == "True":
+        run_cmd += [
+            "--streaming",
+        ]
+    venv_check_call(llm_backend_venv, run_cmd)
+
+
 @pytest.mark.parametrize("TEST_TYPE", ["e2e", "client"])
 @pytest.mark.parametrize("ACCUMULATE_TOKEN", ["True", "False"])
 @pytest.mark.parametrize("BLS_INSTANCE_COUNT", ["1"])

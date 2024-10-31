@@ -138,6 +138,76 @@ def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
     return encoder_engine_dir, decoder_engine_dir
 
 
+def prepare_whisper_large_engine(tensorrt_llm_whisper_example_root,
+                                 whisper_large_model_root):
+    # Convert OpenAI Whisper Checkpoint
+    ckpt_dir = os.path.join(tensorrt_llm_whisper_example_root, "model_dir",
+                            "whisper_large")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_whisper_example_root}/convert_checkpoint.py",
+        f"--model_dir={whisper_large_model_root}",
+        f"--output_dir={ckpt_dir}",
+    ]
+
+    # Build encoder and decoder
+    encoder_engine_dir = os.path.join(tensorrt_llm_whisper_example_root,
+                                      "engine_dir", "whisper_large_encoder")
+    decoder_engine_dir = os.path.join(tensorrt_llm_whisper_example_root,
+                                      "engine_dir", "whisper_large_decoder")
+
+    encoder_build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}/encoder",
+        f"--output_dir={encoder_engine_dir}",
+        "--moe_plugin=disable",
+        "--enable_xqa=disable",
+        "--max_batch_size=8",
+        "--gemm_plugin=disable",
+        "--bert_attention_plugin=float16",
+        "--max_input_len=3000",
+        "--max_seq_len=3000",
+    ]
+    decoder_build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}/decoder",
+        f"--output_dir={decoder_engine_dir}",
+        "--moe_plugin=disable",
+        "--enable_xqa=disable",
+        "--max_beam_width=4",
+        "--max_batch_size=8",
+        "--max_seq_len=114",
+        "--max_input_len=14",
+        "--max_encoder_input_len=3000",
+        "--gemm_plugin=float16",
+        "--bert_attention_plugin=float16",
+        "--gpt_attention_plugin=float16",
+    ]
+    append_timing_cache_args(encoder_build_cmd)
+    append_timing_cache_args(decoder_build_cmd)
+
+    convert_cmd = " ".join(convert_cmd)
+    encoder_build_cmd = " ".join(encoder_build_cmd)
+    decoder_build_cmd = " ".join(decoder_build_cmd)
+    if not os.path.exists(encoder_build_cmd):
+        check_call(convert_cmd, shell=True)
+        check_call(encoder_build_cmd, shell=True)
+        check_call(decoder_build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {encoder_engine_dir}")
+        print_info(f"Reusing engine: {decoder_engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {encoder_build_cmd}")
+        print_info(f"Skipped: {decoder_build_cmd}")
+
+    assert os.path.exists(
+        encoder_engine_dir), f"{encoder_engine_dir} does not exists."
+    assert os.path.exists(
+        decoder_engine_dir), f"{decoder_engine_dir} does not exists."
+    return encoder_engine_dir, decoder_engine_dir
+
+
 def prepare_gpt_350m_engine(type, tensorrt_llm_gpt_example_root,
                             gpt_tokenizer_model_root):
     # Convert GPT weights from HF
