@@ -234,21 +234,14 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
             = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
     }
-    try
+
+    if (mParticipantIds)
     {
-        auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
-        // TODO: validate participantIds?
-        parallelConfig.setParticipantIds(participantIds);
+        parallelConfig.setParticipantIds(mParticipantIds.value());
     }
-    catch (std::exception const& e)
+    else if (!spawnProcesses && mIsOrchestratorMode)
     {
-        if (!spawnProcesses && mIsOrchestratorMode)
-        {
-            TLLM_THROW(
-                "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
-                "obtained from the config.pbtxt due to the following error: %s",
-                e.what());
-        }
+        TLLM_THROW("Spawning of processes was disabled in orchestrator mode, but participant IDs is missing.");
     }
     return parallelConfig;
 }
@@ -576,6 +569,16 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         mGpuDeviceIds = std::nullopt;
     }
     mIsOrchestratorMode = false;
+
+    auto participantIds = model_state_->getParticipantIds();
+    if (participantIds && !participantIds.value().empty())
+    {
+        mParticipantIds = participantIds.value()[mInstanceIndex % participantIds.value().size()];
+    }
+    else
+    {
+        mParticipantIds = std::nullopt;
+    }
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
