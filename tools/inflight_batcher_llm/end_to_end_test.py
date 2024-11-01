@@ -46,6 +46,7 @@ def test_functionality(client,
                        prompts,
                        output_lens,
                        vocabSizePadded=50257,
+                       return_log_probs=False,
                        return_context_logits=False,
                        return_generation_logits=False,
                        test_bls=False):
@@ -89,6 +90,13 @@ def test_functionality(client,
             utils.prepare_tensor("end_id", output_end_id, FLAGS.protocol),
             utils.prepare_tensor("pad_id", output_pad_id, FLAGS.protocol),
         ]
+        if return_log_probs:
+            return_log_probs_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_log_probs", return_log_probs_flag,
+                                     FLAGS.protocol),
+            ]
+
         if return_context_logits:
             return_context_logits_flag = np.array([[True]], dtype=bool)
             inputs += [
@@ -107,41 +115,30 @@ def test_functionality(client,
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("output_ids").astype(np.int32)
         seq_lengths = result.as_numpy("sequence_length")
-        cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
-        output_log_probs = result.as_numpy("output_log_probs").astype(
-            np.float32)
-        context_logits = result.as_numpy("context_logits").astype(np.float32)
-        generation_logits = result.as_numpy("generation_logits").astype(
-            np.float32)
-
-        print(f"context_logits.shape: {context_logits.shape}")
-        print(f"generation_logits.shape: {generation_logits.shape}")
+        if return_log_probs:
+            cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
+            output_log_probs = result.as_numpy("output_log_probs").astype(
+                np.float32)
+        if return_context_logits:
+            context_logits = result.as_numpy("context_logits").astype(
+                np.float32)
+            print(f"context_logits.shape: {context_logits.shape}")
+        if return_generation_logits:
+            generation_logits = result.as_numpy("generation_logits").astype(
+                np.float32)
+            print(f"generation_logits.shape: {generation_logits.shape}")
 
         model_name = "postprocessing"
         inputs = [
             utils.prepare_tensor("TOKENS_BATCH", output0, FLAGS.protocol),
             utils.prepare_tensor("SEQUENCE_LENGTH", seq_lengths,
                                  FLAGS.protocol),
-            utils.prepare_tensor("CUM_LOG_PROBS", cum_log_probs,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("CONTEXT_LOGITS", context_logits,
-                                 FLAGS.protocol),
-            utils.prepare_tensor("GENERATION_LOGITS", generation_logits,
-                                 FLAGS.protocol)
         ]
         inputs[0].set_data_from_numpy(output0)
         inputs[1].set_data_from_numpy(seq_lengths)
-        inputs[2].set_data_from_numpy(cum_log_probs)
-        inputs[3].set_data_from_numpy(output_log_probs)
-        inputs[4].set_data_from_numpy(context_logits)
-        inputs[5].set_data_from_numpy(generation_logits)
 
         result = client.infer(model_name, inputs, request_id=str(i))
         output0 = result.as_numpy("OUTPUT")
-        post_gen_logits = result.as_numpy("OUT_GENERATION_LOGITS")
-        assert verify_logits(generation_logits, post_gen_logits)
 
         # 2. Use ensemble model
         model_name = "ensemble"
@@ -158,6 +155,13 @@ def test_functionality(client,
             utils.prepare_tensor("stop_words", stop_words_list,
                                  FLAGS.protocol),
         ]
+
+        if return_log_probs:
+            return_log_probs_flag = np.array([[True]], dtype=bool)
+            inputs += [
+                utils.prepare_tensor("return_log_probs", return_log_probs_flag,
+                                     FLAGS.protocol),
+            ]
         if return_context_logits:
             return_context_logits_flag = np.array([[True]], dtype=bool)
             inputs += [
@@ -173,42 +177,47 @@ def test_functionality(client,
                                      FLAGS.protocol),
             ]
 
-        result = client.infer(model_name, inputs, request_id=str(i))
+        outputs = utils.prepare_outputs(FLAGS.protocol, return_log_probs,
+                                        return_context_logits,
+                                        return_generation_logits)
+
+        print(outputs)
+
+        result = client.infer(model_name,
+                              inputs,
+                              outputs=outputs,
+                              request_id=str(i))
 
         # 3. Check the results between manually ensembled models and the ensemble model
         ensemble_output = result.as_numpy('text_output')
-        ensemble_cum_log_probs = result.as_numpy('cum_log_probs')
-        ensemble_output_log_probs = result.as_numpy('output_log_probs')
-        ensemble_context_logits = result.as_numpy('context_logits')
-        ensemble_generation_logits = result.as_numpy('generation_logits')
 
+        print(f"ensemble output: {ensemble_output}")
         assert output0 == ensemble_output
-        assert cum_log_probs == ensemble_cum_log_probs
-        assert (output_log_probs == ensemble_output_log_probs).all()
-        assert verify_logits(context_logits, ensemble_context_logits)
-        assert verify_logits(generation_logits, ensemble_generation_logits)
+        if return_log_probs:
+            ensemble_cum_log_probs = result.as_numpy('cum_log_probs')
+            ensemble_output_log_probs = result.as_numpy('output_log_probs')
+            assert cum_log_probs == ensemble_cum_log_probs
+            assert (output_log_probs == ensemble_output_log_probs).all()
 
-        ensemble_context_logits_shape = ensemble_context_logits.shape
-        assert (len(ensemble_context_logits_shape) == 3)
         if return_context_logits:
+            ensemble_context_logits = result.as_numpy('context_logits')
+            assert verify_logits(context_logits, ensemble_context_logits)
+            ensemble_context_logits_shape = ensemble_context_logits.shape
+            assert (len(ensemble_context_logits_shape) == 3)
+
             # Expect shape [1, prompt_length, vocabSizePadded]
             assert (ensemble_context_logits_shape[0] == 1)  # One request
             assert (ensemble_context_logits_shape[1] == inputIds.size
                     )  # Prompt length
             assert (ensemble_context_logits_shape[2] == vocabSizePadded
                     )  # VocabSizePadded
-        else:
-            # Expect shape [1, 1, 1]
-            assert (ensemble_context_logits_shape[0] == 1)
-            assert (ensemble_context_logits_shape[1] == 1)
-            assert (ensemble_context_logits_shape[2] == 1)
-            assert (ensemble_context_logits[0][0][0] == 0
-                    )  # Dummy tensor's value is 0
-
-        ensemble_generation_logits_shape = ensemble_generation_logits.shape
-        assert (len(ensemble_generation_logits_shape) == 4)
 
         if return_generation_logits:
+            ensemble_generation_logits = result.as_numpy('generation_logits')
+            assert verify_logits(generation_logits, ensemble_generation_logits)
+            ensemble_generation_logits_shape = ensemble_generation_logits.shape
+            assert (len(ensemble_generation_logits_shape) == 4)
+
             # Expect shape [1, beam_width, output_length, vocabSizePadded]
             assert (ensemble_generation_logits_shape[0] == 1)  # One request
             assert (ensemble_generation_logits_shape[1] == 1
@@ -217,13 +226,6 @@ def test_functionality(client,
                     )  # Output length
             assert (ensemble_generation_logits_shape[3] == vocabSizePadded
                     )  # VocabSizePadded
-        else:
-            assert (ensemble_generation_logits_shape[0] == 1)
-            assert (ensemble_generation_logits_shape[1] == 1)
-            assert (ensemble_generation_logits_shape[2] == 1)
-            assert (ensemble_generation_logits_shape[3] == 1)
-            assert (ensemble_generation_logits[0][0][0][0] == 0
-                    )  # Dummy tensor's value is 0
 
         if test_bls:
             # 4. Use bls
@@ -260,43 +262,44 @@ def test_functionality(client,
                                          FLAGS.protocol),
                 ]
 
-            result = client.infer(model_name, inputs, request_id=str(i))
+            result = client.infer(model_name,
+                                  inputs,
+                                  outputs=outputs,
+                                  request_id=str(i))
 
             # 5. Check the results between manually ensembled models and the bls model
             bls_output = result.as_numpy('text_output')
-            bls_cum_log_probs = result.as_numpy('cum_log_probs')
-            bls_output_log_probs = result.as_numpy('output_log_probs')
-            bls_context_logits = result.as_numpy('context_logits')
-            bls_generation_logits = result.as_numpy('generation_logits')
-            continue
-
             assert output0 == bls_output
-            assert cum_log_probs == bls_cum_log_probs
-            assert (output_log_probs == bls_output_log_probs).all()
-            assert verify_logits(context_logits, bls_context_logits)
-            assert verify_logits(generation_logits, bls_generation_logits)
 
-            bls_context_logits_shape = bls_context_logits.shape
-            assert (len(bls_context_logits_shape) == 3)
+            if return_log_probs:
+                result.as_numpy('cum_log_probs')
+                result.as_numpy('output_log_probs')
+                # Disabled due to flaky results
+                #assert cum_log_probs == bls_cum_log_probs
+                #assert (output_log_probs == bls_output_log_probs).all()
+
             if return_context_logits:
+                bls_context_logits = result.as_numpy('context_logits')
+                bls_context_logits_shape = bls_context_logits.shape
+                # Disabled due to flaky results
+                #assert verify_logits(context_logits, bls_context_logits)
+
+                assert (len(bls_context_logits_shape) == 3)
                 # Expect shape [1, prompt_length, vocabSizePadded]
                 assert (bls_context_logits_shape[0] == 1)  # One request
                 assert (bls_context_logits_shape[1] == inputIds.size
                         )  # Prompt length
                 assert (bls_context_logits_shape[2] == vocabSizePadded
                         )  # VocabSizePadded
-            else:
-                # Expect shape [1, 1, 1]
-                assert (bls_context_logits_shape[0] == 1)
-                assert (bls_context_logits_shape[1] == 1)
-                assert (bls_context_logits_shape[2] == 1)
-                assert (bls_context_logits[0][0][0] == 0
-                        )  # Dummy tensor's value is 0
-
-            bls_generation_logits_shape = bls_generation_logits.shape
-            assert (len(bls_generation_logits_shape) == 4)
 
             if return_generation_logits:
+                bls_generation_logits = result.as_numpy('generation_logits')
+                # Disabled due to flaky results
+                #assert verify_logits(generation_logits, bls_generation_logits)
+
+                bls_generation_logits_shape = bls_generation_logits.shape
+                assert (len(bls_generation_logits_shape) == 4)
+
                 # Expect shape [1, beam_width, output_length, vocabSizePadded]
                 assert (bls_generation_logits_shape[0] == 1)  # One request
                 assert (bls_generation_logits_shape[1] == 1
@@ -305,13 +308,6 @@ def test_functionality(client,
                         )  # Output length
                 assert (bls_generation_logits_shape[3] == vocabSizePadded
                         )  # VocabSizePadded
-            else:
-                assert (bls_generation_logits_shape[0] == 1)
-                assert (bls_generation_logits_shape[1] == 1)
-                assert (bls_generation_logits_shape[2] == 1)
-                assert (bls_generation_logits_shape[3] == 1)
-                assert (bls_generation_logits[0][0][0][0] == 0
-                        )  # Dummy tensor's value is 0
 
         if FLAGS.verbose:
             print('Response: {}'.format(result.get_response()))
@@ -338,7 +334,8 @@ def test_performance(client, prompts, output_lens):
                                  FLAGS.protocol),
         ]
 
-        client.infer(model_name, inputs, request_id=str(i))
+        outputs = utils.prepare_outputs(FLAGS.protocol)
+        client.infer(model_name, inputs, outputs=outputs, request_id=str(i))
 
     print(f"[INFO] Start benchmarking on {len(prompts)} prompts.")
     latency = 0
@@ -360,13 +357,18 @@ def test_performance(client, prompts, output_lens):
                                  FLAGS.protocol),
         ]
 
+        outputs = utils.prepare_outputs(FLAGS.protocol)
         if FLAGS.protocol == "http":
             async_requests.append(
-                client.async_infer(model_name, inputs, request_id=str(i)))
+                client.async_infer(model_name,
+                                   inputs,
+                                   outputs=outputs,
+                                   request_id=str(i)))
         elif FLAGS.protocol == "grpc":
             async_requests.append(
                 client.async_infer(model_name,
                                    inputs,
+                                   outputs=outputs,
                                    callback=partial(callback, user_data,
                                                     datetime.now()),
                                    request_id=str(i)))
@@ -422,6 +424,11 @@ if __name__ == '__main__':
                         required=True,
                         help='Dataset path used for the test.')
 
+    parser.add_argument('--return-log-probs',
+                        action="store_true",
+                        default=False,
+                        help='Return log probs.')
+
     parser.add_argument('--return-context-logits',
                         action="store_true",
                         default=False,
@@ -467,6 +474,6 @@ if __name__ == '__main__':
 
     vocabSizePadded = 50257  # gpt
     test_functionality(client, prompts, output_lens, vocabSizePadded,
-                       FLAGS.return_context_logits,
+                       FLAGS.return_log_probs, FLAGS.return_context_logits,
                        FLAGS.return_generation_logits, FLAGS.test_bls)
     test_performance(client, prompts, output_lens)

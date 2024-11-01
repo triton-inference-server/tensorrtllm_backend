@@ -48,17 +48,26 @@ def prepare_inputs(prompt,
                    embedding_bias_weights,
                    streaming,
                    beam_width,
+                   return_log_probs_data,
                    return_context_logits_data,
                    return_generation_logits_data,
                    end_id,
                    pad_id,
                    num_draft_tokens=0,
-                   use_draft_logits=None):
+                   use_draft_logits=None,
+                   num_return_sequences=1):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.int32) * output_len
     streaming_data = np.array([[streaming]], dtype=bool)
+    # WAR: In TensorRT-LLM, setting 'num_return_sequences' results in
+    # returning num_return_sequences * beam_width beams in total.
+    # To ensure the correct number of 'num_return_sequences' beams are
+    # returned, we set num_return_sequences=1 when communicating with the
+    # server and then clip 'num_return_sequences' beams on the client side.
+    num_return_sequences_data = np.array(
+        [[num_return_sequences if beam_width == 1 else 1]], dtype=np.int32)
     beam_width_data = np.array([[beam_width]], dtype=np.int32)
     temperature_data = np.array([[temperature]], dtype=np.float32)
 
@@ -66,6 +75,7 @@ def prepare_inputs(prompt,
         "text_input": input0_data,
         "max_tokens": output0_len,
         "stream": streaming_data,
+        "num_return_sequences": num_return_sequences_data,
         "beam_width": beam_width_data,
         "temperature": temperature_data,
     }
@@ -99,6 +109,9 @@ def prepare_inputs(prompt,
         frequency_penalty = [[frequency_penalty]]
         frequency_penalty_data = np.array(frequency_penalty, dtype=np.float32)
         inputs["frequency_penalty"] = frequency_penalty_data
+
+    if return_log_probs_data is not None:
+        inputs["return_log_probs"] = return_log_probs_data
 
     if return_context_logits_data is not None:
         inputs["return_context_logits"] = return_context_logits_data
@@ -149,6 +162,7 @@ def run_inference(triton_client,
                   streaming,
                   beam_width,
                   overwrite_output_text,
+                  return_log_probs_data,
                   return_context_logits_data,
                   return_generation_logits_data,
                   end_id,
@@ -156,12 +170,16 @@ def run_inference(triton_client,
                   batch_inputs,
                   verbose,
                   num_draft_tokens=0,
-                  use_draft_logits=None):
+                  use_draft_logits=None,
+                  num_return_sequences=None):
 
     try:
         prompts = json.loads(prompt)
     except:
         prompts = [prompt]
+
+    if num_return_sequences is None:
+        num_return_sequences = beam_width
 
     bs1_inputs = []
     for prompt in prompts:
@@ -170,9 +188,10 @@ def run_inference(triton_client,
                            presence_penalty, frequency_penalty, temperature,
                            stop_words, bad_words, embedding_bias_words,
                            embedding_bias_weights, streaming, beam_width,
-                           return_context_logits_data,
+                           return_log_probs_data, return_context_logits_data,
                            return_generation_logits_data, end_id, pad_id,
-                           num_draft_tokens, use_draft_logits))
+                           num_draft_tokens, use_draft_logits,
+                           num_return_sequences))
 
     if batch_inputs:
         multiple_inputs = []
@@ -193,6 +212,21 @@ def run_inference(triton_client,
         raise Exception(
             "check_outputs flag only works with beam_width == 1 currently")
 
+    #Only include needed outputs
+    outputs = []
+    outputs.append(grpcclient.InferRequestedOutput("text_output"))
+    if return_log_probs_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("cum_log_probs"))
+        outputs.append(grpcclient.InferRequestedOutput("output_log_probs"))
+    if return_context_logits_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("context_logits"))
+    if return_generation_logits_data is not None:
+        outputs.append(grpcclient.InferRequestedOutput("generation_logits"))
+    if num_return_sequences > 1:
+        outputs.append(grpcclient.InferRequestedOutput("sequence_index"))
+    if batch_inputs:
+        outputs.append(grpcclient.InferRequestedOutput("batch_index"))
+
     output_texts = []
     user_data = UserData()
     for inputs in multiple_inputs:
@@ -203,13 +237,15 @@ def run_inference(triton_client,
         batch_size = inputs[0].shape()[0]
         triton_client.async_stream_infer(model_name,
                                          inputs,
+                                         outputs=outputs,
                                          request_id=request_id)
 
         #Wait for server to close the stream
         triton_client.stop_stream()
 
         # Parse the responses
-        batch_output_text = [''] * batch_size
+        batch_output_text = [[''] * num_return_sequences
+                             for _ in range(batch_size)]
         while True:
             try:
                 result = user_data._completed_requests.get(block=False)
@@ -221,41 +257,55 @@ def run_inference(triton_client,
                 print(result)
             else:
                 output = result.as_numpy('text_output')
-                batch_index = result.as_numpy('batch_index')[0][0]
+
+                batch_index = result.as_numpy('batch_index')
+                batch_index = 0 if batch_index is None else batch_index[0][0]
+
+                seq_index = result.as_numpy('sequence_index')
+                seq_index = 0 if seq_index is None else seq_index[0][0]
+
                 if streaming and beam_width == 1:
-                    if verbose:
+                    if verbose and seq_index == 0:
                         print(batch_index, output, flush=True)
                     new_output = output[0].decode("utf-8")
                     if overwrite_output_text:
-                        batch_output_text[batch_index] = new_output
+                        batch_output_text[batch_index][seq_index] = new_output
                     else:
-                        batch_output_text[batch_index] += new_output
+                        batch_output_text[batch_index][seq_index] += new_output
                 else:
                     output_text = output[0].decode("utf-8")
-                    batch_output_text[batch_index] = output_text
+                    batch_output_text[batch_index][seq_index] = output_text
                     if verbose:
-                        print(f"{batch_index}: {output_text}", flush=True)
+                        if num_return_sequences > 1:
+                            print(
+                                f"{batch_index} [{seq_index}]: {output_text}",
+                                flush=True)
+                        else:
+                            print(f"{batch_index}: {output_text}", flush=True)
 
-                if return_context_logits_data is not None:
-                    context_logits = result.as_numpy('context_logits')
-                    if verbose:
-                        print(f"context_logits.shape: {context_logits.shape}")
-                        print(f"context_logits: {context_logits}")
-                if return_generation_logits_data is not None:
-                    generation_logits = result.as_numpy('generation_logits')
-                    if verbose:
-                        print(
-                            f"generation_logits.shape: {generation_logits.shape}"
-                        )
-                        print(f"generation_logits: {generation_logits}")
+                output_log_probs = result.as_numpy('output_log_probs')
+                if output_log_probs is not None and verbose:
+                    print(f"output_log_probs.shape: {output_log_probs.shape}")
+                    print(f"output_log_probs: {output_log_probs}")
+
+                context_logits = result.as_numpy('context_logits')
+                if context_logits is not None and verbose:
+                    print(f"context_logits.shape: {context_logits.shape}")
+                    print(f"context_logits: {context_logits}")
+
+                generation_logits = result.as_numpy("generation_logits")
+                if generation_logits is not None and verbose:
+                    print(
+                        f"generation_logits.shape: {generation_logits.shape}")
+                    print(f"generation_logits: {generation_logits}")
 
         if streaming and beam_width == 1:
             if verbose:
                 for output_text in batch_output_text:
-                    print(output_text)
+                    print('\n'.join(output_text))
 
         for output_text in batch_output_text:
-            output_texts.append(output_text)
+            output_texts.extend(output_text)
 
     return output_texts
 
@@ -314,6 +364,15 @@ if __name__ == '__main__':
         required=False,
         default=False,
         help="Enable streaming mode. Default is False.",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--num-return-sequences",
+        type=int,
+        required=False,
+        default=None,
+        help="Number of sequences to generate.",
     )
 
     parser.add_argument(
@@ -400,6 +459,14 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "--return-log-probs",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Return log probs",
+    )
+
+    parser.add_argument(
         "--return-context-logits",
         action="store_true",
         required=False,
@@ -447,6 +514,11 @@ if __name__ == '__main__':
         print("client creation failed: " + str(e))
         sys.exit(1)
 
+    return_log_probs_data = None
+    if FLAGS.return_log_probs:
+        return_log_probs_data = np.array([[FLAGS.return_log_probs]],
+                                         dtype=bool)
+
     return_context_logits_data = None
     if FLAGS.return_context_logits:
         return_context_logits_data = np.array([[FLAGS.return_context_logits]],
@@ -458,19 +530,38 @@ if __name__ == '__main__':
             [[FLAGS.return_generation_logits]], dtype=bool)
 
     output_texts = run_inference(
-        client, FLAGS.prompt, FLAGS.output_len, FLAGS.request_id,
-        FLAGS.repetition_penalty, FLAGS.presence_penalty,
-        FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
-        FLAGS.bad_words, embedding_bias_words, embedding_bias_weights,
-        FLAGS.model_name, FLAGS.streaming, FLAGS.beam_width,
-        FLAGS.overwrite_output_text, return_context_logits_data,
-        return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id,
-        FLAGS.batch_inputs, True)
+        client,
+        FLAGS.prompt,
+        FLAGS.output_len,
+        FLAGS.request_id,
+        FLAGS.repetition_penalty,
+        FLAGS.presence_penalty,
+        FLAGS.frequency_penalty,
+        FLAGS.temperature,
+        FLAGS.stop_words,
+        FLAGS.bad_words,
+        embedding_bias_words,
+        embedding_bias_weights,
+        FLAGS.model_name,
+        FLAGS.streaming,
+        FLAGS.beam_width,
+        FLAGS.overwrite_output_text,
+        return_log_probs_data,
+        return_context_logits_data,
+        return_generation_logits_data,
+        FLAGS.end_id,
+        FLAGS.pad_id,
+        FLAGS.batch_inputs,
+        True,
+        num_return_sequences=FLAGS.num_return_sequences)
 
     if FLAGS.check_outputs:
         expected_outputs = json.loads(FLAGS.expected_outputs)
-        assert len(expected_outputs) == len(output_texts)
-        assert all([
-            output_text == expected_output for output_text, expected_output in
-            zip(output_texts, expected_outputs)
-        ])
+        n = FLAGS.num_return_sequences or FLAGS.beam_width
+        assert len(expected_outputs) * n == len(output_texts)
+
+        batched_output_texts = [
+            output_texts[i:i + n] for i in range(0, len(output_texts), n)
+        ]
+        for out_texts, expected in zip(batched_output_texts, expected_outputs):
+            assert all([out == expected for out in out_texts])

@@ -24,7 +24,7 @@ docker build -t trtllm_base \
 cd ../
 # Need to use the aligned version of the Triton server repository.
 # Refer to the support matrix for the aligned version: https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html
-TRITON_SERVER_REPO_TAG=${TRITON_SERVER_REPO_TAG:-r24.09}
+TRITON_SERVER_REPO_TAG=${TRITON_SERVER_REPO_TAG:-r24.10}
 git clone -b ${TRITON_SERVER_REPO_TAG} https://github.com/triton-inference-server/server.git
 cd server
 
@@ -33,8 +33,8 @@ cd server
 # the tags of the TensorRT-LLM backend and Python backend repositories that will
 # be used to build the container.
 TRTLLM_BASE_IMAGE=${TRTLLM_BASE_IMAGE:-trtllm_base}
-TENSORRTLLM_BACKEND_REPO_TAG=${TENSORRTLLM_BACKEND_REPO_TAG:-v0.13.0}
-PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.09}
+TENSORRTLLM_BACKEND_REPO_TAG=${TENSORRTLLM_BACKEND_REPO_TAG:-v0.14.0}
+PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.10}
 
 # The flags for some features or endpoints can be removed if not needed.
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
@@ -42,6 +42,7 @@ PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.09}
               --filesystem=gcs --filesystem=s3 --filesystem=azure_storage \
               --endpoint=http --endpoint=grpc --endpoint=sagemaker --endpoint=vertex-ai \
               --backend=ensemble --enable-gpu --no-container-pull \
+              --repoagent=checksum --cache=local --cache=redis \
               --image=base,${TRTLLM_BASE_IMAGE} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
               --backend=python:${PYTHON_BACKEND_REPO_TAG}

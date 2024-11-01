@@ -181,10 +181,18 @@ def extract_trtllm_outputs(result):
     assert sequence_length_data.shape[0] == 1
     assert sequence_length_data.shape[1] == 1
     sequence_length = sequence_length_data[0, 0]
-    cum_log_probs = result.as_numpy("cum_log_probs").astype(np.float32)
-    output_log_probs = result.as_numpy("output_log_probs").astype(np.float32)
-    context_logits = result.as_numpy("context_logits").astype(np.float32)
-    generation_logits = result.as_numpy("generation_logits").astype(np.float32)
+    cum_log_probs = result.as_numpy("cum_log_probs")
+    if cum_log_probs is not None:
+        cum_log_probs = cum_log_probs.astype(np.float32)
+    output_log_probs = result.as_numpy("output_log_probs")
+    if output_log_probs is not None:
+        output_log_probs = output_log_probs.astype(np.float32)
+    context_logits = result.as_numpy("context_logits")
+    if context_logits is not None:
+        context_logits.astype(np.float32)
+    generation_logits = result.as_numpy("generation_logits")
+    if generation_logits is not None:
+        generation_logits = generation_logits.astype(np.float32)
     return output_ids, sequence_length, cum_log_probs, output_log_probs, context_logits, generation_logits
 
 
@@ -195,10 +203,6 @@ def get_postprocessor_inputs(output_ids, cum_log_probs, output_log_probs,
         prepare_tensor("TOKENS_BATCH", output_ids_data),
         prepare_tensor("SEQUENCE_LENGTH",
                        np.array([[len(output_ids)]], dtype=np.int32)),
-        prepare_tensor("CUM_LOG_PROBS", cum_log_probs),
-        prepare_tensor("OUTPUT_LOG_PROBS", output_log_probs),
-        prepare_tensor("CONTEXT_LOGITS", context_logits),
-        prepare_tensor("GENERATION_LOGITS", generation_logits)
     ]
 
     return inputs

@@ -161,6 +161,7 @@ class GenerationResponse:
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
+    sequence_index: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -171,6 +172,7 @@ class Response:
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
+    sequence_index: Optional[np.ndarray] = None
 
     def __eq__(self, o) -> bool:
         """Just for testing"""
@@ -181,7 +183,8 @@ class Response:
                 and np.array_equal(self.output_log_probs, o.output_log_probs)
                 and np.array_equal(self.context_logits, o.context_logits)
                 and np.array_equal(self.generation_logits, o.generation_logits)
-                and np.array_equal(self.batch_index, o.batch_index))
+                and np.array_equal(self.batch_index, o.batch_index)
+                and np.array_equal(self.sequence_index, o.sequence_index))
 
 
 class Decoder:
@@ -355,14 +358,16 @@ class Decoder:
                 )
 
             batch_index = gen_response.batch_index
-            if batch_index.ndim != 2:
-                raise Exception("Expected batch_index tensor to have 2 dims.")
-            if batch_index.shape[0] != 1:
-                raise Exception("Expected batch size of 1")
-            if batch_index.shape[1] != 1:
-                raise Exception("Expected only one batch_index")
+            if batch_index is not None:
+                if batch_index.ndim != 2:
+                    raise Exception(
+                        "Expected batch_index tensor to have 2 dims.")
+                if batch_index.shape[0] != 1:
+                    raise Exception("Expected batch size of 1")
+                if batch_index.shape[1] != 1:
+                    raise Exception("Expected only one batch_index")
 
-            batch_index = batch_index[0][0]
+            batch_index = batch_index[0][0] if batch_index is not None else 0
 
             self._accumulated_tokens[batch_index] = new_tokens if (
                 self._accumulated_tokens[batch_index] is None
