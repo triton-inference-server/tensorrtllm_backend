@@ -28,6 +28,7 @@
 #include "utils.h"
 
 #include "tensorrt_llm/common/mpiUtils.h"
+#include "tensorrt_llm/executor/serialization.h"
 
 #include <nlohmann/json.hpp>
 
@@ -102,6 +103,17 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
             "max_tokens_in_paged_kv_cache");
     }
 
+    std::optional<float> crossKvCacheFraction = std::nullopt;
+    try
+    {
+        crossKvCacheFraction = model_state_->GetParameter<float>("cross_kv_cache_fraction");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("cross_kv_cache_fraction is not specified, error if it's encoder-decoder model, otherwise ok");
+    }
+
     std::optional<size_t> kvCacheHostCacheSize = std::nullopt;
     try
     {
@@ -168,7 +180,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
     }
 
     return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowVec, sinkTokenLength,
-        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks);
+        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks, crossKvCacheFraction);
 }
 
 executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
@@ -206,33 +218,36 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
         parallelConfig.setDeviceIds(mGpuDeviceIds.value());
     }
 
-    char const* str = std::getenv("TRTLLM_ORCHESTRATOR");
-    if (str && std::atoi(str) != 0)
+    char const* useOrchestratorMode = std::getenv("TRTLLM_ORCHESTRATOR");
+    auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
+    auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
+    if (useOrchestratorMode && std::atoi(useOrchestratorMode) != 0)
     {
         parallelConfig.setCommunicationMode(executor::CommunicationMode::kORCHESTRATOR);
+        mIsOrchestratorMode = true;
+
+        tensorrt_llm::mpi::initialize(tensorrt_llm::mpi::MpiThreadSupport::THREAD_MULTIPLE);
+
         auto const workerExecutablePath = model_state_->GetExecutorWorkerPath();
-        auto const spawnProcessesEnvVar = std::getenv("TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES");
-        auto const spawnProcesses = !spawnProcessesEnvVar || std::atoi(spawnProcessesEnvVar);
         auto const isOrchestrator = spawnProcesses || (tensorrt_llm::mpi::MpiComm::world().getRank() == 0);
         auto orchestratorConfig
             = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
-
-        if (!spawnProcesses)
+    }
+    try
+    {
+        auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
+        // TODO: validate participantIds?
+        parallelConfig.setParticipantIds(participantIds);
+    }
+    catch (std::exception const& e)
+    {
+        if (!spawnProcesses && mIsOrchestratorMode)
         {
-            try
-            {
-                auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
-                // TODO: validate participantIds?
-                parallelConfig.setParticipantIds(participantIds);
-            }
-            catch (std::exception const& e)
-            {
-                TLLM_THROW(
-                    "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
-                    "obtained from the config.pbtxt due to the following error: %s",
-                    e.what());
-            }
+            TLLM_THROW(
+                "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
+                "obtained from the config.pbtxt due to the following error: %s",
+                e.what());
         }
     }
     return parallelConfig;
@@ -530,6 +545,7 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     {
         mGpuDeviceIds = std::nullopt;
     }
+    mIsOrchestratorMode = false;
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
@@ -644,11 +660,14 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         // Shutdown the worker ranks which will cause them to wait for leader/orchestrator to terminate
         mExecutor->shutdown();
 
-        // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
-        // we still don't want to return from initialize since Triton server would appear as ready
-        // So exit
-        TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
-        exit(0);
+        if (mExecutor->isParticipant())
+        {
+            // Since leader/orchestrator can terminate if there are issues loading other models like pre/post processing
+            // we still don't want to return from initialize since Triton server would appear as ready
+            // So exit
+            TLLM_LOG_INFO("Terminating worker process since shutdown signal was received from leader or orchestrator");
+            exit(0);
+        }
     }
 }
 
@@ -701,13 +720,15 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 }
 
 // Split batched TRITONBACKEND_Request into one executor:Request object per sample.
-std::vector<executor::Request> ModelInstanceState::createExecutorRequests(
-    TRITONBACKEND_Request* request, bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType)
+std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITONBACKEND_Request* request,
+    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
+    executor::RequestType requestType = utils::getRequestType(request);
+
     return utils::createRequestsFromInputTensors(
-        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType);
+        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType, isOrchestrator);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -735,8 +756,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequests = createExecutorRequests(
-                request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(), mModelType);
+            auto executorRequests = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput,
+                isDecoupled(), mModelType, mIsOrchestratorMode);
 
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             TRITONBACKEND_ResponseFactory* factory;
@@ -770,7 +791,8 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        requestIdsSet});
+                        static_cast<int32_t>(requestIds.size()), executorRequest.getNumReturnSequences(), requestIdsSet,
+                        executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
             {
@@ -818,6 +840,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             auto result = response.getResult();
             isFinal = result.isFinal;
             error = nullptr;
+            auto sequenceIndex = result.sequenceIndex;
             auto& outputIds = result.outputTokenIds;
             std::vector<int32_t> beamLength(outputIds.size());
             int32_t maxBeamLength = -1;
@@ -874,14 +897,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
                     utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> contextLogitsShape{1, 1, 1};
-                    auto contextLogitsType = TRITONSERVER_TYPE_FP32;
-                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-                    utils::flatten<float>(std::vector<float>{0}, contextLogitsBuffer, contextLogitsShape);
-                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::generationLogits) > 0)
@@ -896,14 +911,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(
                         result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
-                }
-                else
-                {
-                    std::vector<int64_t> generationLogitsShape{1, 1, 1, 1};
-                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
-                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
-                        generationLogitsType, OutputFieldsNames::generationLogits);
-                    utils::flatten<float>(std::vector<float>{0}, generationLogitsBuffer, generationLogitsShape);
                 }
             }
 
@@ -928,15 +935,6 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
                     utils::flatten<float>(logProbs, outputLogProbsBuffer, outputLogProbsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> outputLogProbsShape{1, 1, requestData.inputTokensSize};
-                    auto outputLogProbsType = TRITONSERVER_TYPE_FP32;
-                    auto outputLogProbsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, outputLogProbsShape, outputLogProbsType, OutputFieldsNames::outputLogProbs);
-                    utils::flatten<float>(
-                        std::vector<float>(requestData.inputTokensSize), outputLogProbsBuffer, outputLogProbsShape);
-                }
             }
 
             if (requestData.outputNames.count(OutputFieldsNames::cumLogProbs) > 0)
@@ -949,17 +947,9 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
                     utils::flatten<float>(result.cumLogProbs.value(), cumLogProbsBuffer, cumLogProbsShape);
                 }
-                else
-                {
-                    std::vector<int64_t> cumLogProbsShape{1, 1};
-                    auto cumLogProbsType = TRITONSERVER_TYPE_FP32;
-                    auto cumLogProbsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, cumLogProbsShape, cumLogProbsType, OutputFieldsNames::cumLogProbs);
-                    utils::flatten<float>(std::vector<float>{0}, cumLogProbsBuffer, cumLogProbsShape);
-                }
             }
 
-            if (requestData.outputNames.count(OutputFieldsNames::batchIndex) > 0)
+            if (requestData.outputNames.count(OutputFieldsNames::batchIndex) > 0 && requestData.batchSize > 1)
             {
                 std::vector<int64_t> batchIndexShape{1, 1};
                 auto batchIndexType = TRITONSERVER_TYPE_INT32;
@@ -967,6 +957,39 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                     tritonResponse, batchIndexShape, batchIndexType, OutputFieldsNames::batchIndex);
                 std::vector<int32_t> batchIndexVec = {requestData.batchIndex};
                 utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
+            }
+
+            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0 && requestData.numReturnSequences)
+            {
+                std::vector<int64_t> sequenceIndexShape{1, 1};
+                auto sequenceIndexType = TRITONSERVER_TYPE_INT32;
+                auto sequenceIndexBuffer = utils::getResponseBuffer<int32_t>(
+                    tritonResponse, sequenceIndexShape, sequenceIndexType, OutputFieldsNames::sequenceIndex);
+                std::vector<int32_t> sequenceIndexVec = {sequenceIndex};
+                utils::flatten<int32_t>(sequenceIndexVec, sequenceIndexBuffer, sequenceIndexShape);
+            }
+
+            if (requestData.requestType == executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY)
+            {
+                if (response.getResult().contextPhaseParams.has_value())
+                {
+                    size_t contextPhaseParamsSize
+                        = executor::Serialization::serializedSize(response.getResult().contextPhaseParams.value());
+                    std::vector<int64_t> contextPhaseParamsShape{1, static_cast<int64_t>(contextPhaseParamsSize)};
+                    TRITONSERVER_DataType contextPhaseParamsType = TRITONSERVER_TYPE_UINT8;
+                    auto contextPhaseParamsBuffer = utils::getResponseBuffer<uint8_t>(tritonResponse,
+                        contextPhaseParamsShape, contextPhaseParamsType, OutputFieldsNames::contextPhaseParams);
+
+                    std::stringbuf contextPhaseSerializationBuffer(std::ios_base::out | std::ios_base::in);
+                    contextPhaseSerializationBuffer.pubsetbuf(
+                        reinterpret_cast<char*>(contextPhaseParamsBuffer), contextPhaseParamsSize);
+                    std::ostream os(&contextPhaseSerializationBuffer);
+                    executor::Serialization::serialize(response.getResult().contextPhaseParams.value(), os);
+                }
+                else
+                {
+                    TLLM_THROW("contextParams must be present in the response");
+                }
             }
         }
         else

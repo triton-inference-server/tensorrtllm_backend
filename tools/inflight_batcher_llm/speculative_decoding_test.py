@@ -264,7 +264,7 @@ if __name__ == '__main__':
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
                 FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
-                None, FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose)
+                None, None, FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose)
             assert (len(output_control) == 1)
             output_control = output_control[0]
             if FLAGS.verbose:
@@ -275,15 +275,21 @@ if __name__ == '__main__':
                 if FLAGS.verbose:
                     print(f"Calling BLS speculative decoding model",
                           flush=True)
+
+                return_generation_logits_data = None
+                if FLAGS.return_generation_logits:
+                    return_generation_logits_data = np.array(
+                        [[FLAGS.return_generation_logits]], dtype=bool)
+
                 output_speculative = end_to_end_grpc_client.run_inference(
                     client_target, prompt, output_len, str(request_id),
                     FLAGS.repetition_penalty, FLAGS.presence_penalty,
                     FLAGS.frequency_penalty, FLAGS.temperature,
                     FLAGS.stop_words, FLAGS.bad_words, [], [],
-                    "tensorrt_llm_bls", False, 1, False, None,
-                    np.array([[FLAGS.return_generation_logits]], dtype=bool),
-                    FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose,
-                    FLAGS.num_draft_tokens, FLAGS.use_draft_logits)
+                    "tensorrt_llm_bls", False, 1, False, None, None,
+                    return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id,
+                    False, FLAGS.verbose, FLAGS.num_draft_tokens,
+                    FLAGS.use_draft_logits)
                 assert (len(output_speculative) == 1)
                 output_speculative = output_speculative[0]
                 if FLAGS.verbose:

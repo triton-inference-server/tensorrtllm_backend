@@ -36,6 +36,7 @@
 #include "triton/core/tritonserver.h"
 #include <map>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 
 using namespace tensorrt_llm;
@@ -50,16 +51,19 @@ struct InputFieldsNames
     static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
+    static constexpr char const* numReturnSequences = "num_return_sequences";
     static constexpr char const* endId = "end_id";
     static constexpr char const* padId = "pad_id";
     static constexpr char const* badWords = "bad_words_list";
     static constexpr char const* stopWords = "stop_words_list";
     static constexpr char const* embeddingBias = "embedding_bias";
+    static constexpr char const* contextPhaseParams = "context_phase_params";
 
     // OutputConfig
     static constexpr char const* returnLogProbs = "return_log_probs";
     static constexpr char const* returnGenerationLogits = "return_generation_logits";
     static constexpr char const* returnContextLogits = "return_context_logits";
+    static constexpr char const* excludeInputFromOutput = "exclude_input_in_output";
 
     // SamplingConfig
     static constexpr char const* beamWidth = "beam_width";
@@ -103,10 +107,17 @@ struct OutputFieldsNames
     static constexpr char const* outputLogProbs = "output_log_probs";
     static constexpr char const* cumLogProbs = "cum_log_probs";
     static constexpr char const* batchIndex = "batch_index";
+    static constexpr char const* sequenceIndex = "sequence_index";
+    static constexpr char const* contextPhaseParams = "context_phase_params";
 };
 
 inline static std::string const kStopInputTensorName = "stop";
 inline static std::string const kStreamingInputTensorName = "streaming";
+inline static std::string const kRequestTypeParameterName = "request_type";
+inline static std::unordered_map<std::string, executor::RequestType> stringToRequestType
+    = {{"context_and_generation", executor::RequestType::REQUEST_TYPE_CONTEXT_AND_GENERATION},
+        {"context_only", executor::RequestType::REQUEST_TYPE_CONTEXT_ONLY},
+        {"generation_only", executor::RequestType::REQUEST_TYPE_GENERATION_ONLY}};
 
 namespace utils
 {
@@ -135,14 +146,16 @@ std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigF
     InputTensors const& inputsTensors);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
-std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(InputTensors const& inputsTensors);
+std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
+    InputTensors const& inputsTensors, size_t inputLen);
 
 /// @brief Construct executor::LoraConfig from input tensors
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors);
 
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
-    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType);
+    bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
+    executor::RequestType requestType, bool isOrchestrator);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t
@@ -275,6 +288,52 @@ void* getResponseBuffer(TRITONBACKEND_Response* tritonResponse, std::vector<int6
     return tritonBuffer;
 }
 
+template <typename T>
+struct ParameterTypeMap
+{
+    static const TRITONSERVER_ParameterType parameter_type;
+};
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<int32_t>::parameter_type;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<std::string>::parameter_type;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<bool>::parameter_type;
+
+template <>
+const TRITONSERVER_ParameterType ParameterTypeMap<double>::parameter_type;
+
+template <typename T>
+std::optional<T> getRequestParameter(TRITONBACKEND_Request* request, std::string const& name)
+{
+    uint32_t parameter_count;
+    TRITONBACKEND_RequestParameterCount(request, &parameter_count);
+    for (size_t i = 0; i < parameter_count; i++)
+    {
+        char const* request_key;
+        TRITONSERVER_ParameterType parameter_type;
+        void const* value;
+        TRITONBACKEND_RequestParameter(request, i, &request_key, &parameter_type, &value);
+        if (parameter_type == ParameterTypeMap<T>::parameter_type && request_key == name)
+        {
+            if (std::is_same<T, std::string>::value)
+            {
+                return reinterpret_cast<char const*>(value);
+            }
+            else
+            {
+                return *reinterpret_cast<T const*>(value);
+            }
+        }
+    }
+
+    // If the parameter is not found, we would return a nullopt.
+    return std::nullopt;
+}
+
 /// @brief Convert a sparse tensor to a list of VecTokens
 std::list<executor::VecTokens> convertWordList(executor::VecTokens const& sparseList);
 
@@ -289,6 +348,26 @@ std::vector<std::vector<int32_t>> csvStrToVecVecInt(std::string const& str);
 
 /// Split a string by a delimiter and return the tokens in a vector of strings.
 std::vector<std::string> split(std::string const& str, char delimiter);
+
+/// @brief Get the TRTLLM request type from the request parameters.
+executor::RequestType getRequestType(TRITONBACKEND_Request* request);
+
+struct MemoryBuffer : std::streambuf
+{
+    MemoryBuffer(char* base, size_t size)
+    {
+        this->setg(base, base, base + size);
+    }
+};
+
+struct InMemoryStreamBuffer : virtual MemoryBuffer, std::istream
+{
+    InMemoryStreamBuffer(char* base, size_t size)
+        : MemoryBuffer(base, size)
+        , std::istream(static_cast<std::streambuf*>(this))
+    {
+    }
+};
 
 } // namespace utils
 } // namespace triton::backend::inflight_batcher_llm

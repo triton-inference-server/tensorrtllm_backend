@@ -175,10 +175,7 @@ def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
     return trtllm.SamplingConfig(**kwargs)
 
 
-def get_output_config_from_request(request,
-                                   exclude_input_from_output,
-                                   batch_size=1,
-                                   batch_index=0):
+def get_output_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
     kwargs["return_log_probs"] = get_input_scalar_by_name(
         request, 'return_log_probs', batch_size, batch_index)
@@ -186,7 +183,6 @@ def get_output_config_from_request(request,
         request, 'return_context_logits', batch_size, batch_index)
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
         request, 'return_generation_logits', batch_size, batch_index)
-    kwargs["exclude_input_from_output"] = exclude_input_from_output
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
@@ -295,6 +291,10 @@ def convert_request(request, exclude_input_from_output, decoupled):
         if inputs['streaming'] and not decoupled:
             raise pb_utils.TritonModelException(
                 "Streaming is only supported in decoupled mode.")
+
+        inputs['num_return_sequences'] = get_input_scalar_by_name(
+            request, 'num_return_sequences', batch_size, batch_index) or 1
+
         inputs['end_id'] = get_input_scalar_by_name(request, 'end_id',
                                                     batch_size, batch_index)
         inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id',
@@ -312,8 +312,18 @@ def convert_request(request, exclude_input_from_output, decoupled):
 
         sampling_config = get_sampling_config_from_request(
             request, batch_size, batch_index)
-        output_config = get_output_config_from_request(
-            request, exclude_input_from_output, batch_size, batch_index)
+        output_config = get_output_config_from_request(request, batch_size,
+                                                       batch_index)
+        req_exclude_input_from_output = get_input_scalar_by_name(
+            request, 'exclude_input_in_output', batch_size, batch_index)
+        if req_exclude_input_from_output is None:
+            # if request doesn't specify exclude_input_from_output, try to use the parameter
+            output_config.exclude_input_from_output = (
+                exclude_input_from_output
+                if exclude_input_from_output is not None else false)
+        else:
+            output_config.exclude_input_from_output = req_exclude_input_from_output
+
         external_draft_tokens_config = get_external_draft_tokens_config_from_request(
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
@@ -333,7 +343,8 @@ def convert_request(request, exclude_input_from_output, decoupled):
     return requests
 
 
-def convert_response(response, batch_index):
+def convert_response(response, batch_index, batch_size, num_return_sequences):
+
     if response.has_error():
         return pb_utils.InferenceResponse(output_tensors=[],
                                           error=pb_utils.TritonError(
@@ -346,36 +357,50 @@ def convert_response(response, batch_index):
                          -1, np.int32)
     for idx, beam in enumerate(result.output_token_ids):
         output_ids[0, idx, :len(beam)] = beam
+
     output_tensors = [
         pb_utils.Tensor("output_ids", output_ids),
         pb_utils.Tensor("sequence_length", beam_lengths),
     ]
-    output_tensors.append(
-        pb_utils.Tensor(
-            "cum_log_probs",
-            np.expand_dims(np.array(result.cum_log_probs, np.float32), 0)
-            if result.cum_log_probs is not None else np.zeros(
-                (1, 1), np.float32)))
-    output_tensors.append(
-        pb_utils.Tensor(
-            "output_log_probs",
-            np.expand_dims(np.array(result.log_probs, np.float32), 0) if
-            result.log_probs is not None else np.zeros((1, 1, 1), np.float32)))
-    output_tensors.append(
-        pb_utils.Tensor(
-            "context_logits",
-            np.expand_dims(np.array(result.context_logits, np.float32), 0)
-            if result.context_logits is not None else np.zeros(
-                (1, 1, 1), np.float32)))
-    output_tensors.append(
-        pb_utils.Tensor(
-            "generation_logits",
-            np.expand_dims(np.array(result.generation_logits, np.float32), 0)
-            if result.generation_logits is not None else np.zeros(
-                (1, 1, 1, 1), np.float32)))
-    output_tensors.append(
-        pb_utils.Tensor("batch_index",
-                        np.expand_dims(np.array([batch_index], np.int32), 0)))
+
+    if result.cum_log_probs is not None:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "cum_log_probs",
+                np.expand_dims(np.array(result.cum_log_probs, np.float32), 0)))
+
+    if result.log_probs is not None:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "output_log_probs",
+                np.expand_dims(np.array(result.log_probs, np.float32), 0)))
+
+    if result.context_logits is not None:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "context_logits",
+                np.expand_dims(np.array(result.context_logits, np.float32),
+                               0)))
+
+    if result.generation_logits is not None:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "generation_logits",
+                np.expand_dims(np.array(result.generation_logits, np.float32),
+                               0)))
+
+    if batch_size > 1:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "batch_index",
+                np.expand_dims(np.array([batch_index], np.int32), 0)))
+
+    if num_return_sequences > 1:
+        output_tensors.append(
+            pb_utils.Tensor(
+                "sequence_index",
+                np.expand_dims(np.array([result.sequence_index], np.int32),
+                               0)))
 
     return pb_utils.InferenceResponse(output_tensors), result.is_final
 
@@ -452,6 +477,8 @@ class TritonPythonModel:
             "free_gpu_memory_fraction":
             get_parameter(model_config, "kv_cache_free_gpu_mem_fraction",
                           float),
+            "cross_kv_cache_fraction":
+            get_parameter(model_config, "cross_kv_cache_fraction", float),
             "host_cache_size":
             get_parameter(model_config, "kv_cache_host_memory_bytes", int),
             "onboard_blocks":
@@ -862,11 +889,14 @@ class TritonPythonModel:
 
         with self.lock:
             request_ids = self.executor.enqueue_requests(executor_requests)
-            for req_id, triton_req_id, triton_user_id, triton_request, batch_index in zip(
+            for req_id, triton_req_id, triton_user_id, executor_request, triton_request, batch_index in zip(
                     request_ids, triton_req_ids, triton_user_ids,
-                    triton_requests, batch_indices):
+                    executor_requests, triton_requests, batch_indices):
+
                 self.req_id_to_request_data[
-                    req_id] = triton_req_id, triton_user_id, batch_index, triton_request.get_response_sender(
+                    req_id] = triton_req_id, triton_user_id, batch_index, len(
+                        batch_indices
+                    ), executor_request.num_return_sequences, triton_request.get_response_sender(
                     )
                 self.triton_req_id_to_req_ids[triton_req_id].add(req_id)
                 if triton_user_id is not None and triton_user_id != "":
@@ -883,11 +913,11 @@ class TritonPythonModel:
                 with self.lock:
                     if req_id not in self.req_id_to_request_data:
                         continue
-                    triton_req_id, triton_user_id, batch_index, response_sender = self.req_id_to_request_data[
+                    triton_req_id, triton_user_id, batch_index, batch_size, num_return_sequences, response_sender = self.req_id_to_request_data[
                         req_id]
 
                 triton_response, is_final = convert_response(
-                    response, batch_index)
+                    response, batch_index, batch_size, num_return_sequences)
 
                 triton_request_final = False
                 if is_final:
@@ -921,7 +951,7 @@ class TritonPythonModel:
             time.sleep(self.cancellation_check_period_ms / 1000.0)
             with self.lock:
                 for req_id, (triton_req_id, triton_user_id, batch_index,
-                             response_sender
+                             batch_size, num_return_sequences, response_sender
                              ) in self.req_id_to_request_data.items():
                     if response_sender.is_cancelled():
                         self.executor.cancel_request(req_id)

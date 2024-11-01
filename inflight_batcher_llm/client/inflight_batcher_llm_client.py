@@ -123,17 +123,18 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    lora_weights_data, lora_config_data, return_log_probs_data,
                    top_k_data, top_p_data, draft_ids_data,
                    return_context_logits_data, return_generation_logits_data,
-                   decoder_input_ids_data, prompt_table_extra_id_data):
+                   decoder_input_ids_data, prompt_table_extra_id_data,
+                   exclude_input_in_output, num_return_sequences_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
         prepare_tensor("request_output_len", request_output_len_data),
+        prepare_tensor("num_return_sequences", num_return_sequences_data),
         prepare_tensor("beam_width", beam_width_data),
         prepare_tensor("temperature", temperature_data),
         prepare_tensor("streaming", streaming_data),
         prepare_tensor("end_id", end_id),
         prepare_tensor("pad_id", pad_id),
-        prepare_tensor("return_log_probs", return_log_probs_data),
         prepare_tensor("runtime_top_k", top_k_data),
         prepare_tensor("runtime_top_p", top_p_data),
     ]
@@ -166,6 +167,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("draft_input_ids", draft_ids_data),
         ]
+    if return_log_probs_data is not None:
+        inputs += [
+            prepare_tensor("return_log_probs", return_log_probs_data),
+        ]
     if return_context_logits_data is not None:
         inputs += [
             prepare_tensor("return_context_logits",
@@ -184,6 +189,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("prompt_table_extra_ids",
                            prompt_table_extra_id_data),
+        ]
+    if exclude_input_in_output is not None:
+        inputs += [
+            prepare_tensor("exclude_input_in_output", exclude_input_in_output),
         ]
     return inputs
 
@@ -215,13 +224,23 @@ def callback(user_data, result, error):
         user_data._completed_requests.put(error)
     else:
         user_data._completed_requests.put(result)
-        if (FLAGS.streaming):
-            if result.get_output('output_ids') is not None:
+        if FLAGS.streaming:
+            # Print the first sequence only in streaming.
+            seq_idx = result.as_numpy('sequence_index')
+            seq_idx = seq_idx[0][0] if seq_idx is not None else 0
+
+            if seq_idx == 0 and result.get_output('output_ids') is not None:
                 output_ids = result.as_numpy('output_ids')
                 seq_lens = result.as_numpy('sequence_length')
-                if seq_lens == None or seq_lens[0][0] > 0:
+                if seq_lens is None or seq_lens[0][0] > 0:
                     tokens = list(output_ids[0][0])
                     print(tokens, flush=True)
+
+
+def expand_and_vstack(results: list, axis=0):
+    if len(results) == 1:
+        return np.vstack(results)
+    return np.vstack([np.expand_dims(r, axis=axis) for r in results])
 
 
 if __name__ == "__main__":
@@ -357,6 +376,14 @@ if __name__ == "__main__":
         help="Error tolerance when checking output for CI",
     )
 
+    parser.add_argument(
+        "-n",
+        "--num-return-sequences",
+        type=int,
+        required=False,
+        default=None,
+        help="Number of sequences to generate.",
+    )
     parser.add_argument(
         "-b",
         "--beam-width",
@@ -534,6 +561,9 @@ if __name__ == "__main__":
 
     FLAGS = parser.parse_args()
 
+    if FLAGS.num_return_sequences is None:
+        FLAGS.num_return_sequences = FLAGS.beam_width
+
     tokenizer = None
     draft_ids = None
     decoder_input_ids = None
@@ -620,6 +650,15 @@ if __name__ == "__main__":
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
     request_output_len = [[FLAGS.request_output_len]]
     request_output_len_data = np.array(request_output_len, dtype=np.int32)
+    # WAR: In TensorRT-LLM, setting 'num_return_sequences' results in
+    # returning num_return_sequences * beam_width beams in total.
+    # To ensure the correct number of 'num_return_sequences' beams are
+    # returned, we set num_return_sequences=1 when communicating with the
+    # server and then clip 'num_return_sequences' beams on the client side.
+    num_return_sequences = [[
+        FLAGS.num_return_sequences if FLAGS.beam_width == 1 else 1
+    ]]
+    num_return_sequences_data = np.array(num_return_sequences, dtype=np.int32)
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.int32)
     top_k = [[FLAGS.top_k]]
@@ -628,8 +667,10 @@ if __name__ == "__main__":
     top_p_data = np.array(top_p, dtype=np.float32)
     temperature = [[FLAGS.temperature]]
     temperature_data = np.array(temperature, dtype=np.float32)
-    return_log_probs = [[FLAGS.return_log_probs]]
-    return_log_probs_data = np.array(return_log_probs, dtype=bool)
+    return_log_probs_data = None
+    if FLAGS.return_log_probs:
+        return_log_probs_data = np.array([[FLAGS.return_log_probs]],
+                                         dtype=bool)
 
     return_context_logits_data = None
     if FLAGS.return_context_logits:
@@ -665,6 +706,11 @@ if __name__ == "__main__":
     if decoder_input_ids is not None:
         decoder_input_ids_data = np.array(decoder_input_ids, dtype=np.int32)
 
+    exclude_input_in_output = None
+    if FLAGS.exclude_input_in_output:
+        exclude_input_in_output = np.array([[FLAGS.exclude_input_in_output]],
+                                           dtype=bool)
+
     if not FLAGS.vocab_size and tokenizer:
         FLAGS.vocab_size = tokenizer.vocab_size
     prompt_table_extra_id_data = None
@@ -690,7 +736,8 @@ if __name__ == "__main__":
         lora_config_data, return_log_probs_data, top_k_data, top_p_data,
         draft_ids_data, return_context_logits_data,
         return_generation_logits_data, decoder_input_ids_data,
-        prompt_table_extra_id_data)
+        prompt_table_extra_id_data, exclude_input_in_output,
+        num_return_sequences_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -723,15 +770,26 @@ if __name__ == "__main__":
     if FLAGS.streaming:
         actual_output_ids = [
             [] if FLAGS.exclude_input_in_output else input_ids[0]
+            for _ in range(FLAGS.num_return_sequences)
         ]
     else:
-        actual_output_ids = []
+        actual_output_ids = [[] for _ in range(FLAGS.num_return_sequences)]
 
-    sequence_lengths = []
-    cum_log_probs = None
-    output_log_probs = None
+    # Expected result shapes: [num_sequences, ...]
+    sequence_lengths = [None] * FLAGS.num_return_sequences
+    cum_log_probs = [None] * FLAGS.num_return_sequences
+    output_log_probs = [None] * FLAGS.num_return_sequences
     context_logits = None
-    generation_logits = None
+    generation_logits = [None] * FLAGS.num_return_sequences
+
+    def set_output(outputs: list, data, seq_idx=None):
+        if FLAGS.beam_width > 1:
+            # data = beams
+            for seq_idx in range(FLAGS.num_return_sequences):
+                outputs[seq_idx] = data[seq_idx]
+        else:
+            assert seq_idx is not None
+            outputs[seq_idx] = data
 
     user_data = UserData()
     with grpcclient.InferenceServerClient(
@@ -744,7 +802,8 @@ if __name__ == "__main__":
     ) as triton_client:
         try:
 
-            if FLAGS.streaming:
+            if FLAGS.streaming or (FLAGS.beam_width == 1
+                                   and FLAGS.num_return_sequences > 1):
 
                 # Establish stream
                 triton_client.start_stream(
@@ -777,7 +836,8 @@ if __name__ == "__main__":
                 while True:
                     try:
                         result = user_data._completed_requests.get(block=False)
-                    except Exception:
+                    except Exception as e:
+                        print(str(e))
                         break
 
                     if type(result) == InferenceServerException:
@@ -790,14 +850,41 @@ if __name__ == "__main__":
                     else:
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
-                        sequence_lengths = result.as_numpy('sequence_length')
                         if output_ids is not None:
-                            # Only one beam is supported
-                            if sequence_lengths == None or sequence_lengths[0][
-                                    0] > 0:
+                            seq_idx = result.as_numpy('sequence_index')
+                            seq_idx = seq_idx[0][
+                                0] if seq_idx is not None else 0
+
+                            if FLAGS.return_log_probs:
+                                set_output(cum_log_probs,
+                                           result.as_numpy('cum_log_probs')[0],
+                                           seq_idx)
+                                set_output(
+                                    output_log_probs,
+                                    result.as_numpy('output_log_probs')[0],
+                                    seq_idx)
+                            if FLAGS.return_context_logits:
+                                context_logits = result.as_numpy(
+                                    'context_logits')
+                            if FLAGS.return_generation_logits:
+                                set_output(
+                                    generation_logits,
+                                    result.as_numpy('generation_logits')[0],
+                                    seq_idx)
+
+                            sequence_lengths[seq_idx] = result.as_numpy(
+                                'sequence_length')[0][0]
+                            if FLAGS.streaming:
+                                # Only one beam is supported
+                                if (sequence_lengths[seq_idx] is None
+                                        or sequence_lengths[seq_idx] > 0):
+                                    tokens = list(output_ids[0][0])
+                                    actual_output_ids[seq_idx] = (
+                                        actual_output_ids[seq_idx] + tokens)
+                            else:
+                                # num_return_sequences > 1 under offline mode.
                                 tokens = list(output_ids[0][0])
-                                actual_output_ids[
-                                    0] = actual_output_ids[0] + tokens
+                                actual_output_ids[seq_idx].extend(tokens)
                         else:
                             print("Got cancellation response from server")
             else:
@@ -810,7 +897,7 @@ if __name__ == "__main__":
                     callback=partial(callback, user_data),
                     parameters={'Streaming': FLAGS.streaming})
 
-                expected_responses = 1
+                expected_responses = FLAGS.num_return_sequences if beam_width == 1 else 1
 
                 if FLAGS.stop_after_ms > 0:
 
@@ -845,21 +932,39 @@ if __name__ == "__main__":
                     else:
                         check_output_names(FLAGS.requested_outputs, result)
                         output_ids = result.as_numpy('output_ids')
+                        seq_idx = result.as_numpy('sequence_index')
+                        seq_idx = seq_idx[0][0] if seq_idx is not None else 0
+
                         if FLAGS.return_log_probs:
-                            cum_log_probs = result.as_numpy('cum_log_probs')
-                            output_log_probs = result.as_numpy(
-                                'output_log_probs')
+                            set_output(cum_log_probs,
+                                       result.as_numpy('cum_log_probs')[0],
+                                       seq_idx)
+                            set_output(output_log_probs,
+                                       result.as_numpy('output_log_probs')[0],
+                                       seq_idx)
                         if FLAGS.return_context_logits:
                             context_logits = result.as_numpy('context_logits')
                         if FLAGS.return_generation_logits:
-                            generation_logits = result.as_numpy(
-                                'generation_logits')
+                            set_output(generation_logits,
+                                       result.as_numpy('generation_logits')[0],
+                                       seq_idx)
                         if output_ids is not None:
-                            sequence_lengths = result.as_numpy(
-                                'sequence_length')
-                            for beam_output_ids in output_ids[0]:
-                                tokens = list(beam_output_ids)
-                                actual_output_ids.append(tokens)
+                            print(result.as_numpy('sequence_length'))
+                            if FLAGS.beam_width > 1:
+                                set_output(
+                                    sequence_lengths,
+                                    result.as_numpy('sequence_length')[0])
+                                for beam_idx in range(
+                                        FLAGS.num_return_sequences):
+                                    beam_output_ids = output_ids[0][beam_idx]
+                                    tokens = list(beam_output_ids)
+                                    actual_output_ids[beam_idx].extend(tokens)
+                            else:
+                                assert seq_idx is not None
+                                sequence_lengths[seq_idx] = result.as_numpy(
+                                    'sequence_length')[0][0]
+                                tokens = list(output_ids[0][0])
+                                actual_output_ids[seq_idx].extend(tokens)
                         else:
                             print("Got cancellation response from server")
 
@@ -871,19 +976,25 @@ if __name__ == "__main__":
 
         passed = True
 
-        for beam in range(FLAGS.beam_width):
-            seq_len = sequence_lengths[0][beam] if (
-                not FLAGS.streaming and len(sequence_lengths) > 0) else len(
-                    actual_output_ids[beam])
+        # Keep the output ids of seq_idx=0 for testing randomness
+        # across generated sequences.
+        output_ids_wo_prompt_0 = None
+
+        for seq_idx in range(FLAGS.num_return_sequences):
+            seq_len = (sequence_lengths[seq_idx]
+                       if not FLAGS.streaming and len(sequence_lengths) > 0
+                       else len(actual_output_ids[seq_idx]))
             # These should be equal when input IDs are excluded from output
-            output_ids_w_prompt = actual_output_ids[beam][:seq_len]
+            output_ids_w_prompt = actual_output_ids[seq_idx][:seq_len]
             output_ids_wo_prompt = (
                 output_ids_w_prompt if FLAGS.exclude_input_in_output else
                 output_ids_w_prompt[input_ids_data.shape[1]:])
-            if tokenizer != None:
+            if seq_idx == 0:
+                output_ids_wo_prompt_0 = output_ids_wo_prompt
+            if tokenizer is not None:
                 output_text = tokenizer.decode(output_ids_wo_prompt)
                 print(f'Input: {FLAGS.text}')
-                print(f'Output beam {beam}: {output_text}')
+                print(f'Output beam {seq_idx}: {output_text}')
 
             # If cancelled, the number of output tokens should be less than request output length.
             if FLAGS.stop_after_ms > 0 and len(
@@ -894,37 +1005,47 @@ if __name__ == "__main__":
                                      str(len(output_ids_wo_prompt)))
             curate_log_output(output_ids_w_prompt, "Output")
 
-            if (FLAGS.check_output and beam == 0):
+            if FLAGS.check_output and seq_idx == 0:
                 passed = False
                 if FLAGS.correctness_threshold == 1.0:
                     passed = (output_ids_w_prompt == expected_output_ids)
                 else:
                     # Compare the output tokens one by one
                     num_same_output_id = 0
-                    for i in range(
-                            min(len(output_ids_w_prompt),
-                                len(expected_output_ids))):
+                    expected_len = len(expected_output_ids)
+                    for i in range(min(len(output_ids_w_prompt),
+                                       expected_len)):
                         if output_ids_w_prompt[i] == expected_output_ids[i]:
                             num_same_output_id += 1
                     # Calculate the match rate
-                    match_rate = num_same_output_id / len(expected_output_ids)
+                    match_rate = num_same_output_id / expected_len
                     print(f"Output token matching rate: {match_rate}")
                     passed = (match_rate > FLAGS.correctness_threshold)
-
-                print("expected_output_ids = ", expected_output_ids)
+                    print("expected_output_ids = ", expected_output_ids)
                 print("\n=====")
                 print("PASS!" if passed else "FAIL!")
                 print("=====")
 
+            non_deterministic_sampling = FLAGS.beam_width == 1 and (
+                top_k[0][0] > 1 or top_p[0][0] > 0)
+            if FLAGS.check_output and non_deterministic_sampling and seq_idx > 0:
+                # Skip the correctness check under non-deterministic sampling.
+                # Generated sequences should not be identical.
+                passed = output_ids_w_prompt[seq_idx] != expected_output_ids
+                if not passed:
+                    print(f"Output tokens of sequence {seq_idx} is identical "
+                          f"to the first sequence.")
+
         if FLAGS.return_log_probs:
-            print(cum_log_probs)
-            print(output_log_probs)
+            print('cum_log_probs:', expand_and_vstack(cum_log_probs))
+            print('output_log_probs:', expand_and_vstack(output_log_probs))
 
         if FLAGS.return_context_logits:
             print(f"context_logits.shape: {context_logits.shape}")
             print(f"context_logits: {context_logits}")
 
         if FLAGS.return_generation_logits:
+            generation_logits = expand_and_vstack(generation_logits)
             print(f"generation_logits.shape: {generation_logits.shape}")
             print(f"generation_logits: {generation_logits}")
 
