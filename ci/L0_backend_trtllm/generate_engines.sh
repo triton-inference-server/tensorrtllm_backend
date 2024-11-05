@@ -25,9 +25,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
-GPT_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/examples/gpt
-TRTLLM_DIR=/opt/tritonserver/tensorrtllm_backend/tensorrt_llm/
+BACKEND_ROOT=${BACKEND_ROOT:='/opt/tritonserver/tensorrtllm_backend'}
+BASE_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm
+GPT_DIR=${BACKEND_ROOT}/tensorrt_llm/examples/gpt
+TRTLLM_DIR=${BACKEND_ROOT}/tensorrt_llm/
 
 function build_base_model {
     local NUM_GPUS=$1

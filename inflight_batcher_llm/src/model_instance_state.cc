@@ -234,21 +234,14 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
             = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
     }
-    try
+
+    if (mParticipantIds)
     {
-        auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
-        // TODO: validate participantIds?
-        parallelConfig.setParticipantIds(participantIds);
+        parallelConfig.setParticipantIds(mParticipantIds.value());
     }
-    catch (std::exception const& e)
+    else if (!spawnProcesses && mIsOrchestratorMode)
     {
-        if (!spawnProcesses && mIsOrchestratorMode)
-        {
-            TLLM_THROW(
-                "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
-                "obtained from the config.pbtxt due to the following error: %s",
-                e.what());
-        }
+        TLLM_THROW("Spawning of processes was disabled in orchestrator mode, but participant IDs is missing.");
     }
     return parallelConfig;
 }
@@ -576,6 +569,16 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         mGpuDeviceIds = std::nullopt;
     }
     mIsOrchestratorMode = false;
+
+    auto participantIds = model_state_->getParticipantIds();
+    if (participantIds && !participantIds.value().empty())
+    {
+        mParticipantIds = participantIds.value()[mInstanceIndex % participantIds.value().size()];
+    }
+    else
+    {
+        mParticipantIds = std::nullopt;
+    }
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
@@ -819,10 +822,12 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                         "wrong in TRT-LLM runtime.");
                 }
                 auto requestOutputNames = utils::getRequestOutputNames(request);
+                int32_t const numReturnSequences
+                    = executorRequest.getSamplingConfig().getNumReturnSequences().value_or(1);
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        static_cast<int32_t>(requestIds.size()), executorRequest.getNumReturnSequences(), requestIdsSet,
+                        static_cast<int32_t>(requestIds.size()), numReturnSequences, requestIdsSet,
                         executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
@@ -942,6 +947,18 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(
                         result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                }
+                else if (result.specDecFastLogitsInfo.has_value())
+                {
+                    auto const& logitsInfo = result.specDecFastLogitsInfo.value();
+                    size_t const numLogitsNeeded = (sizeof(logitsInfo) + 1) / sizeof(float);
+                    std::vector<int64_t> generationLogitsShape{1, 1, 1, numLogitsNeeded};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    std::vector<float> data(numLogitsNeeded);
+                    std::memcpy(data.data(), &logitsInfo, sizeof(logitsInfo));
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(data, generationLogitsBuffer, generationLogitsShape);
                 }
             }
 
@@ -1168,21 +1185,25 @@ void ModelInstanceState::WaitForStats()
             // currently the metrics related to request stats only concern with aggregated
             // results so that we can retrieve request stats and process all of them
             // whenever metrics is to be reported.
-            auto requestStats = mExecutor->getLatestRequestStats();
             double totalKvCacheTransferMS = 0;
             size_t requestCount = 0;
-            for (auto const& iteration : requestStats)
+            if (!mIsOrchestratorMode)
             {
-                for (auto const& request : iteration.requestStats)
+                // TODO: implement orchestrator mode support: https://jirasw.nvidia.com/browse/TRTLLM-1581
+                auto requestStats = mExecutor->getLatestRequestStats();
+                for (auto const& iteration : requestStats)
                 {
-                    // only check and aggregate results when request is completed
-                    if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
+                    for (auto const& request : iteration.requestStats)
                     {
-                        if (request.disServingStats.has_value())
+                        // only check and aggregate results when request is completed
+                        if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
                         {
-                            auto const& disServingStats = request.disServingStats.value();
-                            totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
-                            requestCount++;
+                            if (request.disServingStats.has_value())
+                            {
+                                auto const& disServingStats = request.disServingStats.value();
+                                totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
+                                requestCount++;
+                            }
                         }
                     }
                 }

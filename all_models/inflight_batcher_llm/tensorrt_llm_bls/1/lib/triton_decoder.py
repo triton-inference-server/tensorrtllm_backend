@@ -108,6 +108,9 @@ class TritonDecoder(Decoder):
             "embedding_bias_weights",
             "num_draft_tokens",
             "use_draft_logits",
+            "lora_task_id",
+            "lora_weights",
+            "lora_config",
         ]
 
         self.__undo_reshape_whitelist = {
@@ -409,6 +412,9 @@ class TritonDecoder(Decoder):
             "stream": "streaming",
             "prompt_embedding_table": "prompt_embedding_table",
             "prompt_vocab_size": "prompt_vocab_size",
+            "lora_task_id": "lora_task_id",
+            "lora_weights": "lora_weights",
+            "lora_config": "lora_config",
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)

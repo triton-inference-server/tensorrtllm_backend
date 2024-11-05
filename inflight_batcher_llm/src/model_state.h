@@ -73,6 +73,11 @@ public:
         return mGpuDeviceIds;
     }
 
+    std::optional<std::vector<std::vector<int32_t>>> getParticipantIds()
+    {
+        return mParticipantIds;
+    }
+
     bool IsDecoupled() const
     {
         return is_decoupled_;
@@ -98,6 +103,7 @@ private:
 
     // model parameters
     std::optional<std::vector<std::vector<int32_t>>> mGpuDeviceIds;
+    std::optional<std::vector<std::vector<int32_t>>> mParticipantIds;
     bool is_decoupled_ = false;
 
     void LoadParameters();
