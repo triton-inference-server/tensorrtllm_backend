@@ -6,9 +6,14 @@ import time
 from difflib import SequenceMatcher
 
 import pytest
-from trt_test.misc import check_call, check_output, print_info
+from trt_test.misc import check_call, check_output, print_error, print_info
 
 from .conftest import venv_check_call, venv_check_output
+
+try:
+    import psutil
+except ModuleNotFoundError:
+    check_call(f"pip3 install psutil", shell=True)
 
 
 def query_gpu_name():
@@ -422,3 +427,90 @@ def retrieve_latency_value(log):
 
     assert latency_value is not None, f"Did not find latency value in log: {log}."
     return float(latency_value)
+
+
+def get_pid_by_name(process_name):
+    proc_pid = None
+    for proc in psutil.process_iter(['pid', 'name']):
+        if proc.info['name'] == process_name:
+            proc_pid = proc.info['pid']
+            break
+
+    assert proc_pid, f"Fail to get process pid of {process_name}."
+    return proc_pid
+
+
+def get_rss_usage_bytes_by_pid(pid):
+    rss = None
+    try:
+        process = psutil.Process(pid)
+        rss = process.memory_info().rss
+    except psutil.NoSuchProcess:
+        print_error(f"Process with PID {pid} no longer exists.")
+    except psutil.AccessDenied:
+        print_error(f"Access denied to process with PID {pid}.")
+    except Exception as e:
+        print_error(f"An error occurred: {e}")
+
+    assert rss, f"Fail to get RSS usage of pid {pid}."
+    return rss
+
+
+def check_avg_rss_increasement(llm_backend_venv,
+                               process_name,
+                               inference_cmd,
+                               rss_increase_bytes_threshold=64,
+                               warm_up_times=10,
+                               total_run_times=20):
+    pid = get_pid_by_name(process_name)
+    rss_usage_before_inference = get_rss_usage_bytes_by_pid(pid)
+
+    # Warm-up.
+    time = 1
+    for _ in range(warm_up_times):
+        venv_check_call(llm_backend_venv, inference_cmd)
+        current_rss_usage = get_rss_usage_bytes_by_pid(pid)
+        print_info(
+            f"The RSS usage after {time} inference request is: {current_rss_usage} bytes."
+        )
+        time += 1
+
+    rss_usage_after_warmup = get_rss_usage_bytes_by_pid(pid)
+
+    # Calculate average RSS increasement.
+    if total_run_times <= warm_up_times:
+        raise ValueError(f"total_run_times must larger than {warm_up_times}.")
+    for _ in range(total_run_times - warm_up_times):
+        venv_check_call(llm_backend_venv, inference_cmd)
+        current_rss_usage = get_rss_usage_bytes_by_pid(pid)
+        print_info(
+            f"The RSS usage after {time} inference request is: {current_rss_usage} bytes."
+        )
+        time += 1
+
+    rss_usage_final_run = get_rss_usage_bytes_by_pid(pid)
+    avg_rss_increasement = (rss_usage_final_run - rss_usage_after_warmup) // (
+        total_run_times - warm_up_times)
+
+    print_info(f"Checking RSS usage of process: {process_name}.")
+    print_info(
+        f"The RSS usage before inference is: {rss_usage_before_inference} bytes."
+    )
+    print_info(
+        f"The RSS usage after {warm_up_times} times warm-up run is: {rss_usage_after_warmup} bytes."
+    )
+    print_info(
+        f"The RSS usage after {total_run_times} times run is: {rss_usage_final_run} bytes."
+    )
+    print_info(
+        f"The average RSS increasement after warm-up is: {avg_rss_increasement} bytes."
+    )
+
+    if avg_rss_increasement > rss_increase_bytes_threshold:
+        pytest.fail(
+            f"The average RSS increasement: {avg_rss_increasement} bytes > threshold: {rss_increase_bytes_threshold} bytes."
+        )
+    else:
+        print_info(
+            f"The average RSS increasement: {avg_rss_increasement} bytes <= threshold: {rss_increase_bytes_threshold} bytes."
+        )

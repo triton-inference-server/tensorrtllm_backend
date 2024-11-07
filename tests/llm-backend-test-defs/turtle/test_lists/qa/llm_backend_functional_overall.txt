@@ -784,3 +784,4 @@ test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-Fals
 test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-True-ensemble]
 test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-False-ensemble]
 test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-True-ensemble]
+test_triton_memleak.py::test_llama_v3_8b_rss_increasement[test_basic-True-1-False-True-True-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-4096-1-1-1-False-ensemble]
