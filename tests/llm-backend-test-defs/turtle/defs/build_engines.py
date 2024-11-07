@@ -949,7 +949,8 @@ def prepare_llama_v2_13b_engine(tensorrt_llm_llama_example_root,
 
 
 def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
-                               llama_v3_8b_model_root):
+                               llama_v3_8b_model_root,
+                               workers=8):
     engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
                               "llama_v3_8b_ifb")
     ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
@@ -961,8 +962,8 @@ def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
         f"--model_dir={llama_v3_8b_model_root}",
         f"--output_dir={ckpt_dir}",
         "--dtype=bfloat16",
-        "--tp_size=8",
-        "--workers=8",
+        f"--tp_size={workers}",
+        f"--workers={workers}",
     ]
 
     build_cmd = [
@@ -980,7 +981,7 @@ def prepare_llama_v3_8b_engine(tensorrt_llm_llama_example_root,
         "--kv_cache_type=paged",
         "--max_seq_len=4096",
         "--max_batch_size=96",
-        "--workers=8",
+        f"--workers={workers}",
         "--gather_generation_logits",
     ]
 
