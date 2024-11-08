@@ -215,6 +215,18 @@ fill_triton_repo () {
         wget -nc --directory-prefix=${TRITON_REPO}/whisper_bls/1 https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/multilingual.tiktoken
         wget -nc --directory-prefix=${TRITON_REPO}/whisper_bls/1 https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/mel_filters.npz
     fi
+
+    if [ "$MODEL" = "gpt-disaggregated-serving-bls" ]; then
+        cp -r ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/generation
+        mv ${TRITON_REPO}/tensorrt_llm ${TRITON_REPO}/context
+        cp -r all_models/disaggregated_serving/disaggregated_serving_bls/ ${TRITON_REPO}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/disaggregated_serving_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},disaggregated_serving_bls_count:${BLS_INSTANCE_COUNT},context_model_name:context,generation_model_name:generation
+
+        mv ${TRITON_REPO}/disaggregated_serving_bls ${TRITON_REPO}/tensorrt_llm
+        sed 's/name: "disaggregated_serving_bls"/name: "tensorrt_llm"/' -i ${TRITON_REPO}/tensorrt_llm/config.pbtxt
+        sed 's/name: "tensorrt_llm"/name: "context"/' -i ${TRITON_REPO}/context/config.pbtxt
+        sed 's/name: "tensorrt_llm"/name: "generation"/' -i ${TRITON_REPO}/generation/config.pbtxt
+    fi
 }
 
 launch_triton_server () {
@@ -1010,6 +1022,28 @@ if [ "$MODEL" = "gpt-speculative-decoding" ]; then
             --verbose
 
         popd # inflight_batcher_llm/client
+
+        kill_triton_server
+    done
+fi
+
+if [ "$MODEL" = "gpt-disaggregated-serving-bls" ]; then
+
+    DECOUPLED_MODE="False"
+    STREAMING="false"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="0.2"
+
+    for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
+
+        # Disaggregated Serving is not supported in v1 batching
+        if [[ "${BATCHING_STRATEGY}" == "v1" ]]; then
+            continue
+        fi
+
+        launch_triton_server
+        run_cpp_e2e_backend_tests
 
         kill_triton_server
     done
