@@ -317,6 +317,14 @@ input [
     reshape: { shape: [ ] }
     optional: true
   },
+  # cross_attention_mask shape `[bs, seq_len, num_images*num_tiles]`
+  {
+    name: "cross_attention_mask"
+    data_type: TYPE_BOOL
+    dims: [ -1, -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
   # the unique task ID for the given LoRA.
   # To perform inference with a specific LoRA for the first time `lora_task_id` `lora_weights` and `lora_config` must all be given.
   # The LoRA will be cached, so that subsequent requests for the same task only require `lora_task_id`.

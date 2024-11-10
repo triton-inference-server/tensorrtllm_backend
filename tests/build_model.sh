@@ -25,6 +25,7 @@ BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
 LLAVA_7B=/home/scratch.trt_llm_data/llm-models/llava-1.5-7b-hf
 VILA1_5_3B=/home/scratch.trt_llm_data/llm-models/vila/VILA1.5-3b
 VILA_PATH=/home/scratch.trt_llm_data/llm-models/vila/VILA
+LLAMA_3_2_11B_VISION=/home/scratch.trt_llm_data/llm-models/llama-3.2-models/Llama-3.2-11B-Vision
 WHISPER_LAREGE_V3=/home/scratch.trt_llm_data/llm-models/whisper-models/large-v3
 set -e
 
@@ -509,6 +510,33 @@ if [ "$MODEL" = "vila" ]; then
     python build_visual_engine.py --model_path ${VILA1_5_3B} --model_type vila --max_batch_size 32 --vila_path ${VILA_PATH}
 
     popd # tensorrt_llm/examples/multimodal
+fi
+
+if [ "$MODEL" = "mllama" ]; then
+
+    echo "Install mllama requirements"
+    pip install -r all_models/multimodal/requirements-mllama.txt
+
+    pushd tensorrt_llm/examples/multimodal
+
+    echo "Convert mllama from HF"
+    python3 ../mllama/convert_checkpoint.py --model_dir ${LLAMA_3_2_11B_VISION} --dtype float16 --output_dir ./c-model/Llama-3.2-11B-Vision/fp16
+
+    echo "mllama builder"
+    trtllm-build --checkpoint_dir ./c-model/Llama-3.2-11B-Vision/fp16 \
+                --gemm_plugin float16 \
+                --max_batch_size 8 \
+                --max_input_len 2048 \
+                --max_seq_len 2560 \
+                --max_encoder_input_len 8200 \
+                --output_dir trt_engines/Llama-3.2-11B-Vision/fp16/1-gpu
+
+    python build_visual_engine.py --model_path ${LLAMA_3_2_11B_VISION} \
+                                  --model_type mllama --max_batch_size 8 \
+                                  --output_dir tmp/trt_engines/Llama-3.2-11B-Vision/vision_encoder
+
+    popd # tensorrt_llm/examples/multimodal
+
 fi
 
 if [ "$MODEL" = "whisper" ]; then
