@@ -32,7 +32,7 @@ import pytest
 
 sys.modules["triton_python_backend_utils"] = MagicMock()
 # Use PYTHONPATH=../inflight_batcher_llm/preprocessing/1/
-from model import TritonPythonModel
+from model import TritonPythonModel, VisionPreProcessor
 
 
 class MockTokenizer:
@@ -49,6 +49,13 @@ class MockTokenizer:
         return [100 + ord(c) for c in text]
 
 
+class MockProcessor:
+
+    def __call__(self, images=None, text=None, **kwargs):
+        # Simple mock to convert a uint8 image into a float image
+        return dict(pixel_values=images / 255.0)
+
+
 @pytest.fixture
 def triton_model():
     model = TritonPythonModel()
@@ -61,6 +68,8 @@ def triton_model():
     model.ptable_shape = (-1, 10, 768)
     model.tokenizer_pad_id = model.tokenizer.pad_token
     model.tokenizer_end_id = model.tokenizer.eos_token
+    model.vision_preprocessor = VisionPreProcessor(model.model_type,
+                                                   MockProcessor())
     return model
 
 
@@ -228,3 +237,21 @@ def test_setup_fake_prompts(triton_model, batch_size, batch_split_prompts,
     assert output.shape[0] == batch_size
     for out, exp in zip(output, expected_input_ids):
         assert np.array_equal(out, exp)
+
+
+# Test for _process_multi_image_inputs()
+@pytest.mark.parametrize(
+    "query, image_bytes, expected_output",
+    [
+        # Test Case 1: Single image placeholder
+        (np.array([[b"Hello <image> World"]
+                   ]), np.ones((1, 1, 32, 32, 3), dtype=np.uint8) * 255,
+         dict(PIXEL_VALUES=np.ones((1, 1, 32, 32, 3), dtype=np.float16)))
+    ])
+def test_process_image_for_encoder(triton_model, query, image_bytes,
+                                   expected_output):
+    output = triton_model.vision_preprocessor.process(query,
+                                                      image_bytes=image_bytes)
+    assert output.keys() == expected_output.keys()
+    for key in output.keys():
+        assert np.array_equal(output[key], expected_output[key])

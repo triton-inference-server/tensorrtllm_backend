@@ -1337,6 +1337,37 @@ if [ "$MODEL" = "blip2-opt" ]; then
     ENABLE_KV_CACHE_REUSE="False"
 fi
 
+if [ "$MODEL" = "mllama" ]; then
+
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    CROSS_KV_CACHE_FRACTION="0.5"
+    BATCHING_STRATEGY="inflight_fused_batching"
+
+    # Test none-streaming
+    DECOUPLED_MODE="False"
+    for BACKEND in "${BACKENDS[@]}"; do
+        if [[ "${BACKEND}" == "python" ]]; then
+            continue
+        fi
+        launch_triton_server
+        python3 tools/multimodal/client.py --model_type mllama
+        kill_triton_server
+    done
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    for BACKEND in "${BACKENDS[@]}"; do
+        launch_triton_server
+        python3 tools/multimodal/client.py --model_type mllama --streaming
+        kill_triton_server
+    done
+    DECOUPLED_MODE="False"
+    CROSS_KV_CACHE_FRACTION=""
+fi
+
+
 if [ "$MODEL" = "whisper" ]; then
 
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[1]}"

@@ -235,6 +235,13 @@ def tensorrt_llm_llama_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def tensorrt_llm_mllama_example_root(llm_backend_root):
+    llm_llama_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                          "examples", "mllama")
+    return llm_llama_example_root
+
+
+@pytest.fixture(scope="session")
 def inflight_batcher_llm_client_root(llm_backend_root):
     inflight_batcher_llm_client_root = os.path.join(llm_backend_root,
                                                     "inflight_batcher_llm",
@@ -431,6 +438,19 @@ def vila_repo_root():
         vila_repo_root
     ), f"{vila_repo_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return vila_repo_root
+
+
+@pytest.fixture(scope="session")
+def mllama_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    mllama_model_root = os.path.join(models_root, "llama-3.2-models",
+                                     "Llama-3.2-11B-Vision")
+
+    assert os.path.exists(
+        mllama_model_root
+    ), f"{mllama_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return mllama_model_root
 
 
 @pytest.fixture(scope="session")

@@ -30,7 +30,7 @@ from typing import List
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from transformers import AutoTokenizer, T5Tokenizer
+from transformers import AutoProcessor, AutoTokenizer, T5Tokenizer
 
 
 class TritonPythonModel:
@@ -119,6 +119,7 @@ class TritonPythonModel:
 
         self.is_multimodal = False
         self.model_type = None
+        self.vision_preprocessor = None
 
         if visual_model_path is not None:
             self.is_multimodal = True
@@ -129,8 +130,8 @@ class TritonPythonModel:
                 'model_type']
 
             assert self.model_type in [
-                'llava', 'blip2-opt', 'vila'
-            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt and vila. Got {self.model_type}."
+                'llava', 'blip2-opt', 'vila', 'mllama'
+            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila and mllama. Got {self.model_type}."
 
             llm_model_path = model_config['parameters']['gpt_model_path'][
                 'string_value']
@@ -140,6 +141,10 @@ class TritonPythonModel:
             self.vocab_size = int(
                 llm_model_config["pretrained_config"]["vocab_size"])
             self._setup_ptable_shape(llm_model_config)
+
+            self.vision_preprocessor = VisionPreProcessor(
+                self.model_type, AutoProcessor.from_pretrained(tokenizer_dir),
+                model_config)
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
@@ -285,6 +290,24 @@ class TritonPythonModel:
                         input_id[i] >= self.vocab_size,
                         prompt_table_extra_id[i], 0)
 
+            # Preprocessing vision input passed as a url or bytes tensor
+            img_urls = pb_utils.get_input_tensor_by_name(request, 'IMAGE_URL')
+            image_bytes = pb_utils.get_input_tensor_by_name(
+                request, 'IMAGE_BYTES')
+            if img_urls or image_bytes:
+                assert self.vision_preprocessor != None, "Vision preprocessor for preparing images before encoding is None"
+                vision_processed_tensors = self.vision_preprocessor.process(
+                    queries=query.astype(str).tolist(),
+                    img_urls=img_urls,
+                    image_bytes=image_bytes,
+                ) if self.is_multimodal else {}
+                vision_processed_tensors = [
+                    pb_utils.Tensor.from_dlpack(k, v)
+                    for k, v in vision_processed_tensors.items()
+                ]
+            else:
+                vision_processed_tensors = []
+
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
             input_id_tensor = pb_utils.Tensor(
@@ -316,16 +339,13 @@ class TritonPythonModel:
                     'OUT_PROMPT_TABLE_EXTRA_IDS',
                     np.array(prompt_table_extra_ids,
                              dtype=self.out_prompt_table_extra_ids_dtype))
-                inference_response = pb_utils.InferenceResponse(
-                    output_tensors=[
-                        input_id_tensor, decoder_input_id_tensor,
-                        bad_words_ids_tensor, stop_words_ids_tensor,
-                        request_input_len_tensor,
-                        request_decoder_input_len_tensor,
-                        request_output_len_tensor, embedding_bias_tensor,
-                        end_id_tensor, pad_id_tensor,
-                        prompt_table_extra_ids_tensor
-                    ])
+                inference_response = pb_utils.InferenceResponse(output_tensors=[
+                    input_id_tensor, decoder_input_id_tensor,
+                    bad_words_ids_tensor, stop_words_ids_tensor,
+                    request_input_len_tensor, request_decoder_input_len_tensor,
+                    request_output_len_tensor, embedding_bias_tensor,
+                    end_id_tensor, pad_id_tensor, prompt_table_extra_ids_tensor
+                ] + vision_processed_tensors)
             else:
                 inference_response = pb_utils.InferenceResponse(
                     output_tensors=[
@@ -335,7 +355,7 @@ class TritonPythonModel:
                         request_decoder_input_len_tensor,
                         request_output_len_tensor, embedding_bias_tensor,
                         end_id_tensor, pad_id_tensor
-                    ])
+                    ] + vision_processed_tensors)
             responses.append(inference_response)
 
         # You should return a list of pb_utils.InferenceResponse. Length
@@ -498,6 +518,9 @@ class TritonPythonModel:
             elif 'vila' == self.model_type:
                 pre_prompt = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: "
                 post_prompt = " ASSISTANT:"
+            elif 'mllama' == self.model_type:
+                pre_prompt = None
+                post_prompt = None
 
             fake_prompt_id = np.arange(self.vocab_size,
                                        self.vocab_size + self.ptable_shape[1])
@@ -624,3 +647,100 @@ class TritonPythonModel:
             batch_embedding_bias.append(np.array(embedding_bias))
 
         return np.array(batch_embedding_bias, dtype=bias_dtype)
+
+
+class VisionPreProcessor:
+    """ A class that can load images from url requests, and process them via a vision model processor,
+    in preparation for the vision encoder.
+    """
+
+    def __init__(self,
+                 vision_model_type,
+                 vision_model_processor,
+                 preprocessor_model_config={}):
+        # import libraries that are only relevant for multimodal models
+        import requests
+        import torch
+        from PIL import Image
+        from torch.utils.dlpack import from_dlpack
+
+        from tensorrt_llm._utils import str_dtype_to_torch
+
+        # create method for loading image from urls
+        self.load_images_from_urls = lambda img_urls: [
+            Image.open(requests.get(img_url.decode(), stream=True).raw)
+            for img_url in img_urls
+        ]
+        self.load_images_tensor = lambda tensor: tensor if not hasattr(
+            tensor, 'to_dlpack') else from_dlpack(tensor.to_dlpack())
+
+        # extract expected output tensor dtype
+        self.output_str_dtypes = {}
+        for properties in preprocessor_model_config.get('output', []):
+            dtype = properties['data_type']
+            self.output_str_dtypes[properties['name']] = np.dtype(
+                pb_utils.triton_string_to_numpy(dtype)).name
+
+        # create method for converting output tensors batch to the expected type
+        self.convert_tensor_list_to_tensor = lambda tensor_list: torch.concat(
+            [
+                torch.from_numpy(x) if isinstance(x, np.ndarray) else x
+                for x in tensor_list
+            ],
+            dim=0)
+        self.convert_tensor_to_str_dtype = lambda tensor, dtype: tensor.to(
+            str_dtype_to_torch(dtype))
+
+        # create model-specific processor
+        self.vision_model_processor = vision_model_processor
+        self.vision_model_type = vision_model_type
+
+    def process(self, queries, img_urls=None, image_bytes=None):
+        vision_processed_tensors = {}
+        if img_urls is not None or image_bytes is not None:
+            if img_urls is not None:
+                # download and read images
+                images = [
+                    self.load_images_from_urls(urls)
+                    for urls in img_urls.as_numpy()
+                ]
+            else:
+                images = [
+                    img for img_list in self.load_images_tensor(image_bytes)
+                    for img in img_list
+                ]
+
+            batch_size = len(images)
+
+            preprocessor_outputs = {}
+            possible_output_names = [
+                'PIXEL_VALUES', 'ASPECT_RATIO_IDS', 'ASPECT_RATIO_MASK',
+                'CROSS_ATTENTION_MASK'
+            ]
+            for batch_id in range(batch_size):
+                # Preprocess images and query
+                processed_vision_data = self.vision_model_processor(
+                    images=images[batch_id],
+                    text=queries[batch_id],
+                    return_tensors="pt")
+
+                # Reshape pixel_values to [num_images, *HWC/CHW]
+                val = processed_vision_data["pixel_values"]
+
+                val = val.reshape(1, -1, *(val.shape[-3:]))
+                processed_vision_data["pixel_values"] = val
+                # Create vision output tensors
+                for key in possible_output_names:
+                    val = processed_vision_data.get(key.lower())
+                    if val is not None:
+                        if key not in preprocessor_outputs:
+                            preprocessor_outputs[key] = []
+                        preprocessor_outputs[key].append(val)
+
+            for key, tensor_list in preprocessor_outputs.items():
+                val = self.convert_tensor_list_to_tensor(tensor_list)
+                if key in self.output_str_dtypes:
+                    val = self.convert_tensor_to_str_dtype(
+                        val, self.output_str_dtypes[key])
+                vision_processed_tensors[key] = val
+        return vision_processed_tensors
