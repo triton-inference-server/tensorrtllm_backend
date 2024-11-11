@@ -528,6 +528,7 @@ def prepare_vila_engine(tensorrt_llm_multimodal_example_root,
 def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
                           tensorrt_llm_mllama_example_root, mllama_model_root):
     # Convert MLLAMA from HF
+    check_call("pip3 install -U transformers", shell=True)
     model_name = "Llama-3.2-11B-Vision"
     ckpt_dir = os.path.join(tensorrt_llm_multimodal_example_root, "model_dir",
                             model_name)
