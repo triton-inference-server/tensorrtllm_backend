@@ -812,6 +812,13 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
             request.setCrossAttentionMask(executor::detail::ofITensor(originalTensor));
         }
 
+        if (inputTensors.count(InputFieldsNames::skipCrossAttnBlocks))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor
+                = inputTensors.at(InputFieldsNames::skipCrossAttnBlocks).tensor;
+            request.setSkipCrossAttnBlocks(executor::detail::ofITensor(originalTensor));
+        }
+
         requests.emplace_back(std::move(request));
     }
     return requests;
