@@ -63,13 +63,6 @@ def prepare_inputs(prompt,
     input0_data = np.array(input0).astype(object)
     output0_len = np.ones_like(input0).astype(np.int32) * output_len
     streaming_data = np.array([[streaming]], dtype=bool)
-    # WAR: In TensorRT-LLM, setting 'num_return_sequences' results in
-    # returning num_return_sequences * beam_width beams in total.
-    # To ensure the correct number of 'num_return_sequences' beams are
-    # returned, we set num_return_sequences=1 when communicating with the
-    # server and then clip 'num_return_sequences' beams on the client side.
-    num_return_sequences_data = np.array(
-        [[num_return_sequences if beam_width == 1 else 1]], dtype=np.int32)
     beam_width_data = np.array([[beam_width]], dtype=np.int32)
     temperature_data = np.array([[temperature]], dtype=np.float32)
 
@@ -77,10 +70,13 @@ def prepare_inputs(prompt,
         "text_input": input0_data,
         "max_tokens": output0_len,
         "stream": streaming_data,
-        "num_return_sequences": num_return_sequences_data,
         "beam_width": beam_width_data,
         "temperature": temperature_data,
     }
+
+    if num_return_sequences is not None:
+        inputs["num_return_sequences"] = np.array([[num_return_sequences]],
+                                                  dtype=np.int32)
 
     if num_draft_tokens > 0:
         inputs["num_draft_tokens"] = np.array([[num_draft_tokens]],
@@ -194,9 +190,6 @@ def run_inference(triton_client,
     except:
         prompts = [prompt]
 
-    if num_return_sequences is None:
-        num_return_sequences = beam_width
-
     bs1_inputs = []
     for prompt in prompts:
         bs1_inputs.append(
@@ -238,7 +231,7 @@ def run_inference(triton_client,
         outputs.append(grpcclient.InferRequestedOutput("context_logits"))
     if return_generation_logits_data is not None:
         outputs.append(grpcclient.InferRequestedOutput("generation_logits"))
-    if num_return_sequences > 1:
+    if num_return_sequences is not None:
         outputs.append(grpcclient.InferRequestedOutput("sequence_index"))
     if batch_inputs:
         outputs.append(grpcclient.InferRequestedOutput("batch_index"))
@@ -260,8 +253,13 @@ def run_inference(triton_client,
         triton_client.stop_stream()
 
         # Parse the responses
-        batch_output_text = [[''] * num_return_sequences
-                             for _ in range(batch_size)]
+        if num_return_sequences is None:
+            num_generations = beam_width
+        else:
+            num_generations = num_return_sequences
+            assert beam_width == 1
+
+        batch_output_text = [[''] * num_generations for _ in range(batch_size)]
         while True:
             try:
                 result = user_data._completed_requests.get(block=False)
@@ -292,7 +290,7 @@ def run_inference(triton_client,
                     output_text = output[0].decode("utf-8")
                     batch_output_text[batch_index][seq_index] = output_text
                     if verbose:
-                        if num_return_sequences > 1:
+                        if num_generations > 1:
                             print(
                                 f"{batch_index} [{seq_index}]: {output_text}",
                                 flush=True)

@@ -13,6 +13,7 @@ from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
 
 import tensorrt_llm.bindings.executor as trtllm
+import tensorrt_llm.logger as logger
 
 
 def mpi_comm():
@@ -330,6 +331,34 @@ def convert_request(request, exclude_input_from_output, decoupled):
             request, batch_size, batch_index, input_length)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
+
+        # Inputs for mllama support
+        encoder_input_features = get_input_tensor_by_name(
+            request, 'encoder_input_features', batch_size, batch_index)
+        if encoder_input_features is not None:
+            if isinstance(encoder_input_features, np.ndarray):
+                encoder_input_features = from_numpy(
+                    encoder_input_features).squeeze()
+            elif isinstance(encoder_input_features, torch.Tensor):
+                encoder_input_features = encoder_input_features.squeeze(dim=0)
+            inputs['encoder_input_features'] = encoder_input_features
+            logger.debug(
+                f"inputs to llm: encoder_input_features ({encoder_input_features.shape}"
+            )
+
+            encoder_output_length = get_input_tensor_by_name(
+                request, 'encoder_output_lengths', batch_size, batch_index)
+            if encoder_output_length is not None:
+                inputs['encoder_output_length'] = np.squeeze(
+                    encoder_output_length, axis=0)
+
+            cross_attention_mask = get_input_tensor_by_name(
+                request, 'cross_attention_mask', batch_size, batch_index)
+            if cross_attention_mask is not None:
+                inputs['cross_attention_mask'] = cross_attention_mask[0]
+                logger.debug(
+                    f"inputs to llm: cross_attention_mask ({ cross_attention_mask.shape})"
+                )
 
         requests.append(
             trtllm.Request(

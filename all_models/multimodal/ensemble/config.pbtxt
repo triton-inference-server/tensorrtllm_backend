@@ -46,6 +46,18 @@ input [
     optional: true
   },
   {
+    name: "image_bytes_input"
+    data_type: TYPE_UINT8
+    dims: [ -1, -1, -1, -1 ]
+    optional: true
+  },
+  {
+    name: "image_url_input"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "max_tokens"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -228,6 +240,14 @@ ensemble_scheduling {
         value: "decoder_text_input"
       }
       input_map {
+        key: "IMAGE_BYTES"
+        value: "image_bytes_input"
+      }
+      input_map {
+        key: "IMAGE_URL"
+        value: "image_url_input"
+      }
+      input_map {
         key: "REQUEST_OUTPUT_LEN"
         value: "max_tokens"
       }
@@ -276,6 +296,22 @@ ensemble_scheduling {
         value: "_DECODER_INPUT_ID"
       }
       output_map {
+        key: "PIXEL_VALUES"
+        value: "_PIXEL_VALUES"
+      }
+      output_map {
+        key: "ASPECT_RATIO_IDS"
+        value: "_ASPECT_RATIO_IDS"
+      }
+      output_map {
+        key: "ASPECT_RATIO_MASK"
+        value: "_ASPECT_RATIO_MASK"
+      }
+      output_map {
+        key: "CROSS_ATTENTION_MASK"
+        value: "_CROSS_ATTENTION_MASK"
+      }
+      output_map {
         key: "REQUEST_OUTPUT_LEN"
         value: "_REQUEST_OUTPUT_LEN"
       }
@@ -311,6 +347,26 @@ ensemble_scheduling {
         key: "IMAGE"
         value: "image_input"
       }
+      input_map {
+        key: "pixel_values"
+        value: "_PIXEL_VALUES"
+      }
+      input_map {
+        key: "aspect_ratio_ids"
+        value: "_ASPECT_RATIO_IDS"
+      }
+      input_map {
+        key: "aspect_ratio_mask"
+        value: "_ASPECT_RATIO_MASK"
+      }
+      input_map {
+        key: "cross_attention_mask"
+        value: "_CROSS_ATTENTION_MASK"
+      }
+      input_map {
+       key: "max_tokens"
+       value: "_REQUEST_OUTPUT_LEN"
+      }
       output_map {
         key: "OUT_PROMPT_EMBEDDING_TABLE"
         value: "out_prompt_embedding_table"
@@ -318,6 +374,22 @@ ensemble_scheduling {
       output_map {
         key: "OUT_PROMPT_VOCAB_SIZE"
         value: "out_prompt_vocab_size"
+      }
+      output_map {
+        key: "ENCODER_INPUT_FEATURES"
+        value: "encoder_input_features"
+      }
+      output_map {
+        key: "ENCODER_OUTPUT_LENGTHS"
+        value: "encoder_output_lengths"
+      }
+      output_map {
+        key: "CROSS_ATTENTION_MASK"
+        value: "cross_attention_mask"
+      }
+      output_map {
+        key: "SKIP_CROSS_ATTN_BLOCKS"
+        value: "skip_cross_attn_blocks"
       }
     },
     {
@@ -420,6 +492,18 @@ ensemble_scheduling {
         value: "out_prompt_vocab_size"
       }
       input_map {
+        key: "encoder_input_features"
+        value: "encoder_input_features"
+      }
+      input_map {
+        key: "encoder_output_lengths"
+        value: "encoder_output_lengths"
+      }
+      input_map {
+        key: "cross_attention_mask"
+        value: "cross_attention_mask"
+      }
+      input_map {
         key: "stop_words_list"
         value: "_STOP_WORDS_IDS"
       }
@@ -430,6 +514,10 @@ ensemble_scheduling {
       input_map {
         key: "prompt_table_extra_ids"
         value: "_OUT_PROMPT_TABLE_EXTRA_IDS"
+      }
+      input_map {
+        key: "skip_cross_attn_blocks"
+        value: "skip_cross_attn_blocks"
       }
       output_map {
         key: "output_ids"
