@@ -255,6 +255,11 @@ class TritonPythonModel:
                     dtype=torch.int32)
                 logger.debug(
                     f"encoder_output_lengths: {encoder_output_lengths}")
+                skip_cross_attn_blocks = torch.ones([output_shape[0], 1],
+                                                    dtype=torch.bool,
+                                                    device='cpu')
+                logger.debug(
+                    f"skip_cross_attn_blocks: {skip_cross_attn_blocks}")
 
                 # prepare cross_attention_mask
                 # [bs, seq_len, num_tiles] to [bs, seq_len+max_new_tokens, encoder_length]
@@ -293,6 +298,10 @@ class TritonPythonModel:
                         pb_utils.Tensor.from_dlpack(
                             'CROSS_ATTENTION_MASK',
                             to_dlpack(cross_attention_mask)))
+                output_tensors.append(
+                    pb_utils.Tensor.from_dlpack(
+                        'SKIP_CROSS_ATTN_BLOCKS',
+                        to_dlpack(skip_cross_attn_blocks)))
 
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=output_tensors)

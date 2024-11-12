@@ -387,6 +387,10 @@ ensemble_scheduling {
         key: "CROSS_ATTENTION_MASK"
         value: "cross_attention_mask"
       }
+      output_map {
+        key: "SKIP_CROSS_ATTN_BLOCKS"
+        value: "skip_cross_attn_blocks"
+      }
     },
     {
       model_name: "tensorrt_llm"
@@ -510,6 +514,10 @@ ensemble_scheduling {
       input_map {
         key: "prompt_table_extra_ids"
         value: "_OUT_PROMPT_TABLE_EXTRA_IDS"
+      }
+      input_map {
+        key: "skip_cross_attn_blocks"
+        value: "skip_cross_attn_blocks"
       }
       output_map {
         key: "output_ids"

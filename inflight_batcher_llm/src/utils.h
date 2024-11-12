@@ -62,6 +62,7 @@ struct InputFieldsNames
     static constexpr char const* embeddingBias = "embedding_bias";
     static constexpr char const* contextPhaseParams = "context_phase_params";
     static constexpr char const* crossAttentionMask = "cross_attention_mask";
+    static constexpr char const* skipCrossAttnBlocks = "skip_cross_attn_blocks";
 
     // OutputConfig
     static constexpr char const* returnLogProbs = "return_log_probs";

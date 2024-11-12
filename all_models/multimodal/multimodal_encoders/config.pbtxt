@@ -98,6 +98,12 @@ output [
         name: "CROSS_ATTENTION_MASK"
         data_type: TYPE_BOOL
         dims: [ -1, -1 ]
+    },
+    # skip_cross_attn_blocks shape `[bs]`, only used in mllama
+    {
+        name: "SKIP_CROSS_ATTN_BLOCKS"
+        data_type: TYPE_BOOL
+        dims: [ 1 ]
     }
 ]
 
