@@ -681,17 +681,16 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         executor::VecTokens inputTokens;
         std::optional<executor::Tensor> encoderInputFeatures{std::nullopt};
+        if (inputTensors.count(InputFieldsNames::encoderInputFeatures))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor
+                = inputTensors.at(InputFieldsNames::encoderInputFeatures).tensor;
+            utils::squeezeTensor(originalTensor, 2);
+            encoderInputFeatures = executor::detail::ofITensor(originalTensor);
+        }
         if (!utils::extractVector<int32_t>(inputTensors, InputFieldsNames::inputTokens, inputTokens))
         {
-
-            if (inputTensors.count(InputFieldsNames::encoderInputFeatures))
-            {
-                std::shared_ptr<runtime::ITensor> originalTensor
-                    = inputTensors.at(InputFieldsNames::encoderInputFeatures).tensor;
-                utils::squeezeTensor(originalTensor, 2);
-                encoderInputFeatures = executor::detail::ofITensor(originalTensor);
-            }
-            else
+            if (!encoderInputFeatures.has_value())
             {
                 TLLM_THROW("%s or %s is not present in the request.", InputFieldsNames::inputTokens,
                     InputFieldsNames::encoderInputFeatures);
@@ -803,6 +802,21 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
             auto requestContextPhase = executor::Serialization::deserializeContextPhaseParams(buffer);
             request.setContextPhaseParams(requestContextPhase);
+        }
+
+        if (inputTensors.count(InputFieldsNames::crossAttentionMask))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor
+                = inputTensors.at(InputFieldsNames::crossAttentionMask).tensor;
+            utils::squeezeTensor(originalTensor, 2);
+            request.setCrossAttentionMask(executor::detail::ofITensor(originalTensor));
+        }
+
+        if (inputTensors.count(InputFieldsNames::skipCrossAttnBlocks))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor
+                = inputTensors.at(InputFieldsNames::skipCrossAttnBlocks).tensor;
+            request.setSkipCrossAttnBlocks(executor::detail::ofITensor(originalTensor));
         }
 
         requests.emplace_back(std::move(request));

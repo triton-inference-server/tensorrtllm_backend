@@ -17,13 +17,23 @@ from transformers import AutoProcessor, Blip2Processor
 from utils import utils
 
 
-def prepare_inputs(text_data, image_data, request_output_len_data,
-                   beam_width_data, temperature_data, repetition_penalty_data,
-                   presence_penalty_data, end_id, pad_id, top_k_data,
-                   top_p_data, streaming_data, prompt_table_extra_id_data):
+def prepare_inputs(text_data,
+                   image_data,
+                   request_output_len_data,
+                   beam_width_data,
+                   temperature_data,
+                   repetition_penalty_data,
+                   presence_penalty_data,
+                   end_id,
+                   pad_id,
+                   top_k_data,
+                   top_p_data,
+                   streaming_data,
+                   prompt_table_extra_id_data,
+                   image_input_name="image_input"):
     inputs = [
         utils.prepare_tensor("text_input", text_data, grpcclient),
-        utils.prepare_tensor("image_input", image_data, grpcclient),
+        utils.prepare_tensor(image_input_name, image_data, grpcclient),
         utils.prepare_tensor("max_tokens", request_output_len_data,
                              grpcclient),
         utils.prepare_tensor("beam_width", beam_width_data, grpcclient),
@@ -180,7 +190,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model_type",
                         required=True,
-                        choices=['blip2', 'llava', 'vila'],
+                        choices=['blip2', 'llava', 'vila', 'mllama'],
                         help="Model type")
     parser.add_argument("--hf_model_dir",
                         required=False,
@@ -234,8 +244,17 @@ if __name__ == "__main__":
             raw_image = [raw_image]
         image = process_images(raw_image, image_processor, model.config)
 
-    image = image.unsqueeze(0)
-    image_data = image.numpy().astype(np.float16)
+    if 'mllama' in FLAGS.model_type:
+        image_tag = '<|image|>'
+        if image_tag not in FLAGS.text:
+            FLAGS.text = image_tag + FLAGS.text
+        image_data = np.array([[raw_image]])
+        image_input_name = "image_bytes_input"
+    else:
+        image = image.unsqueeze(0)
+        image_data = image.numpy().astype(np.float16)
+        image_input_name = "image_input"
+
     text_data = np.array([[FLAGS.text.encode("utf8")]], dtype=np.object_)
     end_id_data = np.array([[FLAGS.end_id]], dtype=np.int32)
     pad_id_data = np.array([[FLAGS.pad_id]], dtype=np.int32)
@@ -272,11 +291,20 @@ if __name__ == "__main__":
         prompt_table_extra_id_data = np.array(prompt_table_extra_id,
                                               dtype=np.uint64)
 
-    inputs = prepare_inputs(text_data, image_data, request_output_len_data,
-                            beam_width_data, temperature_data,
-                            repetition_penalty_data, presence_penalty_data,
-                            end_id_data, pad_id_data, top_k_data, top_p_data,
-                            streaming_data, prompt_table_extra_id_data)
+    inputs = prepare_inputs(text_data,
+                            image_data,
+                            request_output_len_data,
+                            beam_width_data,
+                            temperature_data,
+                            repetition_penalty_data,
+                            presence_penalty_data,
+                            end_id_data,
+                            pad_id_data,
+                            top_k_data,
+                            top_p_data,
+                            streaming_data,
+                            prompt_table_extra_id_data,
+                            image_input_name=image_input_name)
 
     start_time = datetime.now()
 
