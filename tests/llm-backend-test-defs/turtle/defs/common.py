@@ -432,11 +432,13 @@ def retrieve_latency_value(log):
 def get_pid_by_name(process_name):
     proc_pid = None
     for proc in psutil.process_iter(['pid', 'name']):
-        if proc.info['name'] == process_name:
+        # Skip zombie process.
+        if proc.info['name'] == process_name and proc.status(
+        ) != psutil.STATUS_ZOMBIE:
             proc_pid = proc.info['pid']
             break
 
-    assert proc_pid, f"Fail to get process pid of {process_name}."
+    assert proc_pid, f"Fail to get a valid process pid of {process_name}."
     return proc_pid
 
 
@@ -452,7 +454,7 @@ def get_rss_usage_bytes_by_pid(pid):
     except Exception as e:
         print_error(f"An error occurred: {e}")
 
-    assert rss, f"Fail to get RSS usage of pid {pid}."
+    assert rss is not None, f"Fail to get RSS usage of pid {pid}."
     return rss
 
 
