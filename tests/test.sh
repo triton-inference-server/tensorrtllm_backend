@@ -632,11 +632,6 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
         if [[ "$MODEL" = "mistral-ib-mm" && "${ENABLE_CHUNKED_CONTEXT}" == "true" ]]; then
             continue
         fi
-        # The python backend currently requires decoupled mode.
-        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
-           continue
-        fi
-
         if [[ "$MODEL" = "mistral-ib-mm" ]]; then
             export TRTLLM_ORCHESTRATOR=1
         fi
@@ -693,13 +688,9 @@ if [ "$MODEL" = "gpt-ib" ] || [ "$MODEL" = "mistral-ib" ] || [ "$MODEL" = "mistr
     BATCHING_STRATEGY="inflight_fused_batching"
 
     for BACKEND in "${BACKENDS[@]}"; do
-        if [[ "${BACKEND}" == "python" ]]; then
-            DECOUPLED_MODE="True"
-        fi
         launch_triton_server
         run_cpp_trtllm_queue_size_tests
         kill_triton_server
-        DECOUPLED_MODE="False"
     done
 
     MAX_QUEUE_SIZE="0"
@@ -753,10 +744,6 @@ if [ "$MODEL" = "gpt-ib-streaming" ]; then
         # For V1, batchScheduler currently cannot properly estimate kvCache usage
         if [[ "${BATCHING_STRATEGY}" == "v1" && "${MAX_TOKENS_IN_KV_CACHE}" != "" ]]; then
             continue
-        fi
-        # The python backend currently requires decoupled mode.
-        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
-           continue
         fi
 
         launch_triton_server
@@ -1219,9 +1206,10 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
         if [[ "${KV_CACHE_FREE_GPU_MEM_FRACTION}" == "" && "${MAX_TOKENS_IN_KV_CACHE}" == "" ]]; then
             continue
         fi
-        # The python backend currently requires decoupled mode.
-        if [[ "${BACKEND}" == "python" && "${DECOUPLED_MODE}" == "False" ]]; then
-           continue
+
+        #Encoder-decoder models are not yet supported in python backend
+        if [[ "${BACKEND}" == "python" ]]; then
+            continue
         fi
 
         launch_triton_server
