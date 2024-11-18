@@ -776,8 +776,8 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
             = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
-            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
-            std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
+            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, std::nullopt,
+            loraConfig, std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {
