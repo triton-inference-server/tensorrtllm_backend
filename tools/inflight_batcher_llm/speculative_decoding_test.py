@@ -259,7 +259,7 @@ if __name__ == '__main__':
             # Calling control model only
             if FLAGS.verbose:
                 print(f"Calling control model", flush=True)
-            output_control = end_to_end_grpc_client.run_inference(
+            processed_prompt, output_control = end_to_end_grpc_client.run_inference(
                 client_control, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
@@ -281,7 +281,7 @@ if __name__ == '__main__':
                     return_generation_logits_data = np.array(
                         [[FLAGS.return_generation_logits]], dtype=bool)
 
-                output_speculative = end_to_end_grpc_client.run_inference(
+                processed_prompt, output_speculative = end_to_end_grpc_client.run_inference(
                     client_target, prompt, output_len, str(request_id),
                     FLAGS.repetition_penalty, FLAGS.presence_penalty,
                     FLAGS.frequency_penalty, FLAGS.temperature,

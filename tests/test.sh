@@ -487,6 +487,9 @@ run_cpp_e2e_backend_tests () {
     OVERWRITE_OUTPUT_TEXT_FLAG=""
     [ "${ACCUMULATE_TOKEN}" = "true" ] && OVERWRITE_OUTPUT_TEXT_FLAG="--overwrite-output-text"
 
+    EXCL_INPUT_IN_OUTPUT_FLAG=""
+    [ "${EXCLUDE_INPUT_IN_OUTPUT}" = "true" ] && EXCL_INPUT_IN_OUTPUT_FLAG="--exclude-input-in-output"
+
     pushd inflight_batcher_llm/client
 
     # testing output accuracy for real weights only
@@ -496,8 +499,12 @@ run_cpp_e2e_backend_tests () {
             ${STREAMING_FLAG} \
             --output-len 10 --prompt "The only thing we have to fear is" \
             ${OVERWRITE_OUTPUT_TEXT_FLAG} \
+            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
             --model-name "$E2E_MODEL_NAME" | tee output_e2e
         grep "that the government will" output_e2e
+        if [[ "$EXCL_INPUT_IN_OUTPUT_FLAG" != "" ]]; then
+            grep -v "The only thing we have to fear is" output_e2e
+        fi
 
         if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
             # test with embedding bias
@@ -508,16 +515,21 @@ run_cpp_e2e_backend_tests () {
                 -p "The only thing we have to fear is"  \
                 --embedding-bias-words " government" \
                 --embedding-bias-weights -20 \
-                 --model-name "$E2E_MODEL_NAME" \
+                --model-name "$E2E_MODEL_NAME" \
+                ${EXCL_INPUT_IN_OUTPUT_FLAG} \
                 2>&1 | tee output_w_bias
             grep -v "that the government will" output_w_bias
+            if [[ "$EXCL_INPUT_IN_OUTPUT_FLAG" != "" ]]; then
+                grep -v "The only thing we have to fear is" output_e2e
+            fi
 
             #Only run batched test in streaming for now since it requires decoupled mode
-            if [[ "$STREAMING" == "true" ]]; then
+            if [[ "$DECOUPLED_MODE" == "true" ]]; then
                 # test with batched requests
                 python3 end_to_end_grpc_client.py \
                     ${STREAMING_FLAG} \
                     ${OVERWRITE_OUTPUT_TEXT_FLAG} \
+                    ${EXCL_INPUT_IN_OUTPUT_FLAG} \
                     -o 5 \
                     --model-name "$E2E_MODEL_NAME" \
                     -p '["This is a test","I want you to","The cat is"]'  \
