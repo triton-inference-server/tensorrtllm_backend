@@ -68,6 +68,12 @@ input [
    optional: true
   },
   {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "end_id"
     data_type: TYPE_INT32
     dims: [ 1 ]
