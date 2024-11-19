@@ -526,7 +526,8 @@ def prepare_vila_engine(tensorrt_llm_multimodal_example_root,
 
 
 def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
-                          tensorrt_llm_mllama_example_root, mllama_model_root):
+                          tensorrt_llm_mllama_example_root, mllama_model_root,
+                          llm_backend_root):
     # Convert MLLAMA from HF
     model_name = "Llama-3.2-11B-Vision"
     ckpt_dir = os.path.join(tensorrt_llm_multimodal_example_root, "model_dir",
@@ -569,9 +570,7 @@ def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
     build_cmd = " ".join(build_cmd)
     build_visual_engine_cmd = " ".join(build_visual_engine_cmd)
     if not os.path.exists(engine_dir) or not os.path.exists(visual_engine_dir):
-        check_call(install_requirement_cmd,
-                   shell=True,
-                   cwd=tensorrt_llm_mllama_example_root)
+        check_call(install_requirement_cmd, shell=True, cwd=llm_backend_root)
         check_call(convert_cmd, shell=True)
         check_call(build_cmd, shell=True)
         check_call(build_visual_engine_cmd,

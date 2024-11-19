@@ -2605,6 +2605,7 @@ def test_mllama(
     tensorrt_llm_multimodal_example_root,
     tensorrt_llm_mllama_example_root,
     mllama_model_root,
+    llm_backend_root,
     llm_backend_multimodal_example_root,
     llm_backend_venv,
 ):
@@ -2623,7 +2624,7 @@ def test_mllama(
     # Build Engine
     ENGINE_PATH, VISUAL_ENGINE_DIR = prepare_mllama_engine(
         tensorrt_llm_multimodal_example_root, tensorrt_llm_mllama_example_root,
-        mllama_model_root)
+        mllama_model_root, llm_backend_root)
     # Prepare model repo
     new_model_repo = os.path.join(llm_backend_repo_root, "triton_repo")
     prepare_ib_model_repo(llm_backend_repo_root, new_model_repo)

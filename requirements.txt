@@ -1,6 +1,6 @@
 regex
 fire
 tritonclient[all]
-transformers==4.36.1
+transformers==4.45.1
 pandas
 tabulate
