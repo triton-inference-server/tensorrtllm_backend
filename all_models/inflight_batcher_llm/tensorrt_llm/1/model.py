@@ -809,11 +809,6 @@ class TritonPythonModel:
         self.stats_check_period_ms = get_parameter(
             model_config, "stats_check_period_ms", int) or 100
 
-        if not self.decoupled:
-            raise pb_utils.TritonModelException(
-                "Please enable decoupled transaction policy in the model configuration to serve this model"
-            )
-
         self.create_metrics(args["model_name"],
                             args["model_version"],
                             is_v1_model=executor_config.batching_type ==
