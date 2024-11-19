@@ -63,6 +63,12 @@ input [
    optional: true
   },
   {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "end_id"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -375,6 +381,10 @@ ensemble_scheduling {
       input_map {
         key: "decoder_input_lengths"
         value: "_REQUEST_DECODER_INPUT_LEN"
+      }
+      input_map {
+        key: "exclude_input_in_output"
+        value: "exclude_input_in_output"
       }
       input_map {
         key: "request_output_len"

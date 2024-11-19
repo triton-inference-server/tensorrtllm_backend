@@ -57,7 +57,8 @@ def prepare_inputs(prompt,
                    use_draft_logits=None,
                    num_return_sequences=1,
                    lora_dir=None,
-                   lora_task_id=None):
+                   lora_task_id=None,
+                   exclude_input_in_output=False):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -140,6 +141,10 @@ def prepare_inputs(prompt,
     if pad_id is not None:
         pad_id_data = np.array([[pad_id]], dtype=np.int32)
         inputs["pad_id"] = pad_id_data
+    if exclude_input_in_output is not None:
+        exclude_input_in_output_data = np.array([[exclude_input_in_output]],
+                                                dtype=bool)
+        inputs["exclude_input_in_output"] = exclude_input_in_output_data
 
     if lora_dir and lora_task_id:
         inputs["lora_weights"] = np.load(
@@ -183,7 +188,8 @@ def run_inference(triton_client,
                   use_draft_logits=None,
                   num_return_sequences=None,
                   lora_dir=None,
-                  lora_task_id=None):
+                  lora_task_id=None,
+                  exclude_input_in_output=False):
 
     try:
         prompts = json.loads(prompt)
@@ -200,7 +206,8 @@ def run_inference(triton_client,
                            return_log_probs_data, return_context_logits_data,
                            return_generation_logits_data, end_id, pad_id,
                            num_draft_tokens, use_draft_logits,
-                           num_return_sequences, lora_dir, lora_task_id))
+                           num_return_sequences, lora_dir, lora_task_id,
+                           exclude_input_in_output))
 
     if batch_inputs:
         multiple_inputs = []
@@ -321,7 +328,7 @@ def run_inference(triton_client,
         for output_text in batch_output_text:
             output_texts.extend(output_text)
 
-    return output_texts
+    return prompts, output_texts
 
 
 if __name__ == '__main__':
@@ -524,6 +531,11 @@ if __name__ == '__main__':
                         required=False,
                         help="LoRA task ID")
 
+    parser.add_argument('--exclude-input-in-output',
+                        action="store_true",
+                        required=False,
+                        help='Option to exclude prompt in output text.')
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8001"
@@ -555,7 +567,7 @@ if __name__ == '__main__':
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
-    output_texts = run_inference(
+    prompts, output_texts = run_inference(
         client,
         FLAGS.prompt,
         FLAGS.output_len,
@@ -579,7 +591,8 @@ if __name__ == '__main__':
         FLAGS.pad_id,
         FLAGS.batch_inputs,
         True,
-        num_return_sequences=FLAGS.num_return_sequences)
+        num_return_sequences=FLAGS.num_return_sequences,
+        exclude_input_in_output=FLAGS.exclude_input_in_output)
 
     if FLAGS.check_outputs:
         expected_outputs = json.loads(FLAGS.expected_outputs)
@@ -589,5 +602,8 @@ if __name__ == '__main__':
         batched_output_texts = [
             output_texts[i:i + n] for i in range(0, len(output_texts), n)
         ]
-        for out_texts, expected in zip(batched_output_texts, expected_outputs):
+        for out_texts, prompt, expected in zip(batched_output_texts, prompts,
+                                               expected_outputs):
+            if not FLAGS.streaming and not FLAGS.exclude_input_in_output:
+                expected = prompt + expected
             assert all([out == expected for out in out_texts])
