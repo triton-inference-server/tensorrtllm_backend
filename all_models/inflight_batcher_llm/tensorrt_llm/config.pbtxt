@@ -625,6 +625,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "eagle_choices"
+    value: {
+      string_value: "${eagle_choices}"
+  }
+}
+parameters: {
   key: "gpu_weights_percent"
     value: {
       string_value: "${gpu_weights_percent}"

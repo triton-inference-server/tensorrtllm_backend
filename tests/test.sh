@@ -1193,6 +1193,53 @@ if [ "$MODEL" = "medusa" ]; then
     kill_triton_server
 fi
 
+if [ "$MODEL" = "eagle" ]; then
+    # To make sure that torch is not a dependency for C++ backend
+    # pip3 uninstall -y torch
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    STREAMING="true"
+    run_all_tests="true"
+
+    MAX_NUM_SEQUENCE="${MAX_NUM_SEQUENCES[0]}"
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+    BATCHING_STRATEGY="${BATCHING_STRATEGIES[0]}"
+    # chunked context is not supported yet.
+    ENABLE_CHUNKED_CONTEXT="false"
+    DECODING_MODE="eagle"
+
+    END_ID_EAGLE=1284
+    # Use the same I/O files as eagle is based on the same vicuna-v1.3-7b as medusa.
+    EAGLE_INPUT_IDS_PATH='../../tools/dataset/short_input_end_id_medusa.csv'
+    EAGLE_OUTPUT_IDS_PATH='../../tools/dataset/short_output_end_id_medusa.csv'
+
+    for BACKEND in "${BACKENDS[@]}"; do
+        launch_triton_server
+        run_cpp_trtllm_backend_tests ${EAGLE_INPUT_IDS_PATH} ${EAGLE_OUTPUT_IDS_PATH} ${END_ID_EAGLE}
+        kill_triton_server
+    done
+    # FIXME: grpc e2e test returns different result (because it is Eagle and not GPT) and has some problems with spaces
+
+    # Test non-streaming
+    DECOUPLED_MODE="False"
+    launch_triton_server
+    # Test client
+    pushd inflight_batcher_llm/client
+    python3 inflight_batcher_llm_client.py \
+            --request-output-len=128 \
+            --end-id ${END_ID_EAGLE} \
+            --request-id 1 \
+            --tokenizer-dir ${TOKENIZER_PATH} \
+            --input-tokens-csv ${EAGLE_INPUT_IDS_PATH} \
+            --output-tokens-csv ${EAGLE_OUTPUT_IDS_PATH} \
+            --check-output
+    popd # inflight_batcher_llm/client
+    kill_triton_server
+fi
+
 if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
 
     # Non-streaming tests, decoupled is false

@@ -7,6 +7,7 @@ test_triton_llm.py::test_blip2_opt[test_kv_cache_reuse-False-1-False-True-True-0
 test_triton_llm.py::test_llava[False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.7-max_utilization-1-1-1-False-tensorrt_llm_bls]
 test_triton_llm.py::test_vila[4-False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.7-max_utilization-1-1-1-False-tensorrt_llm_bls]
 test_triton_llm.py::test_medusa_vicuna_7b_ifb[False-1-medusa-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
+test_triton_llm.py::test_eagle_vicuna_7b_ifb[False-1-eagle-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
 test_triton_llm.py::test_llama_v2_7b_ifb[test_stop_words-False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-True-tensorrt_llm_bls]
 test_triton_llm.py::test_mistral_v1_7b_ifb[False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-4096-1-1-1-False-ensemble]
 test_triton_llm.py::test_mistral_v1_multi_models[False-1-False-True-False-0-128-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-4096-1-1-1-False-ensemble]

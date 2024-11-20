@@ -48,7 +48,8 @@ CASE_TO_EXAMPLE = [
   "gpt-2b-ib-lora": "gpt-2b-ib-lora",
   "medusa": "medusa",
   "whisper": "whisper",
-  "gpt-disaggregated-serving-bls": "gpt-disaggregated-serving-bls"
+  "gpt-disaggregated-serving-bls": "gpt-disaggregated-serving-bls",
+  "eagle": "eagle"
 ]
 
 CASE_TO_MODEL = [
@@ -67,6 +68,7 @@ CASE_TO_MODEL = [
   "gpt-2b-ib-lora": "gpt-2b-ib-lora",
   "gpt-gather-logits": "gpt2",
   "medusa": "vicuna-7b-v1.3",
+  "eagle": "vicuna-7b-v1.3",
   "bart-ib": "bart-large-cnn",
   "t5-ib": "t5-small",
   "blip2-opt": "blip2-opt-2.7b",
@@ -88,6 +90,7 @@ CASE_TO_ENGINE_DIR = [
   "gpt-ib-ptuning": "gpt/trt_engine/email_composition/fp16/1-gpu/",
   "gpt-2b-ib-lora": "gpt/trt_engine/gpt-2b-lora-ib/fp16/1-gpu/",
   "medusa": "medusa/tmp/medusa/7B/trt_engines/fp16/1-gpu/",
+  "eagle": "eagle/tmp/eagle/7B/trt_engines/fp16/1-gpu/",
   "bart-ib": "enc_dec/trt_engine/bart-ib/fp16/1-gpu/",
   "t5-ib": "enc_dec/trt_engine/t5-ib/fp16/1-gpu/",
   "blip2-opt": "multimodal/trt_engines/opt-2.7b/fp16/1-gpu",
@@ -380,13 +383,13 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("blip2-opt") || caseName.contains("mllama") || caseName.contains("whisper") || caseName.contains("triton-extensive") || caseName.contains("disaggregated-serving")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("eagle") || caseName.contains("blip2-opt") || caseName.contains("mllama") || caseName.contains("whisper") || caseName.contains("triton-extensive") || caseName.contains("disaggregated-serving")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/trtllmExecutorWorker /opt/tritonserver/backends/tensorrtllm"
     }
 
-    if (caseName.contains("llama") || caseName.contains("medusa")) {
+    if (caseName.contains("llama") || caseName.contains("medusa") || caseName.contains("eagle")) {
       tokenizerType = "llama"
     }
 
@@ -811,6 +814,11 @@ pipeline {
               stage("Test mllama") {
                 steps {
                   runTRTLLMBackendTest("mllama")
+                }
+              }
+              stage("Test eagle") {
+                steps {
+                  runTRTLLMBackendTest("eagle")
                 }
               }
             }

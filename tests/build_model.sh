@@ -19,6 +19,7 @@ GPT_2B=/home/scratch.trt_llm_data/llm-models/GPT-2B-001_bf16_tp1.nemo
 GPT_2B_LORA=/home/scratch.trt_llm_data/llm-models/lora/gpt-next-2b
 VICUNA=/home/scratch.trt_llm_data/llm-models/vicuna-7b-v1.3
 MEDUSA_VICUNA=/home/scratch.trt_llm_data/llm-models/medusa-vicuna-7b-v1.3/
+EAGLE_VICUNA=/home/scratch.trt_llm_data/llm-models/EAGLE-Vicuna-7B-v1.3/
 BART=/home/scratch.trt_llm_data/llm-models/bart-large-cnn/
 T5=/home/scratch.trt_llm_data/llm-models/t5-small/
 BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
@@ -411,6 +412,32 @@ if [ "$MODEL" = "medusa" ]; then
              --max_num_tokens 2400
 
     popd # tensorrt_llm/examples/medusa
+
+fi
+
+if [ "$MODEL" = "eagle" ]; then
+
+    # Eagle
+    pushd tensorrt_llm/examples/eagle
+
+    install_requirements
+
+    echo "Convert Eagle from HF"
+    python convert_checkpoint.py --model_dir ${VICUNA} \
+                            --eagle_model_dir ${EAGLE_VICUNA} \
+                            --output_dir ./tllm_checkpoint_1gpu_eagle \
+                            --dtype float16 \
+                            --num_eagle_layers 4
+
+    echo "Build Eagle: float16"
+    trtllm-build --checkpoint_dir ./tllm_checkpoint_1gpu_eagle \
+             --output_dir ./tmp/eagle/7B/trt_engines/fp16/1-gpu/ \
+             --gemm_plugin float16 \
+             --speculative_decoding_mode eagle \
+             --max_batch_size 8 --max_seq_len 600 \
+             --max_num_tokens 2400
+
+    popd # tensorrt_llm/examples/eagle
 
 fi
 
