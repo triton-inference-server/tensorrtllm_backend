@@ -472,6 +472,18 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         {
             decodingMode = executor::DecodingMode::Medusa();
         }
+        else if (decodingModeStr == "redrafter")
+        {
+            decodingMode = executor::DecodingMode::ExplicitDraftTokens();
+        }
+        else if (decodingModeStr == "lookahead")
+        {
+            decodingMode = executor::DecodingMode::Lookahead();
+        }
+        else if (decodingModeStr == "eagle")
+        {
+            decodingMode = executor::DecodingMode::Eagle();
+        }
         else
         {
             throw std::runtime_error("");
@@ -481,7 +493,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     {
         TLLM_LOG_WARNING(
             "decoding_mode parameter is invalid or not specified"
-            "(must be one of the {top_k, top_p, top_k_top_p, beam_search, medusa})."
+            "(must be one of the {top_k, top_p, top_k_top_p, beam_search, medusa, redrafter, lookahead, eagle})."
             "Using default: top_k_top_p if max_beam_width == 1, beam_search otherwise");
     }
 
@@ -499,6 +511,22 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             TLLM_LOG_WARNING(
                 "medusa_choices parameter is not specified. "
                 "Will be using default mc_sim_7b_63 choices instead.");
+        }
+    }
+
+    try
+    {
+        auto eagleChoices = model_state_->GetParameter<executor::EagleChoices>("eagle_choices");
+        executor::EagleConfig eagleConfig(eagleChoices);
+        decodingConfig.setEagleConfig(eagleConfig);
+    }
+    catch (std::exception const& e)
+    {
+        if (decodingMode && decodingMode->isEagle())
+        {
+            TLLM_LOG_WARNING(
+                "eagle_choices parameter is not specified. "
+                "Will be using default mc_sim_7b_63 choices instead or choices specified per-request.");
         }
     }
 

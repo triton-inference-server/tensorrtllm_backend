@@ -59,6 +59,52 @@ def prepare_medusa_vicuna_7b_engine(tensorrt_llm_medusa_example_root,
     return engine_dir
 
 
+def prepare_eagle_vicuna_7b_engine(tensorrt_llm_eagle_example_root,
+                                   vicuna_7b_model_root,
+                                   eagle_vicuna_7b_model_root):
+    # Convert Eagle from HF
+    ckpt_dir = os.path.join(tensorrt_llm_eagle_example_root, "model_dir",
+                            "eagle_vicuna_7b")
+    convert_cmd = [
+        "python3", f"{tensorrt_llm_eagle_example_root}/convert_checkpoint.py",
+        f"--model_dir={vicuna_7b_model_root}",
+        f"--eagle_model_dir={eagle_vicuna_7b_model_root}",
+        f"--output_dir={ckpt_dir}", "--dtype=float16", "--num_eagle_layers=4"
+    ]
+
+    # Build Eagle: float16
+    engine_dir = os.path.join(tensorrt_llm_eagle_example_root, "engine_dir",
+                              "eagle_vicuna_7b")
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--gemm_plugin=float16",
+        "--max_batch_size=8",
+        "--max_seq_len=600",
+        "--speculative_decoding_mode=eagle",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_eagle_example_root)
+        check_call(convert_cmd, shell=True)
+        check_call(build_cmd, shell=True)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_t5_small_engine(tensorrt_llm_enc_dec_example_root,
                             t5_small_model_root):
     # Convert T5 from HF

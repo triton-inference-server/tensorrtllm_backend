@@ -136,6 +136,10 @@ def parse_medusa_choices(medusa_choices):
     return result
 
 
+def parse_eagle_choices(eagle_choices):
+    return parse_medusa_choices(eagle_choices)
+
+
 def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
     kwargs['beam_width'] = get_input_scalar_by_name(
@@ -472,6 +476,12 @@ def convert_decoding_mode(decoding_mode: str):
         return trtllm.DecodingMode.BeamSearch()
     elif decoding_mode == "medusa":
         return trtllm.DecodingMode.Medusa()
+    elif decoding_mode == "redrafter":
+        return trtllm.DecodingMode.ExplicitDraftTokens()
+    elif decoding_mode == "lookahead":
+        return trtllm.DecodingMode.Lookahead()
+    elif decoding_mode == "eagle":
+        return trtllm.DecodingMode.Eagle()
     raise pb_utils.TritonModelException(
         f"decoding_mode value of '{decoding_mode}' is not supported.")
 
@@ -569,10 +579,15 @@ class TritonPythonModel:
         return trtllm.PeftCacheConfig(**kwargs)
 
     def get_decoding_config(self, model_config):
+        eagle_choices = parse_eagle_choices(
+            get_parameter(model_config, "eagle_choices"))
         kwargs = {
             "medusa_choices":
             parse_medusa_choices(get_parameter(model_config,
                                                "medusa_choices")),
+            "eagle_config":
+            None
+            if eagle_choices is None else trtllm.EagleConfig(eagle_choices),
             "decoding_mode":
             convert_decoding_mode(get_parameter(model_config,
                                                 "decoding_mode")),

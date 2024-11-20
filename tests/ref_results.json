@@ -4,5 +4,6 @@
 "gpt-ib-streaming-python": { "Avg. latency (ms)": 2097.85, "OP tokens/sec":  4782.26},
 "mistral-ib-tensorrtllm": { "Avg. latency (ms)": 17368.00, "OP tokens/sec": 574.00},
 "mistral-ib-mm-tensorrtllm": { "Avg. latency (ms)": 18284.85, "OP tokens/sec": 544.23},
-"medusa-tensorrtllm": { "Avg. latency (ms)": 53283.01, "OP tokens/sec": 188.38}
+"medusa-tensorrtllm": { "Avg. latency (ms)": 53283.01, "OP tokens/sec": 188.38},
+"eagle-tensorrtllm": { "Avg. latency (ms)": 37552.14, "OP tokens/sec": 257.64}
 }

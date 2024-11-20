@@ -622,6 +622,9 @@ def test_convert_decoding_mode():
     assert convert_decoding_mode("top_k_top_p").isTopKandTopP()
     assert convert_decoding_mode("beam_search").isBeamSearch()
     assert convert_decoding_mode("medusa").isMedusa()
+    assert convert_decoding_mode("redrafter").isExplicitDraftTokens()
+    assert convert_decoding_mode("lookahead").isLookahead()
+    assert convert_decoding_mode("eagle").isEagle()
     with pytest.raises(
             Exception,
             match="decoding_mode value of 'other' is not supported"):
@@ -709,6 +712,8 @@ def test_get_executor_config_minimal():
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
     assert config.decoding_config.decoding_mode is None
     assert config.decoding_config.medusa_choices is None
+    assert config.decoding_config.eagle_config is None
+    assert config.decoding_config.lookahead_decoding_config is None
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     assert config.kv_cache_config.enable_block_reuse == False
     assert config.kv_cache_config.max_tokens is None

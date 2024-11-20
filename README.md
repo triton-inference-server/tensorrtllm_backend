@@ -73,7 +73,7 @@ repo. If you don't find your answer there you can ask questions on the
     - [Scheduling](#scheduling)
     - [Key-Value Cache](#key-value-cache)
     - [Decoding](#decoding)
-      - [Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search and Medusa](#decoding-modes---top-k-top-p-top-k-top-p-beam-search-and-medusa)
+      - [Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search, Medusa, ReDrafter, Lookahead and Eagle](#decoding-modes---top-k-top-p-top-k-top-p-beam-search-medusa-redrafter-lookahead-and-eagle)
       - [Speculative Decoding](#speculative-decoding)
     - [Chunked Context](#chunked-context)
     - [Quantization](#quantization)
@@ -606,15 +606,15 @@ TRT-LLM engine. Parameters for KV cache can be found in the
 
 ### Decoding
 
-#### Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search and Medusa
+#### Decoding Modes - Top-k, Top-p, Top-k Top-p, Beam Search, Medusa, ReDrafter, Lookahead and Eagle
 
 TensorRT-LLM supports various decoding modes, including top-k, top-p,
-top-k top-p, beam search and Medusa. See the
+top-k top-p, beam search Medusa, ReDrafter, Lookahead and Eagle. See the
 [Sampling Parameters](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md#sampling-parameters)
 section to learn more about top-k, top-p, top-k top-p and beam search decoding.
-For more details on Medusa, please refer to the
-[Medusa Decoding](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/medusa)
-documentation.
+Please refer to the
+[speculative decoding documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/speculative-decoding.md)
+for more details on Medusa, ReDrafter, Lookahead and Eagle.
 
 Parameters for decoding modes can be found in the
 [model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.

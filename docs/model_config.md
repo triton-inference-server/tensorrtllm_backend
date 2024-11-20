@@ -131,7 +131,7 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `max_beam_width` | The beam width value of requests that will be sent to the executor. (default=1) |
-| `decoding_mode` | Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search, medusa}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. When Medusa model is used, `medusa` decoding mode should be set. However, TensorRT-LLM detects loaded Medusa model and overwrites decoding mode to `medusa` with warning. |
+| `decoding_mode` | Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search, medusa, redrafter, lookahead, eagle}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. When Medusa model is used, `medusa` decoding mode should be set. However, TensorRT-LLM detects loaded Medusa model and overwrites decoding mode to `medusa` with warning. Same applies to the ReDrafter, Lookahead and Eagle. |
 
 - Optimization
 
@@ -150,6 +150,12 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `medusa_choices` | To specify Medusa choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
+
+- Eagle
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `eagle_choices` | To specify default per-server Eagle choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
 
 ### tensorrt_llm_bls model
 
