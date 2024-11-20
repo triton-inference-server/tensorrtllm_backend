@@ -138,6 +138,10 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `enable_chunked_context` | Set to `true` to enable context chunking. (default=`false`) |
+| `multi_block_mode` | Set to `false` to disable multi block mode. (default=`true`) |
+| `enable_context_fmha_fp32_acc` | Set to `true` to enable FMHA runner FP32 accumulation. (default=`false`) |
+| `cuda_graph_mode` | Set to `true` to enable cuda graph. (default=`false`) |
+| `cuda_graph_cache_size` | Sets the size of the CUDA graph cache, in numbers of CUDA graphs. (default=0) |
 
 - Scheduling
 
