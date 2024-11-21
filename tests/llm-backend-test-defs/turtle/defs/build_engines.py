@@ -1492,3 +1492,54 @@ def prepare_rcca_nvbug_4342666_engine(type, tensorrt_llm_llama_example_root,
 
     assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
     return engine_dir
+
+
+def prepare_rcca_nvbug_4895566_engine(tensorrt_llm_llama_example_root,
+                                      mistral_v1_tokenizer_model_root):
+
+    engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
+                              "rcca_nvbug_4895566")
+    ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                            "rcca_nvbug_4895566")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--model_dir={mistral_v1_tokenizer_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--gpt_attention_plugin=float16",
+        "--gemm_plugin=float16",
+        "--remove_input_padding=enable",
+        "--context_fmha=enable",
+        "--kv_cache_type=paged",
+        "--max_input_len=5",  # mModel->getMaxInputLen() = max_seq_len - 1 = 4
+        "--max_seq_len=5",
+        "--max_num_tokens=5",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
