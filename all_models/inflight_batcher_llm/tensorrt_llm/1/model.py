@@ -882,12 +882,7 @@ class TritonPythonModel:
 
         # TODO: Read from config,json if available
         build_config = self.get_engine_build_config()
-        engine = LLM(
-            model_id,
-            build_config=build_config,
-            # TODO: Needed to avoid OOM here?
-            kv_cache_config=trtllm.KvCacheConfig(free_gpu_memory_fraction=0.1))
-        pb_utils.Logger.log_info(f"Saving engine to {engine_dir}.")
+        engine = LLM(model_id, build_config=build_config)
         engine.save(str(engine_dir))
         pb_utils.Logger.log_info(f"Saved engine to {engine_dir}.")
 

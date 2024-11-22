@@ -53,17 +53,11 @@ class TritonPythonModel:
           * model_name: Model name
         """
         # Parse model configs
-        model_config = json.loads(args['model_config'])
+        self.model_config = json.loads(args['model_config'])
         # Support tokenizer dir from env var for central location
-        tokenizer_dir = os.environ.get(
-            "TRTLLM_ENGINE_DIR",
-            model_config['parameters']['tokenizer_dir']['string_value'])
-        if not tokenizer_dir:
-            raise pb_utils.TritonModelException(
-                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
-            )
+        tokenizer_dir = self.get_tokenizer_dir()
 
-        skip_special_tokens = model_config['parameters'].get(
+        skip_special_tokens = self.model_config['parameters'].get(
             'skip_special_tokens')
         if skip_special_tokens is not None:
             skip_special_tokens_str = skip_special_tokens[
@@ -94,11 +88,35 @@ class TritonPythonModel:
 
         # Parse model output configs
         output_config = pb_utils.get_output_config_by_name(
-            model_config, "OUTPUT")
+            self.model_config, "OUTPUT")
 
         # Convert Triton types to numpy types
         self.output_dtype = pb_utils.triton_string_to_numpy(
             output_config['data_type'])
+
+    def get_tokenizer_dir(self):
+        # Manual override of tokenizer. This is to support common case/models
+        # when engine/tokenizer are downloaded on demand at model load time.
+        tokenizer_dir = os.environ.get("TRTLLM_TOKENIZER")
+
+        # If no override, use tokenizer co-located with engine
+        if not tokenizer_dir:
+            tokenizer_dir = os.environ.get("TRTLLM_ENGINE_DIR")
+
+        # If no env var used at all, use tokenizer dir defined in config.pbtxt
+        # This is for backwards compatibility but is the most tedious to set
+        # and keep aligned in each location.
+        if not tokenizer_dir:
+            tokenizer_dir = self.model_config['parameters']['tokenizer_dir'][
+                'string_value']
+
+        # If no method of setting tokenizer worked, fail.
+        if not tokenizer_dir:
+            raise pb_utils.TritonModelException(
+                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
+            )
+
+        return tokenizer_dir
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`

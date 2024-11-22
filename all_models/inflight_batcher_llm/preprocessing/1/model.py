@@ -54,21 +54,15 @@ class TritonPythonModel:
           * model_name: Model name
         """
         # Parse model configs
-        model_config = json.loads(args['model_config'])
+        self.model_config = json.loads(args['model_config'])
         # Support tokenizer dir from env var for central location
-        tokenizer_dir = os.environ.get(
-            "TRTLLM_ENGINE_DIR",
-            model_config['parameters']['tokenizer_dir']['string_value'])
-        if not tokenizer_dir:
-            raise pb_utils.TritonModelException(
-                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
-            )
+        tokenizer_dir = self.get_tokenizer_dir()
 
-        add_special_tokens = model_config['parameters'].get(
+        add_special_tokens = self.model_config['parameters'].get(
             'add_special_tokens')
-        visual_model_path = model_config['parameters']['visual_model_path'][
-            'string_value']
-        max_num_images = model_config['parameters'].get('max_num_images')
+        visual_model_path = self.model_config['parameters'][
+            'visual_model_path']['string_value']
+        max_num_images = self.model_config['parameters'].get('max_num_images')
 
         if max_num_images is not None:
             max_num_images_str = max_num_images['string_value']
@@ -139,7 +133,7 @@ class TritonPythonModel:
                 'llava', 'blip2-opt', 'vila', 'mllama'
             ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila and mllama. Got {self.model_type}."
 
-            llm_model_path = model_config['parameters']['gpt_model_path'][
+            llm_model_path = self.model_config['parameters']['gpt_model_path'][
                 'string_value']
             llm_model_path = os.path.join(llm_model_path, 'config.json')
             with open(llm_model_path, 'r') as f:
@@ -150,7 +144,7 @@ class TritonPythonModel:
 
             self.vision_preprocessor = VisionPreProcessor(
                 self.model_type, AutoProcessor.from_pretrained(tokenizer_dir),
-                model_config)
+                self.model_config)
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
@@ -165,7 +159,7 @@ class TritonPythonModel:
                 input_name.lower() + "_dtype",
                 pb_utils.triton_string_to_numpy(
                     pb_utils.get_input_config_by_name(
-                        model_config, input_name)['data_type']))
+                        self.model_config, input_name)['data_type']))
 
         for output_name in output_names:
             setattr(
@@ -173,7 +167,31 @@ class TritonPythonModel:
                 output_name.lower() + "_dtype",
                 pb_utils.triton_string_to_numpy(
                     pb_utils.get_output_config_by_name(
-                        model_config, output_name)['data_type']))
+                        self.model_config, output_name)['data_type']))
+
+    def get_tokenizer_dir(self):
+        # Manual override of tokenizer. This is to support common case/models
+        # when engine/tokenizer are downloaded on demand at model load time.
+        tokenizer_dir = os.environ.get("TRTLLM_TOKENIZER")
+
+        # If no override, use tokenizer co-located with engine
+        if not tokenizer_dir:
+            tokenizer_dir = os.environ.get("TRTLLM_ENGINE_DIR")
+
+        # If no env var used at all, use tokenizer dir defined in config.pbtxt
+        # This is for backwards compatibility but is the most tedious to set
+        # and keep aligned in each location.
+        if not tokenizer_dir:
+            tokenizer_dir = self.model_config['parameters']['tokenizer_dir'][
+                'string_value']
+
+        # If no method of setting tokenizer worked, fail.
+        if not tokenizer_dir:
+            raise pb_utils.TritonModelException(
+                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
+            )
+
+        return tokenizer_dir
 
     def _setup_ptable_shape(self, llm_model_config):
         max_prompt_embedding_table_size = llm_model_config['build_config'][
