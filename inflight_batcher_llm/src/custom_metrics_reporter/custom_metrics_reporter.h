@@ -30,6 +30,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -59,7 +60,8 @@ public:
     /// group for.
     /// \return a TRITONSERVER_Error indicating success or failure.
     TRITONSERVER_Error* CreateGroup(std::string const& model_name, const uint64_t version,
-        TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE);
+        TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE,
+        std::optional<const std::vector<double>> buckets = std::nullopt);
 
     /// Update the Triton metrics associated with this group using
     /// the parsed TRT LLM backend statistics values.
@@ -173,6 +175,12 @@ public:
     static const std::vector<std::string> general_metric_keys_;
     static const std::vector<std::string> general_metric_labels_;
 
+    static const std::vector<std::string> response_metric_type_keys_;
+    static const std::vector<std::string> response_metric_type_labels_;
+
+    static const std::vector<std::string> input_metric_type_keys_;
+    static const std::vector<std::string> input_metric_type_labels_;
+
 private:
     std::vector<std::unique_ptr<TritonMetricGroup>> metric_groups_;
     std::unique_ptr<TritonMetricGroup> request_metric_family_;
@@ -181,6 +189,8 @@ private:
     std::unique_ptr<TritonMetricGroup> dis_serving_metric_family_;
     std::unique_ptr<TritonMetricGroup> model_type_metric_family_;
     std::unique_ptr<TritonMetricGroup> general_metric_family_;
+    std::unique_ptr<TritonMetricGroup> response_tokens_metric_family_;
+    std::unique_ptr<TritonMetricGroup> input_tokens_metric_family_;
 };
 
 } // namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter

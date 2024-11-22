@@ -841,7 +841,9 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 auto const& requestId = requestIds.at(batchIndex);
                 auto const& executorRequest = executorRequests.at(batchIndex);
                 int64_t inputTokensSize = executorRequest.getInputTokenIds().size();
+                bool streaming = executorRequest.getStreaming();
                 executor::SizeType32 beamWidthCopy = executorRequest.getSamplingConfig().getBeamWidth();
+                bool excludeInputFromOutput = executorRequest.getOutputConfig().excludeInputFromOutput;
                 if (mRequestIdToRequestData.count(requestId))
                 {
                     TLLM_LOG_ERROR(
@@ -853,10 +855,10 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 int32_t const numReturnSequences
                     = executorRequest.getSamplingConfig().getNumReturnSequences().value_or(1);
                 mRequestIdToRequestData.emplace(requestId,
-                    RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
-                        std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        static_cast<int32_t>(requestIds.size()), numReturnSequences, requestIdsSet,
-                        executorRequest.getRequestType()});
+                    RequestData{factory, request, tritonRequestId, inputTokensSize, 0, streaming,
+                        excludeInputFromOutput, beamWidthCopy, std::move(requestOutputNames),
+                        {exec_start_ns, compute_start_ns, 0, 0}, batchIndex, static_cast<int32_t>(requestIds.size()),
+                        numReturnSequences, requestIdsSet, executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
             {
@@ -889,7 +891,20 @@ TRITONSERVER_Error* ModelInstanceState::reportBaseMetrics(RequestData& requestDa
     return nullptr; // success
 }
 
-std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceState::fillTritonResponse(
+TRITONSERVER_Error* ModelInstanceState::reportCustomMetrics(
+    int64_t inputTokensSize, int64_t outputTokensSize, TRITONSERVER_Error* error)
+{
+    std::string statJson = "{";
+    statJson.append("\"Total Output Tokens\":" + std::to_string(outputTokensSize) + ",");
+    statJson.append("\"Total Input Tokens\":" + std::to_string(inputTokensSize) + ",");
+    statJson.back() = '}';
+#ifdef TRITON_ENABLE_METRICS
+    LOG_IF_ERROR(custom_metrics_reporter_->UpdateCustomMetrics(statJson), "Failed updating TRT LLM statistics");
+#endif
+    return nullptr; // success
+}
+
+std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelInstanceState::fillTritonResponse(
     TRITONBACKEND_ResponseFactory* factory, executor::Response const& response, RequestData const& requestData)
 {
     TRITONBACKEND_Response* tritonResponse;
@@ -897,6 +912,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
 
     TRITONSERVER_Error* error = nullptr;
     bool isFinal = false;
+    int64_t outputTokensSize = 0;
     try
     {
         if (!response.hasError())
@@ -910,6 +926,8 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
             int32_t maxBeamLength = -1;
             for (size_t i = 0; i < outputIds.size(); ++i)
             {
+                // We want to capture ALL output tokens for ALL beams
+                outputTokensSize += outputIds[i].size();
                 beamLength[i] = outputIds[i].size();
                 maxBeamLength = std::max(beamLength[i], maxBeamLength);
             }
@@ -1084,7 +1102,7 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
         error = TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errMsg.c_str());
     }
 
-    return {tritonResponse, isFinal, error};
+    return {tritonResponse, isFinal, error, outputTokensSize};
 }
 
 void ModelInstanceState::WaitForResponse()
@@ -1112,7 +1130,18 @@ void ModelInstanceState::WaitForResponse()
 
             auto factory = requestData.factory;
 
-            auto [tritonResponse, isFinal, error] = fillTritonResponse(factory, response, requestData);
+            auto [tritonResponse, isFinal, error, outputTokensSize]
+                = fillTritonResponse(factory, response, requestData);
+            {
+                std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
+                if (!mRequestIdToRequestData.count(requestId))
+                {
+                    TLLM_LOG_ERROR("Unexpected response for a request ID that is not active");
+                    continue;
+                }
+                mRequestIdToRequestData[requestId].outputTokensSize += outputTokensSize;
+                requestData = mRequestIdToRequestData[requestId];
+            }
 
             if (isFinal)
             {
@@ -1138,9 +1167,15 @@ void ModelInstanceState::WaitForResponse()
                 pendingBatchedRequestIds.erase(requestId);
                 if (pendingBatchedRequestIds.size() == 0)
                 {
+                    if (!requestData.excludeInputInOutput && !requestData.streaming)
+                    {
+                        // Need to do this as initial tokens sent by the executor are the input tokens IF NOT Streaming
+                        requestData.outputTokensSize -= (requestData.inputTokensSize * requestData.beamWidth);
+                    }
                     requestData.timestamps.compute_end_ns = compute_end_ns;
                     LOG_IF_ERROR(reportBaseMetrics(requestData, error), "Error reporting metrics");
-
+                    LOG_IF_ERROR(reportCustomMetrics(requestData.inputTokensSize, requestData.outputTokensSize, error),
+                        "Error reporting custom metrics per request");
                     LOG_IF_ERROR(
                         TRITONBACKEND_RequestRelease(requestData.tritonRequest, TRITONSERVER_REQUEST_RELEASE_ALL),
                         "Cannot release request");
