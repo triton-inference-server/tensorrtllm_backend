@@ -3,17 +3,19 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from random import randint
 from threading import Lock, Thread
 
 import numpy as np
+import tensorrt_llm.bindings.executor as trtllm
+import tensorrt_llm.logger as logger
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
 
-import tensorrt_llm.bindings.executor as trtllm
-import tensorrt_llm.logger as logger
+from tensorrt_llm import LLM, BuildConfig
 
 
 def mpi_comm():
@@ -321,7 +323,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
             # if request doesn't specify exclude_input_from_output, try to use the parameter
             output_config.exclude_input_from_output = (
                 exclude_input_from_output
-                if exclude_input_from_output is not None else false)
+                if exclude_input_from_output is not None else False)
         else:
             output_config.exclude_input_from_output = req_exclude_input_from_output
 
@@ -791,27 +793,25 @@ class TritonPythonModel:
           * model_version: Model version
           * model_name: Model name
         """
-        model_config = json.loads(args['model_config'])
-        gpt_model_path = get_parameter(model_config, "gpt_model_path")
-        if get_parameter(model_config, "enable_trt_overlap", bool):
+        self.model_config = json.loads(args['model_config'])
+        if get_parameter(self.model_config, "enable_trt_overlap", bool):
             raise pb_utils.TritonModelException(
                 f"enable_trt_overlap=true is not supported.")
         self.exclude_input_from_output = get_parameter(
-            model_config, "exclude_input_in_output", bool)
-        executor_config = self.get_executor_config(model_config)
-        self.executor = trtllm.Executor(gpt_model_path,
-                                        trtllm.ModelType.DECODER_ONLY,
-                                        executor_config)
+            self.model_config, "exclude_input_in_output", bool)
         self.decoupled = pb_utils.using_decoupled_model_transaction_policy(
-            model_config)
+            self.model_config)
         self.cancellation_check_period_ms = get_parameter(
-            model_config, "cancellation_check_period_ms", int) or 100
+            self.model_config, "cancellation_check_period_ms", int) or 100
         self.stats_check_period_ms = get_parameter(
-            model_config, "stats_check_period_ms", int) or 100
+            self.model_config, "stats_check_period_ms", int) or 100
+
+        # Setup and initialize executor
+        self.init_engine()
 
         self.create_metrics(args["model_name"],
                             args["model_version"],
-                            is_v1_model=executor_config.batching_type ==
+                            is_v1_model=self.executor_config.batching_type ==
                             trtllm.BatchingType.STATIC)
         self.triton_user_id_to_req_ids = {}
         self.triton_req_id_to_req_ids = {}
@@ -829,6 +829,85 @@ class TritonPythonModel:
         else:
             # In leader mode, worker ranks will wait here until leader is done.
             self.executor.shutdown()
+
+    def init_engine(self):
+        engine_dir: Path = self.get_engine_dir()
+        engines = [engine for engine in engine_dir.glob("*.engine")]
+        # Build engine if not found
+        if engines:
+            pb_utils.Logger.log_info(
+                f"Found existing engine(s) at {engine_dir}.")
+        else:
+            pb_utils.Logger.log_info(f"No engine(s) found at {engine_dir}.")
+            model_id: str = os.environ.get("TRTLLM_MODEL")
+            if not model_id:
+                raise pb_utils.TritonModelException(
+                    f"Could not build engine because no TRTLLM_MODEL was specified."
+                )
+
+            self.build_engine(model_id, engine_dir)
+
+        self.load_engine(engine_dir)
+
+    def get_engine_dir(self) -> Path:
+        engine_dir: Path = Path(
+            os.environ.get("TRTLLM_ENGINE_DIR",
+                           get_parameter(self.model_config, "gpt_model_path")))
+        if not engine_dir:
+            raise pb_utils.TritonModelException(
+                f"No engine directory set. Please set TRTLLM_ENGINE_DIR env var or 'gpt_model_path' config field to the directory containing engines and tokenizers."
+            )
+
+        if not engine_dir.exists():
+            pb_utils.Logger.log_info(
+                f"{engine_dir} does not exist, so it will be created.")
+            engine_dir.mkdir()
+
+        if not engine_dir.is_dir():
+            raise pb_utils.TritonModelException(
+                f"{engine_dir} is not a valid directory, please choose a valid directory."
+            )
+
+        return engine_dir
+
+    def load_engine(self, engine_dir: Path):
+        self.executor_config = self.get_executor_config(self.model_config)
+        self.executor = trtllm.Executor(engine_dir,
+                                        trtllm.ModelType.DECODER_ONLY,
+                                        self.executor_config)
+
+    def build_engine(self, model_id: str, engine_dir: Path):
+        """
+        model_id: str
+          Local filepath to model weights or HuggingFace ID
+        """
+        pb_utils.Logger.log_info(f"Building engine from {model_id}.")
+
+        # TODO: Read from config,json if available
+        build_config = self.get_engine_build_config()
+        engine = LLM(model_id, build_config=build_config)
+        engine.save(str(engine_dir))
+        pb_utils.Logger.log_info(f"Saved engine to {engine_dir}.")
+
+    def get_engine_build_config(self):
+        # FIXME: Can't construct BuildConfig directly from **build_config
+        # If a config file exists with a build_config, use it.
+        #config_file = engine_dir / "config.json"
+        #if config_file.exists():
+        #    pb_utils.Logger.log_info(f"Found engine build config at {config_file}.")
+        #    with open(config_file) as f:
+        #        config_json = json.load(f)
+        #        build_config = config_json["build_config"]
+        #    pb_utils.Logger.log_info(f"Using build config: {build_config}")
+        #    config = BuildConfig(**build_config)
+        #else:
+        #    pb_utils.Logger.log_info(f"Using default build config.")
+        #    # Default config if no config file found
+        #    config = BuildConfig()
+
+        config = BuildConfig()
+        pb_utils.Logger.log_info(f"Using default build config: {config}")
+        return config
 
     def handle_stop_request(self, triton_user_id, response_sender):
         if triton_user_id is None or triton_user_id == "":
@@ -877,9 +956,7 @@ class TritonPythonModel:
         triton_req_ids = []
 
         for request in requests:
-
             triton_user_id = request.request_id()
-
             response_sender = request.get_response_sender()
             stop = get_input_scalar_by_name(request, 'stop')
 
@@ -899,9 +976,11 @@ class TritonPythonModel:
                 except Exception as e:
                     response_sender.send(
                         pb_utils.InferenceResponse(error=pb_utils.TritonError(
-                            f"An error occurred when processing the input values for request id {request.request_id()}, the error was '{e}'"
+                            f"An error occurred when processing the input values for request id {triton_user_id}, the error was '{e}'"
                         )),
                         flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                    # TODO: Remove
+                    raise e
                 else:
                     for batch_index, converted_req in enumerate(
                             converted_reqs):

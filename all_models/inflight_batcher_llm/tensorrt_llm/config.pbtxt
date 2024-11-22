@@ -25,17 +25,16 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 name: "tensorrt_llm"
-backend: "${triton_backend}"
-max_batch_size: ${triton_max_batch_size}
+backend: "python"
+max_batch_size: 256
 
 model_transaction_policy {
-  decoupled: ${decoupled_mode}
+  decoupled: True
 }
 
 dynamic_batching {
-    preferred_batch_size: [ ${triton_max_batch_size} ]
-    max_queue_delay_microseconds: ${max_queue_delay_microseconds}
-    default_queue_policy: { max_queue_size: ${max_queue_size} }
+    max_queue_delay_microseconds: 100
+    default_queue_policy: { max_queue_size: 0 }
 }
 
 input [
@@ -433,7 +432,7 @@ output [
 instance_group [
   {
     count: 1
-    kind : KIND_CPU
+    kind : KIND_MODEL
   }
 ]
 parameters: {
@@ -451,9 +450,10 @@ parameters: {
 parameters: {
   key: "gpt_model_type"
   value: {
-    string_value: "${batching_strategy}"
+    string_value: "inflight_fused_batching"
   }
 }
+# TODO: env var
 parameters: {
   key: "gpt_model_path"
   value: {
