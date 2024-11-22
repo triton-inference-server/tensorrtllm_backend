@@ -26,7 +26,7 @@
 
 name: "preprocessing"
 backend: "python"
-max_batch_size: ${triton_max_batch_size}
+max_batch_size: 256
 input [
     {
         name: "QUERY"
@@ -177,10 +177,11 @@ output [
     }
 ]
 
+# TODO: Use shared env var
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "${tokenizer_dir}"
+    string_value: ""
   }
 }
 
@@ -198,10 +199,11 @@ parameters {
   }
 }
 
+# TODO: Shared env var
 parameters: {
   key: "gpt_model_path"
   value: {
-    string_value: "${engine_dir}"
+    string_value: ""
   }
 }
 
@@ -214,7 +216,7 @@ parameters: {
 
 instance_group [
     {
-        count: ${preprocessing_instance_count}
+        count: 8
         kind: KIND_CPU
     }
 ]

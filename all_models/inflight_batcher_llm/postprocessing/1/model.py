@@ -25,6 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import json
+import os
 
 import numpy as np
 import triton_python_backend_utils as pb_utils
@@ -53,8 +54,14 @@ class TritonPythonModel:
         """
         # Parse model configs
         model_config = json.loads(args['model_config'])
-        tokenizer_dir = model_config['parameters']['tokenizer_dir'][
-            'string_value']
+        # Support tokenizer dir from env var for central location
+        tokenizer_dir = os.environ.get(
+            "TRTLLM_ENGINE_DIR",
+            model_config['parameters']['tokenizer_dir']['string_value'])
+        if not tokenizer_dir:
+            raise pb_utils.TritonModelException(
+                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
+            )
 
         skip_special_tokens = model_config['parameters'].get(
             'skip_special_tokens')

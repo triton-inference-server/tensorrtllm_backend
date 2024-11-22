@@ -55,8 +55,14 @@ class TritonPythonModel:
         """
         # Parse model configs
         model_config = json.loads(args['model_config'])
-        tokenizer_dir = model_config['parameters']['tokenizer_dir'][
-            'string_value']
+        # Support tokenizer dir from env var for central location
+        tokenizer_dir = os.environ.get(
+            "TRTLLM_ENGINE_DIR",
+            model_config['parameters']['tokenizer_dir']['string_value'])
+        if not tokenizer_dir:
+            raise pb_utils.TritonModelException(
+                f"No tokenizer directory set. Please set TRTLLM_ENGINE_DIR env var or 'tokenizer_dir' config field to the directory containing engines and tokenizers."
+            )
 
         add_special_tokens = model_config['parameters'].get(
             'add_special_tokens')
@@ -662,9 +668,8 @@ class VisionPreProcessor:
         import requests
         import torch
         from PIL import Image
-        from torch.utils.dlpack import from_dlpack
-
         from tensorrt_llm._utils import str_dtype_to_torch
+        from torch.utils.dlpack import from_dlpack
 
         # create method for loading image from urls
         self.load_images_from_urls = lambda img_urls: [

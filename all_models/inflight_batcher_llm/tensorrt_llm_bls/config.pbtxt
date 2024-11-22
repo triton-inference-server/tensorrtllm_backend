@@ -26,10 +26,10 @@
 
 name: "tensorrt_llm_bls"
 backend: "python"
-max_batch_size: ${triton_max_batch_size}
+max_batch_size: 256
 
 model_transaction_policy {
-  decoupled: ${decoupled_mode}
+  decoupled: True
 }
 
 input [
@@ -330,7 +330,7 @@ parameters: {
 
 instance_group [
   {
-    count: ${bls_instance_count}
+    count: 1
     kind : KIND_CPU
   }
 ]
