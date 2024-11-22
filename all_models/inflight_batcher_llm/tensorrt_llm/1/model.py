@@ -834,7 +834,10 @@ class TritonPythonModel:
         engine_dir: Path = self.get_engine_dir()
         engines = [engine for engine in engine_dir.glob("*.engine")]
         # Build engine if not found
-        if not engines:
+        if engines:
+            pb_utils.Logger.log_info(
+                f"Found existing engine(s) at {engine_dir}.")
+        else:
             pb_utils.Logger.log_info(f"No engine(s) found at {engine_dir}.")
             model_id: str = os.environ.get("TRTLLM_MODEL")
             if not model_id:
@@ -887,14 +890,23 @@ class TritonPythonModel:
         pb_utils.Logger.log_info(f"Saved engine to {engine_dir}.")
 
     def get_engine_build_config(self):
-        # NOTE: Given config.json, can read from 'build_config' section and from_dict
+        # FIXME: Can't construct BuildConfig directly from **build_config
+        # If a config file exists with a build_config, use it.
+        #config_file = engine_dir / "config.json"
+        #if config_file.exists():
+        #    pb_utils.Logger.log_info(f"Found engine build config at {config_file}.")
+        #    with open(config_file) as f:
+        #        config_json = json.load(f)
+        #        build_config = config_json["build_config"]
+        #    pb_utils.Logger.log_info(f"Using build config: {build_config}")
+        #    config = BuildConfig(**build_config)
+        #else:
+        #    pb_utils.Logger.log_info(f"Using default build config.")
+        #    # Default config if no config file found
+        #    config = BuildConfig()
+
         config = BuildConfig()
-        # TODO: Expose more build args to user
-        # TODO: Discuss LLM API BuildConfig defaults
-        # NOTE: Using some defaults from trtllm-build because LLM API defaults are too low
-        #config.max_input_len = 1024
-        #config.max_seq_len = 8192
-        #config.max_batch_size = 256
+        pb_utils.Logger.log_info(f"Using default build config: {config}")
         return config
 
     def handle_stop_request(self, triton_user_id, response_sender):
