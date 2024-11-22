@@ -7,13 +7,12 @@ from random import randint
 from threading import Lock, Thread
 
 import numpy as np
+import tensorrt_llm.bindings.executor as trtllm
+import tensorrt_llm.logger as logger
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
-
-import tensorrt_llm.bindings.executor as trtllm
-import tensorrt_llm.logger as logger
 
 
 def mpi_comm():
@@ -321,7 +320,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
             # if request doesn't specify exclude_input_from_output, try to use the parameter
             output_config.exclude_input_from_output = (
                 exclude_input_from_output
-                if exclude_input_from_output is not None else false)
+                if exclude_input_from_output is not None else False)
         else:
             output_config.exclude_input_from_output = req_exclude_input_from_output
 
