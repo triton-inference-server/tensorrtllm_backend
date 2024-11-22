@@ -35,6 +35,7 @@ SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm/tokenizer
 BASE_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm
 BASE_METRICS_VERIFICATION_TEST=base_metrics_verification_tests.py
+BASE_METRICS_VERIFICATION_TEST_NAME=base_metrics_verification_tests
 BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
 CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
 CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
@@ -318,6 +319,46 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
+    # Start a clean server to verify token metrics are being
+    # reported correctly
+    SERVER_LOG="./${NUM_GPU}gpu_token_metrics.log"
+    replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    #Based on prompt below
+    export STREAM_INPUT_SIZE=3
+    export STREAM_OUTPUT_SIZE=50
+    python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
+        --prompt="My name is" \
+        --streaming \
+        -o=$STREAM_OUTPUT_SIZE
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        RET=1
+    fi
+
+    # Make sure the metrics is retrieved after the server has updated the metrics internally
+    sleep ${SLEEP_DURATION}
+    curl localhost:8002/metrics -o end_to_end_token_metrics.out
+
+    set +e
+    kill_server
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    replace_config_tags 'decoupled: True' 'decoupled: False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+
     # Start a clean server to verify base metrics are being
     # reported correctly
     SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_base_metrics.log"
@@ -333,7 +374,36 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     set -e
 
     set +e
-    BACKEND_ROOT=${BACKEND_ROOT} python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    BACKEND_ROOT=${BACKEND_ROOT} python3 -m unittest ${BASE_METRICS_VERIFICATION_TEST_NAME}.TRTLLMBaseMetricsTest.test_end_to_end >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    if [ $? -ne 0 ]; then
+        cat ${BASE_METRICS_VERIFICATION_LOG}
+        echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        RET=1
+    fi
+    set -e
+
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+    # Start a clean server to verify base metrics are being
+    # reported correctly
+    SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_base_metrics.log"
+    replace_config_tags '${max_beam_width}' "2" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    set +e
+    BACKEND_ROOT=${BACKEND_ROOT} python3 -m unittest ${BASE_METRICS_VERIFICATION_TEST_NAME}.TRTLLMBaseMetricsTest.test_end_to_end_beam_width >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
     if [ $? -ne 0 ]; then
         cat ${BASE_METRICS_VERIFICATION_LOG}
         echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"

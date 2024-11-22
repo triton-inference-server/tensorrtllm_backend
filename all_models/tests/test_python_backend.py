@@ -541,8 +541,8 @@ def test_convert_response(trtllm_response: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response, batch_index, batch_size, num_return_sequences)
     assert is_final == True
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -564,8 +564,8 @@ def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response_minimal, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response_minimal, batch_index, batch_size, num_return_sequences)
     assert is_final == False
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -584,8 +584,8 @@ def test_convert_response_error(trtllm_response_error: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response_error, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response_error, batch_index, batch_size, num_return_sequences)
     assert is_final == True
     assert response.has_error() and response.error.message == "internal error"
 

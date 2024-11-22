@@ -53,6 +53,7 @@ function build_tensorrt_engine_inflight_batcher {
             --kv_cache_type paged \
             --gemm_plugin float16 \
             --workers "${NUM_GPUS}" \
+            --max_beam_width 2 \
             --output_dir "${OUTPUT_DIR}" \
             ${extra_args}
     cd ${BASE_DIR}
