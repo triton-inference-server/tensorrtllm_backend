@@ -36,6 +36,22 @@ TRTLLM_BASE_IMAGE=${TRTLLM_BASE_IMAGE:-trtllm_base}
 TENSORRTLLM_BACKEND_REPO_TAG=${TENSORRTLLM_BACKEND_REPO_TAG:-v0.15.0}
 PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.11}
 
+TRITON_GITHUB_ORGANIZATION=${TRITON_GITHUB_ORGANIZATION:-}
+if [ "$TRITON_GITHUB_ORGANIZATION" != "" ]
+then
+    GITHUB_ORGANIZATION="--github-organization=${TRITON_GITHUB_ORGANIZATION}"
+else
+    GITHUB_ORGANIZATION=""
+fi
+
+TRITON_CONTAINER_PREBUILD_COMMAND=${TRITON_CONTAINER_PREBUILD_COMMAND:-}
+if [ "$TRITON_CONTAINER_PREBUILD_COMMAND" != "" ]
+then
+    CONTAINER_PREBUILD_COMMAND="--container-prebuild-command=${TRITON_CONTAINER_PREBUILD_COMMAND}"
+else
+    CONTAINER_PREBUILD_COMMAND=""
+fi
+
 # The flags for some features or endpoints can be removed if not needed.
 ./build.py -v --no-container-interactive --enable-logging --enable-stats --enable-tracing \
               --enable-metrics --enable-gpu-metrics --enable-cpu-metrics \
@@ -45,4 +61,5 @@ PYTHON_BACKEND_REPO_TAG=${PYTHON_BACKEND_REPO_TAG:-r24.11}
               --repoagent=checksum --cache=local --cache=redis \
               --image=base,${TRTLLM_BASE_IMAGE} \
               --backend=tensorrtllm:${TENSORRTLLM_BACKEND_REPO_TAG} \
-              --backend=python:${PYTHON_BACKEND_REPO_TAG}
+              --backend=python:${PYTHON_BACKEND_REPO_TAG} \
+              "${GITHUB_ORGANIZATION}" "${CONTAINER_PREBUILD_COMMAND}"
