@@ -3,8 +3,10 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from random import randint
 from threading import Lock, Thread
+from typing import Any, List
 
 import numpy as np
 import torch
@@ -13,7 +15,22 @@ from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
 
 import tensorrt_llm.bindings.executor as trtllm
+
+METRIC_TOTAL_OUTPUT_TOKENS = "total_output_tokens"
+METRIC_TOTAL_INPUT_TOKENS = "total_input_tokens"
 import tensorrt_llm.logger as logger
+
+
+@dataclass
+class RequestData:
+    triton_req_id: int
+    triton_user_id: str
+    batch_index: int
+    batch_size: int
+    num_return_sequences: int
+    num_input_tokens: int
+    num_output_tokens: int
+    response_sender: Any
 
 
 def mpi_comm():
@@ -136,6 +153,10 @@ def parse_medusa_choices(medusa_choices):
     return result
 
 
+def parse_eagle_choices(eagle_choices):
+    return parse_medusa_choices(eagle_choices)
+
+
 def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {}
     kwargs['beam_width'] = get_input_scalar_by_name(
@@ -254,6 +275,29 @@ def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     return None
 
 
+def build_1_2_5_buckets(max_value: int) -> List[int]:
+    """
+    Builds a list of buckets with increasing powers of 10 multiplied by
+    mantissa values (1, 5), starting from 10 until the value exceeds
+    the specified maximum.
+
+    Example:
+    >>> build_1_2_5_buckets(1000)
+    [10, 50, 100, 500, 1000]
+    """
+    mantissa_lst = [1, 5]
+    exponent = 1  # Start from exponent 1 instead of 0
+    buckets: List[int] = []
+    while True:
+        for m in mantissa_lst:
+            value = m * 10**exponent
+            if value <= max_value:
+                buckets.append(value)
+            else:
+                return buckets
+        exponent += 1
+
+
 def convert_request(request, exclude_input_from_output, decoupled):
     inputs = {}
     input_token_ids = get_input_tensor_by_name(request, 'input_ids')
@@ -281,7 +325,6 @@ def convert_request(request, exclude_input_from_output, decoupled):
             input_length = len(input_token_ids)
         # Trim input token ids with input_lengths
         inputs['input_token_ids'] = input_token_ids[0:input_length]
-
         inputs['max_new_tokens'] = get_input_scalar_by_name(
             request, 'request_output_len', batch_size, batch_index)
         if inputs['max_new_tokens'] is None:
@@ -377,7 +420,7 @@ def convert_response(response, batch_index, batch_size, num_return_sequences):
     if response.has_error():
         return pb_utils.InferenceResponse(output_tensors=[],
                                           error=pb_utils.TritonError(
-                                              response.error_msg)), True
+                                              response.error_msg)), True, 0
     result = response.result
     beam_lengths = np.expand_dims(
         np.array([len(beam) for beam in result.output_token_ids], np.int32), 0)
@@ -387,6 +430,7 @@ def convert_response(response, batch_index, batch_size, num_return_sequences):
     for idx, beam in enumerate(result.output_token_ids):
         output_ids[0, idx, :len(beam)] = beam
 
+    output_lengths = output_ids.size
     output_tensors = [
         pb_utils.Tensor("output_ids", output_ids),
         pb_utils.Tensor("sequence_length", beam_lengths),
@@ -431,7 +475,8 @@ def convert_response(response, batch_index, batch_size, num_return_sequences):
                 np.expand_dims(np.array([result.sequence_index], np.int32),
                                0)))
 
-    return pb_utils.InferenceResponse(output_tensors), result.is_final
+    return pb_utils.InferenceResponse(
+        output_tensors), result.is_final, output_lengths
 
 
 def convert_scheduler_policy(batch_scheduler_policy: str):
@@ -472,6 +517,12 @@ def convert_decoding_mode(decoding_mode: str):
         return trtllm.DecodingMode.BeamSearch()
     elif decoding_mode == "medusa":
         return trtllm.DecodingMode.Medusa()
+    elif decoding_mode == "redrafter":
+        return trtllm.DecodingMode.ExplicitDraftTokens()
+    elif decoding_mode == "lookahead":
+        return trtllm.DecodingMode.Lookahead()
+    elif decoding_mode == "eagle":
+        return trtllm.DecodingMode.Eagle()
     raise pb_utils.TritonModelException(
         f"decoding_mode value of '{decoding_mode}' is not supported.")
 
@@ -569,10 +620,15 @@ class TritonPythonModel:
         return trtllm.PeftCacheConfig(**kwargs)
 
     def get_decoding_config(self, model_config):
+        eagle_choices = parse_eagle_choices(
+            get_parameter(model_config, "eagle_choices"))
         kwargs = {
             "medusa_choices":
             parse_medusa_choices(get_parameter(model_config,
                                                "medusa_choices")),
+            "eagle_config":
+            None
+            if eagle_choices is None else trtllm.EagleConfig(eagle_choices),
             "decoding_mode":
             convert_decoding_mode(get_parameter(model_config,
                                                 "decoding_mode")),
@@ -653,6 +709,17 @@ class TritonPythonModel:
             description="General TRT LLM metrics",
             kind=pb_utils.MetricFamily.GAUGE,
         )
+        # Set the metric using self.general_metric_output_family.observe(string_size)
+        self.request_tokens_metric_family = pb_utils.MetricFamily(
+            name="nv_llm_input_token_len",
+            description="TRT LLM response metrics",
+            kind=pb_utils.MetricFamily.HISTOGRAM,
+        )
+        self.response_tokens_metric_family = pb_utils.MetricFamily(
+            name="nv_llm_output_token_len",
+            description="TRT LLM response metrics",
+            kind=pb_utils.MetricFamily.HISTOGRAM,
+        )
         common_labels = {"model": model, "version": version}
         self.all_metrics = {
             # Request metrics
@@ -724,6 +791,20 @@ class TritonPythonModel:
                 "general_type": "iteration_counter",
                 **common_labels
             }),
+            METRIC_TOTAL_OUTPUT_TOKENS:
+            self.response_tokens_metric_family.Metric(
+                labels={
+                    "response_metric_type": METRIC_TOTAL_OUTPUT_TOKENS,
+                    **common_labels
+                },
+                buckets=build_1_2_5_buckets(1000)),
+            METRIC_TOTAL_INPUT_TOKENS:
+            self.request_tokens_metric_family.Metric(
+                labels={
+                    "response_metric_type": METRIC_TOTAL_INPUT_TOKENS,
+                    **common_labels
+                },
+                buckets=build_1_2_5_buckets(1000)),
         }
         if is_v1_model:
             self.all_metrics.update({
@@ -917,12 +998,21 @@ class TritonPythonModel:
                     request_ids, triton_req_ids, triton_user_ids,
                     executor_requests, triton_requests, batch_indices):
 
-                self.req_id_to_request_data[
-                    req_id] = triton_req_id, triton_user_id, batch_index, len(
-                        batch_indices
-                    ), executor_request.num_return_sequences, triton_request.get_response_sender(
-                    )
+                self.req_id_to_request_data[req_id] = RequestData(
+                    triton_req_id, triton_user_id, batch_index,
+                    len(batch_indices), executor_request.num_return_sequences,
+                    0, 0, triton_request.get_response_sender())
                 self.triton_req_id_to_req_ids[triton_req_id].add(req_id)
+                input_len = len(
+                    executor_request.input_token_ids
+                ) if executor_request.input_token_ids is not None else 0
+                self.req_id_to_request_data[
+                    req_id].num_input_tokens += input_len
+                # This checks both request level and instance config level
+                if executor_request.output_config.exclude_input_from_output == False and executor_request.streaming == False:
+                    self.req_id_to_request_data[
+                        req_id].num_output_tokens -= self.req_id_to_request_data[
+                            req_id].num_input_tokens * executor_request.sampling_config.beam_width
                 if triton_user_id is not None and triton_user_id != "":
                     self.triton_user_id_to_req_ids[triton_user_id].add(req_id)
 
@@ -934,53 +1024,60 @@ class TritonPythonModel:
             for response in self.executor.await_responses(
                     timeout=datetime.timedelta(milliseconds=1)):
                 req_id = response.request_id
+                request_data = None
                 with self.lock:
                     if req_id not in self.req_id_to_request_data:
                         continue
-                    triton_req_id, triton_user_id, batch_index, batch_size, num_return_sequences, response_sender = self.req_id_to_request_data[
-                        req_id]
+                    request_data = self.req_id_to_request_data[req_id]
 
-                triton_response, is_final = convert_response(
-                    response, batch_index, batch_size, num_return_sequences)
-
+                triton_response, is_final, output_length = convert_response(
+                    response, request_data.batch_index,
+                    request_data.batch_size, request_data.num_return_sequences)
+                with self.lock:
+                    self.req_id_to_request_data[
+                        req_id].num_output_tokens += output_length
                 triton_request_final = False
                 if is_final:
                     with self.lock:
                         # Check if all executor requests part of that triton request are finished
-                        self.triton_req_id_to_req_ids[triton_req_id].remove(
-                            req_id)
-                        if len(self.triton_req_id_to_req_ids[triton_req_id]
-                               ) == 0:
+                        self.triton_req_id_to_req_ids[
+                            request_data.triton_req_id].remove(req_id)
+                        if len(self.triton_req_id_to_req_ids[
+                                request_data.triton_req_id]) == 0:
                             pb_utils.Logger.log_info(
-                                f"DELETING Req id {req_id}, triton_req_id {triton_req_id} "
+                                f"DELETING Req id {req_id}, triton_req_id {request_data.triton_req_id} "
                             )
                             triton_request_final = True
-                            del self.triton_req_id_to_req_ids[triton_req_id]
-                            if triton_user_id is not None and triton_user_id != "":
+                            del self.triton_req_id_to_req_ids[
+                                request_data.triton_req_id]
+                            if request_data.triton_user_id is not None and request_data.triton_user_id != "":
                                 del self.triton_user_id_to_req_ids[
-                                    triton_user_id]
+                                    request_data.triton_user_id]
+                        self.update_metrics_per_request(req_id)
                         del self.req_id_to_request_data[req_id]
 
-                response_sender.send(
+                request_data.response_sender.send(
                     triton_response,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL
                     if triton_request_final else 0)
-
-                # Remove local reference so response_sender can be cleaned properly.
-                del response_sender
 
     def cancellation_loop(self):
         """Checks if any pending requests have been cancelled."""
         while self.running:
             time.sleep(self.cancellation_check_period_ms / 1000.0)
             with self.lock:
-                for req_id, (triton_req_id, triton_user_id, batch_index,
-                             batch_size, num_return_sequences, response_sender
-                             ) in self.req_id_to_request_data.items():
-                    if response_sender.is_cancelled():
+                for req_id, request_data in self.req_id_to_request_data.items(
+                ):
+                    if request_data.response_sender.is_cancelled():
                         self.executor.cancel_request(req_id)
-                    # Remove local reference so response_sender can be cleaned properly.
-                    del response_sender
+
+    def update_metrics_per_request(self, req_id):
+        """Updates triton metrics after completing one request"""
+        output_tokens = self.req_id_to_request_data[req_id].num_output_tokens
+        input_tokens = self.req_id_to_request_data[req_id].num_input_tokens
+
+        self.all_metrics[METRIC_TOTAL_OUTPUT_TOKENS].observe(output_tokens)
+        self.all_metrics[METRIC_TOTAL_INPUT_TOKENS].observe(input_tokens)
 
     def metrics_loop(self):
         """Updates triton metrics using stats from the executor."""
@@ -989,6 +1086,12 @@ class TritonPythonModel:
             for stat in self.executor.get_latest_iteration_stats():
                 try:
                     for key, metric in self.all_metrics.items():
+                        # Skip processing for both histogram metrics
+                        if isinstance(key, str) and key in [
+                                METRIC_TOTAL_OUTPUT_TOKENS,
+                                METRIC_TOTAL_INPUT_TOKENS
+                        ]:
+                            continue
                         value = None
                         if hasattr(stat, key):
                             value = getattr(stat, key)

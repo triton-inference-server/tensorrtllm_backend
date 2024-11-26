@@ -83,6 +83,9 @@ struct RequestData
     TRITONBACKEND_Request* tritonRequest;
     std::string tritonRequestId;
     int64_t inputTokensSize;
+    int64_t outputTokensSize;
+    bool streaming;
+    bool excludeInputInOutput;
     executor::SizeType32 beamWidth;
     std::unordered_set<std::string> outputNames;
     Timestamps timestamps;
@@ -192,7 +195,7 @@ private:
         bool specDecFastLogits);
 
     /// @brief Fill in a triton response based on executor response
-    std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
+    std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> fillTritonResponse(
         TRITONBACKEND_ResponseFactory* factory, executor::Response const& response, RequestData const& requestData);
 
     /// @brief TRT-LLM Executor that handles requests
@@ -203,6 +206,10 @@ private:
 
     /// @brief Report Triton base metrics for a given request
     TRITONSERVER_Error* reportBaseMetrics(RequestData& requestData, TRITONSERVER_Error* error);
+
+    /// @brief Report Triton custom metrics for a given request
+    TRITONSERVER_Error* reportCustomMetrics(
+        int64_t inputTokensSize, int64_t outputTokensSize, TRITONSERVER_Error* error);
 
     /// @brief Retrieve responses from the executor
     void WaitForResponse();
