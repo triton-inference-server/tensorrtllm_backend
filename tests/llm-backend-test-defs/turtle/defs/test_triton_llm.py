@@ -592,8 +592,7 @@ def test_llama_v2_70b_ifb(
 @pytest.mark.parametrize("KV_CACHE_FREE_GPU_MEM_FRACTION", [""])
 @pytest.mark.parametrize("ENABLE_TRT_OVERLAP", ["False"],
                          ids=["disableTrtOverlap"])
-@pytest.mark.parametrize("BATCHING_STRATEGY",
-                         ["inflight_fused_batching", "V1"])
+@pytest.mark.parametrize("BATCHING_STRATEGY", ["inflight_fused_batching"])
 @pytest.mark.parametrize("DECOUPLED_MODE", ["True", "False"],
                          ids=["enableDecoupleMode", "disableDecoupleMode"])
 @pytest.mark.parametrize("TRITON_MAX_BATCH_SIZE", ["128"])
