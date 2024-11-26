@@ -27,6 +27,7 @@
   global:
     TRITONBACKEND_*;
     *ModelState*;
+    *ModelInstanceState*;
     *utils*;
   local: *;
 };

@@ -547,11 +547,11 @@ if [ "$MODEL" = "mllama" ]; then
     pushd tensorrt_llm/examples/multimodal
 
     echo "Convert mllama from HF"
-    python3 ../mllama/convert_checkpoint.py --model_dir ${LLAMA_3_2_11B_VISION} --dtype float16 --output_dir ./c-model/Llama-3.2-11B-Vision/fp16
+    python3 ../mllama/convert_checkpoint.py --model_dir ${LLAMA_3_2_11B_VISION} --dtype bfloat16 --output_dir ./c-model/Llama-3.2-11B-Vision/fp16
 
     echo "mllama builder"
     trtllm-build --checkpoint_dir ./c-model/Llama-3.2-11B-Vision/fp16 \
-                --gemm_plugin float16 \
+                --gemm_plugin auto \
                 --max_batch_size 8 \
                 --max_input_len 2048 \
                 --max_seq_len 2560 \

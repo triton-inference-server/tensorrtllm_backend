@@ -1,6 +1,6 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.10-py3-min
 ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.10-py3
-ARG NVRTC_VER=12.6.68-1
+ARG NVRTC_VER=12.6.77-1
 ARG TRT_VER=10.6.0.26
 ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.6.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.6.tar.gz
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.6.0/tars/TensorRT-${TRT_VER}.ubuntu-24.04.aarch64-gnu.cuda-12.6.tar.gz
@@ -29,6 +29,8 @@ COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchgen /usr/local/lib/python3.10/dist-packages/torchgen
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision /usr/local/lib/python3.10/dist-packages/torchvision
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools /usr/local/lib/python3.10/dist-packages/setuptools
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
@@ -109,6 +111,8 @@ COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchgen /usr/local/lib/python3.10/dist-packages/torchgen
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision /usr/local/lib/python3.10/dist-packages/torchvision
 COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools /usr/local/lib/python3.10/dist-packages/setuptools
+COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/

@@ -582,7 +582,7 @@ def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
         "python3",
         f"{tensorrt_llm_mllama_example_root}/convert_checkpoint.py",
         f"--model_dir={mllama_model_root}",
-        "--dtype=float16",
+        "--dtype=bfloat16",
         f"--output_dir={ckpt_dir}",
     ]
 
@@ -595,7 +595,7 @@ def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
     build_cmd = [
         "trtllm-build",
         f"--checkpoint_dir={ckpt_dir}",
-        "--gemm_plugin float16",
+        "--gemm_plugin auto",
         "--max_beam_width=1",
         "--max_batch_size 8",
         "--max_seq_len 2048",

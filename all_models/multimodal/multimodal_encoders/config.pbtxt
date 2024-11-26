@@ -85,7 +85,7 @@ output [
     # Output for visual encoders of type mllama
     {
         name: "ENCODER_INPUT_FEATURES"
-        data_type: TYPE_FP16
+        data_type: ${encoder_input_features_data_type}
         dims: [ -1, -1 ]
     },
     {

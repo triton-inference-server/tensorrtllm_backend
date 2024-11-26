@@ -159,7 +159,8 @@ def modify_ib_config_pbtxt(
         PARTICIPANT_IDS_TARGET="",
         SPEC_DEC_FAST_LOGITS="0",
         MAX_NUM_IMAGES="1",
-        CROSS_KV_CACHE_FRACTION=""):
+        CROSS_KV_CACHE_FRACTION="",
+        ENCODER_INPUT_FEATURES_DTYPE="TYPE_FP16"):
     fill_template_py = os.path.join(llm_backend_repo_root, "tools",
                                     "fill_template.py")
     tensorrt_llm_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -182,7 +183,7 @@ def modify_ib_config_pbtxt(
 
         check_call(
             f"python3 {fill_template_py} -i {multimodal_enc_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
-            f"visual_model_path:{VISUAL_ENGINE_PATH}",
+            f"visual_model_path:{VISUAL_ENGINE_PATH},encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}",
             shell=True)
         check_call(
             f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} tensorrt_llm_model_name:tensorrt_llm," \
@@ -208,7 +209,8 @@ def modify_ib_config_pbtxt(
             f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
             f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
-            f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS} " \
+            f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
+            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
             f"{f'--participant_ids {PARTICIPANT_IDS_DRAFT}' if PARTICIPANT_IDS_DRAFT else ''}",
             shell=True)
     if TARGET_ENGINE_PATH != "":
@@ -227,7 +229,8 @@ def modify_ib_config_pbtxt(
             f"enable_kv_cache_reuse:true,normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
             f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
-            f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS} " \
+            f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
+            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
             f"{f'--participant_ids {PARTICIPANT_IDS_TARGET}' if PARTICIPANT_IDS_TARGET else ''}",
             shell=True)
 
@@ -259,7 +262,8 @@ def modify_ib_config_pbtxt(
         f"enable_kv_cache_reuse:{ENABLE_KV_CACHE_REUSE},normalize_log_probs:{NORMALIZE_LOG_PROBS}," \
         f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
         f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
-        f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC} " \
+        f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC}," \
+        f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
         f"{f'--participant_ids {PARTICIPANT_IDS}' if PARTICIPANT_IDS else ''}",
         shell=True)
 
