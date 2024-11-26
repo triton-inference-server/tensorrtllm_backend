@@ -364,7 +364,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
             # if request doesn't specify exclude_input_from_output, try to use the parameter
             output_config.exclude_input_from_output = (
                 exclude_input_from_output
-                if exclude_input_from_output is not None else false)
+                if exclude_input_from_output is not None else False)
         else:
             output_config.exclude_input_from_output = req_exclude_input_from_output
 
@@ -642,7 +642,11 @@ class TritonPythonModel:
             "multi_block_mode":
             get_parameter(model_config, "multi_block_mode", bool),
             "enable_context_fmha_fp32_acc":
-            get_parameter(model_config, "enable_context_fmha_fp32_acc", bool)
+            get_parameter(model_config, "enable_context_fmha_fp32_acc", bool),
+            "cuda_graph_mode":
+            get_parameter(model_config, "cuda_graph_mode", bool),
+            "cuda_graph_cache_size":
+            get_parameter(model_config, "cuda_graph_cache_size", int),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExtendedRuntimePerfKnobConfig(**kwargs)

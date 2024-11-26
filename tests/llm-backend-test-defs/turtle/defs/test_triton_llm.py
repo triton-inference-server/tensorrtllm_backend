@@ -2705,7 +2705,8 @@ def test_vila(
 @pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-@pytest.mark.parametrize("FEATURE_NAME", ["test_basic"])
+@pytest.mark.parametrize("IMAGE_TYPE", ["URL", "BASE64"])
+@pytest.mark.parametrize("ENCODER_INPUT_FEATURES_DTYPE", ["TYPE_BF16"])
 def test_mllama(
     E2E_MODEL_NAME,
     MAX_TOKENS_IN_KV_CACHE,
@@ -2729,7 +2730,8 @@ def test_mllama(
     ACCUMULATE_TOKEN,
     BLS_INSTANCE_COUNT,
     EXCLUDE_INPUT_IN_OUTPUT,
-    FEATURE_NAME,
+    IMAGE_TYPE,
+    ENCODER_INPUT_FEATURES_DTYPE,
     tensorrt_llm_multimodal_example_root,
     tensorrt_llm_mllama_example_root,
     mllama_model_root,
@@ -2794,6 +2796,7 @@ def test_mllama(
         BLS_INSTANCE_COUNT,
         VISUAL_ENGINE_PATH=VISUAL_ENGINE_DIR,
         CROSS_KV_CACHE_FRACTION=CROSS_KV_CACHE_FRACTION,
+        ENCODER_INPUT_FEATURES_DTYPE=ENCODER_INPUT_FEATURES_DTYPE,
     )
 
     # Launch Triton Server
@@ -2807,14 +2810,30 @@ def test_mllama(
     check_server_ready()
 
     # Run Test
+    if IMAGE_TYPE == 'URL':
+        IMAGE_URL = "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png"
+    elif IMAGE_TYPE == 'BASE64':
+        IMAGE_URL = (
+            "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"
+            "2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/"
+            "2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/"
+            "wAARCAAKAAoDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/"
+            "8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoK"
+            "So0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztL"
+            "W2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQF"
+            "BgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8R"
+            "cYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqK"
+            "mqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCK3trSL7TD5CqBmVP"
+            "tcUR2jYm2PlmHIUNjhgEJwdxFX1msWUNLG5kIyxF1FGCe/wAm75fp26VqzQxS6rEskSOrxKWDKCGJksgSfXIJH4mvPNTuJ4tWvI"
+            "45pERZ3VVViAAGOABW2GviN9NL6f1ff+uprVwLxEb05cr06KXTz2P/2Q==")
+
     text_prompt = "<|image|>\nPlease elaborate what you see in the image?"
-    image_url = "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png"
     run_cmd = [
         f"{llm_backend_multimodal_example_root}/client.py",
         "--model_type=mllama",
         f"--hf_model_dir={mllama_model_root}",
         f"--text='{text_prompt}'",
-        f"--image={image_url}",
+        f"--image={IMAGE_URL}",
     ]
     if DECOUPLED_MODE == "True":
         run_cmd += [
@@ -2830,7 +2849,7 @@ def test_mllama(
     payload_str = json.dumps({
         "id": "42",
         "text_input": f"{text_prompt}",
-        "image_url_input": f"{image_url}",
+        "image_url_input": f"{IMAGE_URL}",
         "parameters": {
             "max_tokens": 16,
             "top_k": 1,

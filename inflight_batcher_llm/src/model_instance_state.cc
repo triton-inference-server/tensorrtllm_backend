@@ -188,26 +188,49 @@ executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePe
     bool multiBlockMode = true;
     try
     {
-        multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
+        multiBlockMode = model_state_->GetParameter<bool>("multi_block_mode");
     }
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to true");
+        TLLM_LOG_WARNING("multi_block_mode is not specified, will be set to true");
     }
 
     bool enableContextFMHAFP32Acc = false;
     try
     {
-        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enableContextFMHAFP32Acc");
+        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enable_context_fmha_fp32_acc");
     }
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enableContextFMHAFP32Acc is not specified, will be set to false");
+        TLLM_LOG_WARNING("enable_context_fmha_fp32_acc is not specified, will be set to false");
     }
 
-    return executor::ExtendedRuntimePerfKnobConfig(multiBlockMode, enableContextFMHAFP32Acc);
+    bool cudaGraphMode = false;
+    try
+    {
+        cudaGraphMode = model_state_->GetParameter<bool>("cuda_graph_mode");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("cuda_graph_mode is not specified, will be set to false");
+    }
+
+    SizeType32 cudaGraphCacheSize = 0;
+    try
+    {
+        cudaGraphCacheSize = model_state_->GetParameter<SizeType32>("cuda_graph_cache_size");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("cuda_graph_cache_size is not specified, will be set to 0");
+    }
+
+    return executor::ExtendedRuntimePerfKnobConfig(
+        multiBlockMode, enableContextFMHAFP32Acc, cudaGraphMode, cudaGraphCacheSize);
 }
 
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()

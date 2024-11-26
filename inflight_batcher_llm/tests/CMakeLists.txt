@@ -54,6 +54,7 @@ function(add_gtest test_name test_src)
                        PRE_TEST)
 endfunction()
 
+add_gtest(modelInstanceStateTest modelInstanceStateTest.cpp)
 add_gtest(modelStateTest modelState.cpp)
 add_gtest(utilsTest utilsTest.cpp)
 
