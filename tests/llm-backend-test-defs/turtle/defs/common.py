@@ -210,8 +210,8 @@ def modify_ib_config_pbtxt(
             f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
-            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
-            f"{f'--participant_ids {PARTICIPANT_IDS_DRAFT}' if PARTICIPANT_IDS_DRAFT else ''}",
+            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
+            f"participant_ids:{PARTICIPANT_IDS_DRAFT}",
             shell=True)
     if TARGET_ENGINE_PATH != "":
         llm_target_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -230,8 +230,8 @@ def modify_ib_config_pbtxt(
             f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
-            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
-            f"{f'--participant_ids {PARTICIPANT_IDS_TARGET}' if PARTICIPANT_IDS_TARGET else ''}",
+            f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
+            f"participant_ids:{PARTICIPANT_IDS_TARGET}",
             shell=True)
 
     check_call(
@@ -263,8 +263,8 @@ def modify_ib_config_pbtxt(
         f"enable_chunked_context:{ENABLE_CHUNKED_CONTEXT},gpu_device_ids:{GPU_DEVICE_IDS},decoding_mode:{DECODING_MODE}," \
         f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
         f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC}," \
-        f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE} " \
-        f"{f'--participant_ids {PARTICIPANT_IDS}' if PARTICIPANT_IDS else ''}",
+        f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
+        f"participant_ids:{PARTICIPANT_IDS}",
         shell=True)
 
     if os.path.exists(whisper_bls_config):

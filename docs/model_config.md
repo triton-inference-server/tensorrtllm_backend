@@ -12,6 +12,11 @@ The names of the parameters listed below are the values in the `config.pbtxt`
 that can be modified using the
 [`fill_template.py`](../tools/fill_template.py) script.
 
+**NOTE** For fields that have comma as the value (e.g. `gpu_device_ids`,
+`participant_ids`), you need to escape the comma with
+a backslash. For example, if you want to set `gpu_device_ids` to `0,1` you need
+to run `python3 fill_template.py -i config.pbtxt "gpu_device_ids:0\,1".`
+
 The mandatory parameters must be set for the model to run. The optional
 parameters are not required but can be set to customize the model.
 

@@ -2052,9 +2052,9 @@ def test_llama_v3_speculative_decoding_bls(
 
     # Modify config.pbtxt
     ENABLE_KV_CACHE_REUSE = "True"
-    PARTICIPANT_IDS_DRAFT = "1,2,3,4,5,6,7,8"
-    PARTICIPANT_IDS_TARGET = "9,10,11,12,13,14,15,16"
-    PARTICIPANT_IDS = "17,18,19,20,21,22,23,24"
+    PARTICIPANT_IDS_DRAFT = "1\\,2\\,3\\,4\\,5\\,6\\,7\\,8"
+    PARTICIPANT_IDS_TARGET = "9\\,10\\,11\\,12\\,13\\,14\\,15\\,16"
+    PARTICIPANT_IDS = "17\\,18\\,19\\,20\\,21\\,22\\,23\\,24"
     SPEC_DEC_FAST_LOGITS = "1"
     TOKENIZER_PATH = llama_v3_8b_model_root
     modify_ib_config_pbtxt(
