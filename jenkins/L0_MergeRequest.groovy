@@ -423,6 +423,8 @@ def runTRTLLMBackendTest(caseName)
     else if (caseName.contains("python-bls-unit-tests")){
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm_bls/1 python3 -m pytest all_models/tests/test_*decode*.py"
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/tensorrt_llm/1 python3 -m pytest all_models/tests/test_python_backend.py"
+    } else if (caseName.contains("fill-template")) {
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=tools/ python3 -m pytest tools/tests/test_fill_template.py"
     }
     else if (caseName.contains("python-preproc-unit-tests")){
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/preprocessing/1 python3 -m pytest all_models/tests/test_multi_image_preprocess.py"
@@ -747,6 +749,11 @@ pipeline {
               stage("Test preprocessing python unit tests") {
                 steps {
                   runTRTLLMBackendTest("python-preproc-unit-tests")
+                }
+              }
+              stage("Test fill template") {
+                steps {
+                  runTRTLLMBackendTest("fill-template")
                 }
               }
               stage("Test Triton extensive") {
