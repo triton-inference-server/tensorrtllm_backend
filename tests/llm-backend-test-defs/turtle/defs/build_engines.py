@@ -635,6 +635,61 @@ def prepare_mllama_engine(tensorrt_llm_multimodal_example_root,
     return engine_dir, visual_engine_dir
 
 
+def prepare_llama3_v1_8b_engine(tensorrt_llm_llama_example_root,
+                                llama3_v1_8b_model_root):
+    engine_dir = os.path.join(tensorrt_llm_llama_example_root, "engine_dir",
+                              "llama3_v1_8b")
+    ckpt_dir = os.path.join(tensorrt_llm_llama_example_root, "ckpt_dir",
+                            "llama3_v1_8b")
+
+    convert_cmd = [
+        "python3",
+        "convert_checkpoint.py",
+        f"--model_dir={llama3_v1_8b_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=bfloat16",
+        f"--tp_size=1",
+        f"--workers=1",
+    ]
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        f"--output_dir={engine_dir}",
+        "--gemm_plugin=bfloat16",
+        "--workers=1",
+        "--max_batch_size=2048",
+        "--max_input_len=2048",
+        "--max_seq_len=4096",
+        "--max_beam_width=1",
+        "--gpt_attention_plugin=bfloat16",
+        "--reduce_fusion=disable",
+        "--max_num_tokens=16384",
+        "--use_paged_context_fmha=disable",
+        "--multiple_profiles=disable",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    if not os.path.exists(engine_dir):
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(convert_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_llama_example_root)
+        check_call(build_cmd, shell=True, cwd=tensorrt_llm_llama_example_root)
+
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    return engine_dir
+
+
 def prepare_gpt_gather_logits_engine(type, tensorrt_llm_gpt_example_root,
                                      gpt_tokenizer_model_root):
     # Convert GPT weights from HF
