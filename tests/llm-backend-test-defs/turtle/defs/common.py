@@ -520,3 +520,16 @@ def check_avg_rss_increasement(llm_backend_venv,
         print_info(
             f"The average RSS increasement: {avg_rss_increasement} bytes <= threshold: {rss_increase_bytes_threshold} bytes."
         )
+
+
+def parse_endpoint_generated_outputs(output_text, max_tokens, stream):
+    print_info("Analyzing the outputs...")
+    pattern = r'"text_output"\s*:\s*"(.*)"'
+    matches = re.findall(pattern, output_text)
+    assert matches is not None, "No matching outputs."
+
+    num_tokens = max_tokens if stream is True else 1
+    num_matches = len(matches)
+    assert num_tokens == num_matches, f"The output token amount: {num_matches} is not matching expected: {num_tokens}."
+
+    print_info(f"The matched output tokens are:\n{matches}")
