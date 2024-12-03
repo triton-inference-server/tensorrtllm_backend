@@ -53,7 +53,6 @@ The following multimodal model is supported in tensorrtllm_backend:
     trtllm-build --checkpoint_dir ${checkpoint_dir}/encoder \
                 --output_dir ${output_dir}/encoder \
                 --moe_plugin disable \
-                --enable_xqa disable \
                 --max_batch_size ${MAX_BATCH_SIZE} \
                 --gemm_plugin disable \
                 --bert_attention_plugin ${INFERENCE_PRECISION} \
@@ -62,7 +61,6 @@ The following multimodal model is supported in tensorrtllm_backend:
     trtllm-build  --checkpoint_dir ${checkpoint_dir}/decoder \
                 --output_dir ${output_dir}/decoder \
                 --moe_plugin disable \
-                --enable_xqa disable \
                 --max_beam_width ${MAX_BEAM_WIDTH} \
                 --max_batch_size ${MAX_BATCH_SIZE} \
                 --max_seq_len 114 \
