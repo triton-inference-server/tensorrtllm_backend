@@ -231,7 +231,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/encoder \
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/encoder \
     --kv_cache_type disabled --moe_plugin disable \
-    --enable_xqa disable --max_beam_width 1 \
+    --max_beam_width 1 \
     --max_batch_size 8 --max_input_len 512 --max_seq_len 512 \
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
@@ -243,7 +243,7 @@ if [ "$MODEL" = "bart-ib" ] || [ "$MODEL" = "t5-ib" ]; then
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/fp16/decoder \
     --output_dir trt_engine/${MODEL}/fp16/1-gpu/decoder \
     --moe_plugin disable \
-    --enable_xqa disable --max_beam_width 1 \
+    --max_beam_width 1 \
     --max_batch_size 8 --max_input_len 1 --max_seq_len 512 --max_encoder_input_len 512 \
     --gemm_plugin float16 \
     --bert_attention_plugin float16 \
@@ -577,7 +577,6 @@ if [ "$MODEL" = "whisper" ]; then
     trtllm-build --checkpoint_dir ./c-model/${MODEL}/tllm_checkpoint/encoder \
                 --output_dir trt_engine/${MODEL}/encoder \
                 --moe_plugin disable \
-                --enable_xqa disable \
                 --max_batch_size 8 \
                 --gemm_plugin disable \
                 --bert_attention_plugin float16 \
@@ -587,7 +586,6 @@ if [ "$MODEL" = "whisper" ]; then
     trtllm-build  --checkpoint_dir ./c-model/${MODEL}/tllm_checkpoint/decoder \
                 --output_dir trt_engine/${MODEL}/decoder \
                 --moe_plugin disable \
-                --enable_xqa disable \
                 --max_beam_width 4 \
                 --max_batch_size 8 \
                 --max_seq_len 114 \

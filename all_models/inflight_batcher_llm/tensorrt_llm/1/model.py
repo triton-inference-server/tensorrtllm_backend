@@ -193,6 +193,8 @@ def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
         request, 'beam_search_diversity_rate', batch_size, batch_index)
     kwargs['early_stopping'] = get_input_scalar_by_name(
         request, 'early_stopping', batch_size, batch_index)
+    kwargs['num_return_sequences'] = get_input_scalar_by_name(
+        request, 'num_return_sequences', batch_size, batch_index) or 1
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.SamplingConfig(**kwargs)
 
@@ -335,9 +337,6 @@ def convert_request(request, exclude_input_from_output, decoupled):
         if inputs['streaming'] and not decoupled:
             raise pb_utils.TritonModelException(
                 "Streaming is only supported in decoupled mode.")
-
-        inputs['num_return_sequences'] = get_input_scalar_by_name(
-            request, 'num_return_sequences', batch_size, batch_index) or 1
 
         inputs['end_id'] = get_input_scalar_by_name(request, 'end_id',
                                                     batch_size, batch_index)
@@ -1004,8 +1003,9 @@ class TritonPythonModel:
 
                 self.req_id_to_request_data[req_id] = RequestData(
                     triton_req_id, triton_user_id, batch_index,
-                    len(batch_indices), executor_request.num_return_sequences,
-                    0, 0, triton_request.get_response_sender())
+                    len(batch_indices),
+                    executor_request.sampling_config.num_return_sequences, 0,
+                    0, triton_request.get_response_sender())
                 self.triton_req_id_to_req_ids[triton_req_id].add(req_id)
                 input_len = len(
                     executor_request.input_token_ids
