@@ -24,13 +24,17 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import base64
+import io
 import json
 import os
 from typing import List
 
 import numpy as np
+import requests
 import triton_python_backend_utils as pb_utils
-from transformers import AutoTokenizer, T5Tokenizer
+from PIL import Image
+from transformers import AutoProcessor, AutoTokenizer, T5Tokenizer
 
 
 class TritonPythonModel:
@@ -62,6 +66,22 @@ class TritonPythonModel:
             'add_special_tokens')
         visual_model_path = model_config['parameters']['visual_model_path'][
             'string_value']
+        max_num_images = model_config['parameters'].get('max_num_images')
+
+        if max_num_images is not None:
+            max_num_images_str = max_num_images['string_value']
+            if max_num_images_str.isdigit():
+                self.max_num_images = int(max_num_images_str)
+            else:
+                print(
+                    f"[TensorRT-LLM][WARNING] 'max_num_images' parameter is not set correctly (value is {max_num_images_str}). Will be set to None"
+                )
+                self.max_num_images = None
+        else:
+            print(
+                f"[TensorRT-LLM][WARNING] Don't setup 'max_num_images'. Set it as None by default."
+            )
+            self.max_num_images = None
         if visual_model_path == "${visual_model_path}" or visual_model_path == "":
             visual_model_path = None
 
@@ -88,6 +108,7 @@ class TritonPythonModel:
                                                        legacy=False,
                                                        padding_side='left',
                                                        trust_remote_code=True)
+
         if isinstance(self.tokenizer, T5Tokenizer):
             self.tokenizer_bos_id = self.tokenizer.sp_model.bos_id()
 
@@ -101,6 +122,9 @@ class TritonPythonModel:
         self.vocab_size = self.tokenizer.vocab_size
 
         self.is_multimodal = False
+        self.model_type = None
+        self.vision_preprocessor = None
+
         if visual_model_path is not None:
             self.is_multimodal = True
             visual_model_path = os.path.join(visual_model_path, 'config.json')
@@ -110,8 +134,8 @@ class TritonPythonModel:
                 'model_type']
 
             assert self.model_type in [
-                'llava', 'blip2-opt'
-            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava and blip2-opt"
+                'llava', 'blip2-opt', 'vila', 'mllama'
+            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila and mllama. Got {self.model_type}."
 
             llm_model_path = model_config['parameters']['gpt_model_path'][
                 'string_value']
@@ -121,6 +145,10 @@ class TritonPythonModel:
             self.vocab_size = int(
                 llm_model_config["pretrained_config"]["vocab_size"])
             self._setup_ptable_shape(llm_model_config)
+
+            self.vision_preprocessor = VisionPreProcessor(
+                self.model_type, AutoProcessor.from_pretrained(tokenizer_dir),
+                model_config)
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
@@ -152,6 +180,8 @@ class TritonPythonModel:
 
         num_visual_features = max_prompt_embedding_table_size // max_batch_size
         hidden_size = llm_model_config['pretrained_config']['hidden_size']
+        if self.max_num_images is not None:
+            num_visual_features = num_visual_features // self.max_num_images
 
         self.ptable_shape = (-1, num_visual_features, hidden_size)
 
@@ -264,6 +294,24 @@ class TritonPythonModel:
                         input_id[i] >= self.vocab_size,
                         prompt_table_extra_id[i], 0)
 
+            # Preprocessing vision input passed as a url or bytes tensor
+            img_urls = pb_utils.get_input_tensor_by_name(request, 'IMAGE_URL')
+            image_bytes = pb_utils.get_input_tensor_by_name(
+                request, 'IMAGE_BYTES')
+            if img_urls or image_bytes:
+                assert self.vision_preprocessor != None, "Vision preprocessor for preparing images before encoding is None"
+                vision_processed_tensors = self.vision_preprocessor.process(
+                    queries=query.astype(str).tolist(),
+                    img_urls=img_urls,
+                    image_bytes=image_bytes,
+                ) if self.is_multimodal else {}
+                vision_processed_tensors = [
+                    pb_utils.Tensor.from_dlpack(k, v)
+                    for k, v in vision_processed_tensors.items()
+                ]
+            else:
+                vision_processed_tensors = []
+
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
             input_id_tensor = pb_utils.Tensor(
@@ -295,16 +343,13 @@ class TritonPythonModel:
                     'OUT_PROMPT_TABLE_EXTRA_IDS',
                     np.array(prompt_table_extra_ids,
                              dtype=self.out_prompt_table_extra_ids_dtype))
-                inference_response = pb_utils.InferenceResponse(
-                    output_tensors=[
-                        input_id_tensor, decoder_input_id_tensor,
-                        bad_words_ids_tensor, stop_words_ids_tensor,
-                        request_input_len_tensor,
-                        request_decoder_input_len_tensor,
-                        request_output_len_tensor, embedding_bias_tensor,
-                        end_id_tensor, pad_id_tensor,
-                        prompt_table_extra_ids_tensor
-                    ])
+                inference_response = pb_utils.InferenceResponse(output_tensors=[
+                    input_id_tensor, decoder_input_id_tensor,
+                    bad_words_ids_tensor, stop_words_ids_tensor,
+                    request_input_len_tensor, request_decoder_input_len_tensor,
+                    request_output_len_tensor, embedding_bias_tensor,
+                    end_id_tensor, pad_id_tensor, prompt_table_extra_ids_tensor
+                ] + vision_processed_tensors)
             else:
                 inference_response = pb_utils.InferenceResponse(
                     output_tensors=[
@@ -314,7 +359,7 @@ class TritonPythonModel:
                         request_decoder_input_len_tensor,
                         request_output_len_tensor, embedding_bias_tensor,
                         end_id_tensor, pad_id_tensor
-                    ])
+                    ] + vision_processed_tensors)
             responses.append(inference_response)
 
         # You should return a list of pb_utils.InferenceResponse. Length
@@ -328,6 +373,122 @@ class TritonPythonModel:
         """
         print('Cleaning up...')
 
+    def _split_prompt_by_images(self,
+                                concatenated_ids,
+                                image_token_index=-200):
+        """
+        Splits tokenized prompts by image placeholders for each sample in the batch.
+
+        Args:
+            concatenated_ids (np.ndarray): A batch of concatenated token IDs, where image placeholders are indicated by `image_token_index`.
+
+        Returns:
+            List[List[np.ndarray]]: A list containing lists of token ID arrays for each prompt segment, per batch sample.
+        """
+        batch_splits = []
+        for batch in concatenated_ids:
+            zero_indices = np.where(batch == image_token_index)[0]
+            start_idx = 0
+            splits = []
+            for idx in zero_indices:
+                if start_idx != idx:
+                    splits.append(batch[start_idx:idx].reshape(1, -1))
+                start_idx = idx + 1
+            if start_idx < len(batch):
+                splits.append(batch[start_idx:].reshape(1, -1))
+
+            splits = [split for split in splits if split.size > 0]
+            batch_splits.append(splits)
+
+        return batch_splits
+
+    def _setup_fake_prompts(self, batch_size, batch_split_prompts):
+        """
+        Replaces image placeholders with unique fake prompt IDs for multi-image inputs.
+
+        Args:
+            batch_size (int): The number of samples in the batch.
+            batch_split_prompts (List[List[np.ndarray]]): Tokenized prompt segments for each batch sample.
+
+        Returns:
+            np.ndarray: An array of input IDs with image placeholders replaced by fake prompt IDs.
+        """
+
+        num_visual_features = self.ptable_shape[1]
+        input_ids_list = []
+
+        for batch_idx in range(batch_size):
+            splits = batch_split_prompts[batch_idx]
+            sample_input_ids = [splits[0]]
+            sample_fake_prompt_counter = self.vocab_size
+
+            for split_idx in range(len(splits) - 1):
+                fake_prompt_id = np.arange(
+                    sample_fake_prompt_counter,
+                    sample_fake_prompt_counter + num_visual_features)
+                sample_fake_prompt_counter += num_visual_features
+                fake_prompt_id = np.expand_dims(fake_prompt_id, axis=0)
+                sample_input_ids.append(fake_prompt_id)
+                sample_input_ids.append(splits[split_idx + 1])
+
+            sample_input_ids = np.concatenate(sample_input_ids, axis=1)
+            input_ids_list.append(sample_input_ids)
+
+        # Pad the input_ids to the same length for bs > 1
+        max_seq_len = max(
+            [sample_input_ids.shape[1] for sample_input_ids in input_ids_list])
+        input_ids_padded = []
+        for sample_input_ids in input_ids_list:
+            seq_len = sample_input_ids.shape[1]
+            pad_width = max_seq_len - seq_len
+            if pad_width > 0:
+                sample_input_ids_padded = np.pad(
+                    sample_input_ids, ((0, 0), (0, pad_width)),
+                    'constant',
+                    constant_values=self.tokenizer_pad_id)
+            else:
+                sample_input_ids_padded = sample_input_ids
+            input_ids_padded.append(sample_input_ids_padded)
+
+        input_ids = np.stack(input_ids_padded)
+        input_ids = input_ids.reshape(batch_size, -1).astype(np.int32)
+
+        return input_ids
+
+    def _process_multi_image_inputs(self, query, image_token_index=-200):
+        """
+        Processes input queries that contain multiple images by tokenizing the input strings and inserting image_token_index between the parts.
+
+        Args:
+            query (np.ndarray): Batch of input strings.
+
+        Returns:
+            List[np.ndarray]: List of tokenized input IDs for each sample.
+        """
+        start_ids = []
+        for s in query:
+            parts = s[0].decode().split('<image>')
+            num_images = len(parts) - 1
+            if num_images > self.max_num_images:
+                raise ValueError(
+                    f"The number of images in the request ({num_images}) exceeds the maximum allowed ({self.max_num_images})."
+                )
+            tokenized_parts = [
+                self.tokenizer.encode(part, add_special_tokens=False)
+                for part in parts
+            ]
+
+            # Insert `image_token_index` between the parts to represent <image>
+            final_ids = []
+            for i, part in enumerate(tokenized_parts):
+                final_ids.extend(part)
+                if i < len(tokenized_parts) - 1:
+                    final_ids.append(image_token_index)
+
+            start_ids.append(np.array(final_ids).astype(int))
+
+        return start_ids
+
     def _create_request(self, query):
         """
             query : batch string (2D numpy array)
@@ -339,13 +500,17 @@ class TritonPythonModel:
                          ).astype(int) for s in query
             ]
         else:
-            start_ids = [
-                np.array(
-                    self.tokenizer.encode(
-                        s[0].decode(),
-                        add_special_tokens=self.add_special_tokens)).astype(
-                            int) for s in query
-            ]
+            if self.is_multimodal and self.max_num_images and self.max_num_images > 1:
+                start_ids = self._process_multi_image_inputs(query)
+
+            else:
+                start_ids = [
+                    np.array(
+                        self.tokenizer.encode(s[0].decode(),
+                                              add_special_tokens=self.
+                                              add_special_tokens)).astype(int)
+                    for s in query
+                ]
 
         if self.is_multimodal:
             if 'blip2' in self.model_type:
@@ -354,35 +519,46 @@ class TritonPythonModel:
             elif 'llava' == self.model_type:
                 pre_prompt = "USER:\n"
                 post_prompt = " ASSISTANT:"
+            elif 'vila' == self.model_type:
+                pre_prompt = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: "
+                post_prompt = " ASSISTANT:"
+            elif 'mllama' == self.model_type:
+                pre_prompt = None
+                post_prompt = None
 
             fake_prompt_id = np.arange(self.vocab_size,
                                        self.vocab_size + self.ptable_shape[1])
 
-            if pre_prompt is not None:
-                pre_prompt_id = np.array(
-                    self.tokenizer.encode(
-                        pre_prompt,
-                        add_special_tokens=self.add_special_tokens,
-                        padding=True))
+            pre_prompt_id = np.array(
+                self.tokenizer.encode(
+                    pre_prompt,
+                    add_special_tokens=self.add_special_tokens,
+                    padding=True)) if pre_prompt is not None else np.array(
+                        [], dtype=int)
 
-            if post_prompt is not None:
-                post_prompt_id = np.array(
-                    self.tokenizer.encode(
-                        post_prompt,
-                        add_special_tokens=self.add_special_tokens,
-                        padding=True))
+            post_prompt_id = np.array(
+                self.tokenizer.encode(
+                    post_prompt,
+                    add_special_tokens=self.add_special_tokens,
+                    padding=True)) if post_prompt is not None else np.array(
+                        [], dtype=int)
 
-            if post_prompt is None:
-                start_ids = [
-                    np.concatenate((fake_prompt_id, ids), axis=0)
-                    for ids in start_ids
+            if self.max_num_images and self.max_num_images > 1:
+                concatenated_ids = [
+                    np.concatenate((pre_prompt_id, ids, post_prompt_id),
+                                   axis=0) for ids in start_ids
                 ]
+                batch_split_prompts = self._split_prompt_by_images(
+                    concatenated_ids)
+                start_ids = self._setup_fake_prompts(query.shape[0],
+                                                     batch_split_prompts)
             else:
                 start_ids = [
                     np.concatenate(
                         (pre_prompt_id, fake_prompt_id, ids, post_prompt_id),
                         axis=0) for ids in start_ids
                 ]
+
         start_lengths = np.array([[len(ids)] for ids in start_ids]).astype(int)
 
         max_len = 0
@@ -475,3 +651,126 @@ class TritonPythonModel:
             batch_embedding_bias.append(np.array(embedding_bias))
 
         return np.array(batch_embedding_bias, dtype=bias_dtype)
+
+
+class VisionPreProcessor:
+    """ A class that can load images from url requests, and process them via a vision model processor,
+    in preparation for the vision encoder.
+    """
+
+    def __init__(self,
+                 vision_model_type,
+                 vision_model_processor,
+                 preprocessor_model_config={}):
+        # import libraries that are only relevant for multimodal models
+        import torch
+        from torch.utils.dlpack import from_dlpack
+
+        # NOTE: Due to the behavior of MPI initialization, it is recommended to avoid using import tensorrt_llm
+        #       except for the specific modules tensorrt_llm and multimodal_encoders.
+        #       As a result, the function str_dtype_to_torch has been copied directly from tensorrt_llm._utils.
+        _str_to_torch_dtype_dict = dict(
+            bfloat16=torch.bfloat16,
+            float16=torch.float16,
+            float32=torch.float32,
+            int64=torch.int64,
+            int32=torch.int32,
+            int8=torch.int8,
+            bool=torch.bool,
+            fp8=torch.float8_e4m3fn,
+        )
+
+        def str_dtype_to_torch(dtype):
+            ret = _str_to_torch_dtype_dict.get(dtype)
+            assert ret is not None, f'Unsupported dtype: {dtype}'
+            return ret
+
+        self.load_images_tensor = lambda tensor: tensor if not hasattr(
+            tensor, 'to_dlpack') else from_dlpack(tensor.to_dlpack())
+
+        # extract expected output tensor dtype
+        self.output_str_dtypes = {}
+        for properties in preprocessor_model_config.get('output', []):
+            dtype = properties['data_type']
+            self.output_str_dtypes[properties['name']] = np.dtype(
+                pb_utils.triton_string_to_numpy(dtype)).name
+
+        # create method for converting output tensors batch to the expected type
+        self.convert_tensor_list_to_tensor = lambda tensor_list: torch.concat(
+            [
+                torch.from_numpy(x) if isinstance(x, np.ndarray) else x
+                for x in tensor_list
+            ],
+            dim=0)
+        self.convert_tensor_to_str_dtype = lambda tensor, dtype: tensor.to(
+            str_dtype_to_torch(dtype))
+
+        # create model-specific processor
+        self.vision_model_processor = vision_model_processor
+        self.vision_model_type = vision_model_type
+
+    def load_images_from_urls(self, img_urls):
+        images = []
+        for img_url in img_urls:
+            img_url = img_url.decode()
+            if img_url.startswith("data:image/jpeg;base64,"):
+                image_base64 = img_url.split(",")[1]
+                # Decode the base64 string
+                image_data = base64.b64decode(image_base64)
+                # Create a BytesIO object from the decoded data
+                image_buffer = io.BytesIO(image_data)
+                images.append(Image.open(image_buffer))
+            else:
+                images.append(
+                    Image.open(requests.get(img_url, stream=True).raw))
+        return images
+
+    def process(self, queries, img_urls=None, image_bytes=None):
+        vision_processed_tensors = {}
+        if img_urls is not None or image_bytes is not None:
+            if img_urls is not None:
+                # download and read images
+                images = [
+                    self.load_images_from_urls(urls)
+                    for urls in img_urls.as_numpy()
+                ]
+            else:
+                images = [
+                    img for img_list in self.load_images_tensor(image_bytes)
+                    for img in img_list
+                ]
+
+            batch_size = len(images)
+
+            preprocessor_outputs = {}
+            possible_output_names = [
+                'PIXEL_VALUES', 'ASPECT_RATIO_IDS', 'ASPECT_RATIO_MASK',
+                'CROSS_ATTENTION_MASK'
+            ]
+            for batch_id in range(batch_size):
+                # Preprocess images and query
+                processed_vision_data = self.vision_model_processor(
+                    images=images[batch_id],
+                    text=queries[batch_id],
+                    return_tensors="pt")
+
+                # Reshape pixel_values to [num_images, *HWC/CHW]
+                val = processed_vision_data["pixel_values"]
+
+                val = val.reshape(1, -1, *(val.shape[-3:]))
+                processed_vision_data["pixel_values"] = val
+                # Create vision output tensors
+                for key in possible_output_names:
+                    val = processed_vision_data.get(key.lower())
+                    if val is not None:
+                        if key not in preprocessor_outputs:
+                            preprocessor_outputs[key] = []
+                        preprocessor_outputs[key].append(val)
+
+            for key, tensor_list in preprocessor_outputs.items():
+                val = self.convert_tensor_list_to_tensor(tensor_list)
+                if key in self.output_str_dtypes:
+                    val = self.convert_tensor_to_str_dtype(
+                        val, self.output_str_dtypes[key])
+                vision_processed_tensors[key] = val
+        return vision_processed_tensors

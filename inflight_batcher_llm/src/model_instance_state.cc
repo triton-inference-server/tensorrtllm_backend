@@ -188,26 +188,49 @@ executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePe
     bool multiBlockMode = true;
     try
     {
-        multiBlockMode = model_state_->GetParameter<bool>("multiBlockMode");
+        multiBlockMode = model_state_->GetParameter<bool>("multi_block_mode");
     }
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("multiBlockMode is not specified, will be set to true");
+        TLLM_LOG_WARNING("multi_block_mode is not specified, will be set to true");
     }
 
     bool enableContextFMHAFP32Acc = false;
     try
     {
-        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enableContextFMHAFP32Acc");
+        enableContextFMHAFP32Acc = model_state_->GetParameter<bool>("enable_context_fmha_fp32_acc");
     }
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enableContextFMHAFP32Acc is not specified, will be set to false");
+        TLLM_LOG_WARNING("enable_context_fmha_fp32_acc is not specified, will be set to false");
     }
 
-    return executor::ExtendedRuntimePerfKnobConfig(multiBlockMode, enableContextFMHAFP32Acc);
+    bool cudaGraphMode = false;
+    try
+    {
+        cudaGraphMode = model_state_->GetParameter<bool>("cuda_graph_mode");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("cuda_graph_mode is not specified, will be set to false");
+    }
+
+    SizeType32 cudaGraphCacheSize = 0;
+    try
+    {
+        cudaGraphCacheSize = model_state_->GetParameter<SizeType32>("cuda_graph_cache_size");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("cuda_graph_cache_size is not specified, will be set to 0");
+    }
+
+    return executor::ExtendedRuntimePerfKnobConfig(
+        multiBlockMode, enableContextFMHAFP32Acc, cudaGraphMode, cudaGraphCacheSize);
 }
 
 executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
@@ -234,21 +257,14 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
             = executor::OrchestratorConfig(isOrchestrator, workerExecutablePath, nullptr, spawnProcesses);
         parallelConfig.setOrchestratorConfig(orchestratorConfig);
     }
-    try
+
+    if (mParticipantIds)
     {
-        auto const participantIds = model_state_->GetParameter<std::vector<int32_t>>("participant_ids");
-        // TODO: validate participantIds?
-        parallelConfig.setParticipantIds(participantIds);
+        parallelConfig.setParticipantIds(mParticipantIds.value());
     }
-    catch (std::exception const& e)
+    else if (!spawnProcesses && mIsOrchestratorMode)
     {
-        if (!spawnProcesses && mIsOrchestratorMode)
-        {
-            TLLM_THROW(
-                "Spawning of processes was disabled in orchestrator mode, but participant IDs could not be "
-                "obtained from the config.pbtxt due to the following error: %s",
-                e.what());
-        }
+        TLLM_THROW("Spawning of processes was disabled in orchestrator mode, but participant IDs is missing.");
     }
     return parallelConfig;
 }
@@ -339,6 +355,32 @@ executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool 
     return executor::SchedulerConfig(schedulerPolicy);
 }
 
+executor::SpeculativeDecodingConfig ModelInstanceState::getSpeculativeDecodingConfigFromParams(
+    std::optional<executor::OrchestratorConfig> orchConfig)
+{
+    bool fastLogits = false;
+    try
+    {
+        fastLogits = model_state_->GetParameter<bool>("speculative_decoding_fast_logits");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("speculative_decoding_fast_logits is not specified, will be set to false");
+    }
+
+    if (fastLogits && (!orchConfig.has_value() || orchConfig.value().getSpawnProcesses()))
+    {
+        TLLM_LOG_WARNING(
+            "speculative_decoding_fast_logits is set, but requires orchestrator with spawn_processes disabled."
+            "Disabling fast logits.");
+        fastLogits = false;
+    }
+
+    mSpeculativeDecodingFastLogits = fastLogits;
+
+    return executor::SpeculativeDecodingConfig(fastLogits);
+}
+
 executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 {
     auto batchingType = getBatchingTypeFromParams();
@@ -426,6 +468,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     auto parallelConfig = getParallelConfigFromParams();
 
     auto extendedRuntimePerfKnobConfig = getExtendedRuntimePerfKnobConfigFromParams();
+
+    auto specDecConfig = getSpeculativeDecodingConfigFromParams(parallelConfig.getOrchestratorConfig());
 
     std::optional<executor::DecodingMode> decodingMode = std::nullopt;
     try
@@ -524,10 +568,12 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
     }
 
-    return executor::ExecutorConfig(maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
+    auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
         parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs);
+        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs};
+    execConfig.setSpecDecConfig(specDecConfig);
+    return execConfig;
 }
 
 ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
@@ -546,6 +592,16 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
         mGpuDeviceIds = std::nullopt;
     }
     mIsOrchestratorMode = false;
+
+    auto participantIds = model_state_->getParticipantIds();
+    if (participantIds && !participantIds.value().empty())
+    {
+        mParticipantIds = participantIds.value()[mInstanceIndex % participantIds.value().size()];
+    }
+    else
+    {
+        mParticipantIds = std::nullopt;
+    }
     auto executorConfig = getExecutorConfigFromParams();
 
 #ifdef TRITON_ENABLE_METRICS
@@ -721,14 +777,15 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 
 // Split batched TRITONBACKEND_Request into one executor:Request object per sample.
 std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITONBACKEND_Request* request,
-    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator)
+    bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator,
+    bool specDecFastLogits)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
     executor::RequestType requestType = utils::getRequestType(request);
 
-    return utils::createRequestsFromInputTensors(
-        inputsTensors, excludeInputFromOutput, isDecoupled, streaming, modelType, requestType, isOrchestrator);
+    return utils::createRequestsFromInputTensors(inputsTensors, excludeInputFromOutput, isDecoupled, streaming,
+        modelType, requestType, isOrchestrator, specDecFastLogits);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -757,7 +814,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             }
 
             auto executorRequests = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput,
-                isDecoupled(), mModelType, mIsOrchestratorMode);
+                isDecoupled(), mModelType, mIsOrchestratorMode, mSpeculativeDecodingFastLogits);
 
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             TRITONBACKEND_ResponseFactory* factory;
@@ -788,10 +845,12 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                         "wrong in TRT-LLM runtime.");
                 }
                 auto requestOutputNames = utils::getRequestOutputNames(request);
+                int32_t const numReturnSequences
+                    = executorRequest.getSamplingConfig().getNumReturnSequences().value_or(1);
                 mRequestIdToRequestData.emplace(requestId,
                     RequestData{factory, request, tritonRequestId, inputTokensSize, beamWidthCopy,
                         std::move(requestOutputNames), {exec_start_ns, compute_start_ns, 0, 0}, batchIndex,
-                        static_cast<int32_t>(requestIds.size()), executorRequest.getNumReturnSequences(), requestIdsSet,
+                        static_cast<int32_t>(requestIds.size()), numReturnSequences, requestIdsSet,
                         executorRequest.getRequestType()});
             }
             if (tritonRequestId != "")
@@ -911,6 +970,18 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> ModelInstanceStat
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(
                         result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                }
+                else if (result.specDecFastLogitsInfo.has_value())
+                {
+                    auto const& logitsInfo = result.specDecFastLogitsInfo.value();
+                    size_t const numLogitsNeeded = (sizeof(logitsInfo) + 1) / sizeof(float);
+                    std::vector<int64_t> generationLogitsShape{1, 1, 1, numLogitsNeeded};
+                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    std::vector<float> data(numLogitsNeeded);
+                    std::memcpy(data.data(), &logitsInfo, sizeof(logitsInfo));
+                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
+                        generationLogitsType, OutputFieldsNames::generationLogits);
+                    utils::flatten<float>(data, generationLogitsBuffer, generationLogitsShape);
                 }
             }
 
@@ -1132,6 +1203,36 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Used KV cache blocks\":" + std::to_string(kvStats.usedNumBlocks) + ",");
                 statJson.append("\"Reused KV cache blocks\":" + std::to_string(kvStats.reusedBlocks) + ",");
             }
+
+            // requestStats is a list where each item is associated with an iteration,
+            // currently the metrics related to request stats only concern with aggregated
+            // results so that we can retrieve request stats and process all of them
+            // whenever metrics is to be reported.
+            double totalKvCacheTransferMS = 0;
+            size_t requestCount = 0;
+            if (!mIsOrchestratorMode)
+            {
+                // TODO: implement orchestrator mode support: https://jirasw.nvidia.com/browse/TRTLLM-1581
+                auto requestStats = mExecutor->getLatestRequestStats();
+                for (auto const& iteration : requestStats)
+                {
+                    for (auto const& request : iteration.requestStats)
+                    {
+                        // only check and aggregate results when request is completed
+                        if (request.stage == executor::RequestStage::kGENERATION_COMPLETE)
+                        {
+                            if (request.disServingStats.has_value())
+                            {
+                                auto const& disServingStats = request.disServingStats.value();
+                                totalKvCacheTransferMS += disServingStats.kvCacheTransferMS;
+                                requestCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            statJson.append("\"KV cache transfer time\":" + std::to_string(totalKvCacheTransferMS) + ",");
+            statJson.append("\"Request count\":" + std::to_string(requestCount) + ",");
 
             statJson.back() = '}';
 

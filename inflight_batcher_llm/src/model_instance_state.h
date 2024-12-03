@@ -48,6 +48,12 @@
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
 
+namespace triton::backend::inflight_batcher_llm::tests
+{
+class ModelInstanceStateTest;
+class ModelInstanceStateTest_ExecutorConfig_Test;
+} // namespace triton::backend::inflight_batcher_llm::tests
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -119,13 +125,22 @@ public:
     virtual ~ModelInstanceState()
     {
         mStopWaitForResponse = true;
-        mWaitForResponseThread.join();
+        if (mWaitForResponseThread.joinable())
+        {
+            mWaitForResponseThread.join();
+        }
 
         mStopWaitForStats = true;
-        mWaitForStatsThread.join();
+        if (mWaitForStatsThread.joinable())
+        {
+            mWaitForStatsThread.join();
+        }
 
         mStopWaitForCancel = true;
-        mWaitForCancelThread.join();
+        if (mWaitForCancelThread.joinable())
+        {
+            mWaitForCancelThread.join();
+        }
     }
 
     // Get the state of the model that corresponds to this instance.
@@ -149,6 +164,8 @@ public:
     }
 
 private:
+    friend class triton::backend::inflight_batcher_llm::tests::ModelInstanceStateTest_ExecutorConfig_Test;
+
     /// @brief Get batching type
     executor::BatchingType getBatchingTypeFromParams();
 
@@ -167,11 +184,21 @@ private:
     /// @brief Get extended runtime perf knob config
     executor::ExtendedRuntimePerfKnobConfig getExtendedRuntimePerfKnobConfigFromParams();
 
+    /// @brief Get speculative decoding config
+    executor::SpeculativeDecodingConfig getSpeculativeDecodingConfigFromParams(
+        std::optional<executor::OrchestratorConfig> orchConfig);
+
     /// @brief Get executor config
     executor::ExecutorConfig getExecutorConfigFromParams();
 
     /// @brief Constructor
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance);
+
+    /// @brief Constructor used for testing purposes
+    ModelInstanceState(ModelState* model_state)
+        : model_state_(model_state)
+    {
+    }
 
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;
@@ -184,7 +211,8 @@ private:
 
     /// @brief Create an executor::Request from input tensors for each sample in batch
     static std::vector<executor::Request> createExecutorRequests(TRITONBACKEND_Request* request,
-        bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode);
+        bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode,
+        bool specDecFastLogits);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*> fillTritonResponse(
@@ -239,8 +267,14 @@ private:
     /// @brief GPU device ids for this instance
     std::optional<std::vector<int32_t>> mGpuDeviceIds;
 
+    /// @brief Participant ids for this instance
+    std::optional<std::vector<int32_t>> mParticipantIds;
+
     /// @brief Boolean indicating whether it is using orchestrator mode or not
     bool mIsOrchestratorMode;
+
+    /// @brief Is speculative decoding fast logits transfer enabled
+    bool mSpeculativeDecodingFastLogits;
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

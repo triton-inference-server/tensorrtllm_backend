@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import argparse
+import base64
+import io
 import os
 import sys
 from datetime import datetime
@@ -17,13 +19,23 @@ from transformers import AutoProcessor, Blip2Processor
 from utils import utils
 
 
-def prepare_inputs(text_data, image_data, request_output_len_data,
-                   beam_width_data, temperature_data, repetition_penalty_data,
-                   presence_penalty_data, end_id, pad_id, top_k_data,
-                   top_p_data, streaming_data, prompt_table_extra_id_data):
+def prepare_inputs(text_data,
+                   image_data,
+                   request_output_len_data,
+                   beam_width_data,
+                   temperature_data,
+                   repetition_penalty_data,
+                   presence_penalty_data,
+                   end_id,
+                   pad_id,
+                   top_k_data,
+                   top_p_data,
+                   streaming_data,
+                   prompt_table_extra_id_data,
+                   image_input_name="image_input"):
     inputs = [
         utils.prepare_tensor("text_input", text_data, grpcclient),
-        utils.prepare_tensor("image_input", image_data, grpcclient),
+        utils.prepare_tensor(image_input_name, image_data, grpcclient),
         utils.prepare_tensor("max_tokens", request_output_len_data,
                              grpcclient),
         utils.prepare_tensor("beam_width", beam_width_data, grpcclient),
@@ -50,6 +62,22 @@ def prepare_inputs(text_data, image_data, request_output_len_data,
                                  prompt_table_extra_id_data, grpcclient),
         ]
     return inputs
+
+
+def load_image(image_path):
+    if image_path.startswith("http") or image_path.startswith("https"):
+        image = Image.open(requests.get(image_path,
+                                        stream=True).raw).convert("RGB")
+    elif image_path.startswith("data:image/jpeg;base64,"):
+        image_base64 = image_path.split(",")[1]
+        # Decode the base64 string
+        image_data = base64.b64decode(image_base64)
+        # Create a BytesIO object from the decoded data
+        image_buffer = io.BytesIO(image_data)
+        image = Image.open(image_buffer).convert("RGB")
+    else:
+        image = Image.open(image_path).convert("RGB")
+    return image
 
 
 if __name__ == "__main__":
@@ -171,21 +199,70 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model_type",
                         required=True,
-                        choices=['blip2', 'llava'],
+                        choices=['blip2', 'llava', 'vila', 'mllama'],
                         help="Model type")
+    parser.add_argument("--hf_model_dir",
+                        required=False,
+                        type=str,
+                        default=None,
+                        help="path to the model directory")
     FLAGS = parser.parse_args()
+    # load and process images
+    if 'vila' in FLAGS.model_type:
+        image_paths = FLAGS.image.split(",")
+        raw_image = []
+        for image_path in image_paths:
+            raw_image.append(load_image(image_path))
+    else:
+        raw_image = load_image(FLAGS.image)
 
-    raw_image = Image.open(requests.get(FLAGS.image, stream=True).raw)
     if 'blip2' in FLAGS.model_type:
-        processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        if FLAGS.hf_model_dir is not None and os.path.exists(
+                FLAGS.hf_model_dir):
+            processor = Blip2Processor.from_pretrained(FLAGS.hf_model_dir)
+        else:
+            processor = Blip2Processor.from_pretrained(
+                "Salesforce/blip2-opt-2.7b")
         image = processor(raw_image, FLAGS.text,
                           return_tensors="pt")['pixel_values']
     elif 'llava' in FLAGS.model_type:
-        processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+        if FLAGS.hf_model_dir is not None and os.path.exists(
+                FLAGS.hf_model_dir):
+            processor = AutoProcessor.from_pretrained(FLAGS.hf_model_dir)
+        else:
+            processor = AutoProcessor.from_pretrained(
+                "llava-hf/llava-1.5-7b-hf")
+
         image = processor(text=FLAGS.text,
                           images=raw_image,
                           return_tensors="pt")['pixel_values']
-    image_data = image.numpy().astype(np.float16)
+    elif 'vila' in FLAGS.model_type:
+        # vila support multiple images input
+        sys.path.append(FLAGS.hf_model_dir + "/../VILA")
+        from llava.model import LlavaLlamaConfig  # noqa
+        from transformers import AutoModel
+        model = AutoModel.from_pretrained(
+            FLAGS.hf_model_dir,
+            device_map='auto',
+            trust_remote_code=True,
+        )
+        vision_tower = model.get_vision_tower()
+        image_processor = vision_tower.image_processor
+        from llava.mm_utils import process_images
+        if not isinstance(raw_image, list):
+            raw_image = [raw_image]
+        image = process_images(raw_image, image_processor, model.config)
+
+    if 'mllama' in FLAGS.model_type:
+        image_tag = '<|image|>'
+        if image_tag not in FLAGS.text:
+            FLAGS.text = image_tag + FLAGS.text
+        image_data = np.array([[raw_image]])
+        image_input_name = "image_bytes_input"
+    else:
+        image = image.unsqueeze(0)
+        image_data = image.numpy().astype(np.float16)
+        image_input_name = "image_input"
 
     text_data = np.array([[FLAGS.text.encode("utf8")]], dtype=np.object_)
     end_id_data = np.array([[FLAGS.end_id]], dtype=np.int32)
@@ -223,11 +300,20 @@ if __name__ == "__main__":
         prompt_table_extra_id_data = np.array(prompt_table_extra_id,
                                               dtype=np.uint64)
 
-    inputs = prepare_inputs(text_data, image_data, request_output_len_data,
-                            beam_width_data, temperature_data,
-                            repetition_penalty_data, presence_penalty_data,
-                            end_id_data, pad_id_data, top_k_data, top_p_data,
-                            streaming_data, prompt_table_extra_id_data)
+    inputs = prepare_inputs(text_data,
+                            image_data,
+                            request_output_len_data,
+                            beam_width_data,
+                            temperature_data,
+                            repetition_penalty_data,
+                            presence_penalty_data,
+                            end_id_data,
+                            pad_id_data,
+                            top_k_data,
+                            top_p_data,
+                            streaming_data,
+                            prompt_table_extra_id_data,
+                            image_input_name=image_input_name)
 
     start_time = datetime.now()
 
