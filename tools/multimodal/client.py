@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import argparse
+import base64
+import io
 import os
 import sys
 from datetime import datetime
@@ -66,6 +68,13 @@ def load_image(image_path):
     if image_path.startswith("http") or image_path.startswith("https"):
         image = Image.open(requests.get(image_path,
                                         stream=True).raw).convert("RGB")
+    elif image_path.startswith("data:image/jpeg;base64,"):
+        image_base64 = image_path.split(",")[1]
+        # Decode the base64 string
+        image_data = base64.b64decode(image_base64)
+        # Create a BytesIO object from the decoded data
+        image_buffer = io.BytesIO(image_data)
+        image = Image.open(image_buffer).convert("RGB")
     else:
         image = Image.open(image_path).convert("RGB")
     return image

@@ -1,4 +1,4 @@
-# Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -23,11 +23,11 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-{
-  global:
-    TRITONBACKEND_*;
-    *ModelState*;
-    *ModelInstanceState*;
-    *utils*;
-  local: *;
-};
+
+from fill_template import split
+
+
+def test_split():
+    assert split("a,b,c", ",") == ["a", "b", "c"]
+    assert split("a\\,b\\,c", ",") == ["a,b,c"]
+    assert split("a\\,b\\,c", ":") == ["a,b,c"]

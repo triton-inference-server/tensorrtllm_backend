@@ -12,6 +12,11 @@ The names of the parameters listed below are the values in the `config.pbtxt`
 that can be modified using the
 [`fill_template.py`](../tools/fill_template.py) script.
 
+**NOTE** For fields that have comma as the value (e.g. `gpu_device_ids`,
+`participant_ids`), you need to escape the comma with
+a backslash. For example, if you want to set `gpu_device_ids` to `0,1` you need
+to run `python3 fill_template.py -i config.pbtxt "gpu_device_ids:0\,1".`
+
 The mandatory parameters must be set for the model to run. The optional
 parameters are not required but can be set to customize the model.
 
@@ -80,6 +85,7 @@ description of the parameters below.
 | `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
 | `engine_dir` | The path to the engine for the model. |
 | `batching_strategy` | The batching strategy to use. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
+| `encoder_input_features_data_type` | The dtype for the input tensor `encoder_input_features`. For the mllama model, this must be `TYPE_BF16`. For other models like whisper, this is `TYPE_FP16`. |
 
 *Optional parameters*
 
@@ -138,6 +144,10 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `enable_chunked_context` | Set to `true` to enable context chunking. (default=`false`) |
+| `multi_block_mode` | Set to `false` to disable multi block mode. (default=`true`) |
+| `enable_context_fmha_fp32_acc` | Set to `true` to enable FMHA runner FP32 accumulation. (default=`false`) |
+| `cuda_graph_mode` | Set to `true` to enable cuda graph. (default=`false`) |
+| `cuda_graph_cache_size` | Sets the size of the CUDA graph cache, in numbers of CUDA graphs. (default=0) |
 
 - Scheduling
 

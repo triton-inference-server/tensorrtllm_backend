@@ -48,6 +48,12 @@
 using namespace tensorrt_llm;
 using namespace tensorrt_llm::batch_manager;
 
+namespace triton::backend::inflight_batcher_llm::tests
+{
+class ModelInstanceStateTest;
+class ModelInstanceStateTest_ExecutorConfig_Test;
+} // namespace triton::backend::inflight_batcher_llm::tests
+
 namespace triton::backend::inflight_batcher_llm
 {
 
@@ -122,13 +128,22 @@ public:
     virtual ~ModelInstanceState()
     {
         mStopWaitForResponse = true;
-        mWaitForResponseThread.join();
+        if (mWaitForResponseThread.joinable())
+        {
+            mWaitForResponseThread.join();
+        }
 
         mStopWaitForStats = true;
-        mWaitForStatsThread.join();
+        if (mWaitForStatsThread.joinable())
+        {
+            mWaitForStatsThread.join();
+        }
 
         mStopWaitForCancel = true;
-        mWaitForCancelThread.join();
+        if (mWaitForCancelThread.joinable())
+        {
+            mWaitForCancelThread.join();
+        }
     }
 
     // Get the state of the model that corresponds to this instance.
@@ -152,6 +167,8 @@ public:
     }
 
 private:
+    friend class triton::backend::inflight_batcher_llm::tests::ModelInstanceStateTest_ExecutorConfig_Test;
+
     /// @brief Get batching type
     executor::BatchingType getBatchingTypeFromParams();
 
@@ -179,6 +196,12 @@ private:
 
     /// @brief Constructor
     ModelInstanceState(ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance);
+
+    /// @brief Constructor used for testing purposes
+    ModelInstanceState(ModelState* model_state)
+        : model_state_(model_state)
+    {
+    }
 
     ModelState* model_state_;
     TRITONBACKEND_ModelInstance* modelInstance_;

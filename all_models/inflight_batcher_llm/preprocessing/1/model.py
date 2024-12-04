@@ -24,12 +24,16 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import base64
+import io
 import json
 import os
 from typing import List
 
 import numpy as np
+import requests
 import triton_python_backend_utils as pb_utils
+from PIL import Image
 from transformers import AutoProcessor, AutoTokenizer, T5Tokenizer
 
 
@@ -659,18 +663,28 @@ class VisionPreProcessor:
                  vision_model_processor,
                  preprocessor_model_config={}):
         # import libraries that are only relevant for multimodal models
-        import requests
         import torch
-        from PIL import Image
         from torch.utils.dlpack import from_dlpack
 
-        from tensorrt_llm._utils import str_dtype_to_torch
+        # NOTE: Due to the behavior of MPI initialization, it is recommended to avoid using import tensorrt_llm
+        #       except for the specific modules tensorrt_llm and multimodal_encoders.
+        #       As a result, the function str_dtype_to_torch has been copied directly from tensorrt_llm._utils.
+        _str_to_torch_dtype_dict = dict(
+            bfloat16=torch.bfloat16,
+            float16=torch.float16,
+            float32=torch.float32,
+            int64=torch.int64,
+            int32=torch.int32,
+            int8=torch.int8,
+            bool=torch.bool,
+            fp8=torch.float8_e4m3fn,
+        )
 
-        # create method for loading image from urls
-        self.load_images_from_urls = lambda img_urls: [
-            Image.open(requests.get(img_url.decode(), stream=True).raw)
-            for img_url in img_urls
-        ]
+        def str_dtype_to_torch(dtype):
+            ret = _str_to_torch_dtype_dict.get(dtype)
+            assert ret is not None, f'Unsupported dtype: {dtype}'
+            return ret
+
         self.load_images_tensor = lambda tensor: tensor if not hasattr(
             tensor, 'to_dlpack') else from_dlpack(tensor.to_dlpack())
 
@@ -694,6 +708,22 @@ class VisionPreProcessor:
         # create model-specific processor
         self.vision_model_processor = vision_model_processor
         self.vision_model_type = vision_model_type
+
+    def load_images_from_urls(self, img_urls):
+        images = []
+        for img_url in img_urls:
+            img_url = img_url.decode()
+            if img_url.startswith("data:image/jpeg;base64,"):
+                image_base64 = img_url.split(",")[1]
+                # Decode the base64 string
+                image_data = base64.b64decode(image_base64)
+                # Create a BytesIO object from the decoded data
+                image_buffer = io.BytesIO(image_data)
+                images.append(Image.open(image_buffer))
+            else:
+                images.append(
+                    Image.open(requests.get(img_url, stream=True).raw))
+        return images
 
     def process(self, queries, img_urls=None, image_bytes=None):
         vision_processed_tensors = {}
