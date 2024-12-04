@@ -212,7 +212,7 @@ fill_triton_repo () {
         cp all_models/multimodal/multimodal_encoders ${TRITON_REPO} -r
         python3 tools/fill_template.py -i ${TRITON_REPO}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
         python3 tools/fill_template.py -i ${TRITON_REPO}/preprocessing/config.pbtxt visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${DECODER_ENGINE_PATH}
-        python3 tools/fill_template.py -i ${TRITON_REPO}/multimodal_encoders/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE}
+        python3 tools/fill_template.py -i ${TRITON_REPO}/multimodal_encoders/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${TOKENIZER_PATH}
         python3 tools/fill_template.py -i ${TRITON_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},accumulate_tokens:${ACCUMULATE_TOKEN},bls_instance_count:${BLS_INSTANCE_COUNT},tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders
 
     fi
@@ -1450,4 +1450,37 @@ if [ "$MODEL" = "whisper" ]; then
     EXCLUDE_INPUT_IN_OUTPUT="false"
     DECOUPLED_MODE="False"
     CROSS_KV_CACHE_FRACTION=""
+fi
+
+if [ "$MODEL" = "llava_onevision" ]; then
+
+    MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
+    BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
+    KV_CACHE_FREE_GPU_MEM_FRACTION="${KV_CACHE_FREE_GPU_MEM_FRACTIONS[0]}"
+
+    # Test none-streaming
+    DECOUPLED_MODE="False"
+    BATCHING_STRATEGY="inflight_fused_batching"
+    launch_triton_server
+    python3 tools/multimodal/client.py --model_type llava_onevision --end-id 151645 --pad-id 151643 | tee multimodal_output
+    grep -oi "singapore" multimodal_output
+    kill_triton_server
+
+    # Test streaming
+    DECOUPLED_MODE="True"
+    BATCHING_STRATEGY="inflight_fused_batching"
+    launch_triton_server
+    python3 tools/multimodal/client.py --model_type llava_onevision --streaming --end-id 151645 --pad-id 151643 | tee multimodal_output
+    grep -oi "sing" multimodal_output
+    kill_triton_server
+
+    # Test with video input
+    DECOUPLED_MODE="False"
+    BATCHING_STRATEGY="inflight_fused_batching"
+    launch_triton_server
+    VIDEO_PATH=$TOKENIZER_PATH'/../video-neva/test_video/video_test.mp4'
+    python3 tools/multimodal/client.py --model_type llava_onevision --end-id 151645 --pad-id 151643 --text "What is in this video?" --video $VIDEO_PATH --video_num_frames 8 | tee multimodal_output
+    grep -oi "robotic hand" multimodal_output
+    kill_triton_server
+
 fi

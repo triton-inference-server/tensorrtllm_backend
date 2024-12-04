@@ -94,7 +94,7 @@ class TritonPythonModel:
                     raise Exception(
                         "cannot perform speculative decoding without draft model"
                     )
-                is_multimodal = req.image_input is not None
+                is_multimodal = req.image_input is not None or req.image_bytes_input is not None or req.image_url_input is not None or req.video_bytes_input is not None
 
                 if speculative_decode and is_multimodal:
                     raise Exception(
