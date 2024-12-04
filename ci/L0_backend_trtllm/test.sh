@@ -26,13 +26,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 SERVER_IPADDR=${TRITONSERVER_IPADDR:=localhost}
 SERVER_TIMEOUT=${SERVER_TIMEOUT:=120}
+BACKEND_ROOT=${BACKEND_ROOT:="/opt/tritonserver/tensorrtllm_backend"}
 DATASET="$PWD/simple_data.json"
-TOOLS_DIR='/opt/tritonserver/tensorrtllm_backend/tools'
-STREAM_DIR='/opt/tritonserver/tensorrtllm_backend/inflight_batcher_llm/client'
+TOOLS_DIR=${BACKEND_ROOT}/tools
+STREAM_DIR=${BACKEND_ROOT}/inflight_batcher_llm/client
 MODEL_DIR="$PWD/triton_model_repo"
 SERVER=/opt/tritonserver/bin/tritonserver
-TOKENIZER_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm/tokenizer
-BASE_DIR=/opt/tritonserver/tensorrtllm_backend/ci/L0_backend_trtllm
+TOKENIZER_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm/tokenizer
+BASE_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm
 BASE_METRICS_VERIFICATION_TEST=base_metrics_verification_tests.py
 BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
 CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
@@ -55,10 +56,10 @@ function replace_config_tags {
 
 function run_server {
   SERVER_ARGS="${1}"
-  python3 /opt/tritonserver/tensorrtllm_backend/scripts/launch_triton_server.py ${SERVER_ARGS} > ${SERVER_LOG} 2>&1 &
+  python3 ${BACKEND_ROOT}/scripts/launch_triton_server.py ${SERVER_ARGS} > ${SERVER_LOG} 2>&1 &
   sleep 2 # allow time to obtain the pid(s)
   # Read PIDs into an array, trimming whitespaces
-  readarray -t SERVER_PID < <(pgrep "tritonserver")
+  readarray -t SERVER_PID < <(pgrep -s 0 "tritonserver")
 }
 
 # Wait until server health endpoint shows ready. Sets WAIT_RET to 0 on
@@ -111,32 +112,52 @@ function kill_server {
 }
 
 function wait_for_server_terminated {
+    local wait_time_secs="${1:-30}"; shift
     local spids=("$@");
     for pid in "${spids[@]}"; do
+        WAIT_RET=1
         echo "Waiting for proc ${pid} to terminate..."
-        while true; do
+        local wait_secs=$wait_time_secs
+        until test $wait_secs -eq 0 ; do
             if ! (kill -0 $pid) > /dev/null 2>&1; then
+                WAIT_RET=0
                 break
             fi
             sleep 1
+            ((wait_secs--));
         done
+        if [ "$WAIT_RET" != "0" ]; then
+            # Cleanup
+            kill $SERVER_PID > /dev/null 2>&1 || true
+            echo -e "\n***\n*** Failed to wait for server to terminated $SERVER\n***"
+            cat $SERVER_LOG
+            exit 1
+        fi
     done
 }
 
 function assert_curl_success {
   message="${1}"
   original_line_no="${2}"
-  RET=0
   if [ "$code" != "200" ]; then
     cat ./curl.out
     cat ${SERVER_LOG}
     echo -e "\n***\n*** ${message} : line ${original_line_no}\n***"
     RET=1
+    return 1
   fi
-  return ${RET}
+  return 0
 }
 
 # =======================================
+
+prerun_kill_triton_server () {
+    pkill -9 -f trtllmExecutorWorker || true
+    pkill -9 -f tritonserver
+}
+
+# Kill titonserver if it is still pending from previous test
+prerun_kill_triton_server || true
 
 rm -f *.log *.out
 # Generate TRT_LLM engines and install dependencies
@@ -160,7 +181,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     reset_model_repo
 
-    cp -r /opt/tritonserver/tensorrtllm_backend/all_models/inflight_batcher_llm/* ${MODEL_DIR}
+    cp -r ${BACKEND_ROOT}/all_models/inflight_batcher_llm/* ${MODEL_DIR}
     rm -rf ${MODEL_DIR}/tensorrt_llm_bls
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/ensemble/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
@@ -173,6 +194,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${engine_dir}' "${MODEL_DIR}/tensorrt_llm/1/inflight_${NUM_GPU}_gpu/" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${max_queue_delay_microseconds}' "50000" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_backend}' "tensorrtllm" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    replace_config_tags '${encoder_input_features_data_type}' "TYPE_FP16" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/postprocessing/config.pbtxt"
     replace_config_tags '${postprocessing_instance_count}' '1' "${MODEL_DIR}/postprocessing/config.pbtxt"
@@ -193,7 +215,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         exit 1
     fi
 
-    wait_for_server_terminated ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # inflight batching OFF (V1)
     # streaming OFF
@@ -220,7 +242,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing v1 benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -234,7 +256,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing v1 end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -244,7 +266,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_v1_no_stream_metrics.out
 
     kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # inflight batching ON
     # streaming OFF
@@ -271,7 +293,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -285,7 +307,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -295,7 +317,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
 
     kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # Start a clean server to verify base metrics are being
     # reported correctly
@@ -311,16 +333,19 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     fi
     set -e
 
-    python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    set +e
+    BACKEND_ROOT=${BACKEND_ROOT} python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
     if [ $? -ne 0 ]; then
         cat ${BASE_METRICS_VERIFICATION_LOG}
         echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         RET=1
     fi
+    set -e
+
     set +e
 
     kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # World size must be 1 when using multi-model
     if [ "${NUM_GPU}" == "0" ]; then
@@ -345,7 +370,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
             cat $SERVER_LOG
             echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
             kill_server
-            wait_for_server_terminated ${SERVER_PID[@]}
+            wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
             RET=1
         fi
         set +e
@@ -355,7 +380,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         curl localhost:8002/metrics -o ${NUM_GPU}gpu_multi_model_metrics.out
 
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
     fi
 
     # inflight batching ON
@@ -381,7 +406,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        wait_for_server_terminated ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -391,16 +416,18 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_stream_metrics.out
 
     kill_server
-    wait_for_server_terminated ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
 done
 
+set +e
 # Verify TRT LLM statistics are being properly reported as custom metrics
 python3 ${CUSTOM_METRICS_VERIFICATION_TEST} >> ${CUSTOM_METRICS_VERIFICATION_LOG} 2>&1
 if [ $? -ne 0 ]; then
     cat ${CUSTOM_METRICS_VERIFICATION_LOG}
     RET=1
 fi
+set -e
 
 if [ $RET -eq 0 ]; then
   echo -e "\n***\n*** Test Passed\n***"

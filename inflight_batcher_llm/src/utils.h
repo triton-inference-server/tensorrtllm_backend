@@ -48,9 +48,12 @@ namespace triton::backend::inflight_batcher_llm
 struct InputFieldsNames
 {
     static constexpr char const* inputTokens = "input_ids";
+    static constexpr char const* encoderInputFeatures = "encoder_input_features";
+    static constexpr char const* encoderOutputLengths = "encoder_output_lengths";
     static constexpr char const* inputLengths = "input_lengths";
     static constexpr char const* decoderInputTokens = "decoder_input_ids";
     static constexpr char const* maxNewTokens = "request_output_len";
+    static constexpr char const* noRepeatNgramSize = "no_repeat_ngram_size";
     static constexpr char const* numReturnSequences = "num_return_sequences";
     static constexpr char const* endId = "end_id";
     static constexpr char const* padId = "pad_id";
@@ -58,6 +61,7 @@ struct InputFieldsNames
     static constexpr char const* stopWords = "stop_words_list";
     static constexpr char const* embeddingBias = "embedding_bias";
     static constexpr char const* contextPhaseParams = "context_phase_params";
+    static constexpr char const* crossAttentionMask = "cross_attention_mask";
 
     // OutputConfig
     static constexpr char const* returnLogProbs = "return_log_probs";
@@ -143,7 +147,7 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
 
 /// @brief Construct executor::ExternalDraftTokensConfig from input tensors
 std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
-    InputTensors const& inputsTensors);
+    InputTensors const& inputsTensors, bool const fastLogits);
 
 /// @brief Construct executor::PromptTuningConfig from input tensors
 std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
@@ -155,7 +159,7 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator);
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t

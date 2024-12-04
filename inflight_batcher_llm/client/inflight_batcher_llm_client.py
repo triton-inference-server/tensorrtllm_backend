@@ -129,7 +129,6 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
         prepare_tensor("request_output_len", request_output_len_data),
-        prepare_tensor("num_return_sequences", num_return_sequences_data),
         prepare_tensor("beam_width", beam_width_data),
         prepare_tensor("temperature", temperature_data),
         prepare_tensor("streaming", streaming_data),
@@ -138,6 +137,10 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         prepare_tensor("runtime_top_k", top_k_data),
         prepare_tensor("runtime_top_p", top_p_data),
     ]
+    if num_return_sequences_data is not None:
+        inputs += [
+            prepare_tensor("num_return_sequences", num_return_sequences_data)
+        ]
     if prompt_embedding_table_data is not None:
         inputs += [
             prepare_tensor("prompt_embedding_table",
@@ -561,9 +564,6 @@ if __name__ == "__main__":
 
     FLAGS = parser.parse_args()
 
-    if FLAGS.num_return_sequences is None:
-        FLAGS.num_return_sequences = FLAGS.beam_width
-
     tokenizer = None
     draft_ids = None
     decoder_input_ids = None
@@ -650,15 +650,12 @@ if __name__ == "__main__":
     input_lengths_data = np.array(input_lengths, dtype=np.int32)
     request_output_len = [[FLAGS.request_output_len]]
     request_output_len_data = np.array(request_output_len, dtype=np.int32)
-    # WAR: In TensorRT-LLM, setting 'num_return_sequences' results in
-    # returning num_return_sequences * beam_width beams in total.
-    # To ensure the correct number of 'num_return_sequences' beams are
-    # returned, we set num_return_sequences=1 when communicating with the
-    # server and then clip 'num_return_sequences' beams on the client side.
-    num_return_sequences = [[
-        FLAGS.num_return_sequences if FLAGS.beam_width == 1 else 1
-    ]]
-    num_return_sequences_data = np.array(num_return_sequences, dtype=np.int32)
+
+    num_return_sequences_data = None
+    if FLAGS.num_return_sequences:
+        num_return_sequences_data = np.array([[FLAGS.num_return_sequences]],
+                                             dtype=np.int32)
+
     beam_width = [[FLAGS.beam_width]]
     beam_width_data = np.array(beam_width, dtype=np.int32)
     top_k = [[FLAGS.top_k]]
@@ -767,25 +764,31 @@ if __name__ == "__main__":
                                    11, 4689, 347, 2852, 2564, 494, 13, 679
                                ]
 
+    if FLAGS.num_return_sequences is None:
+        num_generations = FLAGS.beam_width
+    else:
+        num_generations = FLAGS.num_return_sequences
+        assert FLAGS.beam_width == 1
+
     if FLAGS.streaming:
         actual_output_ids = [
             [] if FLAGS.exclude_input_in_output else input_ids[0]
-            for _ in range(FLAGS.num_return_sequences)
+            for _ in range(num_generations)
         ]
     else:
-        actual_output_ids = [[] for _ in range(FLAGS.num_return_sequences)]
+        actual_output_ids = [[] for _ in range(num_generations)]
 
     # Expected result shapes: [num_sequences, ...]
-    sequence_lengths = [None] * FLAGS.num_return_sequences
-    cum_log_probs = [None] * FLAGS.num_return_sequences
-    output_log_probs = [None] * FLAGS.num_return_sequences
+    sequence_lengths = [None] * num_generations
+    cum_log_probs = [None] * num_generations
+    output_log_probs = [None] * num_generations
     context_logits = None
-    generation_logits = [None] * FLAGS.num_return_sequences
+    generation_logits = [None] * num_generations
 
     def set_output(outputs: list, data, seq_idx=None):
         if FLAGS.beam_width > 1:
             # data = beams
-            for seq_idx in range(FLAGS.num_return_sequences):
+            for seq_idx in range(FLAGS.beam_width):
                 outputs[seq_idx] = data[seq_idx]
         else:
             assert seq_idx is not None
@@ -802,8 +805,7 @@ if __name__ == "__main__":
     ) as triton_client:
         try:
 
-            if FLAGS.streaming or (FLAGS.beam_width == 1
-                                   and FLAGS.num_return_sequences > 1):
+            if FLAGS.streaming or FLAGS.num_return_sequences is not None:
 
                 # Establish stream
                 triton_client.start_stream(
@@ -897,7 +899,9 @@ if __name__ == "__main__":
                     callback=partial(callback, user_data),
                     parameters={'Streaming': FLAGS.streaming})
 
-                expected_responses = FLAGS.num_return_sequences if beam_width == 1 else 1
+                expected_responses = 1
+                if FLAGS.num_return_sequences is not None:
+                    expected_responses = FLAGS.num_return_sequences
 
                 if FLAGS.stop_after_ms > 0:
 
@@ -954,8 +958,7 @@ if __name__ == "__main__":
                                 set_output(
                                     sequence_lengths,
                                     result.as_numpy('sequence_length')[0])
-                                for beam_idx in range(
-                                        FLAGS.num_return_sequences):
+                                for beam_idx in range(FLAGS.beam_width):
                                     beam_output_ids = output_ids[0][beam_idx]
                                     tokens = list(beam_output_ids)
                                     actual_output_ids[beam_idx].extend(tokens)
@@ -980,7 +983,7 @@ if __name__ == "__main__":
         # across generated sequences.
         output_ids_wo_prompt_0 = None
 
-        for seq_idx in range(FLAGS.num_return_sequences):
+        for seq_idx in range(num_generations):
             seq_len = (sequence_lengths[seq_idx]
                        if not FLAGS.streaming and len(sequence_lengths) > 0
                        else len(actual_output_ids[seq_idx]))

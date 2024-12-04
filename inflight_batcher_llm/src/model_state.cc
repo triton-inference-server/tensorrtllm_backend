@@ -100,6 +100,33 @@ void ModelState::LoadParameters()
         // If parameter is not specified, just ignore
         TLLM_LOG_WARNING("gpu_device_ids is not specified, will be automatically set");
     }
+
+    try
+    {
+        auto participantIds = GetParameter<std::string>("participant_ids");
+
+        auto participantIdsList = utils::split(participantIds, ';');
+
+        if (!participantIdsList.empty())
+        {
+            mParticipantIds = std::vector<std::vector<int32_t>>{};
+        }
+        for (auto const& participantList : participantIdsList)
+        {
+            mParticipantIds.value().emplace_back(utils::csvStrToVecInt(participantList));
+        }
+
+        if (!participantIdsList.empty())
+        {
+            auto participantIdsInfo = std::string{"Using participant ids: " + participantIds};
+            TLLM_LOG_INFO(participantIdsInfo);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("participant_ids is not specified, will be automatically set");
+    }
 }
 
 common::TritonJson::Value& ModelState::GetModelConfig()
