@@ -8,7 +8,7 @@ from .common import *
 
 @pytest.mark.skip_less_device(8)
 @pytest.mark.skip_less_device_memory(80000)
-def test_gpt175b_multi_node_engine_config(
+def test_gpt175b_dummyWeights_multi_node_engine_config(
     tensorrt_llm_gpt_example_root,
     gpt_tokenizer_model_root,
 ):

@@ -2148,7 +2148,7 @@ def test_llama_v3_speculative_decoding_bls(
 @pytest.mark.parametrize("DECODING_MODE", [""])
 @pytest.mark.parametrize("MAX_BEAM_WIDTH", ["1"])
 @pytest.mark.parametrize("EXCLUDE_INPUT_IN_OUTPUT", ["False"])
-def test_gpt_175b_ifb(
+def test_gpt_175b_dummyWeights_ifb(
     E2E_MODEL_NAME,
     MAX_TOKENS_IN_KV_CACHE,
     MAX_ATTENTION_WINDOW_SIZE,
