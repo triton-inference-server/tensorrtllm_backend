@@ -74,7 +74,8 @@ CASE_TO_MODEL = [
   "blip2-opt": "blip2-opt-2.7b",
   "mllama": "llama-3.2-models/Llama-3.2-11B-Vision",
   "whisper": "whisper-large-v3",
-  "gpt-disaggregated-serving-bls": "gpt2"
+  "gpt-disaggregated-serving-bls": "gpt2",
+  "llava_onevision": "llava-onevision-qwen2-7b-ov-hf"
 ]
 
 CASE_TO_ENGINE_DIR = [
@@ -96,7 +97,8 @@ CASE_TO_ENGINE_DIR = [
   "blip2-opt": "multimodal/trt_engines/opt-2.7b/fp16/1-gpu",
   "mllama": "multimodal/trt_engines/Llama-3.2-11B-Vision/fp16/1-gpu",
   "whisper": "whisper/trt_engine/whisper",
-  "gpt-disaggregated-serving-bls": "gpt/trt_engine/gpt2/fp16/1-gpu/"
+  "gpt-disaggregated-serving-bls": "gpt/trt_engine/gpt2/fp16/1-gpu/",
+  "llava_onevision": "multimodal/trt_engines/llava-onevision-7b/fp16/1-gpu"
 ]
 
 // Utilities
@@ -383,7 +385,7 @@ def runTRTLLMBackendTest(caseName)
     sh "nvidia-smi"
     sh "rm -rf /opt/tritonserver/backends/tensorrtllm"
 
-    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("eagle") || caseName.contains("blip2-opt") || caseName.contains("mllama") || caseName.contains("whisper") || caseName.contains("triton-extensive") || caseName.contains("disaggregated-serving")) {
+    if (caseName.contains("-ib") || caseName.contains("speculative-decoding") || caseName.contains("gather-logits")  || caseName.contains("medusa") || caseName.contains("eagle") || caseName.contains("blip2-opt") || caseName.contains("mllama") || caseName.contains("whisper") || caseName.contains("triton-extensive") || caseName.contains("disaggregated-serving") || caseName.contains("llava_onevision")) {
       sh "mkdir /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/libtriton_tensorrtllm.so /opt/tritonserver/backends/tensorrtllm"
       sh "cd ${BACKEND_ROOT} && cp inflight_batcher_llm/build/trtllmExecutorWorker /opt/tritonserver/backends/tensorrtllm"
@@ -429,6 +431,9 @@ def runTRTLLMBackendTest(caseName)
     else if (caseName.contains("python-preproc-unit-tests")){
       sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/inflight_batcher_llm/preprocessing/1 python3 -m pytest all_models/tests/test_multi_image_preprocess.py"
     }
+    else if (caseName.contains("python-multimodal-encoders-unit-tests")){
+      sh "cd ${BACKEND_ROOT} && PYTHONPATH=all_models/multimodal/multimodal_encoders/1 python3 -m pytest all_models/tests/test_multimodal_encoders.py"
+    }
     else if (caseName.contains("triton-extensive")){
       sh "cd ${BACKEND_ROOT}/ci/L0_backend_trtllm && BACKEND_ROOT=${backendPath} bash -ex test.sh"
     }
@@ -456,6 +461,12 @@ def runTRTLLMBackendTest(caseName)
     }
     else if (caseName.contains("triton-extensive")){
       sh "cd ${BACKEND_ROOT}/ci/L0_backend_trtllm && bash -ex test.sh"
+    }
+    else if (caseName.contains("llava_onevision")){
+      def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
+      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/tmp/trt_engines/llava-onevision-qwen2-7b-ov-hf/vision_encoder/"
+      sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
+      sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip skip ${visualEnginePath}"
     }
     else {
       def buildExample = CASE_TO_EXAMPLE[caseName]
@@ -756,6 +767,11 @@ pipeline {
                   runTRTLLMBackendTest("fill-template")
                 }
               }
+              stage("Test multimodal encoders python unit tests") {
+                steps {
+                  runTRTLLMBackendTest("python-multimodal-encoders-unit-tests")
+                }
+              }
               stage("Test Triton extensive") {
                 steps {
                   runTRTLLMBackendTest("triton-extensive")
@@ -826,6 +842,11 @@ pipeline {
               stage("Test eagle") {
                 steps {
                   runTRTLLMBackendTest("eagle")
+                }
+              }
+              stage("Test llava_onevision") {
+                steps {
+                  runTRTLLMBackendTest("llava_onevision")
                 }
               }
             }

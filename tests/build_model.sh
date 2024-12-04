@@ -28,6 +28,7 @@ VILA1_5_3B=/home/scratch.trt_llm_data/llm-models/vila/VILA1.5-3b
 VILA_PATH=/home/scratch.trt_llm_data/llm-models/vila/VILA
 LLAMA_3_2_11B_VISION=/home/scratch.trt_llm_data/llm-models/llama-3.2-models/Llama-3.2-11B-Vision
 WHISPER_LAREGE_V3=/home/scratch.trt_llm_data/llm-models/whisper-models/large-v3
+LLAVA_ONEVISION_7B=/home/scratch.trt_llm_data/llm-models/llava-onevision-qwen2-7b-ov-hf
 set -e
 
 pkill -9 -f tritonserver || true
@@ -595,5 +596,30 @@ if [ "$MODEL" = "whisper" ]; then
                 --bert_attention_plugin float16 \
                 --gpt_attention_plugin float16
     popd
+
+fi
+
+if [ "$MODEL" = "llava_onevision" ]; then
+
+    echo "Install llava_onevision requirements"
+    pip install -r all_models/multimodal/requirements-llava-onevision.txt
+
+    pushd tensorrt_llm/examples/multimodal
+
+    echo "Convert Qwen from HF"
+    python3 ../qwen/convert_checkpoint.py --model_dir ${LLAVA_ONEVISION_7B} --dtype float16 --output_dir ./c-model/llava-7b/fp16
+
+    echo "Qwen builder"
+    trtllm-build --checkpoint_dir ./c-model/llava-7b/fp16 \
+                --gemm_plugin float16 \
+                --max_batch_size 1 \
+                --max_input_len 7500 \
+                --max_seq_len 7600 \
+                --max_multimodal_len 7300 \
+                --output_dir trt_engines/llava-onevision-7b/fp16/1-gpu
+
+    python build_visual_engine.py --model_path ${LLAVA_ONEVISION_7B} --model_type llava_onevision --max_batch_size 16
+
+    popd # tensorrt_llm/examples/multimodal
 
 fi

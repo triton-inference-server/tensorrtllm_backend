@@ -64,6 +64,9 @@ class Request:
     text_input: np.ndarray = np.array([])
     decoder_text_input: np.ndarray = None
     image_input: Optional[np.ndarray] = None
+    image_bytes_input: Optional[np.ndarray] = None
+    image_url_input: Optional[np.ndarray] = None
+    video_bytes_input: Optional[np.ndarray] = None
     max_tokens: Optional[np.ndarray] = None
     bad_words: Optional[np.ndarray] = None
     stop_words: Optional[np.ndarray] = None
@@ -131,6 +134,9 @@ class PreprocResponse:
     end_id: Optional[np.ndarray] = None
     pad_id: Optional[np.ndarray] = None
     prompt_table_extra_ids: Optional[np.ndarray] = None
+    pixel_values: Optional[np.ndarray] = None
+    image_sizes: Optional[np.ndarray] = None
+    is_video_input: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
@@ -210,7 +216,8 @@ class Decoder:
 
         multimodal_enc_response = None
         if is_multimodal:
-            multimodal_enc_response = self._multimodal_enc_generate(request)
+            multimodal_enc_response = self._multimodal_enc_generate(
+                request, preproc_response)
 
         if speculative_decoding:
             if batch_size > 1:
