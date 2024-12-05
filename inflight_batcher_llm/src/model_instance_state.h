@@ -100,6 +100,7 @@ struct RequestData
     int32_t numReturnSequences;
     std::shared_ptr<std::set<executor::IdType>> pendingBatchedRequestIds;
     executor::RequestType requestType;
+    bool returnKvCacheReuseStats;
 };
 
 //

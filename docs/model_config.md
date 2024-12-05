@@ -222,6 +222,7 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `beam_width` | [1] | `int32_t` | Beam width for this request; set to 1 for greedy sampling (Default=1) |
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
+| `return_kv_cache_reuse_stats` | [1] | `bool` | When `true`, include kv cache reuse stats in the output |
 
 The following inputs for lora are for both `tensorrt_llm` and `tensorrt_llm_bls`
 models. The inputs are passed through the `tensorrt_llm` model and the
@@ -242,6 +243,9 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 | `context_logits` | [-1, vocab_size] | `float` | Context logits for input |
 | `generation_logits` | [beam_width, seq_len, vocab_size] | `float` | Generation logits for each output |
 | `batch_index` | [1] | `int32` | Batch index |
+| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
+| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_reused_blocks` in the outputs. |
+| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
 
 #### Unique Inputs for tensorrt_llm model
 

@@ -855,6 +855,9 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
             auto requestIds = mExecutor->enqueueRequests(executorRequests);
             auto requestIdsSet = std::make_shared<std::set<executor::IdType>>(requestIds.begin(), requestIds.end());
 
+            bool returnKvCacheReuseStats
+                = utils::getRequestBooleanInputTensor(request, InputFieldsNames::returnKvCacheReuseStats);
+
             // Note:
             // A single TRITONBACKEND_Request will produce multiple executor requests when bs > 1.
             // They are treated as individual executor requests until they come back to triton server,
@@ -881,7 +884,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                     RequestData{factory, request, tritonRequestId, inputTokensSize, 0, streaming,
                         excludeInputFromOutput, beamWidthCopy, std::move(requestOutputNames),
                         {exec_start_ns, compute_start_ns, 0, 0}, batchIndex, static_cast<int32_t>(requestIds.size()),
-                        numReturnSequences, requestIdsSet, executorRequest.getRequestType()});
+                        numReturnSequences, requestIdsSet, executorRequest.getRequestType(), returnKvCacheReuseStats});
             }
             if (tritonRequestId != "")
             {
@@ -1106,6 +1109,25 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                 else
                 {
                     TLLM_THROW("contextParams must be present in the response");
+                }
+            }
+
+            if (requestData.returnKvCacheReuseStats)
+            {
+                auto processStats = [&](std::string const& fieldName, int32_t value)
+                {
+                    std::vector<int64_t> shape{1, 1};
+                    auto type = TRITONSERVER_TYPE_INT32;
+                    auto buffer = utils::getResponseBuffer<int32_t>(tritonResponse, shape, type, fieldName);
+                    std::vector<int32_t> vec = {value};
+                    utils::flatten<int32_t>(vec, buffer, shape);
+                };
+                if (result.requestPerfMetrics.has_value())
+                {
+                    auto stats = result.requestPerfMetrics.value().kvCacheMetrics;
+                    processStats(OutputFieldsNames::kvCacheAllocNewBlocks, stats.numNewAllocatedBlocks);
+                    processStats(OutputFieldsNames::kvCacheReusedBlocks, stats.numReusedBlocks);
+                    processStats(OutputFieldsNames::kvCacheAllocTotalBlocks, stats.numTotalAllocatedBlocks);
                 }
             }
         }
