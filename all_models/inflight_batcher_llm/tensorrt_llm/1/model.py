@@ -193,6 +193,8 @@ def get_sampling_config_from_request(request, batch_size=1, batch_index=0):
         request, 'beam_search_diversity_rate', batch_size, batch_index)
     kwargs['early_stopping'] = get_input_scalar_by_name(
         request, 'early_stopping', batch_size, batch_index)
+    kwargs['num_return_sequences'] = get_input_scalar_by_name(
+        request, 'num_return_sequences', batch_size, batch_index) or 1
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.SamplingConfig(**kwargs)
 
@@ -336,9 +338,6 @@ def convert_request(request, exclude_input_from_output, decoupled):
             raise pb_utils.TritonModelException(
                 "Streaming is only supported in decoupled mode.")
 
-        inputs['num_return_sequences'] = get_input_scalar_by_name(
-            request, 'num_return_sequences', batch_size, batch_index) or 1
-
         inputs['end_id'] = get_input_scalar_by_name(request, 'end_id',
                                                     batch_size, batch_index)
         inputs['pad_id'] = get_input_scalar_by_name(request, 'pad_id',
@@ -364,7 +363,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
             # if request doesn't specify exclude_input_from_output, try to use the parameter
             output_config.exclude_input_from_output = (
                 exclude_input_from_output
-                if exclude_input_from_output is not None else false)
+                if exclude_input_from_output is not None else False)
         else:
             output_config.exclude_input_from_output = req_exclude_input_from_output
 
@@ -642,7 +641,11 @@ class TritonPythonModel:
             "multi_block_mode":
             get_parameter(model_config, "multi_block_mode", bool),
             "enable_context_fmha_fp32_acc":
-            get_parameter(model_config, "enable_context_fmha_fp32_acc", bool)
+            get_parameter(model_config, "enable_context_fmha_fp32_acc", bool),
+            "cuda_graph_mode":
+            get_parameter(model_config, "cuda_graph_mode", bool),
+            "cuda_graph_cache_size":
+            get_parameter(model_config, "cuda_graph_cache_size", int),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExtendedRuntimePerfKnobConfig(**kwargs)
@@ -1000,8 +1003,9 @@ class TritonPythonModel:
 
                 self.req_id_to_request_data[req_id] = RequestData(
                     triton_req_id, triton_user_id, batch_index,
-                    len(batch_indices), executor_request.num_return_sequences,
-                    0, 0, triton_request.get_response_sender())
+                    len(batch_indices),
+                    executor_request.sampling_config.num_return_sequences, 0,
+                    0, triton_request.get_response_sender())
                 self.triton_req_id_to_req_ids[triton_req_id].add(req_id)
                 input_len = len(
                     executor_request.input_token_ids

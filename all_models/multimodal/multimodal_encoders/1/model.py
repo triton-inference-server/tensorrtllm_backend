@@ -49,6 +49,7 @@ def triton_string_to_torch(dtype):
         "TYPE_FP16": torch.float16,
         "TYPE_FP32": torch.float32,
         "TYPE_FP64": torch.float64,
+        "TYPE_BF16": torch.bfloat16
     }
     return type_map[dtype]
 

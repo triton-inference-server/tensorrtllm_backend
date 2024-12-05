@@ -124,12 +124,12 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     python tensorrt_llm/examples/mllama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
-        --dtype float16
+        --dtype bfloat16
 
     trtllm-build \
     --checkpoint_dir ${UNIFIED_CKPT_PATH} \
     --output_dir ${ENGINE_PATH} \
-    --gemm_plugin float16 \
+    --gemm_plugin auto \
     --max_batch_size 8 \
     --max_seq_len 2048 \
     --max_num_tokens 4096 \
@@ -154,7 +154,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     cp all_models/multimodal/ensemble multimodal_ifb -r
     cp all_models/multimodal/multimodal_encoders multimodal_ifb -r
 
-    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False
+    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE}
 
     python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1
 
@@ -165,7 +165,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders
 
     # Newly added for multimodal
-    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH}
+    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE}
     ```
     > **NOTE**:
     >
@@ -176,6 +176,8 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     > You can set the `enable_kv_cache_reuse` option to True to enable kv cache reuse. Requests with the same image/prompt table/input tokens will reuse the KV cache, which will help reduce latency. The specific performance improvement depends on the length of reuse.
     >
     > You can set the `max_num_images` to the max number of images per request. The value should be the same as the `max_num_images_per_request` value used at build the engine step above.
+    >
+    > Set `${ENCODER_INPUT_FEATURES_DTYPE}` to `TYPE_BF16` for mllama, and `TYPE_FP16` for other models.
 
 4. Launch Tritonserver
 
@@ -246,7 +248,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```
 
 7. Send request with curl
-    The triton server supports curl requests with an image url in the payload. For example here is a request send to a Llama-3.2-11B-Vision (mLLama) model:
+    The triton server supports curl requests with an image url in the payload. For example here is a request sent to a Llama-3.2-11B-Vision (mLLama) model:
     ``` bash
     curl -X POST localhost:8000/v2/models/ensemble/generate_stream \
     -d '{"id": "42", "text_input": "<|image|>If I had to write a haiku for this one", "image_url_input": "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png", "parameters": {"max_tokens": 16, "beam_width": 1, "end_id": 128001, "pad_id": 128004, "top_k": 1, "top_p": 0, "stream": false, "temperature": 0}}'
@@ -254,6 +256,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     # response
     data: {"batch_index":0,"context_logits":0.0,"cum_log_probs":0.0,"generation_logits":0.0,"id":"42","model_name":"ensemble","model_version":"1","output_log_probs":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"sequence_end":false,"sequence_id":0,"sequence_index":0,"sequence_start":false,"text_output":"If I had to write a haiku for this one, it would be:.\\nMerlion spouts water.\\nMarina"}
    ```
+   You can also send requests with base64 encoded images. Just replace the url above with `data:image/jpeg;base64,<base64_encoded_image>`.
 
 > **NOTE**:
 > Please ignore any exception thrown with the output. It's a known issue to be fixed.

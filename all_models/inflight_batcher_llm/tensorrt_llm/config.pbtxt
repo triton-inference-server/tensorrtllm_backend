@@ -48,7 +48,7 @@ input [
   },
   {
     name: "encoder_input_features"
-    data_type: TYPE_FP16
+    data_type: ${encoder_input_features_data_type}
     dims: [ -1, -1 ]
     allow_ragged_batch: true
     optional: true
@@ -646,6 +646,18 @@ parameters: {
   key: "multi_block_mode"
   value: {
     string_value: "${multi_block_mode}"
+  }
+}
+parameters: {
+  key: "cuda_graph_mode"
+  value: {
+    string_value: "${cuda_graph_mode}"
+  }
+}
+parameters: {
+  key: "cuda_graph_cache_size"
+  value: {
+    string_value: "${cuda_graph_cache_size}"
   }
 }
 parameters: {
