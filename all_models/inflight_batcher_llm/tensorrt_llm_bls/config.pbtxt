@@ -281,6 +281,13 @@ input [
 	dims: [ -1, 3 ]
 	optional: true
 	allow_ragged_batch: true
+  },
+  {
+    name: "return_kv_cache_reuse_stats"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
   }
 ]
 output [
@@ -316,6 +323,21 @@ output [
   },
   {
     name: "sequence_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_new_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_reused_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_total_blocks"
     data_type: TYPE_INT32
     dims: [ 1 ]
   }

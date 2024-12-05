@@ -555,7 +555,13 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
     bool returnContextLogits{false};
     extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
 
-    return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits);
+    // When returnKvCacheReuseStats is set to true, set returnPerfMetrics to true to return KV cache reuse stats from
+    // perf metrics.
+    bool returnPerfMetrics{false};
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnKvCacheReuseStats, returnPerfMetrics);
+
+    return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits,
+        false /* excludeInputFromOutput */, false /* returnEncoderOutput */, returnPerfMetrics);
 }
 
 std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(

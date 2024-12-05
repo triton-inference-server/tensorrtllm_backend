@@ -97,6 +97,7 @@ class Request:
     lora_weights: Optional[np.ndarray] = None
     lora_config: Optional[np.ndarray] = None
     exclude_input_in_output: Optional[np.ndarray] = None
+    return_kv_cache_reuse_stats: Optional[np.ndarray] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")
@@ -172,6 +173,9 @@ class GenerationResponse:
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
     sequence_index: Optional[np.ndarray] = None
+    kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
+    kv_cache_reused_blocks: Optional[np.ndarray] = None
+    kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -183,6 +187,9 @@ class Response:
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
     sequence_index: Optional[np.ndarray] = None
+    kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
+    kv_cache_reused_blocks: Optional[np.ndarray] = None
+    kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
 
     def __eq__(self, o) -> bool:
         """Just for testing"""
@@ -194,7 +201,14 @@ class Response:
                 and np.array_equal(self.context_logits, o.context_logits)
                 and np.array_equal(self.generation_logits, o.generation_logits)
                 and np.array_equal(self.batch_index, o.batch_index)
-                and np.array_equal(self.sequence_index, o.sequence_index))
+                and np.array_equal(self.sequence_index, o.sequence_index)
+                and np.array_equal(self.sequence_index, o.sequence_index)
+                and np.array_equal(self.kv_cache_alloc_new_blocks,
+                                   o.kv_cache_alloc_new_blocks)
+                and np.array_equal(self.kv_cache_reused_blocks,
+                                   o.kv_cache_reused_blocks)
+                and np.array_equal(self.kv_cache_alloc_total_blocks,
+                                   o.kv_cache_alloc_total_blocks))
 
 
 class Decoder:

@@ -74,7 +74,8 @@ class TritonDecoder(Decoder):
         self._llm_outputs = [
             "output_ids", "sequence_length", "cum_log_probs",
             "output_log_probs", "context_logits", "generation_logits",
-            "batch_index", "sequence_index"
+            "batch_index", "sequence_index", "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks", "kv_cache_alloc_total_blocks"
         ]
 
         self._postproc_outputs = [
@@ -93,7 +94,7 @@ class TritonDecoder(Decoder):
             "prompt_table_extra_id", "embedding_bias_words",
             "embedding_bias_weights", "num_draft_tokens", "use_draft_logits",
             "lora_task_id", "lora_weights", "lora_config",
-            "exclude_input_in_output"
+            "exclude_input_in_output", "return_kv_cache_reuse_stats"
         ]
 
         self.__undo_reshape_whitelist = {
@@ -103,7 +104,7 @@ class TritonDecoder(Decoder):
             "return_log_probs", "return_context_logits",
             "return_generation_logits", "beam_width", "stream",
             "prompt_vocab_size", "num_draft_tokens", "use_draft_logits",
-            "exclude_input_in_output"
+            "exclude_input_in_output", "return_kv_cache_reuse_stats"
         }
 
     def _exec_triton_request(self, request):
@@ -128,6 +129,9 @@ class TritonDecoder(Decoder):
             "generation_logits": "generation_logits",
             "batch_index": "batch_index",
             "sequence_index": "sequence_index",
+            "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks": "kv_cache_reused_blocks",
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
         }
         tensors = self.create_triton_tensors(response, name_map)
         return pb_utils.InferenceResponse(output_tensors=tensors)
@@ -404,6 +408,7 @@ class TritonDecoder(Decoder):
             "lora_weights": "lora_weights",
             "lora_config": "lora_config",
             "exclude_input_in_output": "exclude_input_in_output",
+            "return_kv_cache_reuse_stats": "return_kv_cache_reuse_stats",
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)
@@ -481,6 +486,9 @@ class TritonDecoder(Decoder):
             "generation_logits": "generation_logits",
             "batch_index": "batch_index",
             "sequence_index": "sequence_index",
+            "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks": "kv_cache_reused_blocks",
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
         }
         return self.convert_triton_response(triton_output, GenerationResponse,
                                             name_map)
@@ -516,11 +524,15 @@ class TritonDecoder(Decoder):
             name = named_t.name()
             t = named_t.as_numpy()
             t_map[name] = t
-        response = Response(text_output=t_map["OUTPUT"],
-                            cum_log_probs=gen_res.cum_log_probs,
-                            output_log_probs=gen_res.output_log_probs,
-                            context_logits=gen_res.context_logits,
-                            generation_logits=gen_res.generation_logits,
-                            batch_index=gen_res.batch_index,
-                            sequence_index=gen_res.sequence_index)
+        response = Response(
+            text_output=t_map["OUTPUT"],
+            cum_log_probs=gen_res.cum_log_probs,
+            output_log_probs=gen_res.output_log_probs,
+            context_logits=gen_res.context_logits,
+            generation_logits=gen_res.generation_logits,
+            batch_index=gen_res.batch_index,
+            sequence_index=gen_res.sequence_index,
+            kv_cache_alloc_new_blocks=gen_res.kv_cache_alloc_new_blocks,
+            kv_cache_reused_blocks=gen_res.kv_cache_reused_blocks,
+            kv_cache_alloc_total_blocks=gen_res.kv_cache_alloc_total_blocks)
         return response
