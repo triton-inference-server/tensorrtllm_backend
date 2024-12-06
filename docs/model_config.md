@@ -100,7 +100,7 @@ description of the parameters below.
 | `cancellation_check_period_ms` | The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. (default=100) |
 | `stats_check_period_ms` | The time for the statistics reporting thread to sleep before doing the next check. (default=100) |
 | `recv_poll_period_ms` | The time for the receiving thread in orchestrator mode to sleep before doing the next check. (default=0) |
-| `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=executor::kDefaultIterStatsMaxIterations) |
+| `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=ExecutorConfig::kDefaultIterStatsMaxIterations) |
 | `request_stats_max_iterations` | The maximum number of iterations for which to keep per-request statistics. (default=executor::kDefaultRequestStatsMaxIterations) |
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
 | `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. Use semicolons to separate multiple instances of the model. If not provided, the model will use all visible GPUs. (default=unspecified) |

@@ -32,6 +32,7 @@
 
 #include <nlohmann/json.hpp>
 
+namespace tle = tensorrt_llm::executor;
 using executor::SizeType32;
 
 namespace triton::backend::inflight_batcher_llm
@@ -396,7 +397,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_WARNING("max_beam_width is not specified, will use default value of 1");
     }
 
-    int32_t iterStatsMaxIterations = executor::kDefaultIterStatsMaxIterations;
+    int32_t iterStatsMaxIterations = tle::ExecutorConfig::kDefaultIterStatsMaxIterations;
     try
     {
         iterStatsMaxIterations = model_state_->GetParameter<int32_t>("iter_stats_max_iterations");
@@ -408,7 +409,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             + std::to_string(iterStatsMaxIterations));
     }
 
-    int32_t requestStatsMaxIterations = executor::kDefaultRequestStatsMaxIterations;
+    int32_t requestStatsMaxIterations = tle::ExecutorConfig::kDefaultRequestStatsMaxIterations;
     try
     {
         requestStatsMaxIterations = model_state_->GetParameter<int32_t>("request_stats_max_iterations");
