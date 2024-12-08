@@ -8,7 +8,7 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // Available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.10-py3-aarch64-ubuntu22.04-trt10.6.0.26-src_non_cxx11_abi-devel-202411041524-861"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.11-py3-aarch64-ubuntu22.04-trt10.7.0.23-src_non_cxx11_abi-devel-202412061322-920"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -118,6 +118,7 @@ def runBuild()
         sh "cd ${BACKEND_ROOT} && git submodule update --init --recursive"
 
         sh "pip3 install pre-commit"
+        sh "apt-get update && apt-get install -y 2to3"
         sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
         sh "cd ${BACKEND_ROOT} && pre-commit run -a"
         // Step 3: packaging tensorrt-llm backend
@@ -130,6 +131,9 @@ def runBuild()
 
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
         // Step 4: build tensorrt-llm backend
+        sh "cd /usr/lib/python3.*/ && mv EXTERNALLY-MANAGED EXTERNALLY-MANAGED.bk || true"
+        sh "apt-get update && apt install -y python3-h5py"
+        sh "pip3 list"
         sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real' --trt_root /usr/local/tensorrt"
         sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
         sh "tar -zcf tensorrt_llm_backend_internal_aarch64.tar.gz ${BACKEND_ROOT}"
