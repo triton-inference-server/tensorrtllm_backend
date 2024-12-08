@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -61,7 +61,7 @@ def _single_value(data: Optional[np.ndarray]):
 
 @dataclass
 class Request:
-    text_input: np.ndarray = np.array([])
+    text_input: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_text_input: np.ndarray = None
     image_input: Optional[np.ndarray] = None
     image_bytes_input: Optional[np.ndarray] = None
@@ -125,9 +125,9 @@ class DraftRequest:
 
 @dataclass
 class PreprocResponse:
-    input_ids: np.ndarray = np.array([])
+    input_ids: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_input_ids: np.ndarray = None
-    input_lengths: np.ndarray = np.array([])
+    input_lengths: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_input_lengths: np.ndarray = None
     bad_words_list: Optional[np.ndarray] = None
     stop_words_list: Optional[np.ndarray] = None
@@ -165,8 +165,8 @@ class MultimodalEncResponse:
 
 @dataclass
 class GenerationResponse:
-    output_ids: np.ndarray = np.array([])
-    sequence_length: np.ndarray = np.array([])
+    output_ids: np.ndarray = field(default_factory=lambda: np.array([]))
+    sequence_length: np.ndarray = field(default_factory=lambda: np.array([]))
     cum_log_probs: Optional[np.ndarray] = None
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None
@@ -180,7 +180,7 @@ class GenerationResponse:
 
 @dataclass
 class Response:
-    text_output: np.ndarray = np.array([])
+    text_output: np.ndarray = field(default_factory=lambda: np.array([]))
     cum_log_probs: Optional[np.ndarray] = None
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None

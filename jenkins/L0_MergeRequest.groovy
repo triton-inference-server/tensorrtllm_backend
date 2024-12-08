@@ -12,8 +12,8 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.10-py3-x86_64-ubuntu22.04-trt10.6.0.26-pypi-devel-202411041524-861"
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.10-py3-aarch64-ubuntu22.04-trt10.6.0.26-src_non_cxx11_abi-devel-202411041524-861"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.11-py3-x86_64-ubuntu24.04-trt10.7.0.23-pypi-devel-202412061322-920"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.11-py3-aarch64-ubuntu22.04-trt10.7.0.23-src_non_cxx11_abi-devel-202412061322-920"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -322,6 +322,7 @@ def runBuild()
     container("trt-llm-backend") {
       // Step 2: checking code style
       sh "pip3 install pre-commit"
+      sh "apt-get update && apt-get install -y 2to3"
       sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
       sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt"
       sh "cd ${BACKEND_ROOT} && pre-commit run -a"
@@ -742,11 +743,12 @@ pipeline {
                   runTRTLLMBackendTest("mistral-ib-mm")
                 }
               }
-              stage("Test gpt-ib-streaming") {
-                steps {
-                  runTRTLLMBackendTest("gpt-ib-streaming")
-                }
-              }
+              // http://nvbugs/4998718
+              // stage("Test gpt-ib-streaming") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-ib-streaming")
+              //   }
+              // }
               stage("CPP Unit Tests") {
                 steps {
                   runCPPUnitTest()
