@@ -131,8 +131,6 @@ def runBuild()
 
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
         // Step 4: build tensorrt-llm backend
-        sh "cd /usr/lib/python3.*/ && mv EXTERNALLY-MANAGED EXTERNALLY-MANAGED.bk || true"
-        sh "apt-get update && apt install -y python3-h5py"
         sh "pip3 list"
         sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real' --trt_root /usr/local/tensorrt"
         sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
