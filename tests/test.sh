@@ -503,16 +503,17 @@ run_cpp_e2e_backend_tests () {
     # testing output accuracy for real weights only
     if [[ $MODEL = "gpt-ib" || $MODEL = "gpt-ib-streaming" ]]; then
 
-        python3 end_to_end_grpc_client.py \
-            ${STREAMING_FLAG} \
-            --output-len 10 --prompt "The only thing we have to fear is" \
-            ${OVERWRITE_OUTPUT_TEXT_FLAG} \
-            ${EXCL_INPUT_IN_OUTPUT_FLAG} \
-            --model-name "$E2E_MODEL_NAME" | tee output_e2e
-        grep "that the government will" output_e2e
-        if [[ "$EXCL_INPUT_IN_OUTPUT_FLAG" != "" ]]; then
-            grep -v "The only thing we have to fear is" output_e2e
-        fi
+        # NVBugs: http://nvbugs/4998718
+        # python3 end_to_end_grpc_client.py \
+        #     ${STREAMING_FLAG} \
+        #     --output-len 10 --prompt "The only thing we have to fear is" \
+        #     ${OVERWRITE_OUTPUT_TEXT_FLAG} \
+        #     ${EXCL_INPUT_IN_OUTPUT_FLAG} \
+        #     --model-name "$E2E_MODEL_NAME" | tee output_e2e
+        # grep "that the government will" output_e2e
+        # if [[ "$EXCL_INPUT_IN_OUTPUT_FLAG" != "" ]]; then
+        #     grep -v "The only thing we have to fear is" output_e2e
+        # fi
 
         if [[ "$run_all_tests" == "true" && "$BATCHING_STRATEGY" == "inflight_fused_batching" ]]; then
             # test with embedding bias

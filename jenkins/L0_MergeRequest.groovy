@@ -743,12 +743,11 @@ pipeline {
                   runTRTLLMBackendTest("mistral-ib-mm")
                 }
               }
-              // http://nvbugs/4998718
-              // stage("Test gpt-ib-streaming") {
-              //   steps {
-              //     runTRTLLMBackendTest("gpt-ib-streaming")
-              //   }
-              // }
+              stage("Test gpt-ib-streaming") {
+                steps {
+                  runTRTLLMBackendTest("gpt-ib-streaming")
+                }
+              }
               stage("CPP Unit Tests") {
                 steps {
                   runCPPUnitTest()
