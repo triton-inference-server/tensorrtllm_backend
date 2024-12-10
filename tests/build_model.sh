@@ -26,7 +26,7 @@ BLIP2_OPT_2_7B=/home/scratch.trt_llm_data/llm-models/blip2-opt-2.7b
 LLAVA_7B=/home/scratch.trt_llm_data/llm-models/llava-1.5-7b-hf
 VILA1_5_3B=/home/scratch.trt_llm_data/llm-models/vila/VILA1.5-3b
 VILA_PATH=/home/scratch.trt_llm_data/llm-models/vila/VILA
-LLAMA_3_2_11B_VISION=/home/scratch.trt_llm_data/llm-models/llama-3.2-models/Llama-3.2-11B-Vision
+LLAMA_3_2_11B_VISION=/home/scratch.trt_llm_data/llm-models/llama-3.2-models/Llama-3.2-11B-Vision-Instruct
 WHISPER_LAREGE_V3=/home/scratch.trt_llm_data/llm-models/whisper-models/large-v3
 LLAVA_ONEVISION_7B=/home/scratch.trt_llm_data/llm-models/llava-onevision-qwen2-7b-ov-hf
 set -e
@@ -548,20 +548,20 @@ if [ "$MODEL" = "mllama" ]; then
     pushd tensorrt_llm/examples/multimodal
 
     echo "Convert mllama from HF"
-    python3 ../mllama/convert_checkpoint.py --model_dir ${LLAMA_3_2_11B_VISION} --dtype bfloat16 --output_dir ./c-model/Llama-3.2-11B-Vision/fp16
+    python3 ../mllama/convert_checkpoint.py --model_dir ${LLAMA_3_2_11B_VISION} --dtype bfloat16 --output_dir ./c-model/Llama-3.2-11B-Vision-Instruct/bf16
 
     echo "mllama builder"
-    trtllm-build --checkpoint_dir ./c-model/Llama-3.2-11B-Vision/fp16 \
+    trtllm-build --checkpoint_dir ./c-model/Llama-3.2-11B-Vision-Instruct/bf16 \
                 --gemm_plugin auto \
                 --max_batch_size 8 \
                 --max_input_len 2048 \
                 --max_seq_len 2560 \
                 --max_encoder_input_len 8200 \
-                --output_dir trt_engines/Llama-3.2-11B-Vision/fp16/1-gpu
+                --output_dir trt_engines/Llama-3.2-11B-Vision-Instruct/bf16/1-gpu
 
     python build_visual_engine.py --model_path ${LLAMA_3_2_11B_VISION} \
                                   --model_type mllama --max_batch_size 8 \
-                                  --output_dir tmp/trt_engines/Llama-3.2-11B-Vision/vision_encoder
+                                  --output_dir tmp/trt_engines/Llama-3.2-11B-Vision-Instruct/vision_encoder
 
     popd # tensorrt_llm/examples/multimodal
 
