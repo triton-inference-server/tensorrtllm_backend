@@ -1080,7 +1080,8 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                 utils::flatten<int32_t>(batchIndexVec, batchIndexBuffer, batchIndexShape);
             }
 
-            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0 && requestData.numReturnSequences)
+            if (requestData.outputNames.count(OutputFieldsNames::sequenceIndex) > 0
+                && requestData.numReturnSequences > 1)
             {
                 std::vector<int64_t> sequenceIndexShape{1, 1};
                 auto sequenceIndexType = TRITONSERVER_TYPE_INT32;
