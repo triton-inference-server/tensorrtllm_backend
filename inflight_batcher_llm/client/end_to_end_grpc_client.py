@@ -270,7 +270,7 @@ def run_inference(triton_client,
         outputs.append(grpcclient.InferRequestedOutput("context_logits"))
     if return_generation_logits_data is not None:
         outputs.append(grpcclient.InferRequestedOutput("generation_logits"))
-    if num_return_sequences is not None:
+    if num_return_sequences is not None and num_return_sequences > 1:
         outputs.append(grpcclient.InferRequestedOutput("sequence_index"))
     if batch_inputs:
         outputs.append(grpcclient.InferRequestedOutput("batch_index"))
