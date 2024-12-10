@@ -72,7 +72,7 @@ CASE_TO_MODEL = [
   "bart-ib": "bart-large-cnn",
   "t5-ib": "t5-small",
   "blip2-opt": "blip2-opt-2.7b",
-  "mllama": "llama-3.2-models/Llama-3.2-11B-Vision",
+  "mllama": "llama-3.2-models/Llama-3.2-11B-Vision-Instruct",
   "whisper": "whisper-large-v3",
   "gpt-disaggregated-serving-bls": "gpt2",
   "llava_onevision": "llava-onevision-qwen2-7b-ov-hf"
@@ -95,7 +95,7 @@ CASE_TO_ENGINE_DIR = [
   "bart-ib": "enc_dec/trt_engine/bart-ib/fp16/1-gpu/",
   "t5-ib": "enc_dec/trt_engine/t5-ib/fp16/1-gpu/",
   "blip2-opt": "multimodal/trt_engines/opt-2.7b/fp16/1-gpu",
-  "mllama": "multimodal/trt_engines/Llama-3.2-11B-Vision/fp16/1-gpu",
+  "mllama": "multimodal/trt_engines/Llama-3.2-11B-Vision-Instruct/bf16/1-gpu",
   "whisper": "whisper/trt_engine/whisper",
   "gpt-disaggregated-serving-bls": "gpt/trt_engine/gpt2/fp16/1-gpu/",
   "llava_onevision": "multimodal/trt_engines/llava-onevision-7b/fp16/1-gpu"
@@ -451,7 +451,7 @@ def runTRTLLMBackendTest(caseName)
     }
     else if (caseName.contains("mllama")){
       def enginePath = "${backendPath}/tensorrt_llm/examples/" + CASE_TO_ENGINE_DIR[caseName]
-      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/tmp/trt_engines/Llama-3.2-11B-Vision/vision_encoder/"
+      def visualEnginePath = "${backendPath}/tensorrt_llm/examples/multimodal/tmp/trt_engines/Llama-3.2-11B-Vision-Instruct/vision_encoder/"
       sh "cd ${BACKEND_ROOT} && bash tests/build_model.sh ${caseName}"
       sh "cd ${BACKEND_ROOT} && tests/test.sh ${caseName} ${enginePath} ${modelPath} ${tokenizerType} skip skip skip ${visualEnginePath}"
     }
