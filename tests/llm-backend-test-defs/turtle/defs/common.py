@@ -200,7 +200,7 @@ def modify_ib_config_pbtxt(
         replace_words = 'name: "tensorrt_llm_draft"'
         search_and_replace(llm_draft_config, search_words, replace_words)
         check_call(
-            f"python3 {fill_template_py} -i {llm_draft_config} triton_backend:{BACKEND},engine_dir:{DRAFT_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
+            f"python3 {fill_template_py} -i {llm_draft_config} 'triton_backend:{BACKEND},engine_dir:{DRAFT_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
             f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
             f"batching_strategy:{BATCHING_STRATEGY}," \
             f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
@@ -211,7 +211,7 @@ def modify_ib_config_pbtxt(
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
             f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-            f"participant_ids:{PARTICIPANT_IDS_DRAFT}",
+            f"participant_ids:{PARTICIPANT_IDS_DRAFT}'",
             shell=True)
     if TARGET_ENGINE_PATH != "":
         llm_target_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -220,7 +220,7 @@ def modify_ib_config_pbtxt(
         replace_words = 'name: "tensorrt_llm_target"'
         search_and_replace(llm_target_config, search_words, replace_words)
         check_call(
-            f"python3 {fill_template_py} -i {llm_target_config} triton_backend:{BACKEND},engine_dir:{TARGET_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
+            f"python3 {fill_template_py} -i {llm_target_config} 'triton_backend:{BACKEND},engine_dir:{TARGET_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
             f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
             f"batching_strategy:{BATCHING_STRATEGY}," \
             f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
@@ -231,7 +231,7 @@ def modify_ib_config_pbtxt(
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
             f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-            f"participant_ids:{PARTICIPANT_IDS_TARGET}",
+            f"participant_ids:{PARTICIPANT_IDS_TARGET}'",
             shell=True)
 
     check_call(
@@ -253,7 +253,7 @@ def modify_ib_config_pbtxt(
         shell=True)
 
     check_call(
-        f"python3 {fill_template_py} -i {tensorrt_llm_config} triton_backend:{BACKEND},engine_dir:{DECODER_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
+        f"python3 {fill_template_py} -i {tensorrt_llm_config} 'triton_backend:{BACKEND},engine_dir:{DECODER_ENGINE_PATH},decoupled_mode:{DECOUPLED_MODE}," \
         f"max_tokens_in_paged_kv_cache:{MAX_TOKENS_IN_KV_CACHE},max_attention_window_size:{MAX_ATTENTION_WINDOW_SIZE},batch_scheduler_policy:{BATCH_SCHEDULER_POLICY}," \
         f"batching_strategy:{BATCHING_STRATEGY}," \
         f"kv_cache_free_gpu_mem_fraction:{KV_CACHE_FREE_GPU_MEM_FRACTION},cross_kv_cache_fraction:{CROSS_KV_CACHE_FRACTION},enable_trt_overlap:{ENABLE_TRT_OVERLAP}," \
@@ -264,7 +264,7 @@ def modify_ib_config_pbtxt(
         f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
         f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC}," \
         f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-        f"participant_ids:{PARTICIPANT_IDS}",
+        f"participant_ids:{PARTICIPANT_IDS}'",
         shell=True)
 
     if os.path.exists(whisper_bls_config):
