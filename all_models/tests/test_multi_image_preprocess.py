@@ -250,8 +250,8 @@ def test_setup_fake_prompts(triton_model, batch_size, batch_split_prompts,
     ])
 def test_process_image_for_encoder(triton_model, query, image_bytes,
                                    expected_output):
-    output = triton_model.vision_preprocessor.process(query,
-                                                      image_bytes=image_bytes)
+    output = triton_model.vision_preprocessor.mllama_process(
+        query, image_bytes=image_bytes)
     assert output.keys() == expected_output.keys()
     for key in output.keys():
         assert np.array_equal(output[key], expected_output[key])

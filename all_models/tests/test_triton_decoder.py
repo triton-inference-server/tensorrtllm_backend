@@ -101,6 +101,9 @@ def response(request) -> MockTritonResponse:
         "generation_logits",
         "batch_index",
         "sequence_index",
+        "kv_cache_alloc_new_blocks",
+        "kv_cache_reused_blocks",
+        "kv_cache_alloc_total_blocks",
     ]
     response = Response()
     for output_name in output_names:
@@ -117,7 +120,8 @@ def triton_request(request) -> MockTritonRequest:
         "frequency_penalty", "random_seed", "return_log_probs",
         "return_context_logits", "return_generation_logits", "beam_width",
         "stream", "prompt_embedding_table", "prompt_vocab_size",
-        "embedding_bias_words", "embedding_bias_weights", "num_draft_tokens"
+        "embedding_bias_words", "embedding_bias_weights", "num_draft_tokens",
+        "return_kv_cache_reuse_stats"
     ]
     triton_tensor_map = {}
     for input_name in input_names:
@@ -151,7 +155,11 @@ mock_reponse = {
     "context_logits": [[[-0.2, 0.2]]],
     "generation_logits": [[[0.3, 1.1]]],
     "batch_index": [[0]],
-    "sequence_index": [[0]]
+    "sequence_index": [[0]],
+    "sequence_index": [[0]],
+    "kv_cache_alloc_new_blocks": [[0]],
+    "kv_cache_reused_blocks": [[0]],
+    "kv_cache_alloc_total_blocks": [[0]]
 }
 
 mock_request = {"text_input": [["Hello world"]], "max_tokens": [[24]]}
@@ -211,6 +219,9 @@ _generation_name_map = {
     "generation_logits": "generation_logits",
     "batch_index": "batch_index",
     "sequence_index": "sequence_index",
+    "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
+    "kv_cache_reused_blocks": "kv_cache_reused_blocks",
+    "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks",
 }
 
 convert_triton_response_testcases = [{

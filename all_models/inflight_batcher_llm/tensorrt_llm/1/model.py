@@ -207,6 +207,8 @@ def get_output_config_from_request(request, batch_size=1, batch_index=0):
         request, 'return_context_logits', batch_size, batch_index)
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
         request, 'return_generation_logits', batch_size, batch_index)
+    kwargs["return_perf_metrics"] = get_input_scalar_by_name(
+        request, 'return_kv_cache_reuse_stats', batch_size, batch_index)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
@@ -473,6 +475,27 @@ def convert_response(response, batch_index, batch_size, num_return_sequences):
                 "sequence_index",
                 np.expand_dims(np.array([result.sequence_index], np.int32),
                                0)))
+
+    if result.request_perf_metrics is not None:
+        kv_cache_metrics = result.request_perf_metrics.kv_cache_metrics
+        output_tensors.append(
+            pb_utils.Tensor(
+                "kv_cache_alloc_new_blocks",
+                np.expand_dims(
+                    np.array([kv_cache_metrics.num_new_allocated_blocks],
+                             np.int32), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "kv_cache_reused_blocks",
+                np.expand_dims(
+                    np.array([kv_cache_metrics.num_reused_blocks], np.int32),
+                    0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "kv_cache_alloc_total_blocks",
+                np.expand_dims(
+                    np.array([kv_cache_metrics.num_total_allocated_blocks],
+                             np.int32), 0)))
 
     return pb_utils.InferenceResponse(
         output_tensors), result.is_final, output_lengths

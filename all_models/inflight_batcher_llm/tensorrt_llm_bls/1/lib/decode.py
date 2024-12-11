@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -61,9 +61,12 @@ def _single_value(data: Optional[np.ndarray]):
 
 @dataclass
 class Request:
-    text_input: np.ndarray = np.array([])
+    text_input: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_text_input: np.ndarray = None
     image_input: Optional[np.ndarray] = None
+    image_bytes_input: Optional[np.ndarray] = None
+    image_url_input: Optional[np.ndarray] = None
+    video_bytes_input: Optional[np.ndarray] = None
     max_tokens: Optional[np.ndarray] = None
     bad_words: Optional[np.ndarray] = None
     stop_words: Optional[np.ndarray] = None
@@ -94,6 +97,7 @@ class Request:
     lora_weights: Optional[np.ndarray] = None
     lora_config: Optional[np.ndarray] = None
     exclude_input_in_output: Optional[np.ndarray] = None
+    return_kv_cache_reuse_stats: Optional[np.ndarray] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")
@@ -121,9 +125,9 @@ class DraftRequest:
 
 @dataclass
 class PreprocResponse:
-    input_ids: np.ndarray = np.array([])
+    input_ids: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_input_ids: np.ndarray = None
-    input_lengths: np.ndarray = np.array([])
+    input_lengths: np.ndarray = field(default_factory=lambda: np.array([]))
     decoder_input_lengths: np.ndarray = None
     bad_words_list: Optional[np.ndarray] = None
     stop_words_list: Optional[np.ndarray] = None
@@ -131,6 +135,9 @@ class PreprocResponse:
     end_id: Optional[np.ndarray] = None
     pad_id: Optional[np.ndarray] = None
     prompt_table_extra_ids: Optional[np.ndarray] = None
+    pixel_values: Optional[np.ndarray] = None
+    image_sizes: Optional[np.ndarray] = None
+    is_video_input: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
@@ -158,25 +165,31 @@ class MultimodalEncResponse:
 
 @dataclass
 class GenerationResponse:
-    output_ids: np.ndarray = np.array([])
-    sequence_length: np.ndarray = np.array([])
+    output_ids: np.ndarray = field(default_factory=lambda: np.array([]))
+    sequence_length: np.ndarray = field(default_factory=lambda: np.array([]))
     cum_log_probs: Optional[np.ndarray] = None
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
     sequence_index: Optional[np.ndarray] = None
+    kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
+    kv_cache_reused_blocks: Optional[np.ndarray] = None
+    kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
 
 
 @dataclass
 class Response:
-    text_output: np.ndarray = np.array([])
+    text_output: np.ndarray = field(default_factory=lambda: np.array([]))
     cum_log_probs: Optional[np.ndarray] = None
     output_log_probs: Optional[np.ndarray] = None
     context_logits: Optional[np.ndarray] = None
     generation_logits: Optional[np.ndarray] = None
     batch_index: Optional[np.ndarray] = None
     sequence_index: Optional[np.ndarray] = None
+    kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
+    kv_cache_reused_blocks: Optional[np.ndarray] = None
+    kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
 
     def __eq__(self, o) -> bool:
         """Just for testing"""
@@ -188,7 +201,14 @@ class Response:
                 and np.array_equal(self.context_logits, o.context_logits)
                 and np.array_equal(self.generation_logits, o.generation_logits)
                 and np.array_equal(self.batch_index, o.batch_index)
-                and np.array_equal(self.sequence_index, o.sequence_index))
+                and np.array_equal(self.sequence_index, o.sequence_index)
+                and np.array_equal(self.sequence_index, o.sequence_index)
+                and np.array_equal(self.kv_cache_alloc_new_blocks,
+                                   o.kv_cache_alloc_new_blocks)
+                and np.array_equal(self.kv_cache_reused_blocks,
+                                   o.kv_cache_reused_blocks)
+                and np.array_equal(self.kv_cache_alloc_total_blocks,
+                                   o.kv_cache_alloc_total_blocks))
 
 
 class Decoder:
@@ -210,7 +230,8 @@ class Decoder:
 
         multimodal_enc_response = None
         if is_multimodal:
-            multimodal_enc_response = self._multimodal_enc_generate(request)
+            multimodal_enc_response = self._multimodal_enc_generate(
+                request, preproc_response)
 
         if speculative_decoding:
             if batch_size > 1:

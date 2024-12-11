@@ -5,6 +5,7 @@ The following multimodal model is supported in tensorrtllm_backend:
 * BLIP2-OPT
 * LLAVA
 * VILA
+* LLaVA OneVision
 * MLLAMA
 
 For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM multimodal examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/multimodal).
@@ -54,6 +55,12 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
     export VILA_PATH="tmp/hf_models/VILA"
     git clone https://github.com/Efficient-Large-Model/VILA.git ${VILA_PATH}
+
+    # For LLaVA OneVision
+    pip install -r all_models/multimodal/requirements-llava-onevision.txt
+
+    export MODEL_NAME="llava-onevision-qwen2-7b-ov-hf"
+    git clone https://huggingface.co/llava-hf/${MODEL_NAME} tmp/hf_models/${MODEL_NAME}
 
     # For MLLAMA
     pip install -r all_models/multimodal/requirements-mllama.txt
@@ -120,6 +127,23 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
     python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type vila --vila_path ${VILA_PATH} --max_batch_size 32 #max_batch_size * max_num_images_per_request since vila support multiple images inference
 
+    # For LLaVA OneVision
+    python tensorrt_llm/examples/qwen/convert_checkpoint.py \
+        --model_dir ${HF_MODEL_PATH} \
+        --output_dir ${UNIFIED_CKPT_PATH} \
+        --dtype float16
+
+    trtllm-build \
+        --checkpoint_dir ${UNIFIED_CKPT_PATH} \
+        --output_dir ${ENGINE_PATH} \
+        --gemm_plugin float16 \
+        --max_batch_size 1 \
+        --max_input_len  7500 \
+        --max_seq_len  7600 \
+        --max_multimodal_len 7300 # max_batch_size * num_visual_features(depends on the image size or the specified video num frame)
+
+    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type llava_onevision --max_batch_size 16 # max_batch_size * patch for image or frame for video
+
     # For MLLAMA
     python tensorrt_llm/examples/mllama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
@@ -165,7 +189,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders
 
     # Newly added for multimodal
-    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE}
+    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH}
     ```
     > **NOTE**:
     >
@@ -186,6 +210,8 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```
 
     > **NOTE**:
+    > If there is an error associated with 'MPI_Init_thread', please do `export PMIX_MCA_gds=hash`'
+    >
     > When launching the server, since the prompt_embedding_table is in GPU memory, we need to set the CUDA pool memory for inter-step communication. For example, when we have a shape of (1, 576, 4096) promp_embedding table, we would need 300MB of CUDA pool memory, so we set 30MB to have some GPU buffers. (2(fp16=>2bytes) * 576 * 4096 * 8(max_batch_size) = 18,874,368)
     >
     > Also, the tensorrt_llm initialization assumes using another GPU, we need to initialize it but not use them.
@@ -258,10 +284,19 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
    ```
    You can also send requests with base64 encoded images. Just replace the url above with `data:image/jpeg;base64,<base64_encoded_image>`.
 
+8. Send request with video input
+    ```bash
+    python tools/multimodal/client.py --text "Why is this video funny?" --video sample_demo_1.mp4 --video_num_frames 8 --request-output-len 30 --model_type llava_onevision  --end-id 151645
+
+    [beam 0 ]:
+    user
+    Why is this video funny?assistant
+    The video is funny because the child's actions are playful and exaggerated, as if they are reading the book with great enthusiasm.
+    [INFO] Latency: 507.537 ms
+    ```
+
 > **NOTE**:
 > Please ignore any exception thrown with the output. It's a known issue to be fixed.
->
-> If there is an error associated with 'MPI_Init_thread', please do `export PMIX_MCA_gds=hash`'
 >
 > When `enable_kv_cache_reuse` is set to true, the `prompt_table_extra_id` must be specified in the requests. The `prompt_table_extra_id` is a unique identifier representing the image (or prompt table), the same image uses the same id. The data type is `uint64`, and the minimum value is 1.
 
