@@ -1,4 +1,29 @@
 #!/usr/bin/python
+# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
 import sys
@@ -51,6 +76,7 @@ def prepare_inputs(prompt,
                    return_log_probs_data,
                    return_context_logits_data,
                    return_generation_logits_data,
+                   return_kv_cache_reuse_stats_data,
                    end_id,
                    pad_id,
                    num_draft_tokens=0,
@@ -158,6 +184,10 @@ def prepare_inputs(prompt,
 
         inputs["lora_task_id"] = np.array([[lora_task_id]], dtype=np.uint64)
 
+    if return_kv_cache_reuse_stats_data is not None:
+        inputs[
+            "return_kv_cache_reuse_stats"] = return_kv_cache_reuse_stats_data
+
     return inputs
 
 
@@ -180,6 +210,7 @@ def run_inference(triton_client,
                   return_log_probs_data,
                   return_context_logits_data,
                   return_generation_logits_data,
+                  return_kv_cache_reuse_stats_data,
                   end_id,
                   pad_id,
                   batch_inputs,
@@ -204,7 +235,8 @@ def run_inference(triton_client,
                            stop_words, bad_words, embedding_bias_words,
                            embedding_bias_weights, streaming, beam_width,
                            return_log_probs_data, return_context_logits_data,
-                           return_generation_logits_data, end_id, pad_id,
+                           return_generation_logits_data,
+                           return_kv_cache_reuse_stats_data, end_id, pad_id,
                            num_draft_tokens, use_draft_logits,
                            num_return_sequences, lora_dir, lora_task_id,
                            exclude_input_in_output))
@@ -228,7 +260,7 @@ def run_inference(triton_client,
         raise Exception(
             "check_outputs flag only works with beam_width == 1 currently")
 
-    #Only include needed outputs
+    # Only include needed outputs
     outputs = []
     outputs.append(grpcclient.InferRequestedOutput("text_output"))
     if return_log_probs_data is not None:
@@ -238,10 +270,17 @@ def run_inference(triton_client,
         outputs.append(grpcclient.InferRequestedOutput("context_logits"))
     if return_generation_logits_data is not None:
         outputs.append(grpcclient.InferRequestedOutput("generation_logits"))
-    if num_return_sequences is not None:
+    if num_return_sequences is not None and num_return_sequences > 1:
         outputs.append(grpcclient.InferRequestedOutput("sequence_index"))
     if batch_inputs:
         outputs.append(grpcclient.InferRequestedOutput("batch_index"))
+    if return_kv_cache_reuse_stats_data is not None:
+        outputs.append(
+            grpcclient.InferRequestedOutput("kv_cache_alloc_new_blocks"))
+        outputs.append(
+            grpcclient.InferRequestedOutput("kv_cache_reused_blocks"))
+        outputs.append(
+            grpcclient.InferRequestedOutput("kv_cache_alloc_total_blocks"))
 
     output_texts = []
     user_data = UserData()
@@ -319,6 +358,24 @@ def run_inference(triton_client,
                     print(
                         f"generation_logits.shape: {generation_logits.shape}")
                     print(f"generation_logits: {generation_logits}")
+
+                if return_kv_cache_reuse_stats_data is not None:
+                    kv_cache_alloc_new_blocks = result.as_numpy(
+                        "kv_cache_alloc_new_blocks")[0][0]
+                    kv_cache_reused_blocks = result.as_numpy(
+                        "kv_cache_reused_blocks")[0][0]
+                    kv_cache_alloc_total_blocks = result.as_numpy(
+                        "kv_cache_alloc_total_blocks")[0][0]
+                    if verbose:
+                        print(
+                            f"kv_cache_alloc_new_blocks: {kv_cache_alloc_new_blocks}"
+                        )
+                        print(
+                            f"kv_cache_reused_blocks: {kv_cache_reused_blocks}"
+                        )
+                        print(
+                            f"kv_cache_alloc_total_blocks: {kv_cache_alloc_total_blocks}"
+                        )
 
         if streaming and beam_width == 1:
             if verbose:
@@ -506,6 +563,14 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "--return-kv-cache-reuse-stats",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Return per-request kv cache reuse stats",
+    )
+
+    parser.add_argument(
         '--batch-inputs',
         action="store_true",
         required=False,
@@ -567,6 +632,11 @@ if __name__ == '__main__':
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
+    return_kv_cache_reuse_stats_data = None
+    if FLAGS.return_kv_cache_reuse_stats:
+        return_kv_cache_reuse_stats_data = np.array(
+            [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
+
     prompts, output_texts = run_inference(
         client,
         FLAGS.prompt,
@@ -587,6 +657,7 @@ if __name__ == '__main__':
         return_log_probs_data,
         return_context_logits_data,
         return_generation_logits_data,
+        return_kv_cache_reuse_stats_data,
         FLAGS.end_id,
         FLAGS.pad_id,
         FLAGS.batch_inputs,

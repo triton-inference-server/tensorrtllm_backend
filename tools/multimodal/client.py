@@ -80,6 +80,30 @@ def load_image(image_path):
     return image
 
 
+def load_video(video_path, num_of_frames):
+    import av
+    container = av.open(video_path)
+    total_frames = container.streams.video[0].frames
+    indices = np.arange(0, total_frames,
+                        total_frames / num_of_frames).astype(int)
+
+    def read_video_pyav(container, indices):
+
+        frames = []
+        container.seek(0)
+        start_index = indices[0]
+        end_index = indices[-1]
+        for i, frame in enumerate(container.decode(video=0)):
+            if i > end_index:
+                break
+            if i >= start_index and i in indices:
+                frames.append(frame)
+        return np.stack([x.to_ndarray(format="rgb24") for x in frames])
+
+    video = read_video_pyav(container, indices)
+    return video
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -111,6 +135,21 @@ if __name__ == "__main__":
         default=
         'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png',
         help='Input image')
+
+    parser.add_argument('--video',
+                        type=str,
+                        required=False,
+                        default=None,
+                        help='Input video')
+
+    parser.add_argument(
+        '--video_num_frames',
+        type=int,
+        required=False,
+        default=None,
+        help=
+        'The number of frames sampled from the video in the Llava-OneVision model.'
+    )
 
     parser.add_argument('--end-id',
                         type=int,
@@ -197,22 +236,26 @@ if __name__ == "__main__":
         help=
         "When enable kv cache reuse, we need a unique id to determine whether the images are the same. The type of extra id is uint64, and its range is from 1 to the maximum value of uint64.",
     )
-    parser.add_argument("--model_type",
-                        required=True,
-                        choices=['blip2', 'llava', 'vila', 'mllama'],
-                        help="Model type")
+    parser.add_argument(
+        "--model_type",
+        required=True,
+        choices=['blip2', 'llava', 'vila', 'mllama', 'llava_onevision'],
+        help="Model type")
     parser.add_argument("--hf_model_dir",
                         required=False,
                         type=str,
                         default=None,
                         help="path to the model directory")
     FLAGS = parser.parse_args()
-    # load and process images
+    # load and process images or video
     if 'vila' in FLAGS.model_type:
         image_paths = FLAGS.image.split(",")
         raw_image = []
         for image_path in image_paths:
             raw_image.append(load_image(image_path))
+    elif FLAGS.video is not None:
+        assert FLAGS.video_num_frames is not None, "Number of frames should be provided for video input."
+        raw_video = load_video(FLAGS.video, FLAGS.video_num_frames)
     else:
         raw_image = load_image(FLAGS.image)
 
@@ -225,7 +268,7 @@ if __name__ == "__main__":
                 "Salesforce/blip2-opt-2.7b")
         image = processor(raw_image, FLAGS.text,
                           return_tensors="pt")['pixel_values']
-    elif 'llava' in FLAGS.model_type:
+    elif FLAGS.model_type == 'llava':
         if FLAGS.hf_model_dir is not None and os.path.exists(
                 FLAGS.hf_model_dir):
             processor = AutoProcessor.from_pretrained(FLAGS.hf_model_dir)
@@ -259,6 +302,13 @@ if __name__ == "__main__":
             FLAGS.text = image_tag + FLAGS.text
         image_data = np.array([[raw_image]])
         image_input_name = "image_bytes_input"
+    elif 'llava_onevision' in FLAGS.model_type:
+        if FLAGS.video is not None:
+            image_data = np.array([raw_video])
+            image_input_name = "video_bytes_input"
+        else:
+            image_data = np.array([[raw_image]])
+            image_input_name = "image_bytes_input"
     else:
         image = image.unsqueeze(0)
         image_data = image.numpy().astype(np.float16)

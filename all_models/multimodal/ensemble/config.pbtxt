@@ -57,6 +57,12 @@ input [
     dims: [ 1 ]
     optional: true
   },
+    {
+    name: "video_bytes_input"
+    data_type: TYPE_UINT8
+    dims: [ -1, -1, -1, -1 ]
+    optional: true
+  },
   {
     name: "max_tokens"
     data_type: TYPE_INT32
@@ -248,6 +254,10 @@ ensemble_scheduling {
         value: "image_url_input"
       }
       input_map {
+        key: "VIDEO_BYTES"
+        value: "video_bytes_input"
+      }
+      input_map {
         key: "REQUEST_OUTPUT_LEN"
         value: "max_tokens"
       }
@@ -312,6 +322,14 @@ ensemble_scheduling {
         value: "_CROSS_ATTENTION_MASK"
       }
       output_map {
+        key: "IMAGE_SIZES"
+        value: "_IMAGE_SIZES"
+      }
+      output_map {
+        key: "IS_VIDEO_INPUT"
+        value: "_IS_VIDEO_INPUT"
+      }
+      output_map {
         key: "REQUEST_OUTPUT_LEN"
         value: "_REQUEST_OUTPUT_LEN"
       }
@@ -366,6 +384,14 @@ ensemble_scheduling {
       input_map {
        key: "max_tokens"
        value: "_REQUEST_OUTPUT_LEN"
+      }
+      input_map {
+        key: "image_sizes"
+        value: "_IMAGE_SIZES"
+      }
+      input_map {
+        key: "is_video_input"
+        value: "_IS_VIDEO_INPUT"
       }
       output_map {
         key: "OUT_PROMPT_EMBEDDING_TABLE"

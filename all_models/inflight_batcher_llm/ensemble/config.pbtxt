@@ -153,6 +153,12 @@ input [
     optional: true
   },
   {
+    name: "return_kv_cache_reuse_stats"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "beam_width"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -269,6 +275,21 @@ output [
   },
   {
     name: "sequence_index"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_new_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_reused_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_total_blocks"
     data_type: TYPE_INT32
     dims: [ 1 ]
   }
@@ -451,6 +472,10 @@ ensemble_scheduling {
           value: "return_generation_logits"
       }
       input_map {
+          key: "return_kv_cache_reuse_stats"
+          value: "return_kv_cache_reuse_stats"
+      }
+      input_map {
           key: "num_return_sequences"
           value: "num_return_sequences"
       }
@@ -525,6 +550,18 @@ ensemble_scheduling {
       output_map {
         key: "sequence_index"
         value: "sequence_index"
+      },
+      output_map {
+        key: "kv_cache_alloc_new_blocks"
+        value: "kv_cache_alloc_new_blocks"
+      },
+      output_map {
+        key: "kv_cache_reused_blocks"
+        value: "kv_cache_reused_blocks"
+      },
+      output_map {
+        key: "kv_cache_alloc_total_blocks"
+        value: "kv_cache_alloc_total_blocks"
       }
     },
     {

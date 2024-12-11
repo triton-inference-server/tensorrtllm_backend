@@ -46,7 +46,8 @@ function build_tensorrt_engine_inflight_batcher {
     local OUTPUT_DIR=inflight_${NUM_GPUS}_gpu/
     # ./c-model/gpt2/ must already exist (it will if build_base_model
     # has already been run)
-    extra_args=""
+    # max_batch_size set to 128 to avoid OOM errors
+    # enable use_paged_context_fmha for KV cache reuse
     trtllm-build --checkpoint_dir "${GPT_MODEL_DIR}" \
             --gpt_attention_plugin float16 \
             --remove_input_padding enable \
@@ -55,7 +56,8 @@ function build_tensorrt_engine_inflight_batcher {
             --workers "${NUM_GPUS}" \
             --max_beam_width 2 \
             --output_dir "${OUTPUT_DIR}" \
-            ${extra_args}
+            --max_batch_size 128 \
+            --use_paged_context_fmha enable
     cd ${BASE_DIR}
 }
 
