@@ -143,6 +143,12 @@ def llm_backend_gpt_example_root(llm_backend_root):
 
 
 @pytest.fixture(scope="session")
+def llm_backend_all_models_root(llm_backend_root):
+    backend_all_models_root = os.path.join(llm_backend_root, "all_models")
+    return backend_all_models_root
+
+
+@pytest.fixture(scope="session")
 def llm_backend_whisper_example_root(llm_backend_root):
     backend_whisper_example_root = os.path.join(llm_backend_root, "tools",
                                                 "whisper")
@@ -239,6 +245,13 @@ def tensorrt_llm_llama_example_root(llm_backend_root):
     llm_llama_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
                                           "examples", "llama")
     return llm_llama_example_root
+
+
+@pytest.fixture(scope="session")
+def tensorrt_llm_qwen_example_root(llm_backend_root):
+    llm_qwen_example_root = os.path.join(llm_backend_root, "tensorrt_llm",
+                                         "examples", "qwen")
+    return llm_qwen_example_root
 
 
 @pytest.fixture(scope="session")
@@ -409,6 +422,31 @@ def blip2_opt_model_root():
         blip2_opt_model_root
     ), f"{blip2_opt_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
     return blip2_opt_model_root
+
+
+@pytest.fixture(scope="session")
+def llava_onevision_model_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    llava_onevision_model_root = os.path.join(
+        models_root, "llava-onevision-qwen2-7b-ov-hf")
+
+    assert os.path.exists(
+        llava_onevision_model_root
+    ), f"{llava_onevision_model_root} does not exist under NFS LLM_MODELS_ROOT dir"
+    return llava_onevision_model_root
+
+
+@pytest.fixture(scope="session")
+def test_video_root():
+    models_root = llm_models_root()
+    assert models_root, "Did you set LLM_MODELS_ROOT?"
+    test_video = os.path.join(models_root, "video-neva", "test_video")
+
+    assert os.path.exists(
+        test_video
+    ), f"{test_video} does not exist under NFS LLM_MODELS_ROOT dir"
+    return test_video
 
 
 @pytest.fixture(scope="session")

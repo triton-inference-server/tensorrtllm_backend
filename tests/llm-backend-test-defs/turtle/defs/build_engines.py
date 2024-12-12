@@ -504,6 +504,73 @@ def prepare_llava_engine(tensorrt_llm_multimodal_example_root,
     return engine_dir, visual_engine_dir
 
 
+def prepare_llava_onevision_engine(tensorrt_llm_multimodal_example_root,
+                                   tensorrt_llm_qwen_example_root,
+                                   llava_onevision_model_root,
+                                   llm_backend_all_models_root):
+    # Convert Qwen from HF
+    ckpt_dir = os.path.join(tensorrt_llm_multimodal_example_root, "model_dir",
+                            "llava_onevision_7b")
+    convert_cmd = [
+        "python3",
+        f"{tensorrt_llm_qwen_example_root}/convert_checkpoint.py",
+        f"--model_dir={llava_onevision_model_root}",
+        f"--output_dir={ckpt_dir}",
+        "--dtype=float16",
+    ]
+
+    # Build Qwen
+    engine_dir = os.path.join(tensorrt_llm_multimodal_example_root,
+                              "engine_dir", "llava_onevision_7b")
+    visual_engine_dir = os.path.join(tensorrt_llm_multimodal_example_root,
+                                     "visual_engine_dir", "llava_onevision_7b")
+
+    build_cmd = [
+        "trtllm-build",
+        f"--checkpoint_dir={ckpt_dir}",
+        "--gemm_plugin=float16",
+        "--max_batch_size=1",
+        "--max_input_len=7500",
+        "--max_seq_len=7600",
+        "--max_multimodal_len=7300",
+        f"--output_dir={engine_dir}",
+    ]
+
+    build_visual_engine_cmd = [
+        "python3",
+        "build_visual_engine.py",
+        "--model_type=llava_onevision",
+        f"--model_path={llava_onevision_model_root}",
+        f"--output_dir={visual_engine_dir}",
+        "--max_batch_size=16",
+    ]
+
+    append_timing_cache_args(build_cmd)
+    convert_cmd = " ".join(convert_cmd)
+    build_cmd = " ".join(build_cmd)
+    build_visual_engine_cmd = " ".join(build_visual_engine_cmd)
+    if not os.path.exists(engine_dir):
+        install_requirement_cmd = "pip3 install -r multimodal/requirements-llava-onevision.txt"
+        check_call(install_requirement_cmd,
+                   shell=True,
+                   cwd=llm_backend_all_models_root)
+        check_call(convert_cmd, shell=True)
+        check_call(build_cmd, shell=True)
+        check_call(build_visual_engine_cmd,
+                   shell=True,
+                   cwd=tensorrt_llm_multimodal_example_root)
+    else:
+        print_info(f"Reusing engine: {engine_dir}")
+        print_info(f"Skipped: {convert_cmd}")
+        print_info(f"Skipped: {build_cmd}")
+        print_info(f"Skipped: {build_visual_engine_cmd}")
+
+    assert os.path.exists(engine_dir), f"{engine_dir} does not exists."
+    assert os.path.exists(
+        visual_engine_dir), f"{visual_engine_dir} does not exists."
+    return engine_dir, visual_engine_dir
+
+
 def prepare_vila_engine(tensorrt_llm_multimodal_example_root,
                         tensorrt_llm_llama_example_root, vila_model_root,
                         vila_repo_root):

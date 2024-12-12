@@ -20,3 +20,5 @@ test_triton_llm.py::test_gpt_speculative_decoding_bls[True-False-1-False-True-Tr
 test_triton_llm.py::test_gpt_speculative_decoding_bls[True-False-1-False-True-True-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-ensemble]
 test_triton_llm.py::test_whisper_large_v3_ifb[True-1-top_k_top_p-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-0.5-guaranteed_no_evict-24000-1-1-1-False-ensemble]
 test_triton_rcca.py::test_rcca_bug_4934893[Temperature:0.5-TOP_P:0.95-TOP_K:10-False-1-False-True-False-0-2048-enableDecoupleMode-inflight_fused_batching-disableTrtOverlap-max_utilization-1-1-1-False-ensemble]
+test_triton_llm.py::test_llava_onevision[test_video-False-1-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-guaranteed_no_evict-1-1-1-False-tensorrt_llm_bls]
+test_triton_llm.py::test_llava_onevision[test_basic-False-1-False-True-False-0-128-disableDecoupleMode-inflight_fused_batching-disableTrtOverlap-0.2-max_utilization-1-1-1-False-tensorrt_llm_bls]

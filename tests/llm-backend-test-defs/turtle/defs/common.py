@@ -183,7 +183,8 @@ def modify_ib_config_pbtxt(
 
         check_call(
             f"python3 {fill_template_py} -i {multimodal_enc_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
-            f"visual_model_path:{VISUAL_ENGINE_PATH},encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}",
+            f"visual_model_path:{VISUAL_ENGINE_PATH},encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
+            f"hf_model_path:{TOKENIZER_PATH}",
             shell=True)
         check_call(
             f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} tensorrt_llm_model_name:tensorrt_llm," \
@@ -296,6 +297,13 @@ def validate_by_sequence_matcher(output_result, golden_results, threshold):
         pytest.fail(
             f"highest_similarity_ratio {highest_similarity_ratio} is less than {threshold}"
         )
+
+
+def validate_by_keyword(output_result, keyword):
+    if keyword not in output_result:
+        pytest.fail(f"FAIL! \"{keyword}\" not in output:\n{output_result}")
+    else:
+        print_info(f"PASS! \"{keyword}\" in output:\n{output_result}")
 
 
 def run_cpp_backend_tests(feature_name, llm_backend_venv,
