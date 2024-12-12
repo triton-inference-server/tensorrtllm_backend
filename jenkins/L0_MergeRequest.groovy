@@ -773,13 +773,11 @@ pipeline {
                   runTRTLLMBackendTest("python-multimodal-encoders-unit-tests")
                 }
               }
-              // Skipping this test to unblock the release
-              // need to check with Triton team
-              // stage("Test Triton extensive") {
-              //   steps {
-              //     runTRTLLMBackendTest("triton-extensive")
-              //   }
-              // }
+              stage("Test Triton extensive") {
+                steps {
+                  runTRTLLMBackendTest("triton-extensive")
+                }
+              }
               stage("Test blip2-opt") {
                 steps {
                   runTRTLLMBackendTest("blip2-opt")

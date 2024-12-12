@@ -106,8 +106,10 @@ function reset_model_repo {
 }
 
 function kill_server {
-    pkill -9 -f trtllmExecutorWorker || true
-    pkill -9 -f tritonserver
+    pgrep tritonserver | xargs kill -SIGINT
+    if pgrep -x "trtllmExecutorWorker" > /dev/null; then
+        pkill -SIGINT -f "trtllmExecutorWorker"
+    fi
 }
 
 function wait_for_server_terminated {
@@ -161,10 +163,7 @@ prerun_kill_triton_server || true
 rm -f *.log *.out *.txt
 # Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
-python3 -m pip install --upgrade pip && \
-    pip3 install tritonclient[all] && \
-    pip3 install pandas && \
-    pip3 install tabulate
+pip3 install --upgrade tritonclient[all] pandas tabulate
 
 export AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
 
@@ -214,7 +213,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         exit 1
     fi
 
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # inflight batching OFF (V1)
     # streaming OFF
@@ -241,7 +240,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing v1 benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -255,7 +254,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing v1 end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -265,7 +264,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_v1_no_stream_metrics.out
 
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # inflight batching ON
     # streaming OFF
@@ -292,7 +291,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching benchmark_core_model test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -306,7 +305,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -316,7 +315,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_no_stream_metrics.out
 
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # Start a clean server to verify token metrics are being
     # reported correctly
@@ -345,7 +344,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
 
@@ -355,7 +354,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     set +e
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
     replace_config_tags 'decoupled: True' 'decoupled: False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
 
     # Start a clean server to verify base metrics are being
@@ -384,7 +383,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     set +e
 
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # Start a clean server to verify base metrics are being
     # reported correctly
@@ -413,7 +412,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     set +e
 
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # World size must be 1 when using multi-model
     if [ "${NUM_GPU}" == "0" ]; then
@@ -438,7 +437,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
             cat $SERVER_LOG
             echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
             kill_server
-            # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+            wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
             RET=1
         fi
         set +e
@@ -448,7 +447,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         curl localhost:8002/metrics -o ${NUM_GPU}gpu_multi_model_metrics.out
 
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
     fi
 
     # inflight batching ON
@@ -474,7 +473,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
         cat $SERVER_LOG
         echo -e "\n***\n*** Error executing inflight batching end-to-end streaming test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
         kill_server
-        # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
         RET=1
     fi
     set +e
@@ -484,7 +483,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     curl localhost:8002/metrics -o ${NUM_GPU}gpu_IFB_stream_metrics.out
 
     kill_server
-    # wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
     # Per-request KV cache reuse stats
     # Use large number of tokens for KV cache reuse
@@ -580,7 +579,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing end_to_end_grpc_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
                                 kill_server
-                                # wait_for_server_terminated ${SERVER_PID[@]}
+                                wait_for_server_terminated ${SERVER_PID[@]}
                                 RET=1
                             fi
                             set -e
@@ -592,7 +591,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing inflight_batcher_llm_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
                                 kill_server
-                                # wait_for_server_terminated ${SERVER_PID[@]}
+                                wait_for_server_terminated ${SERVER_PID[@]}
                                 RET=1
                             fi
                             set -e
@@ -616,9 +615,9 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                     fi
                 done
                 kill_server
-                # wait_for_server_terminated ${SERVER_PID[@]}
+                wait_for_server_terminated ${SERVER_PID[@]}
                 # Add a delay to make sure the memory is freed before starting the next test
-                sleep 5
+                sleep 10
             done
         done
     done
