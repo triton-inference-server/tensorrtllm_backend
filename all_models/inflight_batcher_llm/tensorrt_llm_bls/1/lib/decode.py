@@ -324,8 +324,8 @@ class Decoder:
 
             # Evaluate criteria to stop generation loop.
             # If we've hit or exceeded the max output length, should stop
-            length_stop = (len(input_ids) >=
-                           len(prompt_input_ids) + output_len)
+            length_stop = (len(input_ids)
+                           >= len(prompt_input_ids) + output_len)
             if length_stop:
                 break
             # If draft and target have same outputs, should stop. Normally target should return 1 more token.
@@ -401,9 +401,10 @@ class Decoder:
             batch_index = batch_index[0][0] if batch_index is not None else 0
 
             self._accumulated_tokens[batch_index] = new_tokens if (
-                self._accumulated_tokens[batch_index] is None
-            ) else np.concatenate(
-                (self._accumulated_tokens[batch_index], new_tokens), axis=2)
+                self._accumulated_tokens[batch_index]
+                is None) else np.concatenate(
+                    (self._accumulated_tokens[batch_index], new_tokens),
+                    axis=2)
             sequence_lengths = np.array(
                 [[self._accumulated_tokens[batch_index].shape[2]]],
                 dtype=np.int32)

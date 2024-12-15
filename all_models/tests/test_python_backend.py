@@ -163,9 +163,10 @@ def triton_request() -> MockTritonRequest:
         np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.int32),
         "prompt_vocab_size": [2],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return MockTritonRequest({
+        k: MockTritonTensor(k, np.array(v))
+        for k, v in inputs.items()
+    })
 
 
 @pytest.fixture
@@ -218,9 +219,10 @@ def batched_triton_request() -> MockTritonRequest:
                  dtype=np.int32),
         "prompt_vocab_size": [2],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return MockTritonRequest({
+        k: MockTritonTensor(k, np.array(v))
+        for k, v in inputs.items()
+    })
 
 
 @pytest.fixture
@@ -229,9 +231,10 @@ def triton_request_minimal() -> MockTritonRequest:
         "input_ids": [[28524, 287, 5093, 12]],
         "request_output_len": [[16]],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return MockTritonRequest({
+        k: MockTritonTensor(k, np.array(v))
+        for k, v in inputs.items()
+    })
 
 
 @pytest.fixture
