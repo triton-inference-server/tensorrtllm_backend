@@ -257,11 +257,11 @@ if __name__ == '__main__':
     try:
         client_target = grpcclient.InferenceServerClient(url=FLAGS.url_target)
         client_draft = grpcclient.InferenceServerClient(
-            url=FLAGS.url_draft) if (
-                FLAGS.url_target != FLAGS.url_draft) else client_target
+            url=FLAGS.url_draft) if (FLAGS.url_target
+                                     != FLAGS.url_draft) else client_target
         client_control = grpcclient.InferenceServerClient(
-            url=FLAGS.url_control) if (
-                FLAGS.url_target != FLAGS.url_control) else client_target
+            url=FLAGS.url_control) if (FLAGS.url_target
+                                       != FLAGS.url_control) else client_target
     except Exception as e:
         print("client creation failed: " + str(e))
         sys.exit(1)

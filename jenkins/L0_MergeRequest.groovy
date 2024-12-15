@@ -322,7 +322,6 @@ def runBuild()
     container("trt-llm-backend") {
       // Step 2: checking code style
       sh "pip3 install pre-commit"
-      sh "apt-get update && apt-get install -y 2to3"
       sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
       sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt"
       sh "cd ${BACKEND_ROOT} && pre-commit run -a"
