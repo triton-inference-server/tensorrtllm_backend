@@ -279,6 +279,93 @@ def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     return None
 
 
+def get_kv_cache_retention_config_from_request(request,
+                                               batch_size=1,
+                                               batch_index=0):
+
+    def get_tensor_and_check_length(name: str, expected_length: int):
+        tensor = get_input_tensor_by_name(request, name, batch_size,
+                                          batch_index)
+
+        if tensor is None:
+            raise RuntimeError(f"{name} must be provided.")
+
+        tensor = np.squeeze(tensor, axis=0)
+
+        if len(tensor) != expected_length:
+            raise RuntimeError(
+                f"Invalid {name} length. Expected length {expected_length}, got length {len(tensor)}"
+            )
+
+        return tensor
+
+    token_range_starts = get_input_tensor_by_name(
+        request, "retention_token_range_starts", batch_size, batch_index)
+
+    if token_range_starts is not None:
+        token_range_starts = np.squeeze(token_range_starts, axis=0)
+
+        token_range_ends = get_tensor_and_check_length(
+            "retention_token_range_ends", len(token_range_starts))
+        token_range_ends = [
+            None if end == -1 else end for end in token_range_ends
+        ]
+
+        token_range_priorities = get_tensor_and_check_length(
+            "retention_token_range_priorities", len(token_range_starts))
+
+        token_range_durations_ms = get_input_tensor_by_name(
+            request, "retention_token_range_durations_ms", batch_size,
+            batch_index)
+
+        if token_range_durations_ms is None:
+            token_range_durations_ms = [None] * len(token_range_starts)
+        else:
+            token_range_durations_ms = np.squeeze(token_range_durations_ms,
+                                                  axis=0)
+            token_range_durations_ms = [
+                None if duration == -1 else duration
+                for duration in token_range_durations_ms
+            ]
+
+            if len(token_range_durations_ms) != len(token_range_starts):
+                raise RuntimeError(
+                    f"Invalid retention_token_range_durations length. Expected length {len(token_range_starts)}, got length {len(token_range_durations_ms)}"
+                )
+
+        ranges = []
+
+        for start, end, priority, duration_ms in zip(token_range_starts,
+                                                     token_range_ends,
+                                                     token_range_priorities,
+                                                     token_range_durations_ms):
+            ranges.append(
+                trtllm.KvCacheRetentionConfig.TokenRangeRetentionConfig(
+                    token_start=start,
+                    token_end=end,
+                    priority=priority.item(),
+                    duration_ms=None if duration_ms is None else
+                    datetime.timedelta(milliseconds=duration_ms.item())))
+
+        decode_args = {}
+
+        decode_priority = get_input_scalar_by_name(
+            request, "retention_decode_priority", batch_size, batch_index)
+        if decode_priority is not None:
+            decode_args['decode_retention_priority'] = decode_priority
+
+        decode_duration_ms = get_input_scalar_by_name(
+            request, "retention_decode_duration_ms", batch_size, batch_index)
+        if decode_duration_ms is not None:
+            decode_args[
+                'decode_duration_ms'] = decode_duration_ms if decode_duration_ms != -1 else None
+
+        return trtllm.KvCacheRetentionConfig(
+            token_range_retention_configs=ranges, **decode_args)
+
+    return None
+
+
 def build_1_2_5_buckets(max_value: int) -> List[int]:
     """
     Builds a list of buckets with increasing powers of 10 multiplied by
@@ -375,6 +462,8 @@ def convert_request(request, exclude_input_from_output, decoupled):
             request, batch_size, batch_index, input_length)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
+        kv_cache_retention_config = get_kv_cache_retention_config_from_request(
+            request, batch_size, batch_index)
 
         # Inputs for mllama support
         encoder_input_features = get_input_tensor_by_name(
@@ -412,7 +501,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
                 external_draft_tokens_config=external_draft_tokens_config,
                 prompt_tuning_config=prompt_tuning_config,
                 lora_config=lora_config,
-            ))
+                kv_cache_retention_config=kv_cache_retention_config))
     return requests
 
 

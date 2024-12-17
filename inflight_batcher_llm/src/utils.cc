@@ -32,6 +32,9 @@ using namespace tensorrt_llm::batch_manager;
 namespace triton::backend::inflight_batcher_llm::utils
 {
 
+auto constexpr kRetentionNoExpirationTime = -1;
+auto constexpr kRetentionNoRangeEnd = -1;
+
 nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
 {
     if (data_type == TRITONSERVER_TYPE_INVALID)
@@ -652,6 +655,85 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
     return loraConfig;
 }
 
+std::optional<executor::KvCacheRetentionConfig> getKvCacheRetentionConfigFromTensors(InputTensors const& inputsTensors)
+{
+
+    if (inputsTensors.count(InputFieldsNames::retentionTokenRangeStarts))
+    {
+        std::vector<executor::SizeType32> tokenRangeStarts;
+        std::vector<executor::SizeType32> tokenRangeEnds;
+
+        utils::extractVector<executor::SizeType32>(
+            inputsTensors, InputFieldsNames::retentionTokenRangeStarts, tokenRangeStarts);
+
+        if (!utils::extractVector<executor::SizeType32>(
+                inputsTensors, InputFieldsNames::retentionTokenRangeEnds, tokenRangeEnds)
+            || tokenRangeStarts.size() != tokenRangeEnds.size())
+        {
+            throw std::runtime_error(
+                "retention_token_range_ends must be provided, and have the same length as "
+                "retention_token_range_starts");
+        }
+
+        std::vector<executor::RetentionPriority> priorities;
+
+        if (!utils::extractVector<executor::SizeType32>(
+                inputsTensors, InputFieldsNames::retentionTokenRangePriorities, priorities)
+            || priorities.size() != tokenRangeStarts.size())
+        {
+            throw std::runtime_error(
+                "retention_token_range_priorities must be provided, and have the same length as "
+                "retention_token_range_starts");
+        }
+
+        std::vector<std::optional<std::chrono::milliseconds>> durationsMs(tokenRangeStarts.size(), std::nullopt);
+
+        if (inputsTensors.count(InputFieldsNames::retentionTokenRangeDurations))
+        {
+            std::vector<executor::SizeType32> durationVector;
+            utils::extractVector<executor::SizeType32>(
+                inputsTensors, InputFieldsNames::retentionTokenRangeDurations, durationVector);
+
+            if (durationVector.size() != tokenRangeStarts.size())
+            {
+                throw std::runtime_error(
+                    "retention_token_range_durations_ms must have the same length as retention_token_range_starts");
+            }
+
+            for (size_t i = 0; i < durationVector.size(); i++)
+            {
+                durationsMs[i] = durationVector[i] != kRetentionNoExpirationTime
+                    ? std::optional(std::chrono::milliseconds(durationVector[i]))
+                    : std::nullopt;
+            }
+        }
+
+        auto decodePriority = executor::KvCacheRetentionConfig::kDefaultRetentionPriority;
+        std::optional<executor::SizeType32> decodeDurationMs = std::nullopt;
+
+        utils::extractSingleton<executor::RetentionPriority>(
+            inputsTensors, InputFieldsNames::retentionDecodePriority, decodePriority);
+
+        utils::extractOptionalSingleton<executor::SizeType32>(
+            inputsTensors, InputFieldsNames::retentionDecodeDuration, decodeDurationMs);
+
+        auto decodeDuration
+            = decodeDurationMs.has_value() ? std::optional(std::chrono::milliseconds(*decodeDurationMs)) : std::nullopt;
+
+        std::vector<executor::KvCacheRetentionConfig::TokenRangeRetentionConfig> tokenRanges;
+
+        for (size_t i = 0; i < tokenRangeStarts.size(); i++)
+        {
+            tokenRanges.emplace_back(tokenRangeStarts[i],
+                tokenRangeEnds[i] == kRetentionNoRangeEnd ? std::nullopt : std::optional(tokenRangeEnds[i]),
+                priorities[i], durationsMs[i]);
+        }
+
+        return executor::KvCacheRetentionConfig(tokenRanges, decodePriority, decodeDuration);
+    }
+    return std::nullopt;
+}
+
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
     executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits)
@@ -778,12 +860,14 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
 
+        auto kvCacheRetentionConfig = utils::getKvCacheRetentionConfigFromTensors(inputTensors);
+
         auto externalDraftTokensConfig
             = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, std::nullopt,
-            loraConfig, std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
+            loraConfig, std::nullopt, kvCacheRetentionConfig, std::nullopt, encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {

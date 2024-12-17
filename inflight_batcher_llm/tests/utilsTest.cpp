@@ -401,6 +401,20 @@ std::optional<tensorrt_llm::executor::Request> getRequest(
     pushTensor<int32_t>(
         inputsTensors, InputFieldsNames::loraConfig, nvinfer1::DataType::kINT32, {1, 3, 2}, {1, 1, 2, 3, 5, 8});
 
+    // KvCacheRetentionConfig
+    pushTensor<int32_t>(
+        inputsTensors, InputFieldsNames::retentionTokenRangeStarts, nvinfer1::DataType::kINT32, {3}, {0, 100, 200});
+    pushTensor<int32_t>(
+        inputsTensors, InputFieldsNames::retentionTokenRangeEnds, nvinfer1::DataType::kINT32, {3}, {100, 200, 300});
+    pushTensor<int32_t>(
+        inputsTensors, InputFieldsNames::retentionTokenRangePriorities, nvinfer1::DataType::kINT32, {3}, {70, 50, 20});
+    pushTensor<int32_t>(inputsTensors, InputFieldsNames::retentionTokenRangeDurations, nvinfer1::DataType::kINT32, {3},
+        {3000, 2000, 1000});
+    pushTensor<int32_t>(
+        inputsTensors, InputFieldsNames::retentionDecodePriority, nvinfer1::DataType::kINT32, {1}, {10});
+    pushTensor<int32_t>(
+        inputsTensors, InputFieldsNames::retentionDecodeDuration, nvinfer1::DataType::kINT32, {1}, {500});
+
     // ExternalDraftTokensConfig
     pushTensor<int32_t>(inputsTensors, InputFieldsNames::draftInputs, nvinfer1::DataType::kINT32, {4}, {1, 2, 3, 3});
     pushTensor<float>(
@@ -518,6 +532,19 @@ void checkRequest(tensorrt_llm::executor::Request const& request,
     EXPECT_EQ(loraConfig.getTaskId(), 87654);
     checkTensor<float>(loraConfig.getWeights().value(), {0.5, 0.6, 0.7, 0.8, 0.1, 0.1});
     checkTensor<int32_t>(loraConfig.getConfig().value(), {1, 1, 2, 3, 5, 8});
+
+    // KvCacheRetentionConfig
+    auto kvCacheRetentionConfig = request.getKvCacheRetentionConfig().value();
+
+    EXPECT_THAT(kvCacheRetentionConfig.getTokenRangeRetentionConfigs(),
+        testing::ContainerEq(std::vector<executor::KvCacheRetentionConfig::TokenRangeRetentionConfig>{
+            executor::KvCacheRetentionConfig::TokenRangeRetentionConfig(0, 100, 70, std::chrono::milliseconds(3000)),
+            executor::KvCacheRetentionConfig::TokenRangeRetentionConfig(100, 200, 50, std::chrono::milliseconds(2000)),
+            executor::KvCacheRetentionConfig::TokenRangeRetentionConfig(
+                200, 300, 20, std::chrono::milliseconds(1000))}));
+
+    EXPECT_EQ(kvCacheRetentionConfig.getDecodeRetentionPriority(), 10);
+    EXPECT_EQ(kvCacheRetentionConfig.getDecodeDurationMs(), std::chrono::milliseconds(500));
 
     // SamplingConfig
     auto samplingConfig = request.getSamplingConfig();
