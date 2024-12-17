@@ -102,6 +102,14 @@ struct InputFieldsNames
     static constexpr char const* draftInputs = "draft_input_ids";
     static constexpr char const* draftLogits = "draft_logits";
     static constexpr char const* draftAcceptanceThreshold = "draft_acceptance_threshold";
+
+    // KvCacheRetentionConfig
+    static constexpr char const* retentionTokenRangeStarts = "retention_token_range_starts";
+    static constexpr char const* retentionTokenRangeEnds = "retention_token_range_ends";
+    static constexpr char const* retentionTokenRangePriorities = "retention_token_range_priorities";
+    static constexpr char const* retentionTokenRangeDurations = "retention_token_range_durations_ms";
+    static constexpr char const* retentionDecodePriority = "retention_decode_priority";
+    static constexpr char const* retentionDecodeDuration = "retention_decode_duration_ms";
 };
 
 /// @brief Names of output fields
@@ -161,6 +169,9 @@ std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
 
 /// @brief Construct executor::LoraConfig from input tensors
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors);
+
+/// @brief Construct executor::KvCacheRetentionConfig from input tensors
+std::optional<executor::KvCacheRetentionConfig> getKvCacheRetentionConfigFromTensors(InputTensors const& inputsTensors);
 
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
