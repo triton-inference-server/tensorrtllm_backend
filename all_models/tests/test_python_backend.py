@@ -105,6 +105,14 @@ def mock_pb_utils_get_input_tensor_by_name_side_effect(
     return request.get_input_tensor_by_name(name)
 
 
+def make_mock_triton_request(
+        tensors: Dict[str, np.ndarray]) -> MockTritonRequest:
+    return MockTritonRequest({
+        k: MockTritonTensor(k, np.array(v))
+        for k, v in tensors.items()
+    })
+
+
 @pytest.fixture(autouse=True)
 def apply_patches():
     patch("model.pb_utils.Tensor", new=MockTritonTensor).start()
@@ -161,11 +169,15 @@ def triton_request() -> MockTritonRequest:
         np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float16),
         "lora_config":
         np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.int32),
+        "retention_token_range_starts":
+        np.array([[0, 100]], dtype=np.int32),
+        "retention_token_range_ends":
+        np.array([[100, 200]], dtype=np.int32),
+        "retention_token_range_priorities":
+        np.array([[100, 50]], dtype=np.int32),
         "prompt_vocab_size": [2],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return make_mock_triton_request(inputs)
 
 
 @pytest.fixture
@@ -216,11 +228,15 @@ def batched_triton_request() -> MockTritonRequest:
         "lora_config":
         np.array([[[1, 2, 3], [4, 5, 6]], [[11, 12, 13], [14, 15, 16]]],
                  dtype=np.int32),
+        "retention_token_range_starts":
+        np.array([[0, 100], [0, 200]], dtype=np.int32),
+        "retention_token_range_ends":
+        np.array([[100, 200], [200, 300]], dtype=np.int32),
+        "retention_token_range_priorities":
+        np.array([[100, 50], [0, 0]], dtype=np.int32),
         "prompt_vocab_size": [2],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return make_mock_triton_request(inputs)
 
 
 @pytest.fixture
@@ -229,9 +245,10 @@ def triton_request_minimal() -> MockTritonRequest:
         "input_ids": [[28524, 287, 5093, 12]],
         "request_output_len": [[16]],
     }
-    return MockTritonRequest(
-        {k: MockTritonTensor(k, np.array(v))
-         for k, v in inputs.items()})
+    return MockTritonRequest({
+        k: MockTritonTensor(k, np.array(v))
+        for k, v in inputs.items()
+    })
 
 
 @pytest.fixture
@@ -369,6 +386,17 @@ def check_converted_request(converted):
     assert (converted.lora_config.config == torch.tensor([[1, 2, 3],
                                                           [4, 5, 6]])).all()
 
+    assert isinstance(converted.kv_cache_retention_config,
+                      trtllm.KvCacheRetentionConfig)
+    assert len(
+        converted.kv_cache_retention_config.token_range_retention_configs)
+    assert converted.kv_cache_retention_config.token_range_retention_configs[
+        0].token_start == 0
+    assert converted.kv_cache_retention_config.token_range_retention_configs[
+        0].token_end == 100
+    assert converted.kv_cache_retention_config.token_range_retention_configs[
+        0].priority == 100
+
     assert converted.sampling_config.beam_width == 2
     assert converted.sampling_config.top_k == 1
     assert converted.sampling_config.top_p is None
@@ -483,6 +511,7 @@ def test_convert_request_minimal(triton_request_minimal: MockTritonRequest):
     assert converted.external_draft_tokens_config is None
     assert converted.prompt_tuning_config is None
     assert converted.lora_config is None
+    assert converted.kv_cache_retention_config is None
 
     assert converted.sampling_config.beam_width == 1
     assert converted.sampling_config.top_k is None
@@ -504,6 +533,61 @@ def test_convert_request_minimal(triton_request_minimal: MockTritonRequest):
     assert converted.output_config.return_context_logits == False
     assert converted.output_config.return_generation_logits == False
     assert converted.output_config.exclude_input_from_output == False
+
+
+def test_kv_cache_retention_config_invalid():
+
+    def check_retention_config(d: Dict[str, np.ndarray], is_valid: bool):
+        req = make_mock_triton_request(d)
+        if is_valid:
+            get_kv_cache_retention_config_from_request(req, 1, 0)
+        else:
+            with pytest.raises(RuntimeError):
+                get_kv_cache_retention_config_from_request(req, 1, 0)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0, 100]]),
+            "retention_token_range_ends": np.array([[100, 200]])
+        }, False)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0, 100]]),
+            "retention_token_range_ends": np.array([[100, 200]]),
+            "retention_token_range_priorities": np.array([[100]])
+        }, False)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0, 100]]),
+            "retention_token_range_ends": np.array([[100, 200]]),
+            "retention_token_range_priorities": np.array([[50, 50]])
+        }, True)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0, 100]]),
+            "retention_token_range_ends": np.array([[100, 200]]),
+            "retention_token_range_priorities": np.array([[50, 50]]),
+            "retention_token_range_durations_ms": np.array([[100]])
+        }, False)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0, 100]]),
+            "retention_token_range_ends": np.array([[100, 200]]),
+            "retention_token_range_priorities": np.array([[50, 50]]),
+            "retention_token_range_durations_ms": np.array([[100, 50]])
+        }, True)
+
+    check_retention_config(
+        {
+            "retention_token_range_starts": np.array([[0]]),
+            "retention_token_range_ends": np.array([[-1]]),
+            "retention_token_range_priorities": np.array([[50]]),
+            "retention_token_range_durations_ms": np.array([[1000]])
+        }, True)
 
 
 def test_convert_request_invalid():

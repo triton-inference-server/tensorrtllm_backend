@@ -83,6 +83,11 @@ public:
         return is_decoupled_;
     }
 
+    TRITONSERVER_DataType getLogitsDataType() const
+    {
+        return mLogitsDataType;
+    }
+
     uint32_t getAndIncrementInstanceIndex()
     {
         return mInstanceIndex++;
@@ -105,6 +110,7 @@ private:
     std::optional<std::vector<std::vector<int32_t>>> mGpuDeviceIds;
     std::optional<std::vector<std::vector<int32_t>>> mParticipantIds;
     bool is_decoupled_ = false;
+    TRITONSERVER_DataType mLogitsDataType = TRITONSERVER_TYPE_INVALID;
 
     void LoadParameters();
 

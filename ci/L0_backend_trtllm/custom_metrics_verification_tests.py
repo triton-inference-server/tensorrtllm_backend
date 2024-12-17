@@ -139,8 +139,8 @@ class CustomMetricsTest(unittest.TestCase):
                     microseconds=int(metrics[metric_key][-6:]))
                 difference = dt_log - dt_curl
                 self.assertTrue(
-                    timedelta(seconds=-1) <= difference,
-                    difference <= timedelta(seconds=1))
+                    timedelta(seconds=-1) <= difference, difference
+                    <= timedelta(seconds=1))
 
     def test_1_gpu_v1(self):
         self._base_test("1gpu_v1_no_streaming_server.log",
