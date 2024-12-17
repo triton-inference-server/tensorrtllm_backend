@@ -104,6 +104,55 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type)
     return nvinfer1::DataType(0);
 }
 
+TRITONSERVER_DataType to_triton_datatype(executor::DataType data_type)
+{
+    if (data_type == executor::DataType::kBOOL)
+    {
+        return TRITONSERVER_TYPE_BOOL;
+    }
+    else if (data_type == executor::DataType::kUINT8)
+    {
+        return TRITONSERVER_TYPE_UINT8;
+    }
+    else if (data_type == executor::DataType::kINT8)
+    {
+        return TRITONSERVER_TYPE_INT8;
+    }
+    else if (data_type == executor::DataType::kINT32)
+    {
+        return TRITONSERVER_TYPE_INT32;
+    }
+    else if (data_type == executor::DataType::kINT64)
+    {
+        return TRITONSERVER_TYPE_INT64;
+    }
+    else if (data_type == executor::DataType::kBF16)
+    {
+        return TRITONSERVER_TYPE_BF16;
+    }
+    else if (data_type == executor::DataType::kFP8)
+    {
+        assert(false);
+    }
+    else if (data_type == executor::DataType::kFP16)
+    {
+        return TRITONSERVER_TYPE_FP16;
+    }
+    else if (data_type == executor::DataType::kFP32)
+    {
+        return TRITONSERVER_TYPE_FP32;
+    }
+    else if (data_type == executor::DataType::kUNKNOWN)
+    {
+        assert(false);
+    }
+    else
+    {
+        assert(false);
+    }
+    return TRITONSERVER_TYPE_INVALID;
+}
+
 std::vector<InputTensors> splitBatchInputsTensors(InputTensors const& inputsTensors)
 {
     auto inputTokensIt = inputsTensors.find(InputFieldsNames::inputTokens);

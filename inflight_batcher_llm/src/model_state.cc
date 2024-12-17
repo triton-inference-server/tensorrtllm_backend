@@ -74,6 +74,24 @@ void ModelState::LoadParameters()
     model_config_.MemberAsObject("model_transaction_policy", &transaction_policy);
     transaction_policy.MemberAsBool("decoupled", &is_decoupled_);
 
+    // Retrieve logits datatype
+    triton::common::TritonJson::Value outputs;
+    model_config_.MemberAsArray("output", &outputs);
+    for (size_t i = 0; i < outputs.ArraySize(); ++i)
+    {
+        triton::common::TritonJson::Value output;
+        std::string dtype_str, output_name;
+        outputs.IndexAsObject(i, &output);
+        output.MemberAsString("name", &output_name);
+        if (output_name == "generation_logits" || output_name == "context_logits")
+        {
+            output.MemberAsString("data_type", &dtype_str);
+            dtype_str.erase(0, 5); // Remove the 'TYPE_' prefix
+            mLogitsDataType = TRITONSERVER_StringToDataType(dtype_str.c_str());
+            break;
+        }
+    }
+
     try
     {
         auto gpuDeviceIds = GetParameter<std::string>("gpu_device_ids");

@@ -188,7 +188,7 @@ def modify_ib_config_pbtxt(
             shell=True)
         check_call(
             f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} tensorrt_llm_model_name:tensorrt_llm," \
-            f"multimodal_encoders_name:multimodal_encoders",
+            f"multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32",
             shell=True)
         check_call(
             f"python3 {fill_template_py} -i {preprocessing_config} max_num_images:{MAX_NUM_IMAGES}",
@@ -212,7 +212,8 @@ def modify_ib_config_pbtxt(
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
             f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-            f"participant_ids:{PARTICIPANT_IDS_DRAFT}'",
+            f"participant_ids:{PARTICIPANT_IDS_DRAFT}," \
+            f"logits_datatype:TYPE_FP32'",
             shell=True)
     if TARGET_ENGINE_PATH != "":
         llm_target_config = os.path.join(llm_backend_repo_root, REPO_PATH,
@@ -232,7 +233,8 @@ def modify_ib_config_pbtxt(
             f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
             f"speculative_decoding_fast_logits:{SPEC_DEC_FAST_LOGITS}," \
             f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-            f"participant_ids:{PARTICIPANT_IDS_TARGET}'",
+            f"participant_ids:{PARTICIPANT_IDS_TARGET}," \
+            f"logits_datatype:TYPE_FP32'",
             shell=True)
 
     check_call(
@@ -245,12 +247,12 @@ def modify_ib_config_pbtxt(
         f"triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:{POSTPROCESSING_INSTANCE_COUNT}",
         shell=True)
     check_call(
-        f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}",
+        f"python3 {fill_template_py} -i {ensemble_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE},logits_datatype:TYPE_FP32",
         shell=True)
     check_call(
         f"python3 {fill_template_py} -i {tensorrt_llm_bls_config} triton_max_batch_size:{TRITON_MAX_BATCH_SIZE}," \
         f"decoupled_mode:{DECOUPLED_MODE},accumulate_tokens:{ACCUMULATE_TOKEN},bls_instance_count:{BLS_INSTANCE_COUNT}," \
-        f"tensorrt_llm_model_name:{TENSORRT_LLM_TARGET_MODEL_NAME},tensorrt_llm_draft_model_name:{TENSORRT_LLM_DRAFT_MODEL_NAME}",
+        f"tensorrt_llm_model_name:{TENSORRT_LLM_TARGET_MODEL_NAME},tensorrt_llm_draft_model_name:{TENSORRT_LLM_DRAFT_MODEL_NAME},logits_datatype:TYPE_FP32",
         shell=True)
 
     check_call(
@@ -265,7 +267,8 @@ def modify_ib_config_pbtxt(
         f"gpu_weights_percent:{GPU_WEIGHTS_PERCENT},encoder_engine_dir:{ENCODER_ENGINE_PATH},max_queue_size:{MAX_QUEUE_SIZE}," \
         f"enable_context_fmha_fp32_acc:{ENABLE_CONTEXT_FMHA_FP32_ACC}," \
         f"encoder_input_features_data_type:{ENCODER_INPUT_FEATURES_DTYPE}," \
-        f"participant_ids:{PARTICIPANT_IDS}'",
+        f"participant_ids:{PARTICIPANT_IDS}," \
+        f"logits_datatype:TYPE_FP32'",
         shell=True)
 
     if os.path.exists(whisper_bls_config):

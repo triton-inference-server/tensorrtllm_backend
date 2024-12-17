@@ -20,6 +20,35 @@ METRIC_TOTAL_OUTPUT_TOKENS = "total_output_tokens"
 METRIC_TOTAL_INPUT_TOKENS = "total_input_tokens"
 import tensorrt_llm.logger as logger
 
+# From https://github.com/pytorch/pytorch/blob/39425feac799905402abe4d15667fa47c344f2d7/torch/testing/_internal/common_utils.py#L1761
+# Dict of NumPy dtype -> torch dtype (when the correspondence exists)
+numpy_to_torch_dtype_dict = {
+    np.bool_: torch.bool,
+    np.uint8: torch.uint8,
+    np.uint16: torch.uint16,
+    np.uint32: torch.uint32,
+    np.uint64: torch.uint64,
+    np.int8: torch.int8,
+    np.int16: torch.int16,
+    np.int32: torch.int32,
+    np.int64: torch.int64,
+    np.float16: torch.float16,
+    np.float32: torch.float32,
+    np.float64: torch.float64,
+    np.complex64: torch.complex64,
+    np.complex128: torch.complex128
+}
+
+# Dict of torch dtype -> NumPy dtype
+torch_to_numpy_dtype_dict = {
+    value: key
+    for (key, value) in numpy_to_torch_dtype_dict.items()
+}
+torch_to_numpy_dtype_dict.update({
+    torch.bfloat16: np.float32,
+    torch.complex32: np.complex64
+})
+
 
 @dataclass
 class RequestData:
@@ -224,7 +253,7 @@ def get_external_draft_tokens_config_from_request(request,
     draft_logits = get_input_tensor_by_name(request, 'draft_logits',
                                             batch_size, batch_index)
     if draft_logits is not None:
-        kwargs['logits'] = from_numpy(draft_logits).squeeze()
+        kwargs['logits'] = from_numpy(draft_logits).squeeze(dim=0)
     kwargs['acceptance_threshold'] = get_input_scalar_by_name(
         request, 'draft_acceptance_threshold', batch_size, batch_index)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -505,7 +534,11 @@ def convert_request(request, exclude_input_from_output, decoupled):
     return requests
 
 
-def convert_response(response, batch_index, batch_size, num_return_sequences):
+def convert_response(response,
+                     batch_index,
+                     batch_size,
+                     num_return_sequences,
+                     expected_logits_dtype=torch.float32):
 
     if response.has_error():
         return pb_utils.InferenceResponse(output_tensors=[],
@@ -539,18 +572,24 @@ def convert_response(response, batch_index, batch_size, num_return_sequences):
                 np.expand_dims(np.array(result.log_probs, np.float32), 0)))
 
     if result.context_logits is not None:
+        assert (result.context_logits.dtype is expected_logits_dtype)
         output_tensors.append(
             pb_utils.Tensor(
                 "context_logits",
-                np.expand_dims(np.array(result.context_logits, np.float32),
-                               0)))
+                np.expand_dims(
+                    np.array(
+                        result.context_logits, torch_to_numpy_dtype_dict[
+                            result.context_logits.dtype]), 0)))
 
     if result.generation_logits is not None:
+        assert (result.generation_logits.dtype is expected_logits_dtype)
         output_tensors.append(
             pb_utils.Tensor(
                 "generation_logits",
-                np.expand_dims(np.array(result.generation_logits, np.float32),
-                               0)))
+                np.expand_dims(
+                    np.array(
+                        result.generation_logits, torch_to_numpy_dtype_dict[
+                            result.generation_logits.dtype]), 0)))
 
     if batch_size > 1:
         output_tensors.append(
@@ -642,6 +681,22 @@ def convert_timestamp_to_seconds(timestamp: str):
     return int(
         datetime.datetime.strptime(timestamp,
                                    "%m-%d-%Y %H:%M:%S.%f").timestamp())
+
+
+def triton_string_to_torch(dtype):
+    type_map = {
+        "TYPE_BOOL": torch.bool,
+        "TYPE_UINT8": torch.uint8,
+        "TYPE_INT8": torch.int8,
+        "TYPE_INT16": torch.int16,
+        "TYPE_INT32": torch.int32,
+        "TYPE_INT64": torch.int64,
+        "TYPE_FP16": torch.float16,
+        "TYPE_FP32": torch.float32,
+        "TYPE_FP64": torch.float64,
+        "TYPE_BF16": torch.bfloat16
+    }
+    return type_map[dtype]
 
 
 class TritonPythonModel:
@@ -1005,6 +1060,12 @@ class TritonPythonModel:
         self.stats_check_period_ms = get_parameter(
             model_config, "stats_check_period_ms", int) or 100
 
+        self.logits_dtype = None
+        for output in model_config['output']:
+            if output['name'] == 'context_logits' or output[
+                    'name'] == 'generation_logits':
+                self.logits_dtype = triton_string_to_torch(output['data_type'])
+
         self.create_metrics(args["model_name"],
                             args["model_version"],
                             is_v1_model=executor_config.batching_type ==
@@ -1148,7 +1209,8 @@ class TritonPythonModel:
 
                 triton_response, is_final, output_length = convert_response(
                     response, request_data.batch_index,
-                    request_data.batch_size, request_data.num_return_sequences)
+                    request_data.batch_size, request_data.num_return_sequences,
+                    self.logits_dtype)
                 with self.lock:
                     self.req_id_to_request_data[
                         req_id].num_output_tokens += output_length
