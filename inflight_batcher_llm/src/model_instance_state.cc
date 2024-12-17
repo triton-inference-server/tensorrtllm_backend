@@ -1001,7 +1001,8 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                     auto contextLogitsShapeOriginal = result.contextLogits.value().getShape();
                     std::vector<int64_t> contextLogitsShape{
                         1, contextLogitsShapeOriginal[0], contextLogitsShapeOriginal[1]};
-                    auto contextLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto contextLogitsType = utils::to_triton_datatype(result.contextLogits.value().getDataType());
+                    TLLM_CHECK(contextLogitsType == model_state_->getLogitsDataType());
                     auto contextLogitsBuffer = utils::getResponseBuffer<float>(
                         tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
                     utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
@@ -1015,7 +1016,9 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                     auto generationLogitsShapeOriginal = result.generationLogits.value().getShape();
                     std::vector<int64_t> generationLogitsShape{1, generationLogitsShapeOriginal[0],
                         generationLogitsShapeOriginal[1], generationLogitsShapeOriginal[2]};
-                    auto generationLogitsType = TRITONSERVER_TYPE_FP32;
+                    auto generationLogitsType
+                        = utils::to_triton_datatype(result.generationLogits.value().getDataType());
+                    TLLM_CHECK(generationLogitsType == model_state_->getLogitsDataType());
                     auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
                         generationLogitsType, OutputFieldsNames::generationLogits);
                     utils::flatten<float>(

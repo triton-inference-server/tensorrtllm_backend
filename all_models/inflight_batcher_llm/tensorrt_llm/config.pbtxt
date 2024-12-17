@@ -102,7 +102,7 @@ input [
   },
   {
     name: "draft_logits"
-    data_type: TYPE_FP32
+    data_type: ${logits_datatype}
     dims: [ -1, -1 ]
     optional: true
     allow_ragged_batch: true
@@ -388,6 +388,48 @@ input [
     dims: [ 1 ]
     optional: true
     allow_ragged_batch: true
+  },
+  {
+    name: "retention_token_range_starts"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "retention_token_range_ends"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "retention_token_range_priorities"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "retention_token_range_durations_ms"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "retention_decode_priority"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "retention_decode_duration_ms"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
   }
 ]
 output [
@@ -413,12 +455,12 @@ output [
   },
   {
     name: "context_logits"
-    data_type: TYPE_FP32
+    data_type: ${logits_datatype}
     dims: [ -1, -1 ]
   },
   {
     name: "generation_logits"
-    data_type: TYPE_FP32
+    data_type: ${logits_datatype}
     dims: [ -1, -1, -1 ]
   },
   {
