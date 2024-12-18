@@ -107,9 +107,6 @@ function reset_model_repo {
 
 function kill_server {
     pgrep tritonserver | xargs kill -SIGINT
-    if pgrep -x "trtllmExecutorWorker" > /dev/null; then
-        pkill -SIGINT -f "trtllmExecutorWorker"
-    fi
 }
 
 function wait_for_server_terminated {
@@ -135,6 +132,11 @@ function wait_for_server_terminated {
             exit 1
         fi
     done
+    ps aux
+    if pgrep --runstates R,S,D,I -x "trtllmExecutorW" > /dev/null; then
+        echo -e "Worker process still exists - failed to terminate"
+        exit 1
+    fi
 }
 
 function assert_curl_success {
