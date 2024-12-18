@@ -1003,9 +1003,22 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                         1, contextLogitsShapeOriginal[0], contextLogitsShapeOriginal[1]};
                     auto contextLogitsType = utils::to_triton_datatype(result.contextLogits.value().getDataType());
                     TLLM_CHECK(contextLogitsType == model_state_->getLogitsDataType());
-                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-                    utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    if (contextLogitsType == TRITONSERVER_TYPE_FP32)
+                    {
+                        auto contextLogitsBuffer = utils::getResponseBuffer<float>(
+                            tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                        utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    }
+                    else if (contextLogitsType == TRITONSERVER_TYPE_FP16)
+                    {
+                        auto contextLogitsBuffer = utils::getResponseBuffer<half>(
+                            tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                        utils::flatten<half>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    }
+                    else
+                    {
+                        TLLM_THROW("Logits type is not supported");
+                    }
                 }
             }
 
@@ -1019,10 +1032,24 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                     auto generationLogitsType
                         = utils::to_triton_datatype(result.generationLogits.value().getDataType());
                     TLLM_CHECK(generationLogitsType == model_state_->getLogitsDataType());
-                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
-                        generationLogitsType, OutputFieldsNames::generationLogits);
-                    utils::flatten<float>(
-                        result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    if (generationLogitsType == TRITONSERVER_TYPE_FP32)
+                    {
+                        auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse,
+                            generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
+                        utils::flatten<float>(
+                            result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    }
+                    else if (generationLogitsType == TRITONSERVER_TYPE_FP16)
+                    {
+                        auto generationLogitsBuffer = utils::getResponseBuffer<half>(tritonResponse,
+                            generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
+                        utils::flatten<half>(
+                            result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    }
+                    else
+                    {
+                        TLLM_THROW("Logits type is not supported");
+                    }
                 }
                 else if (result.specDecFastLogitsInfo.has_value())
                 {
