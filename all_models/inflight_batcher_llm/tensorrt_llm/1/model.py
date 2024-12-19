@@ -275,7 +275,7 @@ def get_prompt_tuning_config_from_request(request,
     if prompt_embedding_table is not None:
         if isinstance(prompt_embedding_table, np.ndarray):
             kwargs["embedding_table"] = from_numpy(
-                prompt_embedding_table).squeeze()
+                prompt_embedding_table).squeeze(dim=0)
         elif isinstance(prompt_embedding_table, torch.Tensor):
             kwargs["embedding_table"] = prompt_embedding_table.squeeze(dim=0)
 
@@ -297,11 +297,11 @@ def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     lora_weights = get_input_tensor_by_name(request, 'lora_weights',
                                             batch_size, batch_index)
     if lora_weights is not None:
-        kwargs["weights"] = from_numpy(lora_weights).squeeze()
+        kwargs["weights"] = from_numpy(lora_weights).squeeze(dim=0)
     lora_config = get_input_tensor_by_name(request, 'lora_config', batch_size,
                                            batch_index)
     if lora_config is not None:
-        kwargs["config"] = from_numpy(lora_config).squeeze()
+        kwargs["config"] = from_numpy(lora_config).squeeze(dim=0)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.LoraConfig(**kwargs)
@@ -469,7 +469,8 @@ def convert_request(request, exclude_input_from_output, decoupled):
         embedding_bias = get_input_tensor_by_name(request, 'embedding_bias',
                                                   batch_size, batch_index)
         if embedding_bias is not None and embedding_bias.size != 0:
-            inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze()
+            inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze(
+                dim=0)
 
         sampling_config = get_sampling_config_from_request(
             request, batch_size, batch_index)
@@ -500,7 +501,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         if encoder_input_features is not None:
             if isinstance(encoder_input_features, np.ndarray):
                 encoder_input_features = from_numpy(
-                    encoder_input_features).squeeze()
+                    encoder_input_features).squeeze(dim=0)
             elif isinstance(encoder_input_features, torch.Tensor):
                 encoder_input_features = encoder_input_features.squeeze(dim=0)
             inputs['encoder_input_features'] = encoder_input_features
