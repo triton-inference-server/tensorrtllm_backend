@@ -30,6 +30,7 @@ import os
 import numpy as np
 import torch
 import triton_python_backend_utils as pb_utils
+from safetensors.torch import load_file
 from torch.utils.dlpack import from_dlpack, to_dlpack
 
 import tensorrt_llm
@@ -112,6 +113,23 @@ class TritonPythonModel:
                 pb_utils.get_output_config_by_name(
                     model_config, features_output_name)['data_type'])
 
+            if self.model_type == 'llava_onevision':
+                from multimodal_utils import LlavaOnevisionUtils
+                from transformers import AutoConfig
+                hf_model_path = model_config['parameters'].get(
+                    'hf_model_path', None)
+                assert hf_model_path is not None and hf_model_path[
+                    'string_value'] != "${hf_model_path}", "Need to provide hf_model_path for the LLaVA OneVision model"
+
+                newline_buffer_path = os.path.join(
+                    visual_model_path, 'image_newlines.safetensors')
+                image_newline = load_file(
+                    newline_buffer_path)['image_newline'].cuda()
+                model_config = AutoConfig.from_pretrained(
+                    hf_model_path['string_value'])
+                self.llava_onevision_utils = LlavaOnevisionUtils(
+                    model_config, image_newline)
+
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
         function receives a list of pb_utils.InferenceRequest as the only
@@ -150,14 +168,7 @@ class TritonPythonModel:
                 str_dtype_to_torch(self.vision_dtype_str)).pin_memory()
 
             # Prepare input tensors for the vision encoder
-            if self.model_type != 'mllama':
-                vit_input = {
-                    'input':
-                    img_tensor.view(batch_size * num_images,
-                                    img_tensor.shape[2], img_tensor.shape[3],
-                                    img_tensor.shape[4])
-                }
-            else:
+            if self.model_type == 'mllama':
                 aspect_ratio_ids = from_dlpack(
                     pb_utils.get_input_tensor_by_name(
                         request, "aspect_ratio_ids").to_dlpack()).to(
@@ -175,6 +186,47 @@ class TritonPythonModel:
                     'pixel_values': pixel_values,
                     'aspect_ratio_ids': aspect_ratio_ids,
                     'aspect_ratio_mask': aspect_ratio_mask
+                }
+            elif self.model_type == 'llava_onevision':
+                is_video_input = pb_utils.get_input_tensor_by_name(
+                    request, 'is_video_input')
+                is_video_input = is_video_input.as_numpy(
+                )[0] if is_video_input is not None else False
+                if is_video_input:
+                    vit_input = {
+                        'input':
+                        img_tensor.view(batch_size * num_images,
+                                        img_tensor.shape[2],
+                                        img_tensor.shape[3],
+                                        img_tensor.shape[4])
+                    }
+                else:
+                    image_sizes = from_dlpack(
+                        pb_utils.get_input_tensor_by_name(
+                            request, 'image_sizes').to_dlpack())
+                    from transformers.models.llava_onevision.modeling_llava_onevision import \
+                        image_size_to_num_patches
+                    image_num_patches = [
+                        image_size_to_num_patches(
+                            image_size=imsize,
+                            grid_pinpoints=self.llava_onevision_utils.config.
+                            image_grid_pinpoints,
+                            patch_size=self.llava_onevision_utils.config.
+                            vision_config.image_size) for imsize in image_sizes
+                    ]
+                    img_tensor = img_tensor.to('cuda')
+                    img_list = [
+                        img[:num_patch] for img, num_patch in zip(
+                            img_tensor, image_num_patches)
+                    ]
+                    img_tensor = torch.cat(img_list, dim=0).contiguous()
+                    vit_input = {'input': img_tensor}
+            else:
+                vit_input = {
+                    'input':
+                    img_tensor.view(batch_size * num_images,
+                                    img_tensor.shape[2], img_tensor.shape[3],
+                                    img_tensor.shape[4])
                 }
 
             # Run the vision encoder
@@ -201,35 +253,7 @@ class TritonPythonModel:
             output_tensors = []
 
             # Create output tensors
-            if self.model_type != 'mllama':
-                vision_prompt_table = embeddings
-                vision_prompt_vocab_size = np.array(
-                    [[vision_prompt_table.shape[1]]])
-                # Concatenate the prompt tables if there are multiple images in single request
-                if num_images > 1:
-                    prompt_table = vision_prompt_table.view(
-                        batch_size, -1, vision_prompt_table.shape[-1])
-                    prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
-                                                  batch_size,
-                                                  axis=0)
-                else:
-                    # Use the single prompt table directly
-                    vision_prompt_vocab_size = np.repeat(
-                        vision_prompt_vocab_size, batch_size, axis=0)
-                    prompt_table = vision_prompt_table
-                    prompt_vocab_size = vision_prompt_vocab_size
-
-                prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
-                    'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
-
-                prompt_vocab_size_tensor = pb_utils.Tensor(
-                    'OUT_PROMPT_VOCAB_SIZE',
-                    prompt_vocab_size.astype(np.int32))
-
-                output_tensors = [
-                    prompt_embedding_table_tensor, prompt_vocab_size_tensor
-                ]
-            else:
+            if self.model_type == 'mllama':
                 max_tokens = pb_utils.get_input_tensor_by_name(
                     request, 'max_tokens')
                 # max_tokens is needed to prepare the cross_attention_mask
@@ -256,6 +280,11 @@ class TritonPythonModel:
                     dtype=torch.int32)
                 logger.debug(
                     f"encoder_output_lengths: {encoder_output_lengths}")
+                skip_cross_attn_blocks = torch.zeros([output_shape[0], 1],
+                                                     dtype=torch.bool,
+                                                     device='cpu')
+                logger.debug(
+                    f"skip_cross_attn_blocks: {skip_cross_attn_blocks}")
 
                 # prepare cross_attention_mask
                 # [bs, seq_len, num_tiles] to [bs, seq_len+max_new_tokens, encoder_length]
@@ -294,6 +323,48 @@ class TritonPythonModel:
                         pb_utils.Tensor.from_dlpack(
                             'CROSS_ATTENTION_MASK',
                             to_dlpack(cross_attention_mask)))
+                output_tensors.append(
+                    pb_utils.Tensor.from_dlpack(
+                        'SKIP_CROSS_ATTN_BLOCKS',
+                        to_dlpack(skip_cross_attn_blocks)))
+            elif self.model_type == 'llava_onevision':
+                if is_video_input:
+                    prompt_table = self.llava_onevision_utils.postprocess_video(
+                        embeddings, batch_size, num_images)
+                else:
+                    prompt_table = self.llava_onevision_utils.postprocess_image(
+                        embeddings, image_sizes, image_num_patches)
+                prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
+                    'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
+                output_tensors = [prompt_embedding_table_tensor]
+            else:
+                vision_prompt_table = embeddings
+                vision_prompt_vocab_size = np.array(
+                    [[vision_prompt_table.shape[1]]])
+                # Concatenate the prompt tables if there are multiple images in single request
+                if num_images > 1:
+                    prompt_table = vision_prompt_table.view(
+                        batch_size, -1, vision_prompt_table.shape[-1])
+                    prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
+                                                  batch_size,
+                                                  axis=0)
+                else:
+                    # Use the single prompt table directly
+                    vision_prompt_vocab_size = np.repeat(
+                        vision_prompt_vocab_size, batch_size, axis=0)
+                    prompt_table = vision_prompt_table
+                    prompt_vocab_size = vision_prompt_vocab_size
+
+                prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
+                    'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
+
+                prompt_vocab_size_tensor = pb_utils.Tensor(
+                    'OUT_PROMPT_VOCAB_SIZE',
+                    prompt_vocab_size.astype(np.int32))
+
+                output_tensors = [
+                    prompt_embedding_table_tensor, prompt_vocab_size_tensor
+                ]
 
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=output_tensors)

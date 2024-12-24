@@ -62,6 +62,9 @@ class TritonDecoder(Decoder):
             "OUT_PAD_ID",
             "OUT_END_ID",
             "OUT_PROMPT_TABLE_EXTRA_IDS",
+            "PIXEL_VALUES",
+            "IMAGE_SIZES",
+            "IS_VIDEO_INPUT",
         ]
 
         self._multimodal_enc_outputs = [
@@ -71,7 +74,8 @@ class TritonDecoder(Decoder):
         self._llm_outputs = [
             "output_ids", "sequence_length", "cum_log_probs",
             "output_log_probs", "context_logits", "generation_logits",
-            "batch_index", "sequence_index"
+            "batch_index", "sequence_index", "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks", "kv_cache_alloc_total_blocks"
         ]
 
         self._postproc_outputs = [
@@ -79,61 +83,28 @@ class TritonDecoder(Decoder):
         ]
 
         self.input_names = [
-            "text_input",
-            "decoder_text_input",
-            "image_input",
-            "max_tokens",
-            "bad_words",
-            "stop_words",
-            "end_id",
-            "pad_id",
-            "top_k",
-            "top_p",
-            "temperature",
-            "length_penalty",
-            "repetition_penalty",
-            "min_length",
-            "presence_penalty",
-            "frequency_penalty",
-            "random_seed",
-            "return_log_probs",
-            "return_context_logits",
-            "return_generation_logits",
-            "beam_width",
-            "stream",
-            "prompt_embedding_table",
-            "prompt_vocab_size",
-            "prompt_table_extra_id",
-            "embedding_bias_words",
-            "embedding_bias_weights",
-            "num_draft_tokens",
-            "use_draft_logits",
-            "lora_task_id",
-            "lora_weights",
-            "lora_config",
+            "text_input", "decoder_text_input", "image_input",
+            "image_bytes_input", "image_url_input", "video_bytes_input",
+            "max_tokens", "bad_words", "stop_words", "end_id", "pad_id",
+            "top_k", "top_p", "temperature", "length_penalty",
+            "repetition_penalty", "min_length", "presence_penalty",
+            "frequency_penalty", "random_seed", "return_log_probs",
+            "return_context_logits", "return_generation_logits", "beam_width",
+            "stream", "prompt_embedding_table", "prompt_vocab_size",
+            "prompt_table_extra_id", "embedding_bias_words",
+            "embedding_bias_weights", "num_draft_tokens", "use_draft_logits",
+            "lora_task_id", "lora_weights", "lora_config",
+            "exclude_input_in_output", "return_kv_cache_reuse_stats"
         ]
 
         self.__undo_reshape_whitelist = {
-            "max_tokens",
-            "end_id",
-            "pad_id",
-            "top_k",
-            "top_p",
-            "temperature",
-            "length_penalty",
-            "repetition_penalty",
-            "min_length",
-            "presence_penalty",
-            "frequency_penalty",
-            "random_seed",
-            "return_log_probs",
-            "return_context_logits",
-            "return_generation_logits",
-            "beam_width",
-            "stream",
-            "prompt_vocab_size",
-            "num_draft_tokens",
-            "use_draft_logits",
+            "max_tokens", "end_id", "pad_id", "top_k", "top_p", "temperature",
+            "length_penalty", "repetition_penalty", "min_length",
+            "presence_penalty", "frequency_penalty", "random_seed",
+            "return_log_probs", "return_context_logits",
+            "return_generation_logits", "beam_width", "stream",
+            "prompt_vocab_size", "num_draft_tokens", "use_draft_logits",
+            "exclude_input_in_output", "return_kv_cache_reuse_stats"
         }
 
     def _exec_triton_request(self, request):
@@ -158,6 +129,9 @@ class TritonDecoder(Decoder):
             "generation_logits": "generation_logits",
             "batch_index": "batch_index",
             "sequence_index": "sequence_index",
+            "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks": "kv_cache_reused_blocks",
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
         }
         tensors = self.create_triton_tensors(response, name_map)
         return pb_utils.InferenceResponse(output_tensors=tensors)
@@ -241,6 +215,9 @@ class TritonDecoder(Decoder):
     def _get_preproc_tensors(self, request: Request):
         name_map = {
             "text_input": "QUERY",
+            "image_bytes_input": "IMAGE_BYTES",
+            "image_url_input": "IMAGE_URL",
+            "video_bytes_input": "VIDEO_BYTES",
             "decoder_text_input": "DECODER_QUERY",
             "max_tokens": "REQUEST_OUTPUT_LEN",
             "bad_words": "BAD_WORDS_DICT",
@@ -265,14 +242,20 @@ class TritonDecoder(Decoder):
             "OUT_PAD_ID": "pad_id",
             "OUT_END_ID": "end_id",
             "OUT_PROMPT_TABLE_EXTRA_IDS": "prompt_table_extra_ids",
+            "PIXEL_VALUES": "pixel_values",
+            "IMAGE_SIZES": "image_sizes",
+            "IS_VIDEO_INPUT": "is_video_input",
         }
         return self.convert_triton_response(triton_output, PreprocResponse,
                                             name_map)
 
     @override
-    def _multimodal_enc_generate(self,
-                                 request: Request) -> MultimodalEncResponse:
-        input_tensors = self._get_multimodal_enc_tensors(request)
+    def _multimodal_enc_generate(
+        self,
+        request: Request,
+        preproc: PreprocResponse,
+    ) -> MultimodalEncResponse:
+        input_tensors = self._get_multimodal_enc_tensors(request, preproc)
         triton_req = pb_utils.InferenceRequest(
             model_name=self.multimodal_encoders_name,
             inputs=input_tensors,
@@ -280,11 +263,20 @@ class TritonDecoder(Decoder):
         triton_output = self._exec_triton_request_single(triton_req)
         return self._get_multimodal_enc_response(triton_output)
 
-    def _get_multimodal_enc_tensors(self, preproc: PreprocResponse):
-        name_map = {
+    def _get_multimodal_enc_tensors(self, request: Request,
+                                    preproc: PreprocResponse):
+        name_map_request = {
             "image_input": "IMAGE",
         }
-        return self.create_triton_tensors(preproc, name_map)
+        name_map_preproc = {
+            "pixel_values": "pixel_values",
+            "image_sizes": "image_sizes",
+            "is_video_input": "is_video_input"
+        }
+        tensors = []
+        tensors.extend(self.create_triton_tensors(request, name_map_request))
+        tensors.extend(self.create_triton_tensors(preproc, name_map_preproc))
+        return tensors
 
     def _get_multimodal_enc_response(self, triton_output):
         name_map = {
@@ -415,6 +407,8 @@ class TritonDecoder(Decoder):
             "lora_task_id": "lora_task_id",
             "lora_weights": "lora_weights",
             "lora_config": "lora_config",
+            "exclude_input_in_output": "exclude_input_in_output",
+            "return_kv_cache_reuse_stats": "return_kv_cache_reuse_stats",
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)
@@ -492,6 +486,9 @@ class TritonDecoder(Decoder):
             "generation_logits": "generation_logits",
             "batch_index": "batch_index",
             "sequence_index": "sequence_index",
+            "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
+            "kv_cache_reused_blocks": "kv_cache_reused_blocks",
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
         }
         return self.convert_triton_response(triton_output, GenerationResponse,
                                             name_map)
@@ -527,11 +524,15 @@ class TritonDecoder(Decoder):
             name = named_t.name()
             t = named_t.as_numpy()
             t_map[name] = t
-        response = Response(text_output=t_map["OUTPUT"],
-                            cum_log_probs=gen_res.cum_log_probs,
-                            output_log_probs=gen_res.output_log_probs,
-                            context_logits=gen_res.context_logits,
-                            generation_logits=gen_res.generation_logits,
-                            batch_index=gen_res.batch_index,
-                            sequence_index=gen_res.sequence_index)
+        response = Response(
+            text_output=t_map["OUTPUT"],
+            cum_log_probs=gen_res.cum_log_probs,
+            output_log_probs=gen_res.output_log_probs,
+            context_logits=gen_res.context_logits,
+            generation_logits=gen_res.generation_logits,
+            batch_index=gen_res.batch_index,
+            sequence_index=gen_res.sequence_index,
+            kv_cache_alloc_new_blocks=gen_res.kv_cache_alloc_new_blocks,
+            kv_cache_reused_blocks=gen_res.kv_cache_reused_blocks,
+            kv_cache_alloc_total_blocks=gen_res.kv_cache_alloc_total_blocks)
         return response

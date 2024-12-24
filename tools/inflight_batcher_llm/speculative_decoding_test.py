@@ -1,4 +1,28 @@
 #!/usr/bin/python
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
 import sys
@@ -212,6 +236,14 @@ if __name__ == '__main__':
         "Return target model's accepted token logits, require to enable `gather_generation_logits` when build engine",
     )
 
+    parser.add_argument(
+        "--return-kv-cache-reuse-stats",
+        default=False,
+        required=False,
+        action='store_true',
+        help="Return per-request kv cache reuse stats",
+    )
+
     FLAGS = parser.parse_args()
     if not FLAGS.url_target:
         FLAGS.url_target = "localhost:8001"
@@ -259,12 +291,13 @@ if __name__ == '__main__':
             # Calling control model only
             if FLAGS.verbose:
                 print(f"Calling control model", flush=True)
-            output_control = end_to_end_grpc_client.run_inference(
+            processed_prompt, output_control = end_to_end_grpc_client.run_inference(
                 client_control, prompt, output_len, str(request_id),
                 FLAGS.repetition_penalty, FLAGS.presence_penalty,
                 FLAGS.frequency_penalty, FLAGS.temperature, FLAGS.stop_words,
                 FLAGS.bad_words, [], [], "ensemble", False, 1, False, None,
-                None, None, FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose)
+                None, None, None, FLAGS.end_id, FLAGS.pad_id, False,
+                FLAGS.verbose)
             assert (len(output_control) == 1)
             output_control = output_control[0]
             if FLAGS.verbose:
@@ -281,14 +314,20 @@ if __name__ == '__main__':
                     return_generation_logits_data = np.array(
                         [[FLAGS.return_generation_logits]], dtype=bool)
 
-                output_speculative = end_to_end_grpc_client.run_inference(
+                return_kv_cache_reuse_stats_data = None
+                if FLAGS.return_kv_cache_reuse_stats:
+                    return_kv_cache_reuse_stats_data = np.array(
+                        [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
+
+                processed_prompt, output_speculative = end_to_end_grpc_client.run_inference(
                     client_target, prompt, output_len, str(request_id),
                     FLAGS.repetition_penalty, FLAGS.presence_penalty,
                     FLAGS.frequency_penalty, FLAGS.temperature,
                     FLAGS.stop_words, FLAGS.bad_words, [], [],
                     "tensorrt_llm_bls", False, 1, False, None, None,
-                    return_generation_logits_data, FLAGS.end_id, FLAGS.pad_id,
-                    False, FLAGS.verbose, FLAGS.num_draft_tokens,
+                    return_generation_logits_data,
+                    return_kv_cache_reuse_stats_data, FLAGS.end_id,
+                    FLAGS.pad_id, False, FLAGS.verbose, FLAGS.num_draft_tokens,
                     FLAGS.use_draft_logits)
                 assert (len(output_speculative) == 1)
                 output_speculative = output_speculative[0]

@@ -276,6 +276,13 @@ input [
     optional: true
   },
   {
+    name: "return_kv_cache_reuse_stats"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
     name: "exclude_input_in_output"
     data_type: TYPE_BOOL
     dims: [ 1 ]
@@ -373,6 +380,14 @@ input [
     dims: [ -1 ]
     optional: true
     allow_ragged_batch: true
+  },
+  # skip_cross_attn_blocks shape `[bs, 1]`, only used in mllama
+  {
+    name: "skip_cross_attn_blocks"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
   }
 ]
 output [
@@ -420,6 +435,21 @@ output [
     name: "context_phase_params"
     data_type: TYPE_UINT8
     dims: [ -1 ]
+  },
+  {
+    name: "kv_cache_alloc_new_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_reused_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_total_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
   }
 ]
 instance_group [
@@ -614,6 +644,12 @@ parameters: {
   key: "medusa_choices"
     value: {
       string_value: "${medusa_choices}"
+  }
+}
+parameters: {
+  key: "eagle_choices"
+    value: {
+      string_value: "${eagle_choices}"
   }
 }
 parameters: {

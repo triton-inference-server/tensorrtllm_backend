@@ -12,6 +12,11 @@ The names of the parameters listed below are the values in the `config.pbtxt`
 that can be modified using the
 [`fill_template.py`](../tools/fill_template.py) script.
 
+**NOTE** For fields that have comma as the value (e.g. `gpu_device_ids`,
+`participant_ids`), you need to escape the comma with
+a backslash. For example, if you want to set `gpu_device_ids` to `0,1` you need
+to run `python3 fill_template.py -i config.pbtxt "gpu_device_ids:0\,1".`
+
 The mandatory parameters must be set for the model to run. The optional
 parameters are not required but can be set to customize the model.
 
@@ -95,7 +100,7 @@ description of the parameters below.
 | `cancellation_check_period_ms` | The time for cancellation check thread to sleep before doing the next check. It checks if any of the current active requests are cancelled through triton and prevent further execution of them. (default=100) |
 | `stats_check_period_ms` | The time for the statistics reporting thread to sleep before doing the next check. (default=100) |
 | `recv_poll_period_ms` | The time for the receiving thread in orchestrator mode to sleep before doing the next check. (default=0) |
-| `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=executor::kDefaultIterStatsMaxIterations) |
+| `iter_stats_max_iterations` | The maximum number of iterations for which to keep statistics. (default=ExecutorConfig::kDefaultIterStatsMaxIterations) |
 | `request_stats_max_iterations` | The maximum number of iterations for which to keep per-request statistics. (default=executor::kDefaultRequestStatsMaxIterations) |
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
 | `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. Use semicolons to separate multiple instances of the model. If not provided, the model will use all visible GPUs. (default=unspecified) |
@@ -132,7 +137,7 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `max_beam_width` | The beam width value of requests that will be sent to the executor. (default=1) |
-| `decoding_mode` | Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search, medusa}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. When Medusa model is used, `medusa` decoding mode should be set. However, TensorRT-LLM detects loaded Medusa model and overwrites decoding mode to `medusa` with warning. |
+| `decoding_mode` | Set to one of the following: `{top_k, top_p, top_k_top_p, beam_search, medusa, redrafter, lookahead, eagle}` to select the decoding mode. The `top_k` mode exclusively uses Top-K algorithm for sampling, The `top_p` mode uses exclusively Top-P algorithm for sampling. The top_k_top_p mode employs both Top-K and Top-P algorithms, depending on the runtime sampling params of the request. Note that the `top_k_top_p option` requires more memory and has a longer runtime than using `top_k` or `top_p` individually; therefore, it should be used only when necessary. `beam_search` uses beam search algorithm. If not specified, the default is to use `top_k_top_p` if `max_beam_width == 1`; otherwise, `beam_search` is used. When Medusa model is used, `medusa` decoding mode should be set. However, TensorRT-LLM detects loaded Medusa model and overwrites decoding mode to `medusa` with warning. Same applies to the ReDrafter, Lookahead and Eagle. |
 
 - Optimization
 
@@ -155,6 +160,12 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `medusa_choices` | To specify Medusa choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
+
+- Eagle
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `eagle_choices` | To specify default per-server Eagle choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
 
 ### tensorrt_llm_bls model
 
@@ -211,6 +222,7 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `beam_width` | [1] | `int32_t` | Beam width for this request; set to 1 for greedy sampling (Default=1) |
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
+| `return_kv_cache_reuse_stats` | [1] | `bool` | When `true`, include kv cache reuse stats in the output |
 
 The following inputs for lora are for both `tensorrt_llm` and `tensorrt_llm_bls`
 models. The inputs are passed through the `tensorrt_llm` model and the
@@ -231,6 +243,9 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 | `context_logits` | [-1, vocab_size] | `float` | Context logits for input |
 | `generation_logits` | [beam_width, seq_len, vocab_size] | `float` | Generation logits for each output |
 | `batch_index` | [1] | `int32` | Batch index |
+| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
+| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_reused_blocks` in the outputs. |
+| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
 
 #### Unique Inputs for tensorrt_llm model
 

@@ -69,7 +69,6 @@ Build TensorRT-LLM engines.
     --output_dir ${ENGINE_PATH}/encoder \
     --kv_cache_type disabled \
     --moe_plugin disable \
-    --enable_xqa disable \
     --max_beam_width ${MAX_BEAM_WIDTH} \
     --max_input_len ${INPUT_LEN} \
     --max_batch_size ${MAX_BATCH_SIZE} \
@@ -81,7 +80,6 @@ Build TensorRT-LLM engines.
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/decoder \
     --output_dir ${ENGINE_PATH}/decoder \
     --moe_plugin disable \
-    --enable_xqa disable \
     --max_beam_width ${MAX_BEAM_WIDTH} \
     --max_batch_size ${MAX_BATCH_SIZE} \
     --gemm_plugin ${INFERENCE_PRECISION} \
@@ -327,7 +325,6 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
         --output_dir ${ENGINE_PATH}/encoder \
         --kv_cache_type disabled \
         --moe_plugin disable \
-        --enable_xqa disable \
         --max_batch_size 64 \
         --gemm_plugin float16 \
         --bert_attention_plugin float16 \
@@ -338,7 +335,6 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
     trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH}/decoder \
         --output_dir ${ENGINE_PATH}/decoder \
         --moe_plugin disable \
-        --enable_xqa disable \
         --max_batch_size 64 \
         --gemm_plugin float16 \
         --bert_attention_plugin float16 \

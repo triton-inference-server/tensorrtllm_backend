@@ -35,6 +35,7 @@ SERVER=/opt/tritonserver/bin/tritonserver
 TOKENIZER_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm/tokenizer
 BASE_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm
 BASE_METRICS_VERIFICATION_TEST=base_metrics_verification_tests.py
+BASE_METRICS_VERIFICATION_TEST_NAME=base_metrics_verification_tests
 BASE_METRICS_VERIFICATION_LOG="base_metrics_verification.log"
 CUSTOM_METRICS_VERIFICATION_TEST=custom_metrics_verification_tests.py
 CUSTOM_METRICS_VERIFICATION_LOG="custom_metrics_verification.log"
@@ -159,13 +160,10 @@ prerun_kill_triton_server () {
 # Kill titonserver if it is still pending from previous test
 prerun_kill_triton_server || true
 
-rm -f *.log *.out
+rm -f *.log *.out *.txt
 # Generate TRT_LLM engines and install dependencies
 source ./generate_engines.sh
-python3 -m pip install --upgrade pip && \
-    pip3 install tritonclient[all] && \
-    pip3 install pandas && \
-    pip3 install tabulate
+pip3 install --upgrade tritonclient[all] pandas tabulate
 
 export AVAILABLE_GPUS=$(nvidia-smi -L | wc -l)
 
@@ -319,6 +317,46 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
+    # Start a clean server to verify token metrics are being
+    # reported correctly
+    SERVER_LOG="./${NUM_GPU}gpu_token_metrics.log"
+    replace_config_tags 'decoupled: False' 'decoupled: True' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    #Based on prompt below
+    export STREAM_INPUT_SIZE=3
+    export STREAM_OUTPUT_SIZE=50
+    python3 ${STREAM_DIR}/end_to_end_grpc_client.py \
+        --prompt="My name is" \
+        --streaming \
+        -o=$STREAM_OUTPUT_SIZE
+
+    if [ $? -ne 0 ]; then
+        cat $SERVER_LOG
+        echo -e "\n***\n*** Error executing inflight batching end-to-end test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        kill_server
+        wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+        RET=1
+    fi
+
+    # Make sure the metrics is retrieved after the server has updated the metrics internally
+    sleep ${SLEEP_DURATION}
+    curl localhost:8002/metrics -o end_to_end_token_metrics.out
+
+    set +e
+    kill_server
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    replace_config_tags 'decoupled: True' 'decoupled: False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+
     # Start a clean server to verify base metrics are being
     # reported correctly
     SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_base_metrics.log"
@@ -334,7 +372,36 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     set -e
 
     set +e
-    BACKEND_ROOT=${BACKEND_ROOT} python3 ${BASE_METRICS_VERIFICATION_TEST} >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    BACKEND_ROOT=${BACKEND_ROOT} python3 -m unittest ${BASE_METRICS_VERIFICATION_TEST_NAME}.TRTLLMBaseMetricsTest.test_end_to_end >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
+    if [ $? -ne 0 ]; then
+        cat ${BASE_METRICS_VERIFICATION_LOG}
+        echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+        RET=1
+    fi
+    set -e
+
+    set +e
+
+    kill_server
+    wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+    # Start a clean server to verify base metrics are being
+    # reported correctly
+    SERVER_LOG="./${NUM_GPU}gpu_IFB_no_streaming_base_metrics.log"
+    replace_config_tags '${max_beam_width}' "2" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
+    run_server "${SERVER_ARGS}"
+    wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+    if [ "$WAIT_RET" != "0" ]; then
+        # Cleanup
+        kill $SERVER_PID > /dev/null 2>&1 || true
+        echo -e "\n***\n*** Failed to start $SERVER\n***"
+        cat $SERVER_LOG
+        exit 1
+    fi
+    set -e
+
+    set +e
+    BACKEND_ROOT=${BACKEND_ROOT} python3 -m unittest ${BASE_METRICS_VERIFICATION_TEST_NAME}.TRTLLMBaseMetricsTest.test_end_to_end_beam_width >> ${BASE_METRICS_VERIFICATION_LOG} 2>&1
     if [ $? -ne 0 ]; then
         cat ${BASE_METRICS_VERIFICATION_LOG}
         echo -e "\n***\n*** Error executing base metrics verification test with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
@@ -418,7 +485,144 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     kill_server
     wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
+    # Per-request KV cache reuse stats
+    # Use large number of tokens for KV cache reuse
+    echo '{"text_input": "Machine learning is a field of artificial intelligence that focuses on the development of algorithms and statistical models that enable computers to perform tasks without explicit instructions. It involves the use of data and algorithms to imitate the way humans learn, gradually improving its accuracy. Machine learning is used in a variety of applications such as email filtering, detection of network intruders, and computer vision, where it is infeasible to develop an algorithm of specific instructions for performing the task. A subset of machine learning is closely related to computational statistics, which focuses on making predictions using computers.", "max_tokens": 50, "pad_id": 2, "end_id": 2, "return_kv_cache_reuse_stats": true }' > tmp.txt
+    echo "Machine learning is a field of artificial intelligence that focuses on the development of algorithms and statistical models that enable computers to perform tasks without explicit instructions. It involves the use of data and algorithms to imitate the way humans learn, gradually improving its accuracy. Machine learning is used in a variety of applications such as email filtering, detection of network intruders, and computer vision, where it is infeasible to develop an algorithm of specific instructions for performing the task. A subset of machine learning is closely related to computational statistics, which focuses on making predictions using computers." > prompt.txt
+
+    # Test the tensorrtllm model with different backends
+    for TRITON_BACKEND in tensorrtllm python; do
+        for DECOUPLED_TRIAL in non-decoupled decoupled; do
+            reset_model_repo
+            cp -r ${BACKEND_ROOT}/all_models/inflight_batcher_llm/* ${MODEL_DIR}
+            # Copy the engine and place it into the model folder
+            cp -r ${BASE_DIR}/engines/inflight_${NUM_GPU}_gpu/ triton_model_repo/tensorrt_llm/1
+            ENGINE_DIR=${MODEL_DIR}/tensorrt_llm/1/inflight_${NUM_GPU}_gpu/
+            TRITON_MAX_BATCH_SIZE=64
+            INSTANCE_COUNT=1
+            MAX_QUEUE_DELAY_MS=0
+            MAX_QUEUE_SIZE=0
+            FILL_TEMPLATE_SCRIPT=${BACKEND_ROOT}/tools/fill_template.py
+            if [ "${DECOUPLED_TRIAL}" == "non-decoupled" ]; then
+                DECOUPLED_MODE=false
+            else
+                DECOUPLED_MODE=true
+            fi
+
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT}
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_batching,max_queue_size:${MAX_QUEUE_SIZE},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,request_stats_max_iterations:10,exclude_input_in_output:True,enable_kv_cache_reuse:True,encoder_input_features_data_type:TYPE_FP16
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT},max_queue_size:${MAX_QUEUE_SIZE}
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT}
+
+            for ENDPOINT in generate grpc inflight_batcher_llm; do
+                SERVER_LOG="./${NUM_GPU}gpu_kv_cache_stats_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_server.log"
+                CLIENT_LOG="./${NUM_GPU}gpu_kv_cache_stats_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_client.log"
+                run_server "${SERVER_ARGS}"
+                wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
+
+                for ITER in 1 2; do
+                    if [ "$ITER" == "1" ]; then
+                        EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=2
+                        EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=2
+                        EXPECTED_KV_CACHE_REUSED_BLOCKS=0
+                    else
+                        EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=1
+                        EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=1
+                        EXPECTED_KV_CACHE_REUSED_BLOCKS=1
+                    fi
+
+                    if [ "$WAIT_RET" != "0" ]; then
+                        # Cleanup
+                        kill $SERVER_PID > /dev/null 2>&1 || true
+                        echo -e "\n***\n*** Failed to start $SERVER\n***"
+                        cat $SERVER_LOG
+                        exit 1
+                    fi
+
+                    if [ "$ENDPOINT" == "generate" ]; then
+                        # Generate endpoint
+                        # Test with both ensemble and tensorrt_llm_bls models
+                        if [ "$ITER" == "1" ]; then
+                            MODEL="ensemble"
+                        else
+                            MODEL="tensorrt_llm_bls"
+                        fi
+
+                        set +e
+                        if [ "${DECOUPLED_TRIAL}" == "non-decoupled" ]; then
+                            code=`curl -s -w %{http_code} -o ./curl.out -d @tmp.txt localhost:8000/v2/models/${MODEL}/generate`
+                        else
+                            # Remove the "data:" prefix from the response to avoid parsing issues
+                            code=$(curl -s -w %{http_code} -o ./curl.out -d @tmp.txt localhost:8000/v2/models/${MODEL}/generate_stream && sed -i 's/^data: //' ./curl.out)
+                        fi
+
+                        if [ "$code" != "200" ]; then
+                            cat ./curl.out
+                            echo -e "\n***\n*** Test Failed\n***"
+                            RET=1
+                        fi
+                        set -e
+
+                        kv_cache_alloc_new_blocks=$(jq '.kv_cache_alloc_new_blocks' curl.out)
+                        kv_cache_alloc_total_blocks=$(jq '.kv_cache_alloc_total_blocks' curl.out)
+                        kv_cache_reused_blocks=$(jq '.kv_cache_reused_blocks' curl.out)
+                    else
+                        STREAMING_FLAG=""
+                        if [ "${DECOUPLED_TRIAL}" == "decoupled" ]; then
+                            STREAMING_FLAG="--streaming"
+                        fi
+                        if [ "$ENDPOINT" == "grpc" ]; then
+                            set +e
+                            python3 ${STREAM_DIR}/end_to_end_grpc_client.py -v --prompt="$(cat prompt.txt)" --return-kv-cache-reuse-stats ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
+                            if [ $? -ne 0 ]; then
+                                cat $SERVER_LOG
+                                echo -e "\n***\n*** Error executing end_to_end_grpc_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+                                kill_server
+                                wait_for_server_terminated ${SERVER_PID[@]}
+                                RET=1
+                            fi
+                            set -e
+                        elif [ "$ENDPOINT" == "inflight_batcher_llm" ]; then
+                            set +e
+                            python3 ${STREAM_DIR}/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR} \
+                                        --return-kv-cache-reuse-stats --text "$(cat prompt.txt)" ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
+                            if [ $? -ne 0 ]; then
+                                cat $SERVER_LOG
+                                echo -e "\n***\n*** Error executing inflight_batcher_llm_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
+                                kill_server
+                                wait_for_server_terminated ${SERVER_PID[@]}
+                                RET=1
+                            fi
+                            set -e
+                        fi
+                        kv_cache_alloc_new_blocks=$(grep "kv_cache_alloc_new_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        kv_cache_alloc_total_blocks=$(grep "kv_cache_alloc_total_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        kv_cache_reused_blocks=$(grep "kv_cache_reused_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                    fi
+
+                    if [[ "$kv_cache_alloc_new_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS" || \
+                        "$kv_cache_alloc_total_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS" || \
+                        "$kv_cache_reused_blocks" -ne "$EXPECTED_KV_CACHE_REUSED_BLOCKS" ]]; then
+                        echo "Test failed for ${ENDPOINT} with ${NUM_GPU}GPU(s):"
+                        [[ "$kv_cache_alloc_new_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS" ]] && \
+                            echo "  kv_cache_alloc_new_blocks: expected $EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS, got $kv_cache_alloc_new_blocks"
+                        [[ "$kv_cache_alloc_total_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS" ]] && \
+                            echo "  kv_cache_alloc_total_blocks: expected $EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS, got $kv_cache_alloc_total_blocks"
+                        [[ "$kv_cache_reused_blocks" -ne "$EXPECTED_KV_CACHE_REUSED_BLOCKS" ]] && \
+                            echo "  kv_cache_reused_blocks: expected $EXPECTED_KV_CACHE_REUSED_BLOCKS, got $kv_cache_reused_blocks"
+                        RET=1
+                    fi
+                done
+                kill_server
+                wait_for_server_terminated ${SERVER_PID[@]}
+                # Add a delay to make sure the memory is freed before starting the next test
+                sleep 10
+            done
+        done
+    done
 done
+
 
 set +e
 # Verify TRT LLM statistics are being properly reported as custom metrics

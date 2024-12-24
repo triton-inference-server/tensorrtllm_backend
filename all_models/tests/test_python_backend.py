@@ -541,8 +541,8 @@ def test_convert_response(trtllm_response: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response, batch_index, batch_size, num_return_sequences)
     assert is_final == True
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -564,8 +564,8 @@ def test_convert_response_minimal(trtllm_response_minimal: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response_minimal, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response_minimal, batch_index, batch_size, num_return_sequences)
     assert is_final == False
     assert (response.tensors["output_ids"].as_numpy() == np.array([[1, 2, 3]
                                                                    ])).all()
@@ -584,8 +584,8 @@ def test_convert_response_error(trtllm_response_error: trtllm.Response):
     batch_index = 2
     batch_size = 3
     num_return_sequences = 1
-    response, is_final = convert_response(trtllm_response_error, batch_index,
-                                          batch_size, num_return_sequences)
+    response, is_final, output_length = convert_response(
+        trtllm_response_error, batch_index, batch_size, num_return_sequences)
     assert is_final == True
     assert response.has_error() and response.error.message == "internal error"
 
@@ -622,6 +622,9 @@ def test_convert_decoding_mode():
     assert convert_decoding_mode("top_k_top_p").isTopKandTopP()
     assert convert_decoding_mode("beam_search").isBeamSearch()
     assert convert_decoding_mode("medusa").isMedusa()
+    assert convert_decoding_mode("redrafter").isExplicitDraftTokens()
+    assert convert_decoding_mode("lookahead").isLookahead()
+    assert convert_decoding_mode("eagle").isEagle()
     with pytest.raises(
             Exception,
             match="decoding_mode value of 'other' is not supported"):
@@ -709,6 +712,8 @@ def test_get_executor_config_minimal():
     assert config.batching_type == trtllm.BatchingType.INFLIGHT
     assert config.decoding_config.decoding_mode is None
     assert config.decoding_config.medusa_choices is None
+    assert config.decoding_config.eagle_config is None
+    assert config.decoding_config.lookahead_decoding_config is None
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
     assert config.kv_cache_config.enable_block_reuse == False
     assert config.kv_cache_config.max_tokens is None

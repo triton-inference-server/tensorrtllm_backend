@@ -63,6 +63,12 @@ input [
    optional: true
   },
   {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
     name: "end_id"
     data_type: TYPE_INT32
     dims: [ 1 ]
@@ -142,6 +148,12 @@ input [
   },
   {
     name: "return_generation_logits"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_kv_cache_reuse_stats"
     data_type: TYPE_BOOL
     dims: [ 1 ]
     optional: true
@@ -265,6 +277,21 @@ output [
     name: "sequence_index"
     data_type: TYPE_INT32
     dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_new_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_reused_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "kv_cache_alloc_total_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
   }
 ]
 ensemble_scheduling {
@@ -377,6 +404,10 @@ ensemble_scheduling {
         value: "_REQUEST_DECODER_INPUT_LEN"
       }
       input_map {
+        key: "exclude_input_in_output"
+        value: "exclude_input_in_output"
+      }
+      input_map {
         key: "request_output_len"
         value: "_REQUEST_OUTPUT_LEN"
       }
@@ -439,6 +470,10 @@ ensemble_scheduling {
       input_map {
           key: "return_generation_logits"
           value: "return_generation_logits"
+      }
+      input_map {
+          key: "return_kv_cache_reuse_stats"
+          value: "return_kv_cache_reuse_stats"
       }
       input_map {
           key: "num_return_sequences"
@@ -515,6 +550,18 @@ ensemble_scheduling {
       output_map {
         key: "sequence_index"
         value: "sequence_index"
+      },
+      output_map {
+        key: "kv_cache_alloc_new_blocks"
+        value: "kv_cache_alloc_new_blocks"
+      },
+      output_map {
+        key: "kv_cache_reused_blocks"
+        value: "kv_cache_reused_blocks"
+      },
+      output_map {
+        key: "kv_cache_alloc_total_blocks"
+        value: "kv_cache_alloc_total_blocks"
       }
     },
     {

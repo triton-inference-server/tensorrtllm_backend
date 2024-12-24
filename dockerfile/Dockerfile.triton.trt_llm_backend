@@ -1,9 +1,9 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.10-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.10-py3
-ARG NVRTC_VER=12.6.77-1
-ARG TRT_VER=10.6.0.26
-ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.6.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.6.tar.gz
-ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.6.0/tars/TensorRT-${TRT_VER}.ubuntu-24.04.aarch64-gnu.cuda-12.6.tar.gz
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.11-py3-min
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:24.11-py3
+ARG NVRTC_VER=12.6.85-1
+ARG TRT_VER=10.7.0.23
+ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.7.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.6.tar.gz
+ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.7.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.6.tar.gz
 
 FROM ${PYTORCH_IMAGE} as pytorch_image
 FROM ${BASE_IMAGE} as install_dependencies
@@ -24,17 +24,19 @@ RUN if [ -n "${CCACHE_REMOTE_STORAGE}" ] ; then \
 
 # Copy PyTorch package from PyTorch image
 COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch /usr/local/lib/python3.10/dist-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+e000cf0ad9.nv24.10.dist-info /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+e000cf0ad9.nv24.10.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchgen /usr/local/lib/python3.10/dist-packages/torchgen
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision /usr/local/lib/python3.10/dist-packages/torchvision
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools /usr/local/lib/python3.10/dist-packages/setuptools
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-2.6.0a0+df5bbc09d1.nv24.11.dist-info /usr/local/lib/python3.12/dist-packages/torch-2.6.0a0+df5bbc09d1.nv24.11.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-0.20.0a0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update -q=2 && \
     apt-get install -y --no-install-recommends \
         python3-dev \
@@ -106,13 +108,14 @@ FROM ${BASE_IMAGE} as final_stage
 
 # Copy necessary files from the base stage
 COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch /usr/local/lib/python3.10/dist-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+e000cf0ad9.nv24.10.dist-info /usr/local/lib/python3.10/dist-packages/torch-2.5.0a0+e000cf0ad9.nv24.10.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchgen /usr/local/lib/python3.10/dist-packages/torchgen
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision /usr/local/lib/python3.10/dist-packages/torchvision
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.10/dist-packages/torchvision-0.20.0a0.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools /usr/local/lib/python3.10/dist-packages/setuptools
-COPY --from=pytorch_image /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.10/dist-packages/setuptools-70.3.0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-2.6.0a0+df5bbc09d1.nv24.11.dist-info /usr/local/lib/python3.12/dist-packages/torch-2.6.0a0+df5bbc09d1.nv24.11.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-0.20.0a0.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-0.20.0a0.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
@@ -123,6 +126,7 @@ ENV CUDA_VER=$CUDA_VERSION \
 
 # Install the necessary dependencies and remove previous TRT installation in the
 # final image
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update -q=2 && \
     apt-get install -y --no-install-recommends \
         python3-dev \

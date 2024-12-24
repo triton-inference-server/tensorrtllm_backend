@@ -62,6 +62,12 @@ const std::vector<std::string> CustomMetricsReporter::IFB_specific_labels_{
 const std::vector<std::string> CustomMetricsReporter::general_metric_keys_{"Timestamp", "Iteration Counter"};
 const std::vector<std::string> CustomMetricsReporter::general_metric_labels_{"timestamp", "iteration_counter"};
 
+const std::vector<std::string> CustomMetricsReporter::response_metric_type_keys_{"Total Output Tokens"};
+const std::vector<std::string> CustomMetricsReporter::response_metric_type_labels_{"total_output_tokens"};
+
+const std::vector<std::string> CustomMetricsReporter::input_metric_type_keys_{"Total Input Tokens"};
+const std::vector<std::string> CustomMetricsReporter::input_metric_type_labels_{"total_input_tokens"};
+
 uint64_t convertTimestampToMicroseconds(std::string const& ts)
 {
     std::tm tm = {};
@@ -88,14 +94,19 @@ TritonMetricGroup::TritonMetricGroup(std::string const& metric_family_label,
 {
 }
 
-TRITONSERVER_Error* TritonMetricGroup::CreateGroup(
-    std::string const& model_name, const uint64_t version, TRITONSERVER_MetricKind kind)
+TRITONSERVER_Error* TritonMetricGroup::CreateGroup(std::string const& model_name, const uint64_t version,
+    TRITONSERVER_MetricKind kind, std::optional<const std::vector<double>> buckets_)
 {
     TRITONSERVER_MetricFamily* metric_family = nullptr;
     RETURN_IF_ERROR(TRITONSERVER_MetricFamilyNew(
         &metric_family, kind, metric_family_label_.c_str(), metric_family_description_.c_str()));
     metric_family_.reset(metric_family);
-
+    TRITONSERVER_MetricArgs* args = nullptr;
+    std::vector<double> buckets;
+    if (buckets_.has_value())
+    {
+        buckets = buckets_.value();
+    }
     // overloading metris kind to determine update action as well
     switch (kind)
     {
@@ -103,9 +114,13 @@ TRITONSERVER_Error* TritonMetricGroup::CreateGroup(
     case TRITONSERVER_METRIC_KIND_COUNTER:
         update_function_ = decltype(update_function_){TRITONSERVER_MetricIncrement};
         break;
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM:
+        update_function_ = decltype(update_function_){TRITONSERVER_MetricObserve};
+        TRITONSERVER_MetricArgsNew(&args);
+        TRITONSERVER_MetricArgsSetHistogram(args, buckets.data(), buckets.size());
+        break;
     default: return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_UNSUPPORTED, "unsupported Triton metrics kind"); break;
     }
-
     std::vector<TRITONSERVER_Parameter const*> labels;
     std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> model_label(
         TRITONSERVER_ParameterNew("model", TRITONSERVER_PARAMETER_STRING, model_name.c_str()));
@@ -120,7 +135,8 @@ TRITONSERVER_Error* TritonMetricGroup::CreateGroup(
         std::unique_ptr<TRITONSERVER_Parameter, ParameterDeleter> sub_label(
             TRITONSERVER_ParameterNew(category_label_.c_str(), TRITONSERVER_PARAMETER_STRING, sub_labels_[i].c_str()));
         labels.emplace_back(sub_label.get());
-        RETURN_IF_ERROR(TRITONSERVER_MetricNew(&metric, metric_family_.get(), labels.data(), labels.size()));
+        RETURN_IF_ERROR(
+            TRITONSERVER_MetricNewWithArgs(&metric, metric_family_.get(), labels.data(), labels.size(), args));
         std::unique_ptr<TRITONSERVER_Metric, MetricDeleter> unique_metric(metric);
         metrics_.push_back(std::move(unique_metric));
         labels.pop_back();
@@ -202,6 +218,20 @@ TRITONSERVER_Error* CustomMetricsReporter::InitializeReporter(
     RETURN_IF_ERROR(general_metric_family_->CreateGroup(model_name, version));
     metric_groups_.push_back(std::move(general_metric_family_));
 
+    /* GENERAL METRIC GROUP */
+    response_tokens_metric_family_ = std::make_unique<TritonMetricGroup>("nv_llm_output_token_len",
+        "TRT LLM response metrics", "response_metric_type", response_metric_type_keys_, response_metric_type_labels_);
+    std::vector<double> buckets = {10.0, 50.0, 100.0, 500.0, 1000.0};
+    RETURN_IF_ERROR(
+        response_tokens_metric_family_->CreateGroup(model_name, version, TRITONSERVER_METRIC_KIND_HISTOGRAM, buckets));
+    metric_groups_.push_back(std::move(response_tokens_metric_family_));
+
+    input_tokens_metric_family_ = std::make_unique<TritonMetricGroup>("nv_llm_input_token_len",
+        "TRT LLM response metrics", "response_metric_type", input_metric_type_keys_, input_metric_type_labels_);
+    RETURN_IF_ERROR(
+        input_tokens_metric_family_->CreateGroup(model_name, version, TRITONSERVER_METRIC_KIND_HISTOGRAM, buckets));
+    metric_groups_.push_back(std::move(input_tokens_metric_family_));
+
     return nullptr; // success
 }
 
@@ -223,7 +253,7 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const
             if (!metrics.Find(key.c_str(), &value_json))
             {
                 std::string errStr = std::string("Failed to find " + key + " in metrics.");
-                return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, errStr.c_str());
+                continue;
             }
             if (key == "Timestamp")
             {
@@ -238,8 +268,11 @@ TRITONSERVER_Error* CustomMetricsReporter::UpdateCustomMetrics(std::string const
 
             metric_group_values.push_back(value);
         }
-
-        RETURN_IF_ERROR(metric_group->UpdateGroup(metric_group_values));
+        if (metric_group_values.size() > 0)
+        {
+            // Update only when something to update
+            RETURN_IF_ERROR(metric_group->UpdateGroup(metric_group_values));
+        }
     }
 
     return nullptr;
