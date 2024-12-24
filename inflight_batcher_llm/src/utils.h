@@ -62,12 +62,15 @@ struct InputFieldsNames
     static constexpr char const* embeddingBias = "embedding_bias";
     static constexpr char const* contextPhaseParams = "context_phase_params";
     static constexpr char const* crossAttentionMask = "cross_attention_mask";
+    static constexpr char const* skipCrossAttnBlocks = "skip_cross_attn_blocks";
 
     // OutputConfig
     static constexpr char const* returnLogProbs = "return_log_probs";
     static constexpr char const* returnGenerationLogits = "return_generation_logits";
     static constexpr char const* returnContextLogits = "return_context_logits";
     static constexpr char const* excludeInputFromOutput = "exclude_input_in_output";
+    static constexpr char const* returnPerfMetrics = "return_perf_metrics";
+    static constexpr char const* returnKvCacheReuseStats = "return_kv_cache_reuse_stats";
 
     // SamplingConfig
     static constexpr char const* beamWidth = "beam_width";
@@ -113,6 +116,9 @@ struct OutputFieldsNames
     static constexpr char const* batchIndex = "batch_index";
     static constexpr char const* sequenceIndex = "sequence_index";
     static constexpr char const* contextPhaseParams = "context_phase_params";
+    static constexpr char const* kvCacheAllocNewBlocks = "kv_cache_alloc_new_blocks";
+    static constexpr char const* kvCacheReusedBlocks = "kv_cache_reused_blocks";
+    static constexpr char const* kvCacheAllocTotalBlocks = "kv_cache_alloc_total_blocks";
 };
 
 inline static std::string const kStopInputTensorName = "stop";

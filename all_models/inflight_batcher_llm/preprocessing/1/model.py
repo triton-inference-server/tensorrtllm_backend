@@ -134,8 +134,10 @@ class TritonPythonModel:
                 'model_type']
 
             assert self.model_type in [
-                'llava', 'blip2-opt', 'vila', 'mllama'
-            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila and mllama. Got {self.model_type}."
+                'llava', 'blip2-opt', 'vila', 'mllama', 'llava_onevision'
+            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila, mllama and llava_onevision. Got {self.model_type}."
+
+            assert self.model_type != 'llava_onevison' or self.max_num_images is None or self.max_num_images <= 1, f"LLaVA-OneVsion is not support multi image inference currently."
 
             llm_model_path = model_config['parameters']['gpt_model_path'][
                 'string_value']
@@ -146,15 +148,17 @@ class TritonPythonModel:
                 llm_model_config["pretrained_config"]["vocab_size"])
             self._setup_ptable_shape(llm_model_config)
 
-            self.vision_preprocessor = VisionPreProcessor(
-                self.model_type, AutoProcessor.from_pretrained(tokenizer_dir),
-                model_config)
+            if self.model_type == 'mllama' or self.model_type == 'llava_onevision':
+                self.vision_preprocessor = VisionPreProcessor(
+                    self.model_type,
+                    AutoProcessor.from_pretrained(tokenizer_dir), model_config)
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
             "INPUT_ID", "DECODER_INPUT_ID", "REQUEST_INPUT_LEN",
             "REQUEST_DECODER_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
-            "OUT_END_ID", "OUT_PAD_ID", "OUT_PROMPT_TABLE_EXTRA_IDS"
+            "OUT_END_ID", "OUT_PAD_ID", "OUT_PROMPT_TABLE_EXTRA_IDS",
+            "PIXEL_VALUES", "IMAGE_SIZES"
         ]
         input_names = ["EMBEDDING_BIAS_WORDS", "EMBEDDING_BIAS_WEIGHTS"]
         for input_name in input_names:
@@ -270,8 +274,50 @@ class TritonPythonModel:
                 assert prompt_table_extra_id.shape[
                     1] == 1, "Multiple IDs cannot be provided for a single image"
 
+            # Preprocessing vision input passed as a url or bytes tensor
+            img_urls = pb_utils.get_input_tensor_by_name(request, 'IMAGE_URL')
+            image_bytes = pb_utils.get_input_tensor_by_name(
+                request, 'IMAGE_BYTES')
+            video_bytes = pb_utils.get_input_tensor_by_name(
+                request, 'VIDEO_BYTES')
+            vision_processed_tensors = []
+            visual_tokens = []
+            if self.is_multimodal and (img_urls or image_bytes or video_bytes):
+                assert self.vision_preprocessor != None, "Vision preprocessor for preparing images before encoding is None"
+                processed_tensors = {}
+                if self.model_type == 'mllama':
+                    processed_tensors = self.vision_preprocessor.mllama_process(
+                        queries=query.astype(str).tolist(),
+                        img_urls=img_urls,
+                        image_bytes=image_bytes,
+                    )
+                elif self.model_type == 'llava_onevision':
+                    if video_bytes is None:
+                        processed_tensors, visual_tokens = self.vision_preprocessor.llava_onevision_process_image(
+                            queries=query.astype(str).tolist(),
+                            img_urls=img_urls,
+                            image_bytes=image_bytes,
+                        )
+                    else:
+                        processed_tensors, visual_tokens = self.vision_preprocessor.llava_onevision_process_video(
+                            queries=query.astype(str).tolist(),
+                            video_bytes=video_bytes,
+                        )
+                else:
+                    raise ValueError(
+                        "Unsupported model type for IMAGE_BYTES or IMAGE_URL inputs"
+                    )
+                vision_processed_tensors = [
+                    pb_utils.Tensor.from_dlpack(k, v)
+                    for k, v in processed_tensors.items()
+                ]
+            else:
+                assert self.model_type != "mllama" and self.model_type != "llava_onevision", "Image processing requires IMAGE_BYTES or IMAGE_URL to be provided"
+
             # Preprocessing input data.
-            input_id, request_input_len = self._create_request(query)
+            # For the LLaVA_OneVision model, num_visual_features is not a fixed value
+            input_id, request_input_len = self._create_request(
+                query, visual_tokens)
             if decoder_query is not None:
                 decoder_input_id, request_decoder_input_len = self._create_request(
                     decoder_query)
@@ -293,24 +339,6 @@ class TritonPythonModel:
                     prompt_table_extra_ids[i] = np.where(
                         input_id[i] >= self.vocab_size,
                         prompt_table_extra_id[i], 0)
-
-            # Preprocessing vision input passed as a url or bytes tensor
-            img_urls = pb_utils.get_input_tensor_by_name(request, 'IMAGE_URL')
-            image_bytes = pb_utils.get_input_tensor_by_name(
-                request, 'IMAGE_BYTES')
-            if img_urls or image_bytes:
-                assert self.vision_preprocessor != None, "Vision preprocessor for preparing images before encoding is None"
-                vision_processed_tensors = self.vision_preprocessor.process(
-                    queries=query.astype(str).tolist(),
-                    img_urls=img_urls,
-                    image_bytes=image_bytes,
-                ) if self.is_multimodal else {}
-                vision_processed_tensors = [
-                    pb_utils.Tensor.from_dlpack(k, v)
-                    for k, v in vision_processed_tensors.items()
-                ]
-            else:
-                vision_processed_tensors = []
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
@@ -489,7 +517,7 @@ class TritonPythonModel:
 
         return start_ids
 
-    def _create_request(self, query):
+    def _create_request(self, query, visual_tokens=None):
         """
             query : batch string (2D numpy array)
         """
@@ -513,7 +541,7 @@ class TritonPythonModel:
                 ]
 
         if self.is_multimodal:
-            if 'blip2' in self.model_type:
+            if 'blip2' in self.model_type or 'mllama' == self.model_type:
                 pre_prompt = None
                 post_prompt = None
             elif 'llava' == self.model_type:
@@ -522,12 +550,9 @@ class TritonPythonModel:
             elif 'vila' == self.model_type:
                 pre_prompt = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: "
                 post_prompt = " ASSISTANT:"
-            elif 'mllama' == self.model_type:
-                pre_prompt = None
-                post_prompt = None
-
-            fake_prompt_id = np.arange(self.vocab_size,
-                                       self.vocab_size + self.ptable_shape[1])
+            elif 'llava_onevision' == self.model_type:
+                pre_prompt = "<|im_start|>user "
+                post_prompt = "<|im_end|><|im_start|>assistant\n"
 
             pre_prompt_id = np.array(
                 self.tokenizer.encode(
@@ -552,7 +577,26 @@ class TritonPythonModel:
                     concatenated_ids)
                 start_ids = self._setup_fake_prompts(query.shape[0],
                                                      batch_split_prompts)
+            elif self.model_type == 'llava_onevision':
+                fake_prompt_ids = []
+                extra_id = np.array(
+                    self.tokenizer.encode(
+                        '\n',
+                        add_special_tokens=self.add_special_tokens,
+                        padding=True))
+                for tokens in visual_tokens:
+                    prompt_id = np.arange(self.vocab_size,
+                                          self.vocab_size + tokens)
+                    fake_prompt_ids.append(prompt_id)
+                start_ids = [
+                    np.concatenate((pre_prompt_id, prompt_id, extra_id, ids,
+                                    post_prompt_id),
+                                   axis=0)
+                    for prompt_id, ids in zip(fake_prompt_ids, start_ids)
+                ]
             else:
+                fake_prompt_id = np.arange(
+                    self.vocab_size, self.vocab_size + self.ptable_shape[1])
                 start_ids = [
                     np.concatenate(
                         (pre_prompt_id, fake_prompt_id, ids, post_prompt_id),
@@ -725,7 +769,7 @@ class VisionPreProcessor:
                     Image.open(requests.get(img_url, stream=True).raw))
         return images
 
-    def process(self, queries, img_urls=None, image_bytes=None):
+    def mllama_process(self, queries, img_urls=None, image_bytes=None):
         vision_processed_tensors = {}
         if img_urls is not None or image_bytes is not None:
             if img_urls is not None:
@@ -774,3 +818,91 @@ class VisionPreProcessor:
                         val, self.output_str_dtypes[key])
                 vision_processed_tensors[key] = val
         return vision_processed_tensors
+
+    def llava_onevision_process_image(self,
+                                      queries,
+                                      img_urls=None,
+                                      image_bytes=None):
+
+        import torch
+        vision_processed_tensors = {}
+        if img_urls is not None:
+            # download and read images
+            images = [
+                self.load_images_from_urls(urls)
+                for urls in img_urls.as_numpy()
+            ]
+        else:
+            images = [
+                img for img_list in self.load_images_tensor(image_bytes)
+                for img in img_list
+            ]
+
+        batch_size = len(images)
+        assert len(
+            queries
+        ) == batch_size, f"Image must have the same batch size as Query."
+        preprocessor_outputs = {}
+        possible_output_names = ['PIXEL_VALUES', 'IMAGE_SIZES']
+        visual_tokens = []
+        for batch_id in range(batch_size):
+            # Preprocess images and query
+            processed_vision_data = self.vision_model_processor(
+                images=images[batch_id], text='<image>', return_tensors="pt")
+            visual_tokens.append(processed_vision_data['input_ids'].shape[1])
+
+            # Create vision output tensors
+            for key in possible_output_names:
+                val = processed_vision_data.get(key.lower())
+                if val is not None:
+                    if key not in preprocessor_outputs:
+                        preprocessor_outputs[key] = []
+                    preprocessor_outputs[key].append(val)
+
+        max_patch = max(x.shape[1]
+                        for x in preprocessor_outputs['PIXEL_VALUES'])
+        preprocessor_outputs['PIXEL_VALUES'] = [
+            torch.nn.functional.pad(
+                image, (0, 0, 0, 0, 0, 0, 0, max_patch - image.shape[1], 0, 0),
+                mode='constant')
+            for image in preprocessor_outputs['PIXEL_VALUES']
+        ]
+        for key, tensor_list in preprocessor_outputs.items():
+            val = self.convert_tensor_list_to_tensor(tensor_list)
+            if key in self.output_str_dtypes:
+                val = self.convert_tensor_to_str_dtype(
+                    val, self.output_str_dtypes[key])
+            vision_processed_tensors[key] = val
+        return vision_processed_tensors, visual_tokens
+
+    def llava_onevision_process_video(self, queries, video_bytes=None):
+        import torch
+        vision_processed_tensors = {}
+        videos = [video for video in self.load_images_tensor(video_bytes)]
+
+        batch_size = len(videos)
+        assert len(
+            queries
+        ) == batch_size, f"Video must have the same batch size as Query."
+        preprocessor_outputs = {}
+        preprocessor_outputs['PIXEL_VALUES'] = []
+        preprocessor_outputs['IS_VIDEO_INPUT'] = []
+        visual_tokens = []
+        for batch_id in range(len(queries)):
+            processed_vision_data = self.vision_model_processor(
+                videos=list(videos[batch_id]),
+                text='<video>',
+                return_tensors="pt")
+            visual_tokens.append(processed_vision_data['input_ids'].shape[1])
+            preprocessor_outputs['PIXEL_VALUES'].append(
+                processed_vision_data['pixel_values_videos'])
+            preprocessor_outputs['IS_VIDEO_INPUT'].append(
+                torch.ones((1, 1), dtype=torch.bool))
+
+        for key, tensor_list in preprocessor_outputs.items():
+            val = self.convert_tensor_list_to_tensor(tensor_list)
+            if key in self.output_str_dtypes:
+                val = self.convert_tensor_to_str_dtype(
+                    val, self.output_str_dtypes[key])
+            vision_processed_tensors[key] = val
+        return vision_processed_tensors, visual_tokens

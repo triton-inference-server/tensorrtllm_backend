@@ -124,7 +124,8 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    top_k_data, top_p_data, draft_ids_data,
                    return_context_logits_data, return_generation_logits_data,
                    decoder_input_ids_data, prompt_table_extra_id_data,
-                   exclude_input_in_output, num_return_sequences_data):
+                   exclude_input_in_output, num_return_sequences_data,
+                   return_kv_cache_reuse_stats_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -196,6 +197,11 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
     if exclude_input_in_output is not None:
         inputs += [
             prepare_tensor("exclude_input_in_output", exclude_input_in_output),
+        ]
+    if return_kv_cache_reuse_stats_data is not None:
+        inputs += [
+            prepare_tensor("return_kv_cache_reuse_stats",
+                           return_kv_cache_reuse_stats_data),
         ]
     return inputs
 
@@ -522,6 +528,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--return-kv-cache-reuse-stats",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Return per-request kv cache reuse stats",
+    )
+
+    parser.add_argument(
         "--top-k",
         type=int,
         required=False,
@@ -679,6 +693,11 @@ if __name__ == "__main__":
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
+    return_kv_cache_reuse_stats_data = None
+    if FLAGS.return_kv_cache_reuse_stats:
+        return_kv_cache_reuse_stats_data = np.array(
+            [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
+
     repetition_penalty_data = None
     if FLAGS.repetition_penalty is not None:
         repetition_penalty = [[FLAGS.repetition_penalty]]
@@ -734,7 +753,7 @@ if __name__ == "__main__":
         draft_ids_data, return_context_logits_data,
         return_generation_logits_data, decoder_input_ids_data,
         prompt_table_extra_id_data, exclude_input_in_output,
-        num_return_sequences_data)
+        num_return_sequences_data, return_kv_cache_reuse_stats_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -784,6 +803,7 @@ if __name__ == "__main__":
     output_log_probs = [None] * num_generations
     context_logits = None
     generation_logits = [None] * num_generations
+    return_kv_cache_reuse_stats = {}
 
     def set_output(outputs: list, data, seq_idx=None):
         if FLAGS.beam_width > 1:
@@ -873,6 +893,16 @@ if __name__ == "__main__":
                                     generation_logits,
                                     result.as_numpy('generation_logits')[0],
                                     seq_idx)
+                            if FLAGS.return_kv_cache_reuse_stats:
+                                return_kv_cache_reuse_stats[
+                                    'kv_cache_alloc_new_blocks'] = result.as_numpy(
+                                        'kv_cache_alloc_new_blocks')
+                                return_kv_cache_reuse_stats[
+                                    'kv_cache_reused_blocks'] = result.as_numpy(
+                                        'kv_cache_reused_blocks')
+                                return_kv_cache_reuse_stats[
+                                    'kv_cache_alloc_total_blocks'] = result.as_numpy(
+                                        'kv_cache_alloc_total_blocks')
 
                             sequence_lengths[seq_idx] = result.as_numpy(
                                 'sequence_length')[0][0]
@@ -952,6 +982,16 @@ if __name__ == "__main__":
                             set_output(generation_logits,
                                        result.as_numpy('generation_logits')[0],
                                        seq_idx)
+                        if FLAGS.return_kv_cache_reuse_stats:
+                            return_kv_cache_reuse_stats[
+                                'kv_cache_alloc_new_blocks'] = result.as_numpy(
+                                    'kv_cache_alloc_new_blocks')
+                            return_kv_cache_reuse_stats[
+                                'kv_cache_reused_blocks'] = result.as_numpy(
+                                    'kv_cache_reused_blocks')
+                            return_kv_cache_reuse_stats[
+                                'kv_cache_alloc_total_blocks'] = result.as_numpy(
+                                    'kv_cache_alloc_total_blocks')
                         if output_ids is not None:
                             print(result.as_numpy('sequence_length'))
                             if FLAGS.beam_width > 1:
@@ -1051,5 +1091,9 @@ if __name__ == "__main__":
             generation_logits = expand_and_vstack(generation_logits)
             print(f"generation_logits.shape: {generation_logits.shape}")
             print(f"generation_logits: {generation_logits}")
+
+        if FLAGS.return_kv_cache_reuse_stats:
+            for key, value in return_kv_cache_reuse_stats.items():
+                print(f"{key}: {value[0][0]}")
 
         sys.exit(not passed)

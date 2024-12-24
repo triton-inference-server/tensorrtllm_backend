@@ -555,7 +555,13 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
     bool returnContextLogits{false};
     extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
 
-    return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits);
+    // When returnKvCacheReuseStats is set to true, set returnPerfMetrics to true to return KV cache reuse stats from
+    // perf metrics.
+    bool returnPerfMetrics{false};
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnKvCacheReuseStats, returnPerfMetrics);
+
+    return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits,
+        false /* excludeInputFromOutput */, false /* returnEncoderOutput */, returnPerfMetrics);
 }
 
 std::optional<executor::ExternalDraftTokensConfig> getExternalDraftTokensConfigFromTensors(
@@ -776,8 +782,8 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
             = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
-            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, loraConfig,
-            std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
+            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, std::nullopt,
+            loraConfig, std::nullopt, std::nullopt, std::nullopt, encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {
@@ -810,6 +816,13 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
                 = inputTensors.at(InputFieldsNames::crossAttentionMask).tensor;
             utils::squeezeTensor(originalTensor, 2);
             request.setCrossAttentionMask(executor::detail::ofITensor(originalTensor));
+        }
+
+        if (inputTensors.count(InputFieldsNames::skipCrossAttnBlocks))
+        {
+            std::shared_ptr<runtime::ITensor> originalTensor
+                = inputTensors.at(InputFieldsNames::skipCrossAttnBlocks).tensor;
+            request.setSkipCrossAttnBlocks(executor::detail::ofITensor(originalTensor));
         }
 
         requests.emplace_back(std::move(request));
