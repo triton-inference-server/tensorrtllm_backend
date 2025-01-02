@@ -33,7 +33,6 @@ from typing import List
 import numpy as np
 import requests
 import triton_python_backend_utils as pb_utils
-from PIL import Image
 from transformers import AutoProcessor, AutoTokenizer, T5Tokenizer
 
 
@@ -754,6 +753,7 @@ class VisionPreProcessor:
         self.vision_model_type = vision_model_type
 
     def load_images_from_urls(self, img_urls):
+        from PIL import Image
         images = []
         for img_url in img_urls:
             img_url = img_url.decode()
