@@ -1041,6 +1041,7 @@ if [ "$MODEL" = "gpt-disaggregated-serving-bls" ]; then
     MAX_TOKENS_IN_KV_CACHE="${MAX_TOKENS_IN_KV_CACHES[0]}"
     BATCH_SCHEDULER_POLICY="${BATCH_SCHEDULER_POLICIES[0]}"
     KV_CACHE_FREE_GPU_MEM_FRACTION="0.2"
+    export TRTLLM_USE_MPI_KVCACHE="1"
 
     for BATCHING_STRATEGY in "${BATCHING_STRATEGIES[@]}"; do
 
@@ -1054,6 +1055,8 @@ if [ "$MODEL" = "gpt-disaggregated-serving-bls" ]; then
 
         kill_triton_server
     done
+
+    export TRTLLM_USE_MPI_KVCACHE="0"
 fi
 
 if [ "$MODEL" = "gpt-gather-logits" ]; then
