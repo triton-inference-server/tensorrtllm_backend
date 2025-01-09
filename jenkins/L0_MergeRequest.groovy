@@ -12,8 +12,8 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.11-py3-x86_64-ubuntu24.04-trt10.7.0.23-pypi-devel-202412061322-920"
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-24.11-py3-aarch64-ubuntu22.04-trt10.7.0.23-src_non_cxx11_abi-devel-202412061322-920"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-x86_64-ubuntu24.04-trt10.8.0.24-pypi-devel-202501042235-964"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.24-src_non_cxx11_abi-devel-202501042235-964"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -195,6 +195,11 @@ def createKubernetesPodConfig(image, type)
                   kubernetes.io/os: linux
                   nvidia.com/gpu_type: ${type}
                   nvidia.com/driver_version: '${driverVersion}'"""
+        if (type == "GB100-V0F2A-P2020-SKU200-TS2") {
+          selectors = """
+                  kubernetes.io/os: linux
+                  nvidia.com/gpu_type: ${type}"""
+        }
 
         containerConfig = """
                   - name: trt-llm-backend
@@ -341,7 +346,7 @@ def runBuild()
       sh "cat ${CCACHE_DIR}/ccache.conf"
 
       // Step 4: build tensorrt-llm backend
-      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_JOBS} --trt_root /usr/local/tensorrt"
+      sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_JOBS} --trt_root /usr/local/tensorrt -a '80-real;86-real;89-real;90-real;100-real'"
       sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
       sh "tar -zcf tensorrt_llm_backend_internal.tar.gz ${BACKEND_ROOT}"
     }
@@ -363,7 +368,7 @@ def installDependency()
     sh "curl -L ${backendTarfile} | tar -xz ${BACKEND_ROOT}"
     sh "ls -lah"
     sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt || true"
-    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl"
+    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl --extra-index-url https://gitlab-master.nvidia.com/api/v4/projects/95421/packages/pypi/simple"
 
     sh "env"
     sh "which python3"
@@ -799,11 +804,12 @@ pipeline {
                   runTRTLLMBackendTest("gpt-disaggregated-serving-bls")
                 }
               }
-              stage("Test gpt-ib") {
-                steps {
-                  runTRTLLMBackendTest("gpt-ib")
-                }
-              }
+              // https://nvbugspro.nvidia.com/bug/5040102
+              // stage("Test gpt-ib") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-ib")
+              //   }
+              // }
               stage("Test gpt-ib-ptuning") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-ptuning")
@@ -849,6 +855,73 @@ pipeline {
                   runTRTLLMBackendTest("llava_onevision")
                 }
               }
+            }
+          }
+          stage("B100_TS2_PCIe CPP tester") {
+            agent {
+              kubernetes createKubernetesPodConfig(BACKEND_DOCKER_IMAGE, "GB100-V0F2A-P2020-SKU200-TS2")
+            }
+            stages {
+              stage("Setup tester") {
+                steps {
+                  installDependency()
+                }
+              }
+              // stage("Test gpt-disaggeregated-serving-bls") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-disaggregated-serving-bls")
+              //   }
+              // }
+              // stage("Test gpt-ib") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-ib")
+              //   }
+              // }
+              stage("Test gpt-ib-ptuning") {
+                steps {
+                  runTRTLLMBackendTest("gpt-ib-ptuning")
+                }
+              }
+              stage("Test gpt-2b-ib-lora") {
+                steps {
+                  runTRTLLMBackendTest("gpt-2b-ib-lora")
+                }
+              }
+              // stage("Test gpt-speculative-decoding") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-speculative-decoding")
+              //   }
+              // }
+              // stage("Test gpt-ib-speculative-decoding-bls") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-ib-speculative-decoding-bls")
+              //   }
+              // }
+              // stage("Test gpt-gather-logits") {
+              //   steps {
+              //     runTRTLLMBackendTest("gpt-gather-logits")
+              //   }
+              // }
+              // stage("Test medusa") {
+              //   steps {
+              //     runTRTLLMBackendTest("medusa")
+              //   }
+              // }
+              // stage("Test mllama") {
+              //   steps {
+              //     runTRTLLMBackendTest("mllama")
+              //   }
+              // }
+              // stage("Test eagle") {
+              //   steps {
+              //     runTRTLLMBackendTest("eagle")
+              //   }
+              // }
+              // stage("Test llava_onevision") {
+              //   steps {
+              //     runTRTLLMBackendTest("llava_onevision")
+              //   }
+              // }
             }
           }
         }
