@@ -869,7 +869,8 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         --input_file=input.csv \
         --engine_dir ${DECODER_ENGINE_PATH} \
         --output_csv output_w_prompt.csv \
-        --enable_context_fmha_fp32_acc
+        --enable_context_fmha_fp32_acc \
+        --no-kv_cache_enable_block_reuse
 
     #Input w/o virtual tokens:
     echo "25229,291,7379,251522,39854,5754,251514,315,32906,14297,398,261" > input_wo_prompt.csv
@@ -879,7 +880,8 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         --input_file=input_wo_prompt.csv \
         --engine_dir ${DECODER_ENGINE_PATH} \
         --output_csv output_wo_prompt.csv \
-        --enable_context_fmha_fp32_acc
+        --enable_context_fmha_fp32_acc \
+        --no-kv_cache_enable_block_reuse
 
     popd
 
@@ -896,7 +898,13 @@ if [ "$MODEL" = "gpt-ib-ptuning" ]; then
         # Test client
         pushd inflight_batcher_llm/client
 
-        python3 inflight_batcher_llm_client.py --prompt-embedding-table ../../tensorrt_llm/examples/gpt/email_composition.npy --prompt-task-id 0 --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv --output-tokens-csv ../../tensorrt_llm/examples/gpt/output_w_prompt.csv --check-output --request-output-len 8
+        python3 inflight_batcher_llm_client.py \
+          --prompt-embedding-table ../../tensorrt_llm/examples/gpt/email_composition.npy \
+          --prompt-task-id 0 \
+          --input-tokens-csv ../../tensorrt_llm/examples/gpt/input.csv \
+          --output-tokens-csv ../../tensorrt_llm/examples/gpt/output_w_prompt.csv \
+          --check-output \
+          --request-output-len 8
 
         python3 inflight_batcher_llm_client.py --input-tokens-csv ../../tensorrt_llm/examples/gpt/input_wo_prompt.csv --output-tokens-csv ../../tensorrt_llm/examples/gpt/output_wo_prompt.csv --check-output --request-output-len 8
 

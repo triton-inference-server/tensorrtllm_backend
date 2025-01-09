@@ -48,7 +48,7 @@ export LD_LIBRARY_PATH="/usr/local/cuda/compat/lib.real:${LD_LIBRARY_PATH}"
 
 BUILD_TESTS_ARG=""
 if [[ "$BUILD_UNIT_TESTS" == "true" ]]; then
-  BUILD_TESTS_ARG="-DBUILD_TESTS=ON"
+  BUILD_TESTS_ARG="-DBUILD_TESTS=ON -DUSE_CXX11_ABI=ON"
 fi
 
 cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ${BUILD_TESTS_ARG} ..

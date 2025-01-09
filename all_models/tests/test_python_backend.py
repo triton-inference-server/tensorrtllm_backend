@@ -725,7 +725,7 @@ def model_config() -> Dict:
         "medusa_choices": "{1, 2, 3, 4}, {5, 6, 7}",
         "decoding_mode": "medusa",
         "batch_scheduler_policy": "max_utilization",
-        "enable_kv_cache_reuse": "true",
+        "enable_kv_cache_reuse": "false",
         "max_tokens_in_paged_kv_cache": "1",
         "max_attention_window_size": "2",
         "sink_token_length": "3",
@@ -754,7 +754,7 @@ def test_get_executor_config(model_config: Dict):
     assert config.decoding_config.medusa_choices == [[1, 2, 3, 4], [5, 6, 7]]
     assert config.decoding_config.decoding_mode.isMedusa()
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.MAX_UTILIZATION
-    assert config.kv_cache_config.enable_block_reuse == True
+    assert config.kv_cache_config.enable_block_reuse == False
     assert config.kv_cache_config.max_tokens == 1
     assert config.kv_cache_config.max_attention_window == [2]
     assert config.kv_cache_config.sink_token_length == 3
@@ -799,7 +799,7 @@ def test_get_executor_config_minimal():
     assert config.decoding_config.eagle_config is None
     assert config.decoding_config.lookahead_decoding_config is None
     assert config.scheduler_config.capacity_scheduler_policy == trtllm.CapacitySchedulerPolicy.GUARANTEED_NO_EVICT
-    assert config.kv_cache_config.enable_block_reuse == False
+    assert config.kv_cache_config.enable_block_reuse == True
     assert config.kv_cache_config.max_tokens is None
     assert config.kv_cache_config.max_attention_window is None
     assert config.kv_cache_config.sink_token_length is None
