@@ -46,7 +46,7 @@ cd $BUILD_DIR
 
 export LD_LIBRARY_PATH="/usr/local/cuda/compat/lib.real:${LD_LIBRARY_PATH}"
 
-BUILD_TESTS_ARG=""
+BUILD_TESTS_ARG="-DUSE_CXX11_ABI=ON"
 if [[ "$BUILD_UNIT_TESTS" == "true" ]]; then
   BUILD_TESTS_ARG="-DBUILD_TESTS=ON -DUSE_CXX11_ABI=ON"
 fi
