@@ -804,12 +804,11 @@ pipeline {
                   runTRTLLMBackendTest("gpt-disaggregated-serving-bls")
                 }
               }
-              // https://nvbugspro.nvidia.com/bug/5040102
-              // stage("Test gpt-ib") {
-              //   steps {
-              //     runTRTLLMBackendTest("gpt-ib")
-              //   }
-              // }
+              stage("Test gpt-ib") {
+                steps {
+                  runTRTLLMBackendTest("gpt-ib")
+                }
+              }
               stage("Test gpt-ib-ptuning") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-ptuning")
