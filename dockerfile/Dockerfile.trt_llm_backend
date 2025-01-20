@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=gitlab-master.nvidia.com:5005/dl/dgx/tritonserver
-ARG BASE_TAG=25.01-py3.22558435-devel
+ARG BASE_TAG=25.01-py3-stage
 ARG PYTORCH_IMAGE=gitlab-master.nvidia.com:5005/dl/dgx/pytorch:25.01-py3-base
 
 FROM ${PYTORCH_IMAGE} as pytorch_image
