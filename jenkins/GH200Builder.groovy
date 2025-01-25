@@ -8,7 +8,7 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // Available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.40-skip-devel-202501201745-987"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.43-skip-devel-202501241640-999"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -132,7 +132,7 @@ def runBuild()
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
         // Step 4: build tensorrt-llm backend
         sh "pip3 list"
-        sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real;100-real' --trt_root /usr/local/tensorrt"
+        sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real;100-real;120-real' --trt_root /usr/local/tensorrt"
         sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
         sh "tar -zcf tensorrt_llm_backend_internal_aarch64.tar.gz ${BACKEND_ROOT}"
     }
