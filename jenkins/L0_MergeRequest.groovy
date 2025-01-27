@@ -782,11 +782,12 @@ pipeline {
                   runTRTLLMBackendTest("triton-extensive")
                 }
               }
-              stage("Test blip2-opt") {
-                steps {
-                  runTRTLLMBackendTest("blip2-opt")
-                }
-              }
+              // https://nvbugspro.nvidia.com/bug/4854007
+              // stage("Test blip2-opt") {
+              //   steps {
+              //     runTRTLLMBackendTest("blip2-opt")
+              //   }
+              // }
             }
           }
           stage("A100_80GB_PCIE CPP tester") {
