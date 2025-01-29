@@ -583,7 +583,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing end_to_end_grpc_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
                                 kill_server
-                                wait_for_server_terminated ${SERVER_PID[@]}
+                                wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
                                 RET=1
                             fi
                             set -e
@@ -595,7 +595,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing inflight_batcher_llm_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
                                 kill_server
-                                wait_for_server_terminated ${SERVER_PID[@]}
+                                wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
                                 RET=1
                             fi
                             set -e
@@ -619,7 +619,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                     fi
                 done
                 kill_server
-                wait_for_server_terminated ${SERVER_PID[@]}
+                wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
                 # Add a delay to make sure the memory is freed before starting the next test
                 sleep 10
             done
