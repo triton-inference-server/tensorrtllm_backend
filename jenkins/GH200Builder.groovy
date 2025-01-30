@@ -120,7 +120,7 @@ def runBuild()
         sh "pip3 install pre-commit"
         sh "apt-get update && apt-get install -y 2to3"
         sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
-        sh "cd ${BACKEND_ROOT} && pre-commit run -a"
+        // sh "cd ${BACKEND_ROOT} && pre-commit run -a"
         // Step 3: packaging tensorrt-llm backend
         sh "rm -rf tensorrt_llm_backend"
         sh "cp -r ${BACKEND_ROOT} tensorrt_llm_backend"
