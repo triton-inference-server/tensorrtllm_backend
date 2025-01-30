@@ -31,6 +31,7 @@ to learn more about ensemble models.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `triton_max_batch_size` | The maximum batch size that the Triton model instance will run with. Note that for the `tensorrt_llm` model, the actual runtime batch size can be larger than `triton_max_batch_size`. The runtime batch size will be determined by the TRT-LLM scheduler based on a number of parameters such as number of available requests in the queue, and the engine build `trtllm-build` parameters (such `max_num_tokens` and `max_batch_size`). |
+| `logits_datatype` | The data type for context and generation logits. |
 
 ### preprocessing model
 
@@ -86,6 +87,7 @@ description of the parameters below.
 | `engine_dir` | The path to the engine for the model. |
 | `batching_strategy` | The batching strategy to use. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
 | `encoder_input_features_data_type` | The dtype for the input tensor `encoder_input_features`. For the mllama model, this must be `TYPE_BF16`. For other models like whisper, this is `TYPE_FP16`. |
+| `logits_datatype` | The data type for context and generation logits. |
 
 *Optional parameters*
 
@@ -180,6 +182,7 @@ to learn more about BLS models.
 | `triton_max_batch_size` | The maximum batch size that the model can handle. |
 | `decoupled_mode` | Whether to use decoupled mode. |
 | `bls_instance_count` | The number of instances of the model to run. When using the BLS model instead of the ensemble, you should set the number of model instances to the maximum batch size supported by the TRT engine to allow concurrent request execution. |
+| `logits_datatype` | The data type for context and generation logits. |
 
 *Optional parameters*
 

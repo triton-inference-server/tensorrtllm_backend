@@ -280,9 +280,9 @@ class TritonPythonModel:
                     dtype=torch.int32)
                 logger.debug(
                     f"encoder_output_lengths: {encoder_output_lengths}")
-                skip_cross_attn_blocks = torch.zeros([output_shape[0], 1],
-                                                     dtype=torch.bool,
-                                                     device='cpu')
+                skip_cross_attn_blocks = torch.ones([output_shape[0], 1],
+                                                    dtype=torch.bool,
+                                                    device='cpu')
                 logger.debug(
                     f"skip_cross_attn_blocks: {skip_cross_attn_blocks}")
 
