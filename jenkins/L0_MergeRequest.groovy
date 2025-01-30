@@ -12,8 +12,8 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-x86_64-ubuntu24.04-trt10.8.0.43-skip-devel-202501241640-999"
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.43-skip-devel-202501241640-999"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-x86_64-ubuntu24.04-trt10.8.0.43-skip-devel-202501292120-1002"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.43-skip-devel-202501292120-1002"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -368,7 +368,7 @@ def installDependency()
     sh "curl -L ${backendTarfile} | tar -xz ${BACKEND_ROOT}"
     sh "ls -lah"
     sh "cd ${BACKEND_ROOT} && pip3 install -r requirements.txt || true"
-    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl --extra-index-url https://gitlab-master.nvidia.com/api/v4/projects/95421/packages/pypi/simple"
+    sh "cd ${BACKEND_ROOT} && pip3 install --extra-index-url https://pypi.nvidia.com/ --extra-index-url https://pypi.ngc.nvidia.com tensorrt_llm/build/tensorrt_llm*.whl"
 
     sh "env"
     sh "which python3"
