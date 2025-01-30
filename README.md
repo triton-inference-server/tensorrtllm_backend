@@ -46,7 +46,6 @@ repo. If you don't find your answer there you can ask questions on the
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
     - [Quick Start](#quick-start)
-      - [Update the TensorRT-LLM submodule](#update-the-tensorrt-llm-submodule)
       - [Launch Triton TensorRT-LLM container](#launch-triton-tensorrt-llm-container)
       - [Prepare TensorRT-LLM engines](#prepare-tensorrt-llm-engines)
       - [Prepare the Model Repository](#prepare-the-model-repository)
@@ -102,15 +101,6 @@ to see the aligned versions.
 
 In this example, we will use Triton 24.07 with TensorRT-LLM v0.11.0.
 
-#### Update the TensorRT-LLM submodule
-
-```bash
-git clone -b v0.11.0 https://github.com/triton-inference-server/tensorrtllm_backend.git
-cd tensorrtllm_backend
-git submodule update --init --recursive
-git lfs install
-git lfs pull
-```
 
 #### Launch Triton TensorRT-LLM container
 
@@ -123,7 +113,6 @@ sure to replace the `<xx.yy>` with the version of Triton that you want to use.
 ```bash
 docker run --rm -it --net host --shm-size=2g \
     --ulimit memlock=-1 --ulimit stack=67108864 --gpus all \
-    -v </path/to/tensorrtllm_backend>:/tensorrtllm_backend \
     -v </path/to/engines>:/engines \
     nvcr.io/nvidia/tritonserver:24.07-trtllm-python-py3
 ```
@@ -138,7 +127,7 @@ all the supported models. You can also check out the
 examples with serving TensorRT-LLM models.
 
 ```bash
-cd /tensorrtllm_backend/tensorrt_llm/examples/gpt
+cd /app/examples/gpt
 
 # Download weights from HuggingFace Transformers
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
@@ -196,7 +185,7 @@ please see the [model config](./docs/model_config.md#tensorrt_llm_bls-model) sec
 
 ```bash
 mkdir /triton_model_repo
-cp -r /tensorrtllm_backend/all_models/inflight_batcher_llm/* /triton_model_repo/
+cp -r /app/all_models/inflight_batcher_llm/* /triton_model_repo/
 ```
 
 #### Modify the Model Configuration
@@ -208,13 +197,13 @@ modified, please refer to the [model config](./docs/model_config.md) section.
 
 ```bash
 ENGINE_DIR=/engines/gpt/fp16/4-gpu
-TOKENIZER_DIR=/tensorrtllm_backend/tensorrt_llm/examples/gpt/gpt2
+TOKENIZER_DIR=/app/examples/gpt/gpt2
 MODEL_FOLDER=/triton_model_repo
 TRITON_MAX_BATCH_SIZE=4
 INSTANCE_COUNT=1
 MAX_QUEUE_DELAY_MS=0
 MAX_QUEUE_SIZE=0
-FILL_TEMPLATE_SCRIPT=/tensorrtllm_backend/tools/fill_template.py
+FILL_TEMPLATE_SCRIPT=/app/tools/fill_template.py
 DECOUPLED_MODE=false
 
 python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
@@ -236,7 +225,7 @@ Use the launch_triton_server.py script. This launches multiple instances of trit
 ```bash
 # 'world_size' is the number of GPUs you want to use for serving. This should
 # be aligned with the number of GPUs used to build the TensorRT-LLM engine.
-python3 /tensorrtllm_backend/scripts/launch_triton_server.py --world_size=4 --model_repo=${MODEL_FOLDER}
+python3 /app/scripts/launch_triton_server.py --world_size=4 --model_repo=${MODEL_FOLDER}
 ```
 
 You should see the following logs when the server is successfully deployed.
@@ -310,7 +299,7 @@ to send requests to the `tensorrt_llm` model.
 
 ```bash
 pip3 install tritonclient[all]
-INFLIGHT_BATCHER_LLM_CLIENT=/tensorrtllm_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py
+INFLIGHT_BATCHER_LLM_CLIENT=/app/client/inflight_batcher_llm_client.py
 python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
 ```
 
@@ -346,7 +335,7 @@ You can also stop the generation process early by using the `--stop-after-ms`
 option to send a stop request after a few milliseconds:
 
 ```bash
-python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --stop-after-ms 200 --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
+python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --stop-after-ms 200 --request-output-len 200 --request-id 1 --tokenizer-dir ${TOKENIZER_DIR}
 ```
 
 You will find that the generation process is stopped early and therefore the
@@ -431,7 +420,7 @@ script, the client will create a request with multiple prompts, and use the
 For example one could run:
 
 ```
-python3 end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
+python3 /app/client/end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
 ```
 
 to send a request with a batch size of 3 to the Triton server.
@@ -549,7 +538,7 @@ Some examples are shown below:
 - Build LLaMA v3 70B using 4-way tensor parallelism and 2-way pipeline parallelism.
 
 ```bash
-python convert_checkpoint.py --model_dir ./tmp/llama/70B/hf/ \
+python3 convert_checkpoint.py --model_dir ./tmp/llama/70B/hf/ \
                             --output_dir ./tllm_checkpoint_8gpu_tp4_pp2 \
                             --dtype float16 \
                             --tp_size 4 \
@@ -563,7 +552,7 @@ trtllm-build --checkpoint_dir ./tllm_checkpoint_8gpu_tp4_pp2 \
 - Build Mixtral8x22B with tensor parallelism and expert parallelism
 
 ```bash
-python ../llama/convert_checkpoint.py --model_dir ./Mixtral-8x22B-v0.1 \
+python3 ../llama/convert_checkpoint.py --model_dir ./Mixtral-8x22B-v0.1 \
                              --output_dir ./tllm_checkpoint_mixtral_8gpu \
                              --dtype float16 \
                              --tp_size 8 \
@@ -669,7 +658,6 @@ sudo nvidia-smi -lgc 1410,1410
 
 srun --mpi=pmix \
     --container-image triton_trt_llm \
-    --container-mounts /path/to/tensorrtllm_backend:/tensorrtllm_backend \
     --container-workdir /tensorrtllm_backend \
     --output logs/tensorrt_llm_%t.out \
     bash /tensorrtllm_backend/tensorrt_llm_triton.sh
@@ -678,7 +666,7 @@ srun --mpi=pmix \
 `tensorrt_llm_triton.sh`
 ```bash
 TRITONSERVER="/opt/tritonserver/bin/tritonserver"
-MODEL_REPO="/tensorrtllm_backend/triton_model_repo"
+MODEL_REPO="/triton_model_repo"
 
 ${TRITONSERVER} --model-repository=${MODEL_REPO} --disable-auto-complete-config --backend-config=python,shm-region-prefix-name=prefix${SLURM_PROCID}_
 ```

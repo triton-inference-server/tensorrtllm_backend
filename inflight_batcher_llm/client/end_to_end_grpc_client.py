@@ -144,9 +144,9 @@ def prepare_inputs(prompt,
     if return_generation_logits_data is not None:
         inputs["return_generation_logits"] = return_generation_logits_data
 
-    if (embedding_bias_words is not None and embedding_bias_weights is None
-        ) or (embedding_bias_words is None
-              and embedding_bias_weights is not None):
+    if (embedding_bias_words is not None and embedding_bias_weights
+            is None) or (embedding_bias_words is None
+                         and embedding_bias_weights is not None):
         assert 0, "Both embedding bias words and weights must be specified"
 
     if (embedding_bias_words is not None
