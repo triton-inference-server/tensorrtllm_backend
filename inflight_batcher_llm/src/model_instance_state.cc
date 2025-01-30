@@ -819,6 +819,7 @@ std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITON
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
 {
+    TLLM_LOG_INFO("Updated Backend: Enqueuing response!!!");
 
     uint64_t exec_start_ns{0};
     SET_TIMESTAMP(exec_start_ns);
