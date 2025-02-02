@@ -112,16 +112,13 @@ def runBuild()
         sh "id || true"
         sh "whoami || true"
 
-        // Step 2: checking code style
+        // Step 2: packaging tensorrt-llm backend
         sh "cd ${BACKEND_ROOT} && git config --unset core.hooksPath"
         sh "cd ${BACKEND_ROOT} && git lfs install"
         sh "cd ${BACKEND_ROOT} && git submodule update --init --recursive"
 
-        sh "pip3 install pre-commit"
-        sh "apt-get update && apt-get install -y 2to3"
         sh "git config --global --add safe.directory \$(realpath ${BACKEND_ROOT})"
-        // sh "cd ${BACKEND_ROOT} && pre-commit run -a"
-        // Step 3: packaging tensorrt-llm backend
+
         sh "rm -rf tensorrt_llm_backend"
         sh "cp -r ${BACKEND_ROOT} tensorrt_llm_backend"
         sh "cp ${BACKEND_ROOT}/scripts/package_trt_llm_backend.sh package_trt_llm_backend.sh"
@@ -130,7 +127,7 @@ def runBuild()
     uploadArtifacts("tensorrt_llm_backend_aarch64.tar.gz", "sw-tensorrt-generic/llm-artifacts/${hostJobName}/${hostBuildNumber}/")
 
     docker.image(BACKEND_SBSA_DOCKER_IMAGE).inside(' -v /tmp/ccache:${CCACHE_DIR}:rw') {
-        // Step 4: build tensorrt-llm backend
+        // Step 3: build tensorrt-llm backend
         sh "pip3 list"
         sh "cd ${BACKEND_ROOT} && python3 tensorrt_llm/scripts/build_wheel.py --use_ccache -j ${BUILD_CORES} -a '90-real;100-real;120-real' --trt_root /usr/local/tensorrt"
         sh "cd ${BACKEND_ROOT}/inflight_batcher_llm && bash scripts/build.sh -u"
