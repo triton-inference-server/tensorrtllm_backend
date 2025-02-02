@@ -35,7 +35,7 @@ pkill -9 -f tritonserver || true
 
 
 # install deps
-pip3 install -r tensorrt_llm/requirements-dev.txt --extra-index-url https://pypi.ngc.nvidia.com
+pip3 install -r tensorrt_llm/requirements-dev.txt
 
 if [ "$MODEL" = "gpt" ] || [ "$MODEL" = "gpt-disaggregated-serving-bls" ]; then
 

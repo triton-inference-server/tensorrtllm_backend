@@ -30,7 +30,7 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-23.2
 RUN apt-get update && apt-get install -y --no-install-recommends rapidjson-dev python-is-python3 ccache git-lfs
 
 COPY requirements.txt /tmp/
-RUN pip3 install -r /tmp/requirements.txt --extra-index-url https://pypi.ngc.nvidia.com
+RUN pip3 install -r /tmp/requirements.txt
 
 # Remove previous TRT installation
 # We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.

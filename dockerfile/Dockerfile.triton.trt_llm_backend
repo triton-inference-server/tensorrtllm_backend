@@ -187,7 +187,7 @@ WORKDIR /tmp
 
 # Install TRT-LLM wheel after all the dependencies are installed
 COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
-RUN pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm*.whl && \
+RUN pip3 install --no-cache-dir tensorrt_llm*.whl && \
     rm -f tensorrt_llm*.whl
 
 # Copying the scripts
