@@ -26,6 +26,8 @@
 
 import json
 import os
+from collections import defaultdict
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -37,6 +39,8 @@ import tensorrt_llm
 import tensorrt_llm.logger as logger
 from tensorrt_llm._utils import str_dtype_to_torch, torch_dtype_to_trt
 from tensorrt_llm.runtime import Session, TensorInfo
+
+logger.set_level('info')
 
 
 def triton_string_to_torch(dtype):
@@ -85,6 +89,8 @@ class TritonPythonModel:
         # Parse model configs
         model_config = json.loads(args['model_config'])
 
+        self.max_batch_size = model_config['max_batch_size']
+
         # First vision engine
         visual_model_path = model_config['parameters'].get(
             'visual_model_path', None)
@@ -130,45 +136,63 @@ class TritonPythonModel:
                 self.llava_onevision_utils = LlavaOnevisionUtils(
                     model_config, image_newline)
 
-    def execute(self, requests):
-        """`execute` must be implemented in every Python model. `execute`
-        function receives a list of pb_utils.InferenceRequest as the only
-        argument. This function is called when an inference is requested
-        for this model. Depending on the batching configuration (e.g. Dynamic
-        Batching) used, `requests` may contain multiple requests. Every
-        Python model, must create one pb_utils.InferenceResponse for every
-        pb_utils.InferenceRequest in `requests`. If there is an error, you can
-        set the error argument when creating a pb_utils.InferenceResponse.
-        Parameters
-        ----------
-        requests : list
-          A list of pb_utils.InferenceRequest
-        Returns
-        -------
-        list
-          A list of pb_utils.InferenceResponse. The length of this list must
-          be the same as `requests`
-        """
-        responses = []
+            if self.model_type == 'mllama':
+                from transformers import AutoConfig
+                hf_model_path = model_config['parameters'].get(
+                    'hf_model_path', None)
+                assert hf_model_path is not None and hf_model_path[
+                    'string_value'] != "${hf_model_path}", "Need to provide hf_model_path for the MLLaMA model"
+                model_config = AutoConfig.from_pretrained(
+                    hf_model_path['string_value'])
+                self.text_hidden_size = model_config.text_config.hidden_size
 
-        # Every Python backend must iterate over everyone of the requests
-        # and create a pb_utils.InferenceResponse for each of them.
-        pb_utils.Logger
-        for idx, request in enumerate(requests):
-            # Get input tensors
-            img_tensor = (
-                pb_utils.get_input_tensor_by_name(request, 'pixel_values')
-                or pb_utils.get_input_tensor_by_name(request, 'IMAGE'))
-            assert img_tensor != None, "There is no preprocessed image tensor to encode"
+    def get_requests(self, request: List) -> Dict[str, torch.Tensor]:
+        """
+        Processes the incoming request to extract and organize input tensors
+        for different model types.
+
+        This function retrieves image tensors from the request, reshapes them
+        as needed, and organizes them into a dictionary based on the model type
+        being used. It supports handling both 'mllama' and 'llava_onevision' models,
+        as well as other types.
+
+        Args:
+            request: The incoming request containing input tensors. The request
+                    should contain tensors named either 'pixel_values' or 'IMAGE',
+                    and optionally 'aspect_ratio_ids', 'aspect_ratio_mask',
+                    'is_video_input' and 'image_sizes'.
+
+        Returns:
+            A tuple containing:
+                - input_tensors (Dict[str, List[torch.Tensor]]): A dictionary
+                of processed input tensors organized by their type.
+                - batch_size (int): The size of the batch processed.
+                - num_image (int): The number of images in the batch.
+
+        Raises:
+            AssertionError: If no valid image tensor is found in the request.
+        """
+
+        input_tensors: Dict[str, List(torch.Tensor)] = defaultdict(list)
+
+        img_tensor = (pb_utils.get_input_tensor_by_name(
+            request, 'pixel_values')
+                      or pb_utils.get_input_tensor_by_name(request, 'IMAGE'))
+        # mllama supports img_tensor is None case
+        assert img_tensor != None or self.model_type == 'mllama', "There is no preprocessed image tensor to encode"
+        if img_tensor is not None:
             img_tensor = from_dlpack(img_tensor.to_dlpack())
 
             batch_size = img_tensor.shape[0]
-            num_images = img_tensor.shape[1]
+            num_image = img_tensor.shape[1]
             img_tensor = img_tensor.to(
                 str_dtype_to_torch(self.vision_dtype_str)).pin_memory()
-
-            # Prepare input tensors for the vision encoder
-            if self.model_type == 'mllama':
+        else:
+            batch_size = 1
+            num_image = 0
+        # TODO these should be refactored into a factory
+        if self.model_type == 'mllama':
+            if img_tensor is not None:
                 aspect_ratio_ids = from_dlpack(
                     pb_utils.get_input_tensor_by_name(
                         request, "aspect_ratio_ids").to_dlpack()).to(
@@ -178,28 +202,212 @@ class TritonPythonModel:
                         request, "aspect_ratio_mask").to_dlpack()).to(
                             torch.int64).pin_memory()
                 num_tiles = aspect_ratio_mask.shape[-1]
-                # reshape img_tensor to [bs, num_images, num_tiles, ...]
-                pixel_values = img_tensor.view(img_tensor.shape[0], -1,
-                                               num_tiles,
-                                               *(img_tensor.shape[2:]))
-                vit_input = {
-                    'pixel_values': pixel_values,
-                    'aspect_ratio_ids': aspect_ratio_ids,
-                    'aspect_ratio_mask': aspect_ratio_mask
-                }
-            elif self.model_type == 'llava_onevision':
+                # Reshape img_tensor to [bs, num_image, num_tiles, ...]
+                if img_tensor is not None:
+                    pixel_values = img_tensor.view(img_tensor.shape[0], -1,
+                                                   num_tiles,
+                                                   *(img_tensor.shape[2:]))
+            else:
+                pixel_values = None
+                aspect_ratio_ids = None
+                aspect_ratio_mask = None
+            input_tensors['pixel_values'].append(pixel_values)
+            input_tensors['aspect_ratio_ids'].append(aspect_ratio_ids)
+            input_tensors['aspect_ratio_mask'].append(aspect_ratio_mask)
+        elif self.model_type == 'llava_onevision':
+            is_video_input = pb_utils.get_input_tensor_by_name(
+                request, 'is_video_input')
+            is_video_input = is_video_input.as_numpy(
+            )[0] if is_video_input is not None else False
+            if is_video_input:
+                input_tensors['input'].append(
+                    img_tensor.view(-1, img_tensor.shape[2],
+                                    img_tensor.shape[3], img_tensor.shape[4]))
+            else:
+                image_sizes = from_dlpack(
+                    pb_utils.get_input_tensor_by_name(
+                        request, 'image_sizes').to_dlpack())
+                from transformers.models.llava_onevision.modeling_llava_onevision import \
+                    image_size_to_num_patches
+                image_num_patches = [
+                    image_size_to_num_patches(
+                        image_size=imsize,
+                        grid_pinpoints=self.llava_onevision_utils.config.
+                        image_grid_pinpoints,
+                        patch_size=self.llava_onevision_utils.config.
+                        vision_config.image_size) for imsize in image_sizes
+                ]
+                img_tensor = img_tensor.to('cuda')
+                img_list = [
+                    img[:num_patch]
+                    for img, num_patch in zip(img_tensor, image_num_patches)
+                ]
+                img_tensor = torch.cat(img_list, dim=0).contiguous()
+                input_tensors['input'].append(img_tensor)
+        else:
+            input_tensors['input'].append(
+                img_tensor.view(-1, img_tensor.shape[2], img_tensor.shape[3],
+                                img_tensor.shape[4]))
+
+        return input_tensors, batch_size, num_image
+
+    def postprocess_output_tensors(self, output_tensor: torch.Tensor,
+                                   requests: List, batch_sizes: List[int],
+                                   num_images: List[int],
+                                   is_skip_encoders: List[bool]):
+        """
+        Processes the batched output tensor and generates inference responses
+        for each request.
+
+        This function splits the output tensor into individual embeddings for
+        each request, reshapes the embeddings as needed based on the model type,
+        and prepares the output tensors for returning. It supports handling
+        multiple model types, including 'mllama' and 'llava_onevision'.
+
+        Args:
+            output_tensor (torch.Tensor): The batched output tensor containing
+                                        the embeddings. Note that the num_images of
+                                        all requests are fused together in dimension 0.
+            requests (List): A list of requests containing input
+                                        tensors for each model.
+            batch_sizes (List[int]): A list of batch sizes corresponding to each
+                                    request.
+            num_images (List[int]): A list of image counts corresponding to each
+                                    request.
+            is_skip_encoders (List[bool]): A list of skipping the computing of each
+                                    request since image_url is None.
+
+        Returns:
+            List[pb_utils.InferenceResponse]: A list of inference responses,
+                                                each containing the output tensors
+                                                for the corresponding request.
+
+        Raises:
+            Any exceptions raised by tensor operations (e.g., shape mismatches,
+            invalid tensor types) during processing.
+
+        Notes:
+            - The function assumes that the input tensors are structured correctly
+            and that the provided model types are supported.
+            - The output tensors are created in a format suitable for the specific
+            model being processed.
+        """
+
+        responses = []
+        # split the batched output back to no batching
+        if self.model_type == 'mllama':
+            # Here, output_tensor is not the full tensor because we skip the encoder
+            # engine computation for the requests which don't have img_url
+            if output_tensor is not None:
+                splitted_output_tensor = torch.tensor_split(
+                    output_tensor, output_tensor.shape[0], dim=0)
+            output_tensor_idx = 0
+            for req_idx, request in enumerate(requests):
+                batch_size = batch_sizes[req_idx]
+                max_tokens = pb_utils.get_input_tensor_by_name(
+                    request, 'max_tokens')
+                # max_tokens is needed to prepare the cross_attention_mask
+                max_tokens = 0 if max_tokens is None else max_tokens.as_numpy(
+                )[0, 0]
+
+                if is_skip_encoders[req_idx]:
+                    # For the case that img_url is None, creating a dummy output tensor with short length
+                    # and set skip_cross_attn_blocks as True. Also, creating corresponding dummy attention mask.
+                    embeddings = torch.zeros(
+                        [batch_size, 1, 4, 1,
+                         self.text_hidden_size]).to(self.vision_output_dtype)
+                    encoder_input_features = embeddings
+                    output_shape = encoder_input_features.shape
+                    skip_cross_attn_blocks = torch.ones([output_shape[0], 1],
+                                                        dtype=torch.bool,
+                                                        device='cpu')
+                    cross_attention_mask = torch.zeros(
+                        [batch_size, max_tokens, 1, 4],
+                        dtype=torch.bool,
+                        device='cuda')
+                else:
+                    embeddings = splitted_output_tensor[output_tensor_idx]
+                    encoder_input_features = embeddings
+                    output_shape = encoder_input_features.shape
+                    skip_cross_attn_blocks = torch.zeros([batch_size, 1],
+                                                         dtype=torch.bool,
+                                                         device='cpu')
+                    # prepare cross_attention_mask
+                    # [bs, seq_len, num_tiles] to [bs, seq_len+max_new_tokens, encoder_length]
+                    cross_attention_mask = pb_utils.get_input_tensor_by_name(
+                        request, "cross_attention_mask")
+                    if cross_attention_mask != None:
+                        cross_attention_mask = from_dlpack(
+                            pb_utils.get_input_tensor_by_name(
+                                request, "cross_attention_mask").to_dlpack())
+                    output_tensor_idx += 1
+
+                cross_attention_mask = cross_attention_mask.repeat_interleave(
+                    output_shape[3], dim=3)
+                cross_attention_mask = cross_attention_mask.to(
+                    encoder_input_features.device).to(torch.bool).view(
+                        [output_shape[0], -1, encoder_input_features.shape[1]])
+                tmp_mask = [cross_attention_mask] + [
+                    cross_attention_mask[:, -1:, :] for _ in range(max_tokens)
+                ]
+                cross_attention_mask = torch.concat(tmp_mask, dim=1)
+                logger.debug(
+                    f"cross attention mask shape: {cross_attention_mask.shape}"
+                )
+                logger.debug(
+                    f"skip_cross_attn_blocks: {skip_cross_attn_blocks}")
+
+                # reshape encoder output
+                # [bs, num_image, num_tiles, num_patches, hidden_size] to [bs, encoder_length, hidden_size]
+                encoder_input_features = encoder_input_features.view(
+                    output_shape[0],
+                    output_shape[1] * output_shape[2] * output_shape[3],
+                    output_shape[4])
+                logger.debug(
+                    f"encoder_input_features shape: {encoder_input_features.shape}"
+                )
+
+                # prepare encoder output lengths
+                # shape [bs], value [encoder_length]
+                encoder_output_lengths = torch.tensor(
+                    [[output_shape[1] * output_shape[2] * output_shape[3]]],
+                    dtype=torch.int32)
+                logger.debug(
+                    f"encoder_output_lengths: {encoder_output_lengths}")
+                # True when the request does not have image input
+
+                output_tensors = [
+                    pb_utils.Tensor.from_dlpack(
+                        'ENCODER_INPUT_FEATURES',
+                        to_dlpack(encoder_input_features)),
+                    pb_utils.Tensor.from_dlpack(
+                        'ENCODER_OUTPUT_LENGTHS',
+                        to_dlpack(encoder_output_lengths))
+                ]
+                if cross_attention_mask is not None:
+                    output_tensors.append(
+                        pb_utils.Tensor.from_dlpack(
+                            'CROSS_ATTENTION_MASK',
+                            to_dlpack(cross_attention_mask)))
+                output_tensors.append(
+                    pb_utils.Tensor.from_dlpack(
+                        'SKIP_CROSS_ATTN_BLOCKS',
+                        to_dlpack(skip_cross_attn_blocks)))
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=output_tensors)
+                responses.append(inference_response)
+        elif self.model_type == 'llava_onevision':
+            for req_idx, embeddings in enumerate(
+                    torch.split(output_tensor, num_images, dim=0)):
+                request = requests[req_idx]
+                batch_size = batch_sizes[req_idx]
+                num_image = num_images[req_idx]
+
                 is_video_input = pb_utils.get_input_tensor_by_name(
                     request, 'is_video_input')
-                is_video_input = is_video_input.as_numpy(
-                )[0] if is_video_input is not None else False
                 if is_video_input:
-                    vit_input = {
-                        'input':
-                        img_tensor.view(batch_size * num_images,
-                                        img_tensor.shape[2],
-                                        img_tensor.shape[3],
-                                        img_tensor.shape[4])
-                    }
+                    prompt_table = self.llava_onevision_utils.postprocess_video(
+                        embeddings, batch_size, num_image)
                 else:
                     image_sizes = from_dlpack(
                         pb_utils.get_input_tensor_by_name(
@@ -214,135 +422,28 @@ class TritonPythonModel:
                             patch_size=self.llava_onevision_utils.config.
                             vision_config.image_size) for imsize in image_sizes
                     ]
-                    img_tensor = img_tensor.to('cuda')
-                    img_list = [
-                        img[:num_patch] for img, num_patch in zip(
-                            img_tensor, image_num_patches)
-                    ]
-                    img_tensor = torch.cat(img_list, dim=0).contiguous()
-                    vit_input = {'input': img_tensor}
-            else:
-                vit_input = {
-                    'input':
-                    img_tensor.view(batch_size * num_images,
-                                    img_tensor.shape[2], img_tensor.shape[3],
-                                    img_tensor.shape[4])
-                }
 
-            # Run the vision encoder
-            vit_input_info = [
-                TensorInfo(key, torch_dtype_to_trt(val.dtype), val.shape)
-                for key, val in vit_input.items()
-            ]
-            vit_output_info = self.image_session.infer_shapes(vit_input_info)
-            vit_output = {
-                t.name:
-                torch.empty(tuple(t.shape),
-                            dtype=str_dtype_to_torch(self.vision_dtype_str),
-                            device='cuda')
-                for t in vit_output_info
-            }
-            with torch.cuda.stream(self.vision_stream):
-                img_tensor = img_tensor.to('cuda')
-                ok = self.image_session.run(vit_input, vit_output,
-                                            self.vision_stream.cuda_stream)
-                assert ok, "Runtime execution failed for vision encoder session"
-                embeddings = vit_output['output'].to(self.vision_output_dtype)
-            self.vision_stream.synchronize()
-
-            output_tensors = []
-
-            # Create output tensors
-            if self.model_type == 'mllama':
-                max_tokens = pb_utils.get_input_tensor_by_name(
-                    request, 'max_tokens')
-                # max_tokens is needed to prepare the cross_attention_mask
-                max_tokens = 0 if max_tokens is None else max_tokens.as_numpy(
-                )[0, 0]
-
-                # reshape encoder output
-                # [bs, num_images, num_tiles, num_patches, hidden_size] to [bs, encoder_length, hidden_size]
-                encoder_input_features = embeddings
-                output_shape = encoder_input_features.shape
-                encoder_input_features = encoder_input_features.reshape(
-                    output_shape[0],
-                    output_shape[1] * output_shape[2] * output_shape[3],
-                    output_shape[4])
-                logger.debug(
-                    f"encoder_input_features shape: {encoder_input_features.shape}"
-                )
-
-                # prepare encoder output lengths
-                # shape [bs], value [encoder_length]
-
-                encoder_output_lengths = torch.tensor(
-                    [[output_shape[1] * output_shape[2] * output_shape[3]]],
-                    dtype=torch.int32)
-                logger.debug(
-                    f"encoder_output_lengths: {encoder_output_lengths}")
-                skip_cross_attn_blocks = torch.ones([output_shape[0], 1],
-                                                    dtype=torch.bool,
-                                                    device='cpu')
-                logger.debug(
-                    f"skip_cross_attn_blocks: {skip_cross_attn_blocks}")
-
-                # prepare cross_attention_mask
-                # [bs, seq_len, num_tiles] to [bs, seq_len+max_new_tokens, encoder_length]
-                cross_attention_mask = pb_utils.get_input_tensor_by_name(
-                    request, "cross_attention_mask")
-                if cross_attention_mask != None:
-                    cross_attention_mask = from_dlpack(
-                        pb_utils.get_input_tensor_by_name(
-                            request, "cross_attention_mask").to_dlpack())
-                    cross_attention_mask = cross_attention_mask.repeat_interleave(
-                        output_shape[3], dim=3)
-                    cross_attention_mask = cross_attention_mask.to(
-                        encoder_input_features.device).to(torch.bool).reshape([
-                            output_shape[0], -1,
-                            encoder_input_features.shape[1]
-                        ])
-                    tmp_mask = [cross_attention_mask] + [
-                        cross_attention_mask[:, -1:, :]
-                        for _ in range(max_tokens)
-                    ]
-                    cross_attention_mask = torch.concat(tmp_mask, dim=1)
-                    logger.debug(
-                        f"cross attention mask shape: {cross_attention_mask.shape}"
-                    )
-
-                output_tensors.append(
-                    pb_utils.Tensor.from_dlpack(
-                        'ENCODER_INPUT_FEATURES',
-                        to_dlpack(encoder_input_features)))
-                output_tensors.append(
-                    pb_utils.Tensor.from_dlpack(
-                        'ENCODER_OUTPUT_LENGTHS',
-                        to_dlpack(encoder_output_lengths)))
-                if cross_attention_mask is not None:
-                    output_tensors.append(
-                        pb_utils.Tensor.from_dlpack(
-                            'CROSS_ATTENTION_MASK',
-                            to_dlpack(cross_attention_mask)))
-                output_tensors.append(
-                    pb_utils.Tensor.from_dlpack(
-                        'SKIP_CROSS_ATTN_BLOCKS',
-                        to_dlpack(skip_cross_attn_blocks)))
-            elif self.model_type == 'llava_onevision':
-                if is_video_input:
-                    prompt_table = self.llava_onevision_utils.postprocess_video(
-                        embeddings, batch_size, num_images)
-                else:
                     prompt_table = self.llava_onevision_utils.postprocess_image(
                         embeddings, image_sizes, image_num_patches)
                 prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
                     'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
                 output_tensors = [prompt_embedding_table_tensor]
-            else:
+
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=output_tensors)
+                responses.append(inference_response)
+        else:
+            for req_idx, embeddings in enumerate(
+                    torch.tensor_split(output_tensor,
+                                       output_tensor.shape[0],
+                                       dim=0)):
+                batch_size = batch_sizes[req_idx]
+                num_image = num_images[req_idx]
                 vision_prompt_table = embeddings
                 vision_prompt_vocab_size = np.array(
                     [[vision_prompt_table.shape[1]]])
                 # Concatenate the prompt tables if there are multiple images in single request
-                if num_images > 1:
+                if num_image > 1:
                     prompt_table = vision_prompt_table.view(
                         batch_size, -1, vision_prompt_table.shape[-1])
                     prompt_vocab_size = np.repeat(vision_prompt_vocab_size,
@@ -366,11 +467,135 @@ class TritonPythonModel:
                     prompt_embedding_table_tensor, prompt_vocab_size_tensor
                 ]
 
-            inference_response = pb_utils.InferenceResponse(
-                output_tensors=output_tensors)
-            responses.append(inference_response)
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=output_tensors)
+                responses.append(inference_response)
         # You should return a list of pb_utils.InferenceResponse. Length
         # of this list must match the length of `requests` list.
+        return responses
+
+    def execute(self, requests: List):
+        """`execute` must be implemented in every Python model. `execute`
+        function receives a list of pb_utils.InferenceRequest as the only
+        argument. This function is called when an inference is requested
+        for this model. Depending on the batching configuration (e.g. Dynamic
+        Batching) used, `requests` may contain multiple requests. Every
+        Python model, must create one pb_utils.InferenceResponse for every
+        pb_utils.InferenceRequest in `requests`. If there is an error, you can
+        set the error argument when creating a pb_utils.InferenceResponse.
+        Parameters
+        ----------
+        requests : list
+          A list of pb_utils.InferenceRequest
+        Returns
+        -------
+        list
+          A list of pb_utils.InferenceResponse. The length of this list must
+          be the same as `requests`
+        """
+        start_idx = 0
+        responses = []
+
+        next_input_tensors: Dict[str, List(torch.Tensor)] = defaultdict(list)
+        next_batch_sizes = []
+        next_num_images = []
+        next_micro_batch_size = 0
+        next_is_skip_encoders = []
+        while start_idx < len(requests):
+            # Split the full requests into several micro batches
+            # the batch size of each micro batch is smaller than self.max_batch_size
+            input_tensors = next_input_tensors
+            batch_sizes = next_batch_sizes
+            num_images = next_num_images
+            micro_batch_size = next_micro_batch_size
+            is_skip_encoders = next_is_skip_encoders
+            end_idx = start_idx
+            # Continue adding requests to the current batch until we reach the maximum batch size or process all requests
+            while micro_batch_size <= self.max_batch_size and end_idx < len(
+                    requests):
+
+                input_tensor, bs, num_image = self.get_requests(
+                    requests[end_idx])
+                # Check if adding this request to the current batch would exceed the maximum batch size
+                if micro_batch_size + bs <= self.max_batch_size:
+                    is_skip_encoder = False
+                    for tensor_name, tensor in input_tensor.items():
+                        if tensor[0] is None:
+                            is_skip_encoder = True
+                            break
+                        if tensor_name in input_tensors:
+                            input_tensors[tensor_name].extend(tensor)
+                        else:
+                            input_tensors[tensor_name] = tensor
+                    # Update this batch information
+                    batch_sizes.append(bs)
+                    num_images.append(num_image)
+                    is_skip_encoders.append(is_skip_encoder)
+                    micro_batch_size += bs
+                    end_idx += 1
+                else:
+                    # If adding this request would exceed the max batch size, prepare it for the next batch
+                    is_skip_encoder = False
+                    for tensor_name, tensor in input_tensor.items():
+                        if tensor[0] is None:
+                            is_skip_encoder = True
+                            break
+                        if tensor_name in next_input_tensors:
+                            next_input_tensors[tensor_name].extend(tensor)
+                        else:
+                            next_input_tensors[tensor_name] = tensor
+                    # Update next batch information
+                    next_batch_sizes.append(bs)
+                    next_num_images.append(num_image)
+                    next_is_skip_encoders.append(is_skip_encoder)
+                    next_micro_batch_size += bs
+                    end_idx += 1
+
+            logger.info(
+                f"batch {end_idx - start_idx} requests (batch size {micro_batch_size}) together to run encoder model."
+            )
+            embeddings = None
+            if not all(is_skip_encoders):
+                vit_input = {}
+                with torch.cuda.stream(self.vision_stream):
+                    for tensor_name, tensors in input_tensors.items():
+                        vit_input[tensor_name] = torch.cat(
+                            [t.to('cuda', non_blocking=True) for t in tensors])
+                # Set up output tensors
+                vit_input_info = [
+                    TensorInfo(key, torch_dtype_to_trt(val.dtype), val.shape)
+                    for key, val in vit_input.items()
+                ]
+                vit_output_info = self.image_session.infer_shapes(
+                    vit_input_info)
+                vit_output = {
+                    t.name:
+                    torch.empty(tuple(t.shape),
+                                dtype=str_dtype_to_torch(
+                                    self.vision_dtype_str),
+                                device='cuda')
+                    for t in vit_output_info
+                }
+                # Run the vision encoder
+                with torch.cuda.stream(self.vision_stream):
+                    ok = self.image_session.run(vit_input, vit_output,
+                                                self.vision_stream.cuda_stream)
+                    assert ok, "Runtime execution failed for vision encoder session"
+                    embeddings = vit_output['encoder_output'].to(
+                        self.vision_output_dtype)
+                self.vision_stream.synchronize()
+
+            # Post process output and save in responses
+            responses.extend(
+                self.postprocess_output_tensors(embeddings,
+                                                requests[start_idx:end_idx],
+                                                batch_sizes, num_images,
+                                                is_skip_encoders))
+
+            start_idx = end_idx
+
+        assert len(responses) == len(requests), \
+            f"Number of responses ({len(responses)}) from the vision model does not match number of requests ({len(requests)})"
         return responses
 
     def finalize(self):
@@ -378,4 +603,4 @@ class TritonPythonModel:
         Implementing `finalize` function is optional. This function allows
         the model to perform any necessary clean ups before exit.
         """
-        print('Cleaning up...')
+        logger.info('Cleaning up...')

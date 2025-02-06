@@ -94,7 +94,8 @@ class TritonDecoder(Decoder):
             "prompt_table_extra_id", "embedding_bias_words",
             "embedding_bias_weights", "num_draft_tokens", "use_draft_logits",
             "lora_task_id", "lora_weights", "lora_config",
-            "exclude_input_in_output", "return_kv_cache_reuse_stats"
+            "exclude_input_in_output", "return_kv_cache_reuse_stats",
+            "guided_decoding_guide_type", "guided_decoding_guide"
         ]
 
         self.__undo_reshape_whitelist = {
@@ -104,7 +105,8 @@ class TritonDecoder(Decoder):
             "return_log_probs", "return_context_logits",
             "return_generation_logits", "beam_width", "stream",
             "prompt_vocab_size", "num_draft_tokens", "use_draft_logits",
-            "exclude_input_in_output", "return_kv_cache_reuse_stats"
+            "exclude_input_in_output", "return_kv_cache_reuse_stats",
+            "lora_weights", "lora_config", "lora_task_id"
         }
 
     def _exec_triton_request(self, request):
@@ -409,6 +411,8 @@ class TritonDecoder(Decoder):
             "lora_config": "lora_config",
             "exclude_input_in_output": "exclude_input_in_output",
             "return_kv_cache_reuse_stats": "return_kv_cache_reuse_stats",
+            "guided_decoding_guide_type": "guided_decoding_guide_type",
+            "guided_decoding_guide": "guided_decoding_guide"
         }
         batch_size = request.text_input.shape[0]
         tensors = self.create_triton_tensors(request, name_map)

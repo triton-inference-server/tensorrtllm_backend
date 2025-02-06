@@ -15,6 +15,7 @@ from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
 
 import tensorrt_llm.bindings.executor as trtllm
+from tensorrt_llm.llmapi.tokenizer import _xgrammar_tokenizer_info
 
 METRIC_TOTAL_OUTPUT_TOKENS = "total_output_tokens"
 METRIC_TOTAL_INPUT_TOKENS = "total_input_tokens"
@@ -74,12 +75,13 @@ def mpi_rank():
 def get_input_tensor_by_name(request,
                              name,
                              expected_batch_size=None,
-                             batch_index=None):
+                             batch_index=None,
+                             force_on_torch=False):
     tensor = pb_utils.get_input_tensor_by_name(request, name)
     if tensor is None:
         return None
 
-    if tensor.is_cpu():
+    if tensor.is_cpu() and not force_on_torch:
         tensor = tensor.as_numpy()
     else:
         tensor = from_dlpack(tensor.to_dlpack())
@@ -275,7 +277,7 @@ def get_prompt_tuning_config_from_request(request,
     if prompt_embedding_table is not None:
         if isinstance(prompt_embedding_table, np.ndarray):
             kwargs["embedding_table"] = from_numpy(
-                prompt_embedding_table).squeeze()
+                prompt_embedding_table).squeeze(dim=0)
         elif isinstance(prompt_embedding_table, torch.Tensor):
             kwargs["embedding_table"] = prompt_embedding_table.squeeze(dim=0)
 
@@ -297,14 +299,44 @@ def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     lora_weights = get_input_tensor_by_name(request, 'lora_weights',
                                             batch_size, batch_index)
     if lora_weights is not None:
-        kwargs["weights"] = from_numpy(lora_weights).squeeze()
+        kwargs["weights"] = from_numpy(lora_weights).squeeze(dim=0)
     lora_config = get_input_tensor_by_name(request, 'lora_config', batch_size,
                                            batch_index)
     if lora_config is not None:
-        kwargs["config"] = from_numpy(lora_config).squeeze()
+        kwargs["config"] = from_numpy(lora_config).squeeze(dim=0)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.LoraConfig(**kwargs)
+    return None
+
+
+def get_guided_decoding_params_from_request(request,
+                                            batch_size=1,
+                                            batch_index=0):
+    kwargs = {}
+    guided_decoding_guide_type = get_input_tensor_by_name(
+        request, 'guided_decoding_guide_type', batch_size, batch_index)
+    if guided_decoding_guide_type is not None:
+        guided_decoding_guide_type = guided_decoding_guide_type.squeeze(
+            axis=0)[0].decode()
+        guided_decoding_guide_type_mapping = {
+            "json": trtllm.GuidedDecodingParams.GuideType.JSON,
+            "json_schema": trtllm.GuidedDecodingParams.GuideType.JSON_SCHEMA,
+            "regex": trtllm.GuidedDecodingParams.GuideType.REGEX,
+            "ebnf_grammar": trtllm.GuidedDecodingParams.GuideType.EBNF_GRAMMAR
+        }
+        guided_decoding_guide_type = guided_decoding_guide_type_mapping.get(
+            guided_decoding_guide_type)
+    kwargs['guide_type'] = guided_decoding_guide_type
+
+    guided_decoding_guide = get_input_tensor_by_name(request,
+                                                     'guided_decoding_guide',
+                                                     batch_size, batch_index)
+    if guided_decoding_guide is not None:
+        kwargs['guide'] = guided_decoding_guide.squeeze(axis=0)[0].decode()
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    if len(kwargs) > 0:
+        return trtllm.GuidedDecodingParams(**kwargs)
     return None
 
 
@@ -469,7 +501,8 @@ def convert_request(request, exclude_input_from_output, decoupled):
         embedding_bias = get_input_tensor_by_name(request, 'embedding_bias',
                                                   batch_size, batch_index)
         if embedding_bias is not None and embedding_bias.size != 0:
-            inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze()
+            inputs['embedding_bias'] = from_numpy(embedding_bias).squeeze(
+                dim=0)
 
         sampling_config = get_sampling_config_from_request(
             request, batch_size, batch_index)
@@ -500,7 +533,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
         if encoder_input_features is not None:
             if isinstance(encoder_input_features, np.ndarray):
                 encoder_input_features = from_numpy(
-                    encoder_input_features).squeeze()
+                    encoder_input_features).squeeze(dim=0)
             elif isinstance(encoder_input_features, torch.Tensor):
                 encoder_input_features = encoder_input_features.squeeze(dim=0)
             inputs['encoder_input_features'] = encoder_input_features
@@ -522,6 +555,21 @@ def convert_request(request, exclude_input_from_output, decoupled):
                     f"inputs to llm: cross_attention_mask ({ cross_attention_mask.shape})"
                 )
 
+            skip_cross_attn_blocks = get_input_tensor_by_name(
+                request,
+                'skip_cross_attn_blocks',
+                batch_size,
+                batch_index,
+                force_on_torch=True)
+            if skip_cross_attn_blocks is not None:
+                inputs['skip_cross_attn_blocks'] = skip_cross_attn_blocks[0]
+                logger.debug(
+                    f"inputs to llm: skip_cross_attn_blocks ({ skip_cross_attn_blocks.shape})"
+                )
+
+        guided_decoding_params = get_guided_decoding_params_from_request(
+            request, batch_size, batch_index)
+
         requests.append(
             trtllm.Request(
                 **inputs,
@@ -530,6 +578,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
                 external_draft_tokens_config=external_draft_tokens_config,
                 prompt_tuning_config=prompt_tuning_config,
                 lora_config=lora_config,
+                guided_decoding_params=guided_decoding_params,
                 kv_cache_retention_config=kv_cache_retention_config))
     return requests
 
@@ -817,6 +866,35 @@ class TritonPythonModel:
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExtendedRuntimePerfKnobConfig(**kwargs)
 
+    def get_guided_decoding_config(self, model_config):
+
+        guided_decoding_backend = get_parameter(model_config,
+                                                "guided_decoding_backend", str)
+
+        tokenizer_dir = get_parameter(model_config, "tokenizer_dir", str)
+        if guided_decoding_backend not in ['xgrammar']:
+            if tokenizer_dir:
+                pb_utils.Logger.log_warn(
+                    f"Guided decoding backend has not been set but tokenizer_dir is given. Tokenizer_dir will be ignored."
+                )
+            return None
+
+        if guided_decoding_backend == 'xgrammar':
+            guided_decoding_backend = trtllm.GuidedDecodingConfig.GuidedDecodingBackend.XGRAMMAR
+
+        if not tokenizer_dir:
+            raise ValueError(
+                "Guided decoding requires tokenizer's information. Please provide 'tokenizer_dir'."
+            )
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
+        pb_utils.Logger.log_info(
+            f"Guided decoding has been set with {guided_decoding_backend} backend"
+        )
+        return trtllm.GuidedDecodingConfig(
+            backend=guided_decoding_backend,
+            **_xgrammar_tokenizer_info(tokenizer))
+
     def get_executor_config(self, model_config):
         kwargs = {
             "max_beam_width":
@@ -847,7 +925,9 @@ class TritonPythonModel:
                 {},
             ).get("max_queue_size"),
             "extended_runtime_perf_knob_config":
-            self.get_extended_runtime_perf_knob_config(model_config)
+            self.get_extended_runtime_perf_knob_config(model_config),
+            "guided_decoding_config":
+            self.get_guided_decoding_config(model_config)
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)

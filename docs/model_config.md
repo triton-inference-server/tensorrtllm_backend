@@ -42,6 +42,8 @@ to learn more about ensemble models.
 | `triton_max_batch_size` | The maximum batch size that Triton should use with the model. |
 | `tokenizer_dir` | The path to the tokenizer for the model. |
 | `preprocessing_instance_count` | The number of instances of the model to run. |
+| `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
+| `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
 
 *Optional parameters*
 
@@ -50,6 +52,20 @@ to learn more about ensemble models.
 | `add_special_tokens` | The `add_special_tokens` flag used by [HF tokenizers](https://huggingface.co/transformers/v2.11.0/main_classes/tokenizer.html#transformers.PreTrainedTokenizer.add_special_tokens). |
 | `visual_model_path` | The vision engine path used in multimodal workflow. |
 | `engine_dir` | The path to the engine for the model. This parameter is only needed for *multimodal processing* to extract the `vocab_size` from the engine_dir's config.json for `fake_prompt_id` mappings. |
+
+
+### multimodal_encoders model
+
+*Mandatory parameters*
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `triton_max_batch_size` | The maximum batch size that Triton should use with the model. |
+| `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
+| `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
+| `visual_model_path` | The vision engine path used in multimodal workflow. |
+| `hf_model_path` | The Huggingface model path used for `llava_onevision` and `mllama` models. |
+
 
 ### postprocessing model
 
@@ -169,6 +185,13 @@ additional benefits.
 | :----------------------: | :-----------------------------: |
 | `eagle_choices` | To specify default per-server Eagle choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
 
+- Guided decoding
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `guided_decoding_backend` | Set to `xgrammar` to activate guided decoder. |
+| `tokenizer_dir` | The guided decoding of tensorrt_llm python backend requires tokenizer's information. |
+
 ### tensorrt_llm_bls model
 
 See
@@ -226,6 +249,8 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
 | `return_kv_cache_reuse_stats` | [1] | `bool` | When `true`, include kv cache reuse stats in the output |
+| `guided_decoding_guide_type` | [1] | `string` | Guided decoding param: `guide_type` |
+| `guided_decoding_guide` | [1] | `string` | Guided decoding param: `guide` |
 
 The following inputs for lora are for both `tensorrt_llm` and `tensorrt_llm_bls`
 models. The inputs are passed through the `tensorrt_llm` model and the
