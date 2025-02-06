@@ -240,6 +240,20 @@ input [
     dims: [ -1, 3 ]
     optional: true
     allow_ragged_batch: true
+  },
+  {
+    name: "guided_decoding_guide_type"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "guided_decoding_guide"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
   }
 ]
 output [
@@ -519,6 +533,14 @@ ensemble_scheduling {
         key: "lora_config",
         value: "lora_config"
       },
+      input_map {
+        key: "guided_decoding_guide_type",
+        value: "guided_decoding_guide_type"
+      },
+      input_map {
+        key: "guided_decoding_guide",
+        value: "guided_decoding_guide"
+      }
       output_map {
         key: "output_ids"
         value: "_TOKENS_BATCH"

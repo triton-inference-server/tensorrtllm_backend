@@ -27,6 +27,13 @@
 name: "multimodal_encoders"
 backend: "python"
 max_batch_size: ${triton_max_batch_size}
+
+dynamic_batching {
+    preferred_batch_size: [ ${triton_max_batch_size} ]
+    max_queue_delay_microseconds: ${max_queue_delay_microseconds}
+    default_queue_policy: { max_queue_size: ${max_queue_size} }
+}
+
 input [
     {
         name: "IMAGE"
@@ -128,7 +135,7 @@ parameters {
     string_value: "${visual_model_path}"
   }
 }
-# HF model path, needed for llava_onevision model
+# HF model path, needed for llava_onevision and mllama model
 parameters {
   key: "hf_model_path"
   value: {

@@ -162,7 +162,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
             "use default value");
     }
 
-    bool enableKVCacheReuse = false;
+    bool enableKVCacheReuse = true;
     try
     {
         enableKVCacheReuse = model_state_->GetParameter<bool>("enable_kv_cache_reuse");
@@ -170,7 +170,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
+        TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to true");
     }
 
     std::optional<std::vector<SizeType32>> maxAttentionWindowVec = std::nullopt;
@@ -573,7 +573,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             triton::common::TritonJson::Value default_queue_policy;
             if (dynamic_batching.Find("default_queue_policy", &default_queue_policy))
             {
-                int64_t max_queue_size;
+                int64_t max_queue_size = 0;
                 auto err = default_queue_policy.MemberAsInt("max_queue_size", &max_queue_size);
                 if (err == nullptr)
                 {
@@ -595,6 +595,23 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     catch (std::exception const& e)
     {
         TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
+    }
+
+    // TODO
+    // Support C++ guided decoding backend. Now, it throws an error.
+    auto guidedDecodingBackend = model_state_->GetParameter<std::string>("guided_decoding_backend");
+    auto tokenizerDir = model_state_->GetParameter<std::string>("tokenizer_dir");
+    if (guidedDecodingBackend != "" && guidedDecodingBackend != "${guided_decoding_backend}")
+    {
+        TLLM_THROW(
+            "Guided decoding is not currently supported in the C++ tensorrtllm backend. To enable guided decoding, "
+            "switch to the Python tensorrtllm backend.");
+    }
+    if (tokenizerDir != "" && tokenizerDir != "${tokenizer_dir}")
+    {
+        TLLM_LOG_WARNING(
+            "Guided decoding is not currently supported in the C++ tensorrtllm backend. Tokenizer_dir parameter will "
+            "be ignored.");
     }
 
     auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
@@ -1003,9 +1020,22 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                         1, contextLogitsShapeOriginal[0], contextLogitsShapeOriginal[1]};
                     auto contextLogitsType = utils::to_triton_datatype(result.contextLogits.value().getDataType());
                     TLLM_CHECK(contextLogitsType == model_state_->getLogitsDataType());
-                    auto contextLogitsBuffer = utils::getResponseBuffer<float>(
-                        tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
-                    utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    if (contextLogitsType == TRITONSERVER_TYPE_FP32)
+                    {
+                        auto contextLogitsBuffer = utils::getResponseBuffer<float>(
+                            tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                        utils::flatten<float>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    }
+                    else if (contextLogitsType == TRITONSERVER_TYPE_FP16)
+                    {
+                        auto contextLogitsBuffer = utils::getResponseBuffer<half>(
+                            tritonResponse, contextLogitsShape, contextLogitsType, OutputFieldsNames::contextLogits);
+                        utils::flatten<half>(result.contextLogits.value(), contextLogitsBuffer, contextLogitsShape);
+                    }
+                    else
+                    {
+                        TLLM_THROW("Logits type is not supported");
+                    }
                 }
             }
 
@@ -1019,10 +1049,24 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                     auto generationLogitsType
                         = utils::to_triton_datatype(result.generationLogits.value().getDataType());
                     TLLM_CHECK(generationLogitsType == model_state_->getLogitsDataType());
-                    auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse, generationLogitsShape,
-                        generationLogitsType, OutputFieldsNames::generationLogits);
-                    utils::flatten<float>(
-                        result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    if (generationLogitsType == TRITONSERVER_TYPE_FP32)
+                    {
+                        auto generationLogitsBuffer = utils::getResponseBuffer<float>(tritonResponse,
+                            generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
+                        utils::flatten<float>(
+                            result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    }
+                    else if (generationLogitsType == TRITONSERVER_TYPE_FP16)
+                    {
+                        auto generationLogitsBuffer = utils::getResponseBuffer<half>(tritonResponse,
+                            generationLogitsShape, generationLogitsType, OutputFieldsNames::generationLogits);
+                        utils::flatten<half>(
+                            result.generationLogits.value(), generationLogitsBuffer, generationLogitsShape);
+                    }
+                    else
+                    {
+                        TLLM_THROW("Logits type is not supported");
+                    }
                 }
                 else if (result.specDecFastLogitsInfo.has_value())
                 {

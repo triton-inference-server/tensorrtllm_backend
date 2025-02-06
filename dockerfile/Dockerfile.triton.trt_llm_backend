@@ -32,6 +32,9 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-0.
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info
+# For trtllm-bench tool
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
@@ -116,6 +119,9 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-0.
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-70.3.0.dist-info
+# For trtllm-bench tool
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
@@ -165,3 +171,11 @@ WORKDIR /tmp
 COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
 RUN pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm*.whl && \
     rm -f tensorrt_llm*.whl
+
+# Copying the scripts
+WORKDIR /app
+COPY scripts scripts
+COPY all_models all_models
+COPY inflight_batcher_llm/client client
+COPY tools tools
+COPY tensorrt_llm/examples examples

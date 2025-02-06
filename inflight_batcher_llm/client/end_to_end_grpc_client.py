@@ -84,7 +84,9 @@ def prepare_inputs(prompt,
                    num_return_sequences=1,
                    lora_dir=None,
                    lora_task_id=None,
-                   exclude_input_in_output=False):
+                   exclude_input_in_output=False,
+                   guided_decoding_guide_type=None,
+                   guided_decoding_guide=None):
 
     input0 = [[prompt]]
     input0_data = np.array(input0).astype(object)
@@ -172,7 +174,8 @@ def prepare_inputs(prompt,
                                                 dtype=bool)
         inputs["exclude_input_in_output"] = exclude_input_in_output_data
 
-    if lora_dir and lora_task_id:
+    if lora_dir:
+        assert lora_task_id is not None, "Must specify `lora-task-id` with `lora-path` argument"
         inputs["lora_weights"] = np.load(
             os.path.join(lora_dir, "model.lora_weights.npy"))
         try:
@@ -182,12 +185,20 @@ def prepare_inputs(prompt,
             inputs["lora_config"] = np.load(
                 os.path.join(lora_dir, "model.lora_keys.npy"))
 
+    if lora_task_id:
         inputs["lora_task_id"] = np.array([[lora_task_id]], dtype=np.uint64)
 
     if return_kv_cache_reuse_stats_data is not None:
         inputs[
             "return_kv_cache_reuse_stats"] = return_kv_cache_reuse_stats_data
 
+    if guided_decoding_guide_type is not None:
+        inputs["guided_decoding_guide_type"] = np.array(
+            [[guided_decoding_guide_type]]).astype(object)
+
+    if guided_decoding_guide is not None:
+        inputs["guided_decoding_guide"] = np.array([[guided_decoding_guide]
+                                                    ]).astype(object)
     return inputs
 
 
@@ -220,7 +231,9 @@ def run_inference(triton_client,
                   num_return_sequences=None,
                   lora_dir=None,
                   lora_task_id=None,
-                  exclude_input_in_output=False):
+                  exclude_input_in_output=False,
+                  guided_decoding_guide_type=None,
+                  guided_decoding_guide=None):
 
     try:
         prompts = json.loads(prompt)
@@ -230,16 +243,16 @@ def run_inference(triton_client,
     bs1_inputs = []
     for prompt in prompts:
         bs1_inputs.append(
-            prepare_inputs(prompt, output_len, repetition_penalty,
-                           presence_penalty, frequency_penalty, temperature,
-                           stop_words, bad_words, embedding_bias_words,
-                           embedding_bias_weights, streaming, beam_width,
-                           return_log_probs_data, return_context_logits_data,
-                           return_generation_logits_data,
-                           return_kv_cache_reuse_stats_data, end_id, pad_id,
-                           num_draft_tokens, use_draft_logits,
-                           num_return_sequences, lora_dir, lora_task_id,
-                           exclude_input_in_output))
+            prepare_inputs(
+                prompt, output_len, repetition_penalty, presence_penalty,
+                frequency_penalty, temperature, stop_words, bad_words,
+                embedding_bias_words, embedding_bias_weights, streaming,
+                beam_width, return_log_probs_data, return_context_logits_data,
+                return_generation_logits_data,
+                return_kv_cache_reuse_stats_data, end_id, pad_id,
+                num_draft_tokens, use_draft_logits, num_return_sequences,
+                lora_dir, lora_task_id, exclude_input_in_output,
+                guided_decoding_guide_type, guided_decoding_guide))
 
     if batch_inputs:
         multiple_inputs = []
@@ -591,6 +604,7 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help="path to LoRA dir")
+
     parser.add_argument("--lora-task-id",
                         type=int,
                         required=False,
@@ -601,6 +615,18 @@ if __name__ == '__main__':
                         required=False,
                         help='Option to exclude prompt in output text.')
 
+    parser.add_argument('--guided-decoding-guide-type',
+                        type=str,
+                        required=False,
+                        default=None,
+                        help="Guided decoding types.")
+
+    parser.add_argument('--guided-decoding-guide',
+                        type=str,
+                        required=False,
+                        default=None,
+                        help="Guided decoding guide prompts.")
+
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
         FLAGS.url = "localhost:8001"
@@ -609,7 +635,7 @@ if __name__ == '__main__':
     embedding_bias_weights = FLAGS.embedding_bias_weights if FLAGS.embedding_bias_weights else None
 
     lora_dir = FLAGS.lora_path if FLAGS.lora_path else None
-    lora_id = FLAGS.lora_task_id if FLAGS.lora_task_id else None
+    lora_task_id = FLAGS.lora_task_id if FLAGS.lora_task_id is not None else None
 
     try:
         client = grpcclient.InferenceServerClient(url=FLAGS.url)
@@ -638,32 +664,36 @@ if __name__ == '__main__':
             [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
 
     prompts, output_texts = run_inference(
-        client,
-        FLAGS.prompt,
-        FLAGS.output_len,
-        FLAGS.request_id,
-        FLAGS.repetition_penalty,
-        FLAGS.presence_penalty,
-        FLAGS.frequency_penalty,
-        FLAGS.temperature,
-        FLAGS.stop_words,
-        FLAGS.bad_words,
-        embedding_bias_words,
-        embedding_bias_weights,
-        FLAGS.model_name,
-        FLAGS.streaming,
-        FLAGS.beam_width,
-        FLAGS.overwrite_output_text,
-        return_log_probs_data,
-        return_context_logits_data,
-        return_generation_logits_data,
-        return_kv_cache_reuse_stats_data,
-        FLAGS.end_id,
-        FLAGS.pad_id,
-        FLAGS.batch_inputs,
-        True,
+        triton_client=client,
+        prompt=FLAGS.prompt,
+        output_len=FLAGS.output_len,
+        request_id=FLAGS.request_id,
+        repetition_penalty=FLAGS.repetition_penalty,
+        presence_penalty=FLAGS.presence_penalty,
+        frequency_penalty=FLAGS.frequency_penalty,
+        temperature=FLAGS.temperature,
+        stop_words=FLAGS.stop_words,
+        bad_words=FLAGS.bad_words,
+        embedding_bias_words=embedding_bias_words,
+        embedding_bias_weights=embedding_bias_weights,
+        model_name=FLAGS.model_name,
+        streaming=FLAGS.streaming,
+        beam_width=FLAGS.beam_width,
+        overwrite_output_text=FLAGS.overwrite_output_text,
+        return_log_probs_data=return_log_probs_data,
+        return_context_logits_data=return_context_logits_data,
+        return_generation_logits_data=return_generation_logits_data,
+        return_kv_cache_reuse_stats_data=return_kv_cache_reuse_stats_data,
+        end_id=FLAGS.end_id,
+        pad_id=FLAGS.pad_id,
+        batch_inputs=FLAGS.batch_inputs,
+        verbose=True,
         num_return_sequences=FLAGS.num_return_sequences,
-        exclude_input_in_output=FLAGS.exclude_input_in_output)
+        exclude_input_in_output=FLAGS.exclude_input_in_output,
+        lora_dir=lora_dir,
+        lora_task_id=lora_task_id,
+        guided_decoding_guide_type=FLAGS.guided_decoding_guide_type,
+        guided_decoding_guide=FLAGS.guided_decoding_guide)
 
     if FLAGS.check_outputs:
         expected_outputs = json.loads(FLAGS.expected_outputs)

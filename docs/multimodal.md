@@ -157,7 +157,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     --max_batch_size 8 \
     --max_seq_len 2048 \
     --max_num_tokens 4096 \
-    --max_encoder_input_len 8200
+    --max_encoder_input_len 6404
 
     python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type mllama --output_dir ${VISUAL_ENGINE_PATH} --max_batch_size 8 #max_batch_size * max_num_images_per_request
 
@@ -178,9 +178,9 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     cp all_models/multimodal/ensemble multimodal_ifb -r
     cp all_models/multimodal/multimodal_encoders multimodal_ifb -r
 
-    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32
+    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,cross_kv_cache_fraction:0.5
 
-    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1
+    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
 
     python3 tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
 
@@ -189,7 +189,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
 
     # Newly added for multimodal
-    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH}
+    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
     ```
     > **NOTE**:
     >
@@ -202,6 +202,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     > You can set the `max_num_images` to the max number of images per request. The value should be the same as the `max_num_images_per_request` value used at build the engine step above.
     >
     > Set `${ENCODER_INPUT_FEATURES_DTYPE}` to `TYPE_BF16` for mllama, and `TYPE_FP16` for other models.
+    > `cross_kv_cache_fraction` is used to determine the paged kv cache memory pool size of enc-dec models. For such case, we distinguish `free_fraction * (1 - cross_kv_cache_fraction)` to self attention kv caches, and `free_fraction * cross_kv_cache_fraction` to cross attention kv caches.
 
 4. Launch Tritonserver
 

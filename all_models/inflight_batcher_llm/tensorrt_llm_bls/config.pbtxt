@@ -288,6 +288,18 @@ input [
     dims: [ 1 ]
     reshape: { shape: [ ] }
     optional: true
+  },
+  {
+    name: "guided_decoding_guide_type"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "guided_decoding_guide"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
   }
 ]
 output [

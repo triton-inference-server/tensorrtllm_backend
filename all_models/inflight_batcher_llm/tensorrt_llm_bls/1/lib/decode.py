@@ -98,6 +98,8 @@ class Request:
     lora_config: Optional[np.ndarray] = None
     exclude_input_in_output: Optional[np.ndarray] = None
     return_kv_cache_reuse_stats: Optional[np.ndarray] = None
+    guided_decoding_guide_type: Optional[np.ndarray] = None
+    guided_decoding_guide: Optional[np.ndarray] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")

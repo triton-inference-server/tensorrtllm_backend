@@ -430,6 +430,20 @@ input [
     dims: [ 1 ]
     optional: true
     allow_ragged_batch: true
+  },
+  {
+    name: "guided_decoding_guide_type"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "guided_decoding_guide"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
   }
 ]
 output [
@@ -728,5 +742,17 @@ parameters: {
   key: "speculative_decoding_fast_logits"
   value: {
     string_value: "${speculative_decoding_fast_logits}"
+  }
+}
+parameters: {
+  key: "tokenizer_dir"
+  value: {
+    string_value: "${tokenizer_dir}"
+  }
+}
+parameters: {
+  key: "guided_decoding_backend"
+  value: {
+    string_value: "${guided_decoding_backend}"
   }
 }

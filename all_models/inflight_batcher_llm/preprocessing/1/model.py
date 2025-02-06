@@ -312,7 +312,7 @@ class TritonPythonModel:
                     for k, v in processed_tensors.items()
                 ]
             else:
-                assert self.model_type != "mllama" and self.model_type != "llava_onevision", "Image processing requires IMAGE_BYTES or IMAGE_URL to be provided"
+                assert self.model_type != "llava_onevision", "Image processing requires IMAGE_BYTES or IMAGE_URL to be provided"
 
             # Preprocessing input data.
             # For the LLaVA_OneVision model, num_visual_features is not a fixed value
