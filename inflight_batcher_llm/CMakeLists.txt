@@ -54,6 +54,9 @@ option(TRITON_ENABLE_GPU "Enable GPU support in backend" OFF)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_METRICS "Include metrics support in server" ON)
 option(BUILD_TESTS "Build Google tests" OFF)
+set(TRITON_LLM_PATH
+    ""
+    CACHE PATH "Path to Triton LLM library")
 
 if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
   message(
@@ -325,6 +328,19 @@ else()
       LINK_FLAGS
       "-Wl,--version-script libtriton_tensorrtllm.ldscript -Wl,-rpath,'$ORIGIN' -Wl,--no-undefined"
   )
+endif()
+
+if(NOT TRITON_LLM_PATH STREQUAL "")
+  target_compile_definitions(triton-tensorrt-llm-backend
+                             PRIVATE TRITON_ENABLE_KV_EMITTER=1)
+  find_library(
+    TRITON_LLM_LIBRARIES
+    NAMES triton_llm_capi
+    PATHS ${TRITON_LLM_PATH}/lib)
+  target_link_libraries(triton-tensorrt-llm-backend
+                        PRIVATE ${TRITON_LLM_LIBRARIES})
+  target_include_directories(triton-tensorrt-llm-backend
+                             PRIVATE ${TRITON_LLM_PATH}/include)
 endif()
 
 if(BUILD_TESTS)

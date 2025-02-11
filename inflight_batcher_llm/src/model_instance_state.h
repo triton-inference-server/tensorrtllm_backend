@@ -145,6 +145,12 @@ public:
         {
             mWaitForCancelThread.join();
         }
+
+        mStopWaitForKvEvents = true;
+        if (mWaitForKvEventsThread.joinable())
+        {
+            mWaitForKvEventsThread.join();
+        }
     }
 
     // Get the state of the model that corresponds to this instance.
@@ -261,6 +267,15 @@ private:
 
     /// @brief Flag to stop the WaitForCancel thread when the model instance is being destroyed
     bool mStopWaitForCancel;
+
+    /// @brief Retrieve KV events from the executor
+    void WaitForKvEvents();
+
+    /// @brief The thread for WaitForEvents() to run
+    std::thread mWaitForKvEventsThread;
+
+    /// @brief Flag to stop the WaitForEvents thread when the model instance is being destroyed
+    bool mStopWaitForKvEvents;
 
     std::unordered_map<executor::IdType, RequestData> mRequestIdToRequestData;
     std::unordered_map<std::string, std::set<executor::IdType>> mTritonRequestIdToRequestIds;

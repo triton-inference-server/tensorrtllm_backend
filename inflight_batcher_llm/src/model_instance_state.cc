@@ -32,6 +32,10 @@
 
 #include <nlohmann/json.hpp>
 
+#ifdef TRITON_ENABLE_KV_EMITTER
+#include "nvidia/triton_llm/llm_engine.h"
+#endif
+
 namespace tle = tensorrt_llm::executor;
 using executor::SizeType32;
 
@@ -180,8 +184,20 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
             = std::vector<SizeType32>(maxAttentionWindow.value().begin(), maxAttentionWindow.value().end());
     }
 
+    size_t eventBufferMaxSize = 0;
+    try
+    {
+        eventBufferMaxSize = model_state_->GetParameter<size_t>("event_buffer_max_size");
+    }
+    catch (std::exception const& e)
+    {
+        // If parameter is not specified, just ignore
+        TLLM_LOG_WARNING("event_buffer_max_size is not specified, will be set to false");
+    }
+
     return executor::KvCacheConfig(enableKVCacheReuse, maxTokensInPagedKvCache, maxAttentionWindowVec, sinkTokenLength,
-        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks, crossKvCacheFraction);
+        kvCacheFreeGpuMemFraction, kvCacheHostCacheSize, kvCacheOnboardBlocks, crossKvCacheFraction,
+        std::nullopt /* secondaryOffloadMinPriority */, eventBufferMaxSize);
 }
 
 executor::ExtendedRuntimePerfKnobConfig ModelInstanceState::getExtendedRuntimePerfKnobConfigFromParams()
@@ -573,7 +589,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             triton::common::TritonJson::Value default_queue_policy;
             if (dynamic_batching.Find("default_queue_policy", &default_queue_policy))
             {
-                int64_t max_queue_size;
+                int64_t max_queue_size = 0;
                 auto err = default_queue_policy.MemberAsInt("max_queue_size", &max_queue_size);
                 if (err == nullptr)
                 {
@@ -609,7 +625,6 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     : model_state_(model_state)
     , modelInstance_(triton_model_instance)
 {
-
     mInstanceIndex = model_state->getAndIncrementInstanceIndex();
     if (model_state_->getDeviceIds() && model_state_->getDeviceIds().value().size())
     {
@@ -729,6 +744,8 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
     }
     mInstanceSpecificConfig.statsCheckPeriodMs = statsCheckPeriodMs;
 
+    // [TODO] the library itself needs to be initialized so that the KV publisher
+    // is not singleton and can be initialized per model.
     if (mExecutor->canEnqueueRequests())
     {
         mStopWaitForResponse = false;
@@ -739,6 +756,29 @@ ModelInstanceState::ModelInstanceState(ModelState* model_state, TRITONBACKEND_Mo
 
         mStopWaitForCancel = false;
         mWaitForCancelThread = std::thread(&ModelInstanceState::WaitForCancel, this);
+
+        mStopWaitForKvEvents = false;
+#ifdef TRITON_ENABLE_KV_EMITTER
+        // [WIP] parse from model config
+        std::string component_id;
+        try
+        {
+            component_id = model_state_->GetParameter<std::string>("component_id");
+            if (triton_llm_init(model_state->GetModelName().c_str(), component_id.c_str()) == triton_llm_result_t::OK)
+            {
+                mWaitForKvEventsThread = std::thread(&ModelInstanceState::WaitForKvEvents, this);
+            }
+            else
+            {
+                TLLM_LOG_WARNING("Failed to initialize KV publisher");
+            }
+        }
+        catch (std::exception const& e)
+        {
+            // If parameter is not specified, just ignore
+            TLLM_LOG_WARNING("component_id is not specified, KV publisher will be disabled");
+        }
+#endif
     }
     else
     {
@@ -1267,6 +1307,78 @@ void ModelInstanceState::WaitForResponse()
             }
         }
     }
+}
+
+void ModelInstanceState::WaitForKvEvents()
+{
+#ifdef TRITON_ENABLE_KV_EMITTER
+    while (!mStopWaitForKvEvents)
+    {
+        auto manager = mExecutor->getKVCacheEventManager();
+        if (manager)
+        {
+            auto events = (*manager)->getLatestEvents({std::chrono::milliseconds(250)});
+            while (!events.empty())
+            {
+                auto event = events.front();
+                events.pop_front();
+                if (std::holds_alternative<tle::KVCacheStoredData>(event.data))
+                {
+                    auto const& stored_data = std::get<executor::KVCacheStoredData>(event.data);
+
+                    uint64_t event_id = event.eventId;
+                    uint64_t const* parent_hash_ptr = nullptr;
+                    uint64_t parent_hash = 0;
+                    std::vector<uint32_t> token_ids;
+                    std::vector<uintptr_t> num_block_tokens;
+                    std::vector<uint64_t> block_ids;
+                    uintptr_t num_blocks = stored_data.blocks.size();
+                    // [TODO] hard-code to 0 for now as lora id is not supported in the KV receiver
+                    // side yet.
+                    uint64_t lora_id = 0;
+
+                    if (stored_data.parentHash)
+                    {
+                        parent_hash = *stored_data.parentHash;
+                        parent_hash_ptr = &parent_hash;
+                    }
+                    for (auto const& block : stored_data.blocks)
+                    {
+                        for (auto const& token : block.tokens)
+                        {
+                            token_ids.emplace_back(token.tokenId);
+                        }
+                        block_ids.emplace_back(block.blockHash);
+                        num_block_tokens.emplace_back(block.tokens.size());
+                    }
+                    if (triton_kv_event_publish_stored(event_id, token_ids.data(), num_block_tokens.data(),
+                            block_ids.data(), num_blocks, parent_hash_ptr, lora_id)
+                        != triton_llm_result_t::OK)
+                    {
+                        TLLM_LOG_ERROR("Failed to publish KV cache stored event");
+                    }
+                }
+                else if (std::holds_alternative<tle::KVCacheRemovedData>(event.data))
+                {
+                    auto const& delete_data = std::get<executor::KVCacheRemovedData>(event.data);
+
+                    uint64_t event_id = event.eventId;
+                    std::vector<uint64_t> block_ids;
+                    uintptr_t num_blocks = delete_data.blockHashes.size();
+
+                    for (auto const& block_hash : delete_data.blockHashes)
+                    {
+                        block_ids.emplace_back(block_hash);
+                    }
+                    if (triton_kv_event_publish_removed(event_id, block_ids.data(), num_blocks) != triton_llm_result_t::OK)
+                    {
+                        TLLM_LOG_ERROR("Failed to publish KV cache removed event");
+                    }
+                }
+            }
+        }
+    }
+#endif
 }
 
 void ModelInstanceState::WaitForStats()
