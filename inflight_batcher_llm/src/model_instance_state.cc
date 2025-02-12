@@ -277,11 +277,13 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     // lora_cache_optimal_adapter_size
     // lora_cache_gpu_memory_fraction
     // lora_cache_host_memory_bytes
+    // lora_prefetch_dir
 
     SizeType32 maxAdapterSize = 64;
     SizeType32 optimalAdapterSize = 8;
     std::optional<size_t> hostCacheSize = std::nullopt;
     std::optional<float> deviceCachePercent = std::nullopt;
+    std::optional<std::string> loraPrefetchDir = std::nullopt;
 
     std::string fieldName = "lora_cache_max_adapter_size";
     try
@@ -320,10 +322,19 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     {
         TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
     }
+    fieldName = "lora_prefetch_dir";
+    try
+    {
+        loraPrefetchDir = model_state_->GetParameter<std::string>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
+    }
 
     return executor::PeftCacheConfig(0, 0, optimalAdapterSize, maxAdapterSize,
         ModelInstanceState::kPeftCacheNumPutWorkers, ModelInstanceState::kPeftCacheNumEnsureWorkers,
-        ModelInstanceState::kPeftCacheNumCopyStreams, 24, 8, deviceCachePercent, hostCacheSize);
+        ModelInstanceState::kPeftCacheNumCopyStreams, 24, 8, deviceCachePercent, hostCacheSize, loraPrefetchDir);
 }
 
 executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool enableChunkedContext)

@@ -685,6 +685,12 @@ parameters: {
   }
 }
 parameters: {
+  key: "lora_prefetch_dir"
+  value: {
+    string_value: "${lora_prefetch_dir}"
+  }
+}
+parameters: {
   key: "decoding_mode"
   value: {
     string_value: "${decoding_mode}"

@@ -149,6 +149,7 @@ additional benefits.
 | `lora_cache_max_adapter_size` | Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. (default=64) |
 | `lora_cache_gpu_memory_fraction` | Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded. (default=0.05) |
 | `lora_cache_host_memory_bytes` | Size of host LoRA cache in bytes. (default=1G) |
+| `lora_prefetch_dir` | Folder to store the LoRA weights we hope to load during engine initialization. |
 
 - Decoding mode
 
