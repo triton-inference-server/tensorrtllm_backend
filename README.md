@@ -1,5 +1,5 @@
 <!--
-# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -127,7 +127,7 @@ all the supported models. You can also check out the
 examples with serving TensorRT-LLM models.
 
 ```bash
-cd /app/examples/gpt
+cd /app/tensorrt_llm/examples/gpt
 
 # Download weights from HuggingFace Transformers
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
@@ -197,7 +197,7 @@ modified, please refer to the [model config](./docs/model_config.md) section.
 
 ```bash
 ENGINE_DIR=/engines/gpt/fp16/4-gpu
-TOKENIZER_DIR=/app/examples/gpt/gpt2
+TOKENIZER_DIR=/app/tensorrt_llm/examples/gpt/gpt2
 MODEL_FOLDER=/triton_model_repo
 TRITON_MAX_BATCH_SIZE=4
 INSTANCE_COUNT=1
@@ -205,12 +205,13 @@ MAX_QUEUE_DELAY_MS=0
 MAX_QUEUE_SIZE=0
 FILL_TEMPLATE_SCRIPT=/app/tools/fill_template.py
 DECOUPLED_MODE=false
+LOGITS_DATATYPE=TYPE_FP32
 
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},logits_datatype:${LOGITS_DATATYPE}
 python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,max_queue_size:${MAX_QUEUE_SIZE},encoder_input_features_data_type:TYPE_FP16
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT},max_queue_size:${MAX_QUEUE_SIZE}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,max_queue_size:${MAX_QUEUE_SIZE},encoder_input_features_data_type:TYPE_FP16,logits_datatype:${LOGITS_DATATYPE}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},logits_datatype:${LOGITS_DATATYPE}
 ```
 
 > **NOTE**:
@@ -299,7 +300,7 @@ to send requests to the `tensorrt_llm` model.
 
 ```bash
 pip3 install tritonclient[all]
-INFLIGHT_BATCHER_LLM_CLIENT=/app/client/inflight_batcher_llm_client.py
+INFLIGHT_BATCHER_LLM_CLIENT=/app/inflight_batcher_llm/client/inflight_batcher_llm_client.py
 python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
 ```
 
@@ -420,7 +421,7 @@ script, the client will create a request with multiple prompts, and use the
 For example one could run:
 
 ```
-python3 /app/client/end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
+python3 /app/inflight_batcher_llm/client/end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
 ```
 
 to send a request with a batch size of 3 to the Triton server.

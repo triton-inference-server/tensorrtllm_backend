@@ -830,6 +830,8 @@ class TritonPythonModel:
                           float),
             "host_cache_size":
             get_parameter(model_config, "lora_cache_host_memory_bytes", int),
+            "lora_prefetch_dir":
+            get_parameter(model_config, "lora_prefetch_dir", int),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.PeftCacheConfig(**kwargs)

@@ -739,6 +739,7 @@ def model_config() -> Dict:
         "lora_cache_max_adapter_size": "2",
         "lora_cache_gpu_memory_fraction": "0.5",
         "lora_cache_host_memory_bytes": "4",
+        "lora_prefetch_dir": "",
         "enable_context_fmha_fp32_acc": "true"
     }
     return {"parameters": {k: {"string_value": v} for k, v in config.items()}}
