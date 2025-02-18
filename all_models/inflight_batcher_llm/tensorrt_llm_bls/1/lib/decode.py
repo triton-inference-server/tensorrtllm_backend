@@ -100,6 +100,7 @@ class Request:
     return_kv_cache_reuse_stats: Optional[np.ndarray] = None
     guided_decoding_guide_type: Optional[np.ndarray] = None
     guided_decoding_guide: Optional[np.ndarray] = None
+    request_id: Optional[str] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")
@@ -375,6 +376,9 @@ class Decoder:
         draft_request: Optional[DraftRequest] = None,
         multimodal_enc_response: Optional[MultimodalEncResponse] = None,
     ) -> GenerationResponse:
+        raise NotImplementedError()
+
+    def send_cancellation_request(self, request_id, decoupled):
         raise NotImplementedError()
 
     def postprocess(self, gen_response: GenerationResponse,
