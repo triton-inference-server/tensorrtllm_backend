@@ -27,8 +27,8 @@
 #include "model_instance_state.h"
 #include "utils.h"
 
-#include "tensorrt_llm/common/mpiUtils.h"
 #include "tensorrt_llm/executor/serialization.h"
+#include "tensorrt_llm/runtime/utils/mpiUtils.h"
 
 #include <nlohmann/json.hpp>
 
@@ -393,6 +393,51 @@ executor::SpeculativeDecodingConfig ModelInstanceState::getSpeculativeDecodingCo
     return executor::SpeculativeDecodingConfig(fastLogits);
 }
 
+std::optional<executor::GuidedDecodingConfig> ModelInstanceState::getGuidedDecodingConfigFromParams()
+{
+    std::optional<executor::GuidedDecodingConfig> guidedDecodingConfig = std::nullopt;
+    std::string tokenizerDir = model_state_->GetParameter<std::string>("tokenizer_dir");
+    std::string tokenizerInfoPath = model_state_->GetParameter<std::string>("xgrammar_tokenizer_info_path");
+    std::string guidedDecodingBackendStr = model_state_->GetParameter<std::string>("guided_decoding_backend");
+
+    if (!tokenizerDir.empty() && tokenizerDir != "${tokenizer_dir}")
+    {
+        TLLM_LOG_INFO(
+            "Guided decoding C++ workflow does not use tokenizer_dir, this parameter will "
+            "be ignored.");
+    }
+
+    if (guidedDecodingBackendStr.empty() || guidedDecodingBackendStr == "${guided_decoding_backend}"
+        || tokenizerInfoPath.empty() || tokenizerInfoPath == "${xgrammar_tokenizer_info_path}")
+    {
+        return guidedDecodingConfig;
+    }
+
+    TLLM_CHECK_WITH_INFO(std::filesystem::exists(tokenizerInfoPath),
+        "Xgrammar's tokenizer info path at %s does not exist.", tokenizerInfoPath.c_str());
+
+    auto const tokenizerInfo = nlohmann::json::parse(std::ifstream{std::filesystem::path(tokenizerInfoPath)});
+    auto const encodedVocab = tokenizerInfo["encoded_vocab"].template get<std::vector<std::string>>();
+    auto const tokenizerStr = tokenizerInfo["tokenizer_str"].template get<std::string>();
+    auto const stopTokenIds
+        = tokenizerInfo["stop_token_ids"].template get<std::vector<tensorrt_llm::runtime::TokenIdType>>();
+
+    executor::GuidedDecodingConfig::GuidedDecodingBackend guidedDecodingBackend;
+    if (guidedDecodingBackendStr == "xgrammar")
+    {
+        guidedDecodingBackend = executor::GuidedDecodingConfig::GuidedDecodingBackend::kXGRAMMAR;
+    }
+    else
+    {
+        TLLM_THROW(
+            "Guided decoding is currently supported with 'xgrammar' backend. Invalid guided_decoding_backend parameter "
+            "provided.");
+    }
+    guidedDecodingConfig
+        = executor::GuidedDecodingConfig(guidedDecodingBackend, encodedVocab, tokenizerStr, stopTokenIds);
+    return guidedDecodingConfig;
+}
+
 executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 {
     auto batchingType = getBatchingTypeFromParams();
@@ -608,28 +653,18 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
     }
 
-    // TODO
-    // Support C++ guided decoding backend. Now, it throws an error.
-    auto guidedDecodingBackend = model_state_->GetParameter<std::string>("guided_decoding_backend");
-    auto tokenizerDir = model_state_->GetParameter<std::string>("tokenizer_dir");
-    if (guidedDecodingBackend != "" && guidedDecodingBackend != "${guided_decoding_backend}")
-    {
-        TLLM_THROW(
-            "Guided decoding is not currently supported in the C++ tensorrtllm backend. To enable guided decoding, "
-            "switch to the Python tensorrtllm backend.");
-    }
-    if (tokenizerDir != "" && tokenizerDir != "${tokenizer_dir}")
-    {
-        TLLM_LOG_WARNING(
-            "Guided decoding is not currently supported in the C++ tensorrtllm backend. Tokenizer_dir parameter will "
-            "be ignored.");
-    }
+    auto guidedConfig = getGuidedDecodingConfigFromParams();
 
     auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
         parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
         extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs};
     execConfig.setSpecDecConfig(specDecConfig);
+    if (guidedConfig.has_value())
+    {
+        execConfig.setGuidedDecodingConfig(guidedConfig.value());
+        TLLM_LOG_INFO("Guided decoding config has been provided and set as guided decoder.");
+    }
     return execConfig;
 }
 

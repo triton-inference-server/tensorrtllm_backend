@@ -110,6 +110,10 @@ struct InputFieldsNames
     static constexpr char const* retentionTokenRangeDurations = "retention_token_range_durations_ms";
     static constexpr char const* retentionDecodePriority = "retention_decode_priority";
     static constexpr char const* retentionDecodeDuration = "retention_decode_duration_ms";
+
+    // GuidedDecodingParams
+    static constexpr char const* guidedDecodingGuideType = "guided_decoding_guide_type";
+    static constexpr char const* guidedDecodingGuide = "guided_decoding_guide";
 };
 
 /// @brief Names of output fields
@@ -175,6 +179,9 @@ std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const&
 
 /// @brief Construct executor::KvCacheRetentionConfig from input tensors
 std::optional<executor::KvCacheRetentionConfig> getKvCacheRetentionConfigFromTensors(InputTensors const& inputsTensors);
+
+/// @brief Construct executor::GuidedDecodingParams from input tensors
+std::optional<executor::GuidedDecodingParams> getGuidedDecodingParamsFromTensors(InputTensors const& inputsTensors);
 
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,

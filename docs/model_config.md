@@ -192,6 +192,7 @@ additional benefits.
 | :----------------------: | :-----------------------------: |
 | `guided_decoding_backend` | Set to `xgrammar` to activate guided decoder. |
 | `tokenizer_dir` | The guided decoding of tensorrt_llm python backend requires tokenizer's information. |
+| `xgrammar_tokenizer_info_path` | The guided decoding of tensorrt_llm C++ backend requires xgrammar's tokenizer's info in 'json' format. |
 
 ### tensorrt_llm_bls model
 

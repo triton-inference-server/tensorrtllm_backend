@@ -192,6 +192,9 @@ private:
     executor::SpeculativeDecodingConfig getSpeculativeDecodingConfigFromParams(
         std::optional<executor::OrchestratorConfig> orchConfig);
 
+    /// @brief Get guided decoding config
+    std::optional<executor::GuidedDecodingConfig> getGuidedDecodingConfigFromParams();
+
     /// @brief Get executor config
     executor::ExecutorConfig getExecutorConfigFromParams();
 

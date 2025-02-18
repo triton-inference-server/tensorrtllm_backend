@@ -26,6 +26,9 @@
 
 import json
 import traceback
+import uuid
+from collections import defaultdict
+from dataclasses import dataclass, field
 
 import triton_python_backend_utils as pb_utils
 from lib.triton_decoder import TritonDecoder
@@ -34,6 +37,12 @@ from lib.triton_decoder import TritonDecoder
 def get_valid_param_value(param, default_value=''):
     value = param.get('string_value', '')
     return default_value if value.startswith('${') or value == '' else value
+
+
+@dataclass
+class StopWordsState:
+    beam_indices: set[int] = field(default_factory=set)
+    prefix: str = ""
 
 
 class TritonPythonModel:
@@ -76,6 +85,89 @@ class TritonPythonModel:
             draft_llm_model_name=self.draft_llm_model_name,
             multimodal_encoders_name=self.multimodal_encoders_name)
 
+    def get_batch_index(self, response):
+        if hasattr(
+                response, 'batch_index'
+        ) and response.batch_index is not None and response.batch_index.shape == (
+                1, 1):
+            return response.batch_index[0][0]
+        else:
+            return 0
+
+    def get_sequence_index(self, response):
+        if hasattr(
+                response, 'sequence_index'
+        ) and response.sequence_index is not None and response.sequence_index.shape == (
+                1, 1):
+            return response.sequence_index[0][0]
+        else:
+            return 0
+
+    def check_stop_words(self, request, response, state):
+        batch_index = self.get_batch_index(response)
+        seq_index = self.get_sequence_index(response)
+        if not (hasattr(request, 'stop_words')
+                and request.stop_words is not None):
+            return False
+
+        text_input = str(request.text_input[batch_index][0], 'utf-8')
+        is_streaming = hasattr(
+            request,
+            'stream') and request.stream and request.stream[batch_index][0]
+        exclude_input_in_output = hasattr(
+            request, 'exclude_input_in_output'
+        ) and request.exclude_input_in_output and request.exclude_input_in_output[
+            batch_index][0]
+        if is_streaming:
+            # For every beam in the response, check if the stop word is detected
+            for j, text_output in enumerate(response.text_output):
+                text_output = str(text_output, "utf-8")
+                if (batch_index, seq_index, j) not in state:
+                    state[(batch_index, seq_index, j)] = StopWordsState()
+
+                response_state = state[(batch_index, seq_index, j)]
+                # If stop word is already detected for a beam, skip it
+                if j in response_state.beam_indices:
+                    response.text_output[j] = b""
+                    continue
+
+                for i, stop_word in enumerate(request.stop_words[batch_index]):
+                    stop_word = str(stop_word, encoding='utf-8')
+                    if stop_word == "":
+                        continue
+
+                    if stop_word.startswith(response_state.prefix +
+                                            text_output):
+                        response_state.prefix += text_output
+                        if stop_word == response_state.prefix:
+                            response_state.beam_indices.add(j)
+                            break
+                    else:
+                        response_state.prefix = ""
+        else:
+            for j, text_output in enumerate(response.text_output):
+                if (batch_index, seq_index, j) not in state:
+                    state[(batch_index, seq_index, j)] = StopWordsState()
+
+                response_state = state[(batch_index, seq_index, j)]
+                generation_start = 0
+                text_output = str(text_output, "utf-8")
+                if not exclude_input_in_output:
+                    generation_start = len(text_input)
+                for i, stop_word in enumerate(request.stop_words[batch_index]):
+                    stop_word = str(stop_word, encoding='utf-8')
+                    if stop_word == "":
+                        continue
+                    stop_word_index = text_output.find(stop_word,
+                                                       generation_start)
+                    if stop_word_index != -1:
+                        response.text_output[
+                            j] = text_output[:stop_word_index +
+                                             len(stop_word)].encode('utf-8')
+                        response_state.beam_indices.add(j)
+                        break
+        return len(response_state.beam_indices) == len(response.text_output)
+
     def execute(self, requests):
 
         responses = []
@@ -100,12 +192,28 @@ class TritonPythonModel:
                     raise Exception(
                         "Multimodal and speculative decoding is not currently supported"
                     )
+                req.request_id = str(uuid.uuid4())
                 res_gen = self.decoder.decode(
                     req,
                     speculative_decoding=speculative_decode,
                     is_multimodal=is_multimodal)
 
+                stopped_batch_seq_indices = defaultdict(set)
+                stopped_word_status = defaultdict(StopWordsState)
                 for res in res_gen:
+                    batch_index = self.get_batch_index(res)
+                    if batch_index in stopped_batch_seq_indices and self.get_sequence_index(
+                            res) in stopped_batch_seq_indices[batch_index]:
+                        continue
+
+                    if self.check_stop_words(req, res, stopped_word_status):
+                        stopped_batch_seq_indices[batch_index].add(
+                            self.get_sequence_index(res))
+                        if len(stopped_batch_seq_indices
+                               ) == req.text_input.shape[0]:
+                            self.decoder.send_cancellation_request(
+                                req.request_id, self.decoupled)
+
                     triton_response = self.decoder.create_triton_response(res)
                     if self.decoupled:
                         response_sender.send(triton_response)

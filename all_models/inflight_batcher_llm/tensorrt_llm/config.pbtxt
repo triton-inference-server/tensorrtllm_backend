@@ -762,3 +762,9 @@ parameters: {
     string_value: "${guided_decoding_backend}"
   }
 }
+parameters: {
+  key: "xgrammar_tokenizer_info_path"
+  value: {
+    string_value: "${xgrammar_tokenizer_info_path}"
+  }
+}

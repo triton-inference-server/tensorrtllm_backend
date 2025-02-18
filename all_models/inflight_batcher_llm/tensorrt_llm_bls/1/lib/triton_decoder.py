@@ -187,6 +187,30 @@ class TritonDecoder(Decoder):
         else:
             return x
 
+    def send_cancellation_request(self, request_id, decoupled):
+        tensors = []
+        tensors.append(
+            pb_utils.Tensor("input_ids", np.empty([1, 1], dtype=np.int32)))
+        tensors.append(
+            pb_utils.Tensor("input_lengths", np.zeros([1, 1], dtype=np.int32)))
+        tensors.append(
+            pb_utils.Tensor("request_output_len",
+                            np.array([[0]], dtype=np.int32)))
+        tensors.append(
+            pb_utils.Tensor("stop", np.array([[True]], dtype='bool')))
+
+        inference_request = pb_utils.InferenceRequest(
+            model_name=self.llm_model_name,
+            requested_output_names=[],
+            inputs=tensors,
+            request_id=request_id)
+        inference_response = inference_request.exec(decoupled=decoupled)
+        if decoupled:
+            inference_response = list(inference_response)[0]
+        if inference_response.has_error():
+            raise pb_utils.TritonModelException(
+                inference_response.error().message())
+
     def create_triton_tensors(self, obj, name_map: dict):
         tensors = []
         for name, triton_name in name_map.items():
@@ -210,6 +234,7 @@ class TritonDecoder(Decoder):
         triton_req = pb_utils.InferenceRequest(
             model_name=self.preproc_model_name,
             inputs=input_tensors,
+            request_id=request.request_id,
             requested_output_names=self._preproc_outputs)
         triton_output = self._exec_triton_request_single(triton_req)
         return self._get_preproc_response(triton_output)
@@ -261,6 +286,7 @@ class TritonDecoder(Decoder):
         triton_req = pb_utils.InferenceRequest(
             model_name=self.multimodal_encoders_name,
             inputs=input_tensors,
+            request_id=request.request_id,
             requested_output_names=self._multimodal_enc_outputs)
         triton_output = self._exec_triton_request_single(triton_req)
         return self._get_multimodal_enc_response(triton_output)
@@ -297,6 +323,7 @@ class TritonDecoder(Decoder):
         triton_req = pb_utils.InferenceRequest(
             model_name=self.draft_llm_model_name,
             inputs=input_tensors,
+            request_id=request.request_id,
             requested_output_names=self._llm_outputs)
         triton_response = self._exec_triton_request_single(triton_req)
         llm_response = self._get_llm_response(triton_response)
@@ -319,6 +346,7 @@ class TritonDecoder(Decoder):
         triton_req = pb_utils.InferenceRequest(
             model_name=self.llm_model_name,
             inputs=input_tensors,
+            request_id=request.request_id,
             requested_output_names=self._llm_outputs)
         for r in self._exec_triton_request(triton_req):
             yield self._get_llm_response(r)
@@ -340,6 +368,7 @@ class TritonDecoder(Decoder):
         triton_req = pb_utils.InferenceRequest(
             model_name=self.llm_model_name,
             inputs=input_tensors,
+            request_id=request.request_id,
             requested_output_names=self._llm_outputs)
         r = self._exec_triton_request_single(triton_req)
         return self._get_llm_response(r)
