@@ -250,7 +250,7 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `beam_width` | [1] | `int32_t` | Beam width for this request; set to 1 for greedy sampling (Default=1) |
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
-| `return_kv_cache_reuse_stats` | [1] | `bool` | When `true`, include kv cache reuse stats in the output |
+| `return_perf_metrics` | [1] | `bool` | When `true`, include perf metrics in the output, such as kv cache reuse stats |
 | `guided_decoding_guide_type` | [1] | `string` | Guided decoding param: `guide_type` |
 | `guided_decoding_guide` | [1] | `string` | Guided decoding param: `guide` |
 
@@ -266,6 +266,8 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 
 #### Common Outputs
 
+Note: the timing metrics oputputs are represented as the number of nanoseconds since epoch.
+
 | Name | Shape | Type | Description |
 | :------------: | :---------------: | :-----------: | :--------: |
 | `cum_log_probs` | [-1] | `float` | Cumulative probabilities for each output |
@@ -273,9 +275,16 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 | `context_logits` | [-1, vocab_size] | `float` | Context logits for input |
 | `generation_logits` | [beam_width, seq_len, vocab_size] | `float` | Generation logits for each output |
 | `batch_index` | [1] | `int32` | Batch index |
-| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
-| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_reused_blocks` in the outputs. |
-| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
+| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
+| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_reused_blocks` in the outputs. |
+| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
+| `arrival_time_ns` | [1] | `float` | Time when the request was received by TRT-LLM. Set the optional input `return_perf_metrics` to `true` to include `arrival_time_ns` in the outputs. |
+| `first_scheduled_time_ns` | [1] | `float` | Time when the request was first scheduled. Set the optional input `return_perf_metrics` to `true` to include `first_scheduled_time_ns` in the outputs. |
+| `first_token_time_ns` | [1] | `float` | Time when the first token was generated. Set the optional input `return_perf_metrics` to `true` to include `first_token_time_ns` in the outputs. |
+| `last_token_time_ns` | [1] | `float` | Time when the last token was generated. Set the optional input `return_perf_metrics` to `true` to include `last_token_time_ns` in the outputs. |
+| `acceptance_rate` | [1] | `float` | Acceptance rate of the speculative decoding model. Set the optional input `return_perf_metrics` to `true` to include `acceptance_rate` in the outputs. |
+| `total_accepted_draft_tokens` | [1] | `int32` | Number of tokens accepted by the target model in speculative decoding. Set the optional input `return_perf_metrics` to `true` to include `total_accepted_draft_tokens` in the outputs. |
+| `total_draft_tokens` | [1] | `int32` | Maximum number of draft tokens acceptable by the target model in speculative decoding. Set the optional input `return_perf_metrics` to `true` to include `total_draft_tokens` in the outputs. |
 
 #### Unique Inputs for tensorrt_llm model
 

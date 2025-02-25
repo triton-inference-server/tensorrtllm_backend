@@ -97,7 +97,7 @@ class Request:
     lora_weights: Optional[np.ndarray] = None
     lora_config: Optional[np.ndarray] = None
     exclude_input_in_output: Optional[np.ndarray] = None
-    return_kv_cache_reuse_stats: Optional[np.ndarray] = None
+    return_perf_metrics: Optional[np.ndarray] = None
     guided_decoding_guide_type: Optional[np.ndarray] = None
     guided_decoding_guide: Optional[np.ndarray] = None
     request_id: Optional[str] = None
@@ -179,6 +179,13 @@ class GenerationResponse:
     kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
     kv_cache_reused_blocks: Optional[np.ndarray] = None
     kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
+    arrival_time_ns: Optional[np.ndarray] = None
+    first_scheduled_time_ns: Optional[np.ndarray] = None
+    first_token_time_ns: Optional[np.ndarray] = None
+    last_token_time_ns: Optional[np.ndarray] = None
+    acceptance_rate: Optional[np.ndarray] = None
+    total_accepted_draft_tokens: Optional[np.ndarray] = None
+    total_draft_tokens: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -193,6 +200,13 @@ class Response:
     kv_cache_alloc_new_blocks: Optional[np.ndarray] = None
     kv_cache_reused_blocks: Optional[np.ndarray] = None
     kv_cache_alloc_total_blocks: Optional[np.ndarray] = None
+    arrival_time_ns: Optional[np.ndarray] = None
+    first_scheduled_time_ns: Optional[np.ndarray] = None
+    first_token_time_ns: Optional[np.ndarray] = None
+    last_token_time_ns: Optional[np.ndarray] = None
+    acceptance_rate: Optional[np.ndarray] = None
+    total_accepted_draft_tokens: Optional[np.ndarray] = None
+    total_draft_tokens: Optional[np.ndarray] = None
 
     def __eq__(self, o) -> bool:
         """Just for testing"""
@@ -205,13 +219,22 @@ class Response:
                 and np.array_equal(self.generation_logits, o.generation_logits)
                 and np.array_equal(self.batch_index, o.batch_index)
                 and np.array_equal(self.sequence_index, o.sequence_index)
-                and np.array_equal(self.sequence_index, o.sequence_index)
                 and np.array_equal(self.kv_cache_alloc_new_blocks,
                                    o.kv_cache_alloc_new_blocks)
                 and np.array_equal(self.kv_cache_reused_blocks,
                                    o.kv_cache_reused_blocks)
                 and np.array_equal(self.kv_cache_alloc_total_blocks,
-                                   o.kv_cache_alloc_total_blocks))
+                                   o.kv_cache_alloc_total_blocks)
+                and np.array_equal(self.arrival_time_ns, o.arrival_time_ns)
+                and np.array_equal(self.first_scheduled_time_ns,
+                                   o.first_scheduled_time_ns) and
+                np.array_equal(self.first_token_time_ns, o.first_token_time_ns)
+                and np.array_equal(self.last_token_time_ns,
+                                   o.last_token_time_ns)
+                and np.array_equal(self.acceptance_rate, o.acceptance_rate)
+                and np.array_equal(self.total_accepted_draft_tokens,
+                                   o.total_accepted_draft_tokens) and
+                np.array_equal(self.total_draft_tokens, o.total_draft_tokens))
 
 
 class Decoder:

@@ -75,7 +75,10 @@ class TritonDecoder(Decoder):
             "output_ids", "sequence_length", "cum_log_probs",
             "output_log_probs", "context_logits", "generation_logits",
             "batch_index", "sequence_index", "kv_cache_alloc_new_blocks",
-            "kv_cache_reused_blocks", "kv_cache_alloc_total_blocks"
+            "kv_cache_reused_blocks", "kv_cache_alloc_total_blocks",
+            "arrival_time_ns", "first_scheduled_time_ns",
+            "first_token_time_ns", "last_token_time_ns", "acceptance_rate",
+            "total_accepted_draft_tokens", "total_draft_tokens"
         ]
 
         self._postproc_outputs = [
@@ -94,7 +97,7 @@ class TritonDecoder(Decoder):
             "prompt_table_extra_id", "embedding_bias_words",
             "embedding_bias_weights", "num_draft_tokens", "use_draft_logits",
             "lora_task_id", "lora_weights", "lora_config",
-            "exclude_input_in_output", "return_kv_cache_reuse_stats",
+            "exclude_input_in_output", "return_perf_metrics",
             "guided_decoding_guide_type", "guided_decoding_guide"
         ]
 
@@ -105,8 +108,8 @@ class TritonDecoder(Decoder):
             "return_log_probs", "return_context_logits",
             "return_generation_logits", "beam_width", "stream",
             "prompt_vocab_size", "num_draft_tokens", "use_draft_logits",
-            "exclude_input_in_output", "return_kv_cache_reuse_stats",
-            "lora_weights", "lora_config", "lora_task_id"
+            "exclude_input_in_output", "return_perf_metrics", "lora_weights",
+            "lora_config", "lora_task_id"
         }
 
     def _exec_triton_request(self, request):
@@ -133,7 +136,14 @@ class TritonDecoder(Decoder):
             "sequence_index": "sequence_index",
             "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
             "kv_cache_reused_blocks": "kv_cache_reused_blocks",
-            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks",
+            "arrival_time_ns": "arrival_time_ns",
+            "first_scheduled_time_ns": "first_scheduled_time_ns",
+            "first_token_time_ns": "first_token_time_ns",
+            "last_token_time_ns": "last_token_time_ns",
+            "acceptance_rate": "acceptance_rate",
+            "total_accepted_draft_tokens": "total_accepted_draft_tokens",
+            "total_draft_tokens": "total_draft_tokens"
         }
         tensors = self.create_triton_tensors(response, name_map)
         return pb_utils.InferenceResponse(output_tensors=tensors)
@@ -439,7 +449,7 @@ class TritonDecoder(Decoder):
             "lora_weights": "lora_weights",
             "lora_config": "lora_config",
             "exclude_input_in_output": "exclude_input_in_output",
-            "return_kv_cache_reuse_stats": "return_kv_cache_reuse_stats",
+            "return_perf_metrics": "return_perf_metrics",
             "guided_decoding_guide_type": "guided_decoding_guide_type",
             "guided_decoding_guide": "guided_decoding_guide"
         }
@@ -521,7 +531,14 @@ class TritonDecoder(Decoder):
             "sequence_index": "sequence_index",
             "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
             "kv_cache_reused_blocks": "kv_cache_reused_blocks",
-            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks"
+            "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks",
+            "arrival_time_ns": "arrival_time_ns",
+            "first_scheduled_time_ns": "first_scheduled_time_ns",
+            "first_token_time_ns": "first_token_time_ns",
+            "last_token_time_ns": "last_token_time_ns",
+            "acceptance_rate": "acceptance_rate",
+            "total_accepted_draft_tokens": "total_accepted_draft_tokens",
+            "total_draft_tokens": "total_draft_tokens"
         }
         return self.convert_triton_response(triton_output, GenerationResponse,
                                             name_map)
@@ -567,5 +584,12 @@ class TritonDecoder(Decoder):
             sequence_index=gen_res.sequence_index,
             kv_cache_alloc_new_blocks=gen_res.kv_cache_alloc_new_blocks,
             kv_cache_reused_blocks=gen_res.kv_cache_reused_blocks,
-            kv_cache_alloc_total_blocks=gen_res.kv_cache_alloc_total_blocks)
+            kv_cache_alloc_total_blocks=gen_res.kv_cache_alloc_total_blocks,
+            arrival_time_ns=gen_res.arrival_time_ns,
+            first_scheduled_time_ns=gen_res.first_scheduled_time_ns,
+            first_token_time_ns=gen_res.first_token_time_ns,
+            last_token_time_ns=gen_res.last_token_time_ns,
+            acceptance_rate=gen_res.acceptance_rate,
+            total_accepted_draft_tokens=gen_res.total_accepted_draft_tokens,
+            total_draft_tokens=gen_res.total_draft_tokens)
         return response

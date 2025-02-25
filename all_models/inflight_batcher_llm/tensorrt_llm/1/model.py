@@ -9,6 +9,7 @@ from threading import Lock, Thread
 from typing import Any, List
 
 import numpy as np
+import pandas as pd
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
@@ -239,7 +240,12 @@ def get_output_config_from_request(request, batch_size=1, batch_index=0):
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
         request, 'return_generation_logits', batch_size, batch_index)
     kwargs["return_perf_metrics"] = get_input_scalar_by_name(
-        request, 'return_kv_cache_reuse_stats', batch_size, batch_index)
+        request, 'return_perf_metrics', batch_size, batch_index)
+    if get_input_scalar_by_name(request, 'return_kv_cache_reuse_stats',
+                                batch_size, batch_index):
+        pb_utils.Logger.log_warn(
+            "return_kv_cache_reuse_stats is deprecated, please use return_perf_metrics instead."
+        )
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
@@ -427,6 +433,39 @@ def get_kv_cache_retention_config_from_request(request,
     return None
 
 
+def get_lookahead_decoding_config_from_request(request,
+                                               executor_lookahead_config,
+                                               batch_size=1,
+                                               batch_index=0):
+    lookahead_window_size = get_input_tensor_by_name(request,
+                                                     "lookahead_window_size",
+                                                     batch_size, batch_index)
+
+    lookahead_ngram_size = get_input_tensor_by_name(request,
+                                                    "lookahead_ngram_size",
+                                                    batch_size, batch_index)
+
+    lookahead_verification_set_size = get_input_tensor_by_name(
+        request, "lookahead_verification_set_size", batch_size, batch_index)
+
+    # None lookahead config for requests.
+    if all(x is None for x in [
+            lookahead_window_size, lookahead_ngram_size,
+            lookahead_verification_set_size
+    ]):
+        return None
+
+    # Have request lookahead config but no executor config.
+    if executor_lookahead_config is None:
+        raise RuntimeError(
+            "The request lookahead decoding input tensors (window_size, ngram_size and verification_set_size) can only be set if the model instance lookahead parameters are also specified"
+        )
+
+    return trtllm.LookaheadDecodingConfig(lookahead_window_size,
+                                          lookahead_ngram_size,
+                                          lookahead_verification_set_size)
+
+
 def build_1_2_5_buckets(max_value: int) -> List[int]:
     """
     Builds a list of buckets with increasing powers of 10 multiplied by
@@ -450,7 +489,10 @@ def build_1_2_5_buckets(max_value: int) -> List[int]:
         exponent += 1
 
 
-def convert_request(request, exclude_input_from_output, decoupled):
+def convert_request(request,
+                    exclude_input_from_output,
+                    decoupled,
+                    executor_lookahead_config=None):
     inputs = {}
     input_token_ids = get_input_tensor_by_name(request, 'input_ids')
     if input_token_ids is None:
@@ -526,6 +568,8 @@ def convert_request(request, exclude_input_from_output, decoupled):
                                                    batch_index)
         kv_cache_retention_config = get_kv_cache_retention_config_from_request(
             request, batch_size, batch_index)
+        request_lookahead_config = get_lookahead_decoding_config_from_request(
+            request, executor_lookahead_config, batch_size, batch_index)
 
         # Inputs for mllama support
         encoder_input_features = get_input_tensor_by_name(
@@ -579,6 +623,7 @@ def convert_request(request, exclude_input_from_output, decoupled):
                 prompt_tuning_config=prompt_tuning_config,
                 lora_config=lora_config,
                 guided_decoding_params=guided_decoding_params,
+                lookahead_config=request_lookahead_config,
                 kv_cache_retention_config=kv_cache_retention_config))
     return requests
 
@@ -673,6 +718,55 @@ def convert_response(response,
                 np.expand_dims(
                     np.array([kv_cache_metrics.num_total_allocated_blocks],
                              np.int32), 0)))
+
+        timing_metrics = result.request_perf_metrics.timing_metrics
+        output_tensors.append(
+            pb_utils.Tensor(
+                "arrival_time_ns",
+                np.expand_dims(
+                    np.array([pd.Timedelta(timing_metrics.arrival_time).value],
+                             np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "first_scheduled_time_ns",
+                np.expand_dims(
+                    np.array([
+                        pd.Timedelta(timing_metrics.first_scheduled_time).value
+                    ], np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "first_token_time_ns",
+                np.expand_dims(
+                    np.array(
+                        [pd.Timedelta(timing_metrics.first_token_time).value],
+                        np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "last_token_time_ns",
+                np.expand_dims(
+                    np.array(
+                        [pd.Timedelta(timing_metrics.last_token_time).value],
+                        np.int64), 0)))
+
+        spec_dec_metrics = result.request_perf_metrics.speculative_decoding
+        output_tensors.append(
+            pb_utils.Tensor(
+                "acceptance_rate",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.acceptance_rate], np.float32),
+                    0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "total_accepted_draft_tokens",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.total_accepted_draft_tokens],
+                             np.int32), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "total_draft_tokens",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.total_draft_tokens], np.int32),
+                    0)))
 
     return pb_utils.InferenceResponse(
         output_tensors), result.is_final, output_lengths
@@ -836,7 +930,42 @@ class TritonPythonModel:
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.PeftCacheConfig(**kwargs)
 
+    def get_executor_lookahead_config(self, model_config):
+        lookahead_window_size = get_parameter(model_config,
+                                              "lookahead_window_size", int)
+        lookahead_ngram_size = get_parameter(model_config,
+                                             "lookahead_ngram_size", int)
+        lookahead_verification_set_size = get_parameter(
+            model_config, "lookahead_verification_set_size", int)
+        # executor_lookahead_config is not set
+        if all(item is None for item in [
+                lookahead_window_size, lookahead_ngram_size,
+                lookahead_verification_set_size
+        ]):
+            return None
+
+        incomplete_config = None in [
+            lookahead_window_size, lookahead_ngram_size,
+            lookahead_verification_set_size
+        ]
+
+        assert (
+            not incomplete_config
+        ), "Please set executor_lookahead_window_size, executor_lookahead_ngram_size and executor_lookahead_verification_set_size together."
+
+        return trtllm.LookaheadDecodingConfig(lookahead_window_size,
+                                              lookahead_ngram_size,
+                                              lookahead_verification_set_size)
+
     def get_decoding_config(self, model_config):
+
+        decoding_mode = convert_decoding_mode(
+            get_parameter(model_config, "decoding_mode"))
+        self.executor_lookahead_config = None
+        if decoding_mode == trtllm.DecodingMode.Lookahead():
+            # Add LAD config
+            self.executor_lookahead_config = self.get_executor_lookahead_config(
+                model_config)
         eagle_choices = parse_eagle_choices(
             get_parameter(model_config, "eagle_choices"))
         kwargs = {
@@ -846,9 +975,10 @@ class TritonPythonModel:
             "eagle_config":
             None
             if eagle_choices is None else trtllm.EagleConfig(eagle_choices),
+            "lookahead_decoding_config":
+            self.executor_lookahead_config,
             "decoding_mode":
-            convert_decoding_mode(get_parameter(model_config,
-                                                "decoding_mode")),
+            decoding_mode,
         }
         print(kwargs)
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -1234,7 +1364,7 @@ class TritonPythonModel:
                 try:
                     converted_reqs = convert_request(
                         request, self.exclude_input_from_output,
-                        self.decoupled)
+                        self.decoupled, self.executor_lookahead_config)
                 except Exception as e:
                     response_sender.send(
                         pb_utils.InferenceResponse(error=pb_utils.TritonError(

@@ -590,6 +590,59 @@ def test_kv_cache_retention_config_invalid():
         }, True)
 
 
+# Need to test with Executor lookahead config.
+def test_request_lookahead_config():
+
+    def check_request_lookahead_config(request_config: Dict[str, str],
+                                       executor_config, is_valid: bool):
+        req = make_mock_triton_request(request_config)
+
+        if is_valid:
+            get_lookahead_decoding_config_from_request(req,
+                                                       executor_config,
+                                                       batch_size=1,
+                                                       batch_index=0)
+        else:
+            with pytest.raises(Exception):
+                get_lookahead_decoding_config_from_request(req,
+                                                           executor_config,
+                                                           batch_size=1,
+                                                           batch_index=0)
+
+    # When request and executor lookahead_config are set correctly
+    check_request_lookahead_config(
+        {
+            "lookahead_window_size": np.array([[3]], dtype=np.int32),
+            "lookahead_ngram_size": np.array([[3]], dtype=np.int32),
+            "lookahead_verification_set_size": np.array([[3]], dtype=np.int32),
+        }, trtllm.LookaheadDecodingConfig(3, 3, 3), True)
+
+    # When request lookahead_config is not specified
+    check_request_lookahead_config({}, trtllm.LookaheadDecodingConfig(3, 3, 3),
+                                   True)
+
+    # When request lookahead_config is incomplete
+    check_request_lookahead_config(
+        {
+            "lookahead_window_size": np.array([[3]], dtype=np.int32),
+        }, trtllm.LookaheadDecodingConfig(3, 3, 3), False)
+
+    # When request lookahead_config is incomplete
+    check_request_lookahead_config(
+        {
+            "lookahead_window_size": np.array([[3]], dtype=np.int32),
+            "lookahead_ngram_size": np.array([[3]], dtype=np.int32),
+        }, trtllm.LookaheadDecodingConfig(3, 3, 3), False)
+
+    # When request lookahead_config is set while executor_lookahead_config is None
+    check_request_lookahead_config(
+        {
+            "lookahead_window_size": np.array([[3]], dtype=np.int32),
+            "lookahead_ngram_size": np.array([[3]], dtype=np.int32),
+            "lookahead_verification_set_size": np.array([[3]], dtype=np.int32),
+        }, None, False)
+
+
 def test_convert_request_invalid():
     with pytest.raises(Exception, match="A value is required for input_ids"):
         no_input_ids = MockTritonRequest({

@@ -125,7 +125,7 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
                    return_context_logits_data, return_generation_logits_data,
                    decoder_input_ids_data, prompt_table_extra_id_data,
                    exclude_input_in_output, num_return_sequences_data,
-                   return_kv_cache_reuse_stats_data):
+                   return_perf_metrics_data, lookahead_config_data):
     inputs = [
         prepare_tensor("input_ids", input_ids_data),
         prepare_tensor("input_lengths", input_lengths_data),
@@ -198,10 +198,21 @@ def prepare_inputs(input_ids_data, input_lengths_data, request_output_len_data,
         inputs += [
             prepare_tensor("exclude_input_in_output", exclude_input_in_output),
         ]
-    if return_kv_cache_reuse_stats_data is not None:
+    if return_perf_metrics_data is not None:
         inputs += [
-            prepare_tensor("return_kv_cache_reuse_stats",
-                           return_kv_cache_reuse_stats_data),
+            prepare_tensor("return_perf_metrics", return_perf_metrics_data),
+        ]
+    if lookahead_config_data is not None:
+        inputs += [
+            prepare_tensor(
+                "lookahead_window_size",
+                np.array([[lookahead_config_data[0]]], dtype=np.int32)),
+            prepare_tensor(
+                "lookahead_ngram_size",
+                np.array([[lookahead_config_data[1]]], dtype=np.int32)),
+            prepare_tensor(
+                "lookahead_verification_set_size",
+                np.array([[lookahead_config_data[2]]], dtype=np.int32)),
         ]
     return inputs
 
@@ -250,6 +261,16 @@ def expand_and_vstack(results: list, axis=0):
     if len(results) == 1:
         return np.vstack(results)
     return np.vstack([np.expand_dims(r, axis=axis) for r in results])
+
+
+def parse_list(value):
+    try:
+        # Remove brackets and split by comma
+        value = value.strip('[]')
+        return [int(x.strip()) for x in value.split(',')]
+    except Exception as e:
+        raise argparse.ArgumentTypeError(
+            f'Invalid list format. Expected [x,y,z], got {value}. Error: {e}')
 
 
 if __name__ == "__main__":
@@ -528,11 +549,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--return-kv-cache-reuse-stats",
+        "--return-perf-metrics",
         action="store_true",
         required=False,
         default=False,
-        help="Return per-request kv cache reuse stats",
+        help="Return per-request perf metrics",
     )
 
     parser.add_argument(
@@ -575,6 +596,13 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+    parser.add_argument(
+        '--lookahead_config',
+        type=parse_list,
+        help=
+        'Lookahead parameters in format [window_size,ngram_size,verification_set_size]. Example: [7,7,7]',
+        default=None,
+        required=False)
 
     FLAGS = parser.parse_args()
 
@@ -693,10 +721,10 @@ if __name__ == "__main__":
         return_generation_logits_data = np.array(
             [[FLAGS.return_generation_logits]], dtype=bool)
 
-    return_kv_cache_reuse_stats_data = None
-    if FLAGS.return_kv_cache_reuse_stats:
-        return_kv_cache_reuse_stats_data = np.array(
-            [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
+    return_perf_metrics_data = None
+    if FLAGS.return_perf_metrics:
+        return_perf_metrics_data = np.array([[FLAGS.return_perf_metrics]],
+                                            dtype=bool)
 
     repetition_penalty_data = None
     if FLAGS.repetition_penalty is not None:
@@ -743,6 +771,11 @@ if __name__ == "__main__":
                 input_ids_data[i] >= FLAGS.vocab_size,
                 FLAGS.prompt_table_extra_id, 0)
 
+    lookahead_config_data = None
+    if FLAGS.lookahead_config is not None:
+        lookahead_config_data = np.array(FLAGS.lookahead_config,
+                                         dtype=np.int32)
+
     inputs = prepare_inputs(
         input_ids_data, input_lengths_data, request_output_len_data,
         beam_width_data, temperature_data, repetition_penalty_data,
@@ -753,7 +786,8 @@ if __name__ == "__main__":
         draft_ids_data, return_context_logits_data,
         return_generation_logits_data, decoder_input_ids_data,
         prompt_table_extra_id_data, exclude_input_in_output,
-        num_return_sequences_data, return_kv_cache_reuse_stats_data)
+        num_return_sequences_data, return_perf_metrics_data,
+        lookahead_config_data)
 
     if FLAGS.requested_outputs:
         # Must have at least output_ids in requested outputs
@@ -803,7 +837,7 @@ if __name__ == "__main__":
     output_log_probs = [None] * num_generations
     context_logits = None
     generation_logits = [None] * num_generations
-    return_kv_cache_reuse_stats = {}
+    returned_perf_metrics = {}
 
     def set_output(outputs: list, data, seq_idx=None):
         if FLAGS.beam_width > 1:
@@ -824,7 +858,6 @@ if __name__ == "__main__":
             certificate_chain=FLAGS.certificate_chain,
     ) as triton_client:
         try:
-
             if FLAGS.streaming or FLAGS.num_return_sequences is not None:
 
                 # Establish stream
@@ -893,16 +926,37 @@ if __name__ == "__main__":
                                     generation_logits,
                                     result.as_numpy('generation_logits')[0],
                                     seq_idx)
-                            if FLAGS.return_kv_cache_reuse_stats:
-                                return_kv_cache_reuse_stats[
+                            if FLAGS.return_perf_metrics:
+                                returned_perf_metrics[
                                     'kv_cache_alloc_new_blocks'] = result.as_numpy(
                                         'kv_cache_alloc_new_blocks')
-                                return_kv_cache_reuse_stats[
+                                returned_perf_metrics[
                                     'kv_cache_reused_blocks'] = result.as_numpy(
                                         'kv_cache_reused_blocks')
-                                return_kv_cache_reuse_stats[
+                                returned_perf_metrics[
                                     'kv_cache_alloc_total_blocks'] = result.as_numpy(
                                         'kv_cache_alloc_total_blocks')
+                                returned_perf_metrics[
+                                    'arrival_time_ns'] = result.as_numpy(
+                                        'arrival_time_ns')
+                                returned_perf_metrics[
+                                    'first_scheduled_time_ns'] = result.as_numpy(
+                                        'first_scheduled_time_ns')
+                                returned_perf_metrics[
+                                    'first_token_time_ns'] = result.as_numpy(
+                                        'first_token_time_ns')
+                                returned_perf_metrics[
+                                    'last_token_time_ns'] = result.as_numpy(
+                                        'last_token_time_ns')
+                                returned_perf_metrics[
+                                    'acceptance_rate'] = result.as_numpy(
+                                        'acceptance_rate')
+                                returned_perf_metrics[
+                                    'total_accepted_draft_tokens'] = result.as_numpy(
+                                        'total_accepted_draft_tokens')
+                                returned_perf_metrics[
+                                    'total_draft_tokens'] = result.as_numpy(
+                                        'total_draft_tokens')
 
                             sequence_lengths[seq_idx] = result.as_numpy(
                                 'sequence_length')[0][0]
@@ -982,16 +1036,37 @@ if __name__ == "__main__":
                             set_output(generation_logits,
                                        result.as_numpy('generation_logits')[0],
                                        seq_idx)
-                        if FLAGS.return_kv_cache_reuse_stats:
-                            return_kv_cache_reuse_stats[
+                        if FLAGS.return_perf_metrics:
+                            returned_perf_metrics[
                                 'kv_cache_alloc_new_blocks'] = result.as_numpy(
                                     'kv_cache_alloc_new_blocks')
-                            return_kv_cache_reuse_stats[
+                            returned_perf_metrics[
                                 'kv_cache_reused_blocks'] = result.as_numpy(
                                     'kv_cache_reused_blocks')
-                            return_kv_cache_reuse_stats[
+                            returned_perf_metrics[
                                 'kv_cache_alloc_total_blocks'] = result.as_numpy(
                                     'kv_cache_alloc_total_blocks')
+                            returned_perf_metrics[
+                                'arrival_time_ns'] = result.as_numpy(
+                                    'arrival_time_ns')
+                            returned_perf_metrics[
+                                'first_scheduled_time_ns'] = result.as_numpy(
+                                    'first_scheduled_time_ns')
+                            returned_perf_metrics[
+                                'first_token_time_ns'] = result.as_numpy(
+                                    'first_token_time_ns')
+                            returned_perf_metrics[
+                                'last_token_time_ns'] = result.as_numpy(
+                                    'last_token_time_ns')
+                            returned_perf_metrics[
+                                'acceptance_rate'] = result.as_numpy(
+                                    'acceptance_rate')
+                            returned_perf_metrics[
+                                'total_accepted_draft_tokens'] = result.as_numpy(
+                                    'total_accepted_draft_tokens')
+                            returned_perf_metrics[
+                                'total_draft_tokens'] = result.as_numpy(
+                                    'total_draft_tokens')
                         if output_ids is not None:
                             print(result.as_numpy('sequence_length'))
                             if FLAGS.beam_width > 1:
@@ -1093,8 +1168,8 @@ if __name__ == "__main__":
             print(f"generation_logits.shape: {generation_logits.shape}")
             print(f"generation_logits: {generation_logits}")
 
-        if FLAGS.return_kv_cache_reuse_stats:
-            for key, value in return_kv_cache_reuse_stats.items():
+        if FLAGS.return_perf_metrics:
+            for key, value in returned_perf_metrics.items():
                 print(f"{key}: {value[0][0]}")
 
         sys.exit(not passed)

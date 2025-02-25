@@ -237,11 +237,11 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "--return-kv-cache-reuse-stats",
+        "--return-perf-metrics",
         default=False,
         required=False,
         action='store_true',
-        help="Return per-request kv cache reuse stats",
+        help="Return per-request perf metrics",
     )
 
     FLAGS = parser.parse_args()
@@ -314,10 +314,10 @@ if __name__ == '__main__':
                     return_generation_logits_data = np.array(
                         [[FLAGS.return_generation_logits]], dtype=bool)
 
-                return_kv_cache_reuse_stats_data = None
-                if FLAGS.return_kv_cache_reuse_stats:
-                    return_kv_cache_reuse_stats_data = np.array(
-                        [[FLAGS.return_kv_cache_reuse_stats]], dtype=bool)
+                return_perf_metrics_data = None
+                if FLAGS.return_perf_metrics:
+                    return_perf_metrics_data = np.array(
+                        [[FLAGS.return_perf_metrics]], dtype=bool)
 
                 processed_prompt, output_speculative = end_to_end_grpc_client.run_inference(
                     client_target, prompt, output_len, str(request_id),
@@ -325,10 +325,9 @@ if __name__ == '__main__':
                     FLAGS.frequency_penalty, FLAGS.temperature,
                     FLAGS.stop_words, FLAGS.bad_words, [], [],
                     "tensorrt_llm_bls", False, 1, False, None, None,
-                    return_generation_logits_data,
-                    return_kv_cache_reuse_stats_data, FLAGS.end_id,
-                    FLAGS.pad_id, False, FLAGS.verbose, FLAGS.num_draft_tokens,
-                    FLAGS.use_draft_logits)
+                    return_generation_logits_data, return_perf_metrics_data,
+                    FLAGS.end_id, FLAGS.pad_id, False, FLAGS.verbose,
+                    FLAGS.num_draft_tokens, FLAGS.use_draft_logits)
                 assert (len(output_speculative) == 1)
                 output_speculative = output_speculative[0]
                 if FLAGS.verbose:

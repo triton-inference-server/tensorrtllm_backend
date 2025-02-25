@@ -70,6 +70,8 @@ struct InputFieldsNames
     static constexpr char const* returnContextLogits = "return_context_logits";
     static constexpr char const* excludeInputFromOutput = "exclude_input_in_output";
     static constexpr char const* returnPerfMetrics = "return_perf_metrics";
+
+    // Deprecated
     static constexpr char const* returnKvCacheReuseStats = "return_kv_cache_reuse_stats";
 
     // SamplingConfig
@@ -114,6 +116,11 @@ struct InputFieldsNames
     // GuidedDecodingParams
     static constexpr char const* guidedDecodingGuideType = "guided_decoding_guide_type";
     static constexpr char const* guidedDecodingGuide = "guided_decoding_guide";
+
+    // LookaheadDecodingConfig
+    static constexpr char const* requestLookaheadDecodingWindowSize = "lookahead_window_size";
+    static constexpr char const* requestLookaheadDecodingNgramSize = "lookahead_ngram_size";
+    static constexpr char const* requestLookaheadDecodingVerificationSetSize = "lookahead_verification_set_size";
 };
 
 /// @brief Names of output fields
@@ -131,6 +138,13 @@ struct OutputFieldsNames
     static constexpr char const* kvCacheAllocNewBlocks = "kv_cache_alloc_new_blocks";
     static constexpr char const* kvCacheReusedBlocks = "kv_cache_reused_blocks";
     static constexpr char const* kvCacheAllocTotalBlocks = "kv_cache_alloc_total_blocks";
+    static constexpr char const* arrivalTime = "arrival_time_ns";
+    static constexpr char const* firstScheduledTime = "first_scheduled_time_ns";
+    static constexpr char const* firstTokenTime = "first_token_time_ns";
+    static constexpr char const* lastTokenTime = "last_token_time_ns";
+    static constexpr char const* acceptanceRate = "acceptance_rate";
+    static constexpr char const* totalAcceptedDraftTokens = "total_accepted_draft_tokens";
+    static constexpr char const* totalDraftTokens = "total_draft_tokens";
 };
 
 inline static std::string const kStopInputTensorName = "stop";
@@ -183,10 +197,17 @@ std::optional<executor::KvCacheRetentionConfig> getKvCacheRetentionConfigFromTen
 /// @brief Construct executor::GuidedDecodingParams from input tensors
 std::optional<executor::GuidedDecodingParams> getGuidedDecodingParamsFromTensors(InputTensors const& inputsTensors);
 
+/// @brief Construct executor::LookaheadDecodingConfig from input tensors for requests
+/// @note Let executor_lookahead_config as (W, N, G). Each request can specify a Lookahead configuration, noted as (w,
+/// n, g). Ensure the Lookahead configuration for each request satisfies w <= W, n <= N, g <= G.
+std::optional<executor::LookaheadDecodingConfig> getLookaheadDecodingFromTensors(
+    InputTensors const& inputsTensors, std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig);
+
 /// @brief Construct executor::Request from input tensors
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool excludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits);
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits,
+    std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig);
 
 /// @brief get the requestId of the request and update requestIdStrMap
 /// @return Returns 0 if not specified. Throws an error if request_id cannot be convert to uint64_t

@@ -618,10 +618,8 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
     bool returnContextLogits{false};
     extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
 
-    // When returnKvCacheReuseStats is set to true, set returnPerfMetrics to true to return KV cache reuse stats from
-    // perf metrics.
     bool returnPerfMetrics{false};
-    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnKvCacheReuseStats, returnPerfMetrics);
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnPerfMetrics, returnPerfMetrics);
 
     return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits,
         false /* excludeInputFromOutput */, false /* returnEncoderOutput */, returnPerfMetrics);
@@ -841,9 +839,42 @@ std::optional<executor::GuidedDecodingParams> getGuidedDecodingParamsFromTensors
     return guidedDecodingParams;
 }
 
+std::optional<executor::LookaheadDecodingConfig> getLookaheadDecodingFromTensors(
+    InputTensors const& inputsTensors, std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig)
+{
+    std::optional<executor::LookaheadDecodingConfig> requestLookaheadConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::requestLookaheadDecodingWindowSize))
+    {
+        executor::SizeType32 windowSize = 0, ngramSize = 0, verificationSetSize = 0;
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingWindowSize, windowSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_window_size");
+        }
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingNgramSize, ngramSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_ngram_size");
+        }
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingVerificationSetSize, verificationSetSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_verification_set_size");
+        }
+
+        requestLookaheadConfig = executor::LookaheadDecodingConfig{windowSize, ngramSize, verificationSetSize};
+
+        TLLM_CHECK_WITH_INFO(executorLookaheadConfig.has_value(),
+            "Cannot set the request lookahead decoding configuration when model instance lookahead parameters are not "
+            "set.");
+    }
+    return requestLookaheadConfig;
+}
+
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits)
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits,
+    std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
     {
@@ -972,9 +1003,12 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         auto externalDraftTokensConfig
             = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
+        auto requestLookaheadConfig = getLookaheadDecodingFromTensors(inputTensors, executorLookaheadConfig);
+
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
-            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, std::nullopt,
-            loraConfig, std::nullopt, kvCacheRetentionConfig, std::nullopt, encoderInputTokens);
+            /*positionIds*/ std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig,
+            /*PromptTuningConfig*/ pTuningConfig, /*MropeConfig*/ std::nullopt, loraConfig, requestLookaheadConfig,
+            kvCacheRetentionConfig, /*logitsPostProcessorName*/ std::nullopt, encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {
