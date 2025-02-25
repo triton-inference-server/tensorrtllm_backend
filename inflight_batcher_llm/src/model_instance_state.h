@@ -100,7 +100,7 @@ struct RequestData
     int32_t numReturnSequences;
     std::shared_ptr<std::set<executor::IdType>> pendingBatchedRequestIds;
     executor::RequestType requestType;
-    bool returnKvCacheReuseStats;
+    bool returnPerfMetrics;
 };
 
 //
@@ -219,7 +219,7 @@ private:
     /// @brief Create an executor::Request from input tensors for each sample in batch
     static std::vector<executor::Request> createExecutorRequests(TRITONBACKEND_Request* request,
         bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestratorMode,
-        bool specDecFastLogits);
+        bool specDecFastLogits, std::optional<executor::LookaheadDecodingConfig> const& lookaheadDecodingConfig);
 
     /// @brief Fill in a triton response based on executor response
     std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> fillTritonResponse(
@@ -286,6 +286,9 @@ private:
 
     /// @brief Is speculative decoding fast logits transfer enabled
     bool mSpeculativeDecodingFastLogits;
+
+    /// @brief Lookahead Decoding Configuration of this instance
+    std::optional<executor::LookaheadDecodingConfig> mExecutorLookaheadDecodingConfig{std::nullopt};
 
 #ifdef TRITON_ENABLE_METRICS
     std::unique_ptr<custom_metrics_reporter::CustomMetricsReporter> custom_metrics_reporter_;

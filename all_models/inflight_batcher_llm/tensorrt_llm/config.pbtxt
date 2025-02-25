@@ -276,7 +276,7 @@ input [
     optional: true
   },
   {
-    name: "return_kv_cache_reuse_stats"
+    name: "return_perf_metrics"
     data_type: TYPE_BOOL
     dims: [ 1 ]
     reshape: { shape: [ ] }
@@ -444,6 +444,27 @@ input [
     dims: [ 1 ]
     optional: true
     allow_ragged_batch: true
+  },
+  {
+    name: "lookahead_window_size"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "lookahead_ngram_size"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
+  },
+  {
+    name: "lookahead_verification_set_size"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+    allow_ragged_batch: true
   }
 ]
 output [
@@ -504,6 +525,41 @@ output [
   },
   {
     name: "kv_cache_alloc_total_blocks"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "arrival_time_ns"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+  },
+  {
+    name: "first_scheduled_time_ns"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+  },
+  {
+    name: "first_token_time_ns"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+  },
+  {
+    name: "last_token_time_ns"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+  },
+  {
+    name: "acceptance_rate"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  },
+  {
+    name: "total_accepted_draft_tokens"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "total_draft_tokens"
     data_type: TYPE_INT32
     dims: [ 1 ]
   }
@@ -700,6 +756,24 @@ parameters: {
   key: "executor_worker_path"
   value: {
     string_value: "/opt/tritonserver/backends/tensorrtllm/trtllmExecutorWorker"
+  }
+}
+parameters: {
+  key: "lookahead_window_size"
+    value: {
+      string_value: "${lookahead_window_size}"
+  }
+}
+parameters: {
+  key: "lookahead_ngram_size"
+    value: {
+      string_value: "${lookahead_ngram_size}"
+  }
+}
+parameters: {
+  key: "lookahead_verification_set_size"
+    value: {
+      string_value: "${lookahead_verification_set_size}"
   }
 }
 parameters: {

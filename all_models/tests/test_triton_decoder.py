@@ -107,6 +107,13 @@ def response(request) -> MockTritonResponse:
         "kv_cache_alloc_new_blocks",
         "kv_cache_reused_blocks",
         "kv_cache_alloc_total_blocks",
+        "arrival_time_ns",
+        "first_scheduled_time_ns",
+        "first_token_time_ns",
+        "last_token_time_ns",
+        "acceptance_rate",
+        "total_accepted_draft_tokens",
+        "total_draft_tokens",
     ]
     response = Response()
     for output_name in output_names:
@@ -124,7 +131,7 @@ def triton_request(request) -> MockTritonRequest:
         "return_context_logits", "return_generation_logits", "beam_width",
         "stream", "prompt_embedding_table", "prompt_vocab_size",
         "embedding_bias_words", "embedding_bias_weights", "num_draft_tokens",
-        "return_kv_cache_reuse_stats"
+        "return_perf_metrics"
     ]
     triton_tensor_map = {}
     for input_name in input_names:
@@ -162,7 +169,14 @@ mock_reponse = {
     "sequence_index": [[0]],
     "kv_cache_alloc_new_blocks": [[0]],
     "kv_cache_reused_blocks": [[0]],
-    "kv_cache_alloc_total_blocks": [[0]]
+    "kv_cache_alloc_total_blocks": [[0]],
+    "arrival_time_ns": [[0]],
+    "first_scheduled_time_ns": [[1]],
+    "first_token_time_ns": [[2]],
+    "last_token_time_ns": [[3]],
+    "acceptance_rate": [[0.0]],
+    "total_accepted_draft_tokens": [[0]],
+    "total_draft_tokens": [[0]]
 }
 
 mock_request = {"text_input": [["Hello world"]], "max_tokens": [[24]]}
@@ -225,6 +239,13 @@ _generation_name_map = {
     "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
     "kv_cache_reused_blocks": "kv_cache_reused_blocks",
     "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks",
+    "arrival_time_ns": "arrival_time_ns",
+    "first_scheduled_time_ns": "first_scheduled_time_ns",
+    "first_token_time_ns": "first_token_time_ns",
+    "last_token_time_ns": "last_token_time_ns",
+    "acceptance_rate": "acceptance_rate",
+    "total_accepted_draft_tokens": "total_accepted_draft_tokens",
+    "total_draft_tokens": "total_draft_tokens",
 }
 
 convert_triton_response_testcases = [{
