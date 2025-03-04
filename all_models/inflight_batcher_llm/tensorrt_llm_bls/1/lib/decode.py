@@ -101,6 +101,8 @@ class Request:
     guided_decoding_guide_type: Optional[np.ndarray] = None
     guided_decoding_guide: Optional[np.ndarray] = None
     request_id: Optional[str] = None
+    mrope_rotary_cos_sin: Optional[np.ndarray] = None
+    mrope_position_deltas: Optional[np.ndarray] = None
 
     def validate(self):
         _validate_non_empty(self.text_input, "text_input is required")
@@ -141,6 +143,9 @@ class PreprocResponse:
     pixel_values: Optional[np.ndarray] = None
     image_sizes: Optional[np.ndarray] = None
     is_video_input: Optional[np.ndarray] = None
+    attention_mask: Optional[np.ndarray] = None
+    image_grid_thw: Optional[np.ndarray] = None
+    vision_input_id: Optional[np.ndarray] = None
 
     @classmethod
     def with_new_inputs(cls,
@@ -164,6 +169,8 @@ class PreprocResponse:
 class MultimodalEncResponse:
     prompt_embedding_table: Optional[torch.Tensor] = None
     prompt_vocab_size: Optional[np.ndarray] = None
+    mrope_rotary_cos_sin: Optional[np.ndarray] = None
+    mrope_position_deltas: Optional[np.ndarray] = None
 
 
 @dataclass

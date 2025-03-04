@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('--end-id',
                         type=int,
                         required=False,
-                        default=50118,
+                        default=-1,
                         help='The token id for end token.')
 
     parser.add_argument('--pad-id',
@@ -236,11 +236,13 @@ if __name__ == "__main__":
         help=
         "When enable kv cache reuse, we need a unique id to determine whether the images are the same. The type of extra id is uint64, and its range is from 1 to the maximum value of uint64.",
     )
-    parser.add_argument(
-        "--model_type",
-        required=True,
-        choices=['blip2', 'llava', 'vila', 'mllama', 'llava_onevision'],
-        help="Model type")
+    parser.add_argument("--model_type",
+                        required=True,
+                        choices=[
+                            'blip2', 'llava', 'vila', 'mllama',
+                            'llava_onevision', 'qwen2_vl'
+                        ],
+                        help="Model type")
     parser.add_argument("--hf_model_dir",
                         required=False,
                         type=str,
@@ -309,6 +311,10 @@ if __name__ == "__main__":
         else:
             image_data = np.array([[raw_image]])
             image_input_name = "image_bytes_input"
+    elif FLAGS.model_type == 'qwen2_vl':
+        raw_image = raw_image.resize((504, 504))
+        image_data = np.array([[raw_image]])
+        image_input_name = "image_bytes_input"
     else:
         image = image.unsqueeze(0)
         image_data = image.numpy().astype(np.float16)

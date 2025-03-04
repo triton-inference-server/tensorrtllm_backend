@@ -321,7 +321,7 @@ if __name__ == "__main__":
         '--end-id',
         type=int,
         required=False,
-        default=50256,
+        default=-1,
         help='The token id for end token. Only needed if tokenizer is not used.'
     )
 

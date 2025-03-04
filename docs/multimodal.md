@@ -7,6 +7,7 @@ The following multimodal model is supported in tensorrtllm_backend:
 * VILA
 * LLaVA OneVision
 * MLLAMA
+* Qwen2-VL
 
 For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM multimodal examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/multimodal).
 
@@ -67,13 +68,21 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
     export MODEL_NAME="Llama-3.2-11B-Vision"
     git clone https://huggingface.co/meta-llama/${MODEL_NAME} tmp/hf_models/${MODEL_NAME}
+
+    # For Qwen2-VL
+    pip install -r all_models/multimodal/requirements-qwen2vl.txt
+
+    export MODEL_NAME="Qwen2-VL-7B-Instruct"
+    git clone https://huggingface.co/Qwen/${MODEL_NAME} tmp/hf_models/${MODEL_NAME}
+
+    export
     ```
     2-2. Build TensorRT-LLM engines
     ```bash
     export HF_MODEL_PATH=tmp/hf_models/${MODEL_NAME}
     export UNIFIED_CKPT_PATH=tmp/trt_models/${MODEL_NAME}/fp16/1-gpu
     export ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/fp16/1-gpu
-    export VISUAL_ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/vision_encoder
+    export MULTIMODAL_ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/multimodal_encoder
 
     # For BLIP-OPT2
     python tensorrt_llm/examples/opt/convert_checkpoint.py --model_type blip2 \
@@ -89,9 +98,9 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_batch_size 8 \
         --max_seq_len 1024 \
         --max_input_len 924 \
-        --max_multimodal_len 256 # 8 (max_batch_size) * 32 (num_visual_features) for BLIP2
+        --max_multimodal_len 256 # 8 (max_batch_size) * 32 (num_multimodal_features) for BLIP2
 
-    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_type blip2 --model_path ${HF_MODEL_PATH} --max_batch_size 8
+    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_type blip2 --model_path ${HF_MODEL_PATH} --max_batch_size 8
 
     # For LLAVA
     python tensorrt_llm/examples/llama/convert_checkpoint.py \
@@ -106,9 +115,9 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_batch_size 8 \
         --max_input_len 2048 \
         --max_seq_len 2560 \
-        --max_multimodal_len 4608 # 8 (max_batch_size) * 576 (num_visual_features) for LLaVA
+        --max_multimodal_len 4608 # 8 (max_batch_size) * 576 (num_multimodal_features) for LLaVA
 
-    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8
+    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8
 
     # For VILA
     python tensorrt_llm/examples/llama/convert_checkpoint.py \
@@ -123,9 +132,9 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_batch_size 8 \
         --max_input_len 2048 \
         --max_seq_len 2560 \
-        --max_multimodal_len 6272 # 8 (max_batch_size) * 196 (num_visual_features) * 4 (max_num_images_per_request)
+        --max_multimodal_len 6272 # 8 (max_batch_size) * 196 (num_multimodal_features) * 4 (max_num_images_per_request)
 
-    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type vila --vila_path ${VILA_PATH} --max_batch_size 32 #max_batch_size * max_num_images_per_request since vila support multiple images inference
+    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type vila --vila_path ${VILA_PATH} --max_batch_size 32 #max_batch_size * max_num_images_per_request since vila support multiple images inference
 
     # For LLaVA OneVision
     python tensorrt_llm/examples/qwen/convert_checkpoint.py \
@@ -140,9 +149,9 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_batch_size 1 \
         --max_input_len  7500 \
         --max_seq_len  7600 \
-        --max_multimodal_len 7300 # max_batch_size * num_visual_features(depends on the image size or the specified video num frame)
+        --max_multimodal_len 7300 # max_batch_size * num_multimodal_features(depends on the image size or the specified video num frame)
 
-    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type llava_onevision --max_batch_size 16 # max_batch_size * patch for image or frame for video
+    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava_onevision --max_batch_size 16 # max_batch_size * patch for image or frame for video
 
     # For MLLAMA
     python tensorrt_llm/examples/mllama/convert_checkpoint.py \
@@ -159,16 +168,32 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     --max_num_tokens 4096 \
     --max_encoder_input_len 6404
 
-    python tensorrt_llm/examples/multimodal/build_visual_engine.py --model_path ${HF_MODEL_PATH} --model_type mllama --output_dir ${VISUAL_ENGINE_PATH} --max_batch_size 8 #max_batch_size * max_num_images_per_request
+    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type mllama --output_dir ${MULTIMODAL_ENGINE_PATH} --max_batch_size 8 #max_batch_size * max_num_images_per_request
 
+    # For Qwen2-VL
+    python3 ../qwen/convert_checkpoint.py \
+        --model_dir ${HF_MODEL_PATH} \
+        --output_dir ${UNIFIED_CKPT_PATH} \
+        --dtype float16
+
+    trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH} \
+        --output_dir ${ENGINE_PATH} \
+        --gemm_plugin=float16 \
+        --gpt_attention_plugin=float16 \
+        --max_batch_size 4 \
+        --max_input_len 2048 \
+        --max_seq_len 3072 \
+        --max_multimodal_len 1296 #(max_batch_size) * 324 (num_multimodal_features), this's for image_shape=[504,504]
+
+    python build_multimodal_engine.py --model_type qwen2_vl --model_path tmp/hf_models/${MODEL_NAME} --output_dir ${MULTIMODAL_ENGINE_PATH}
     ```
 
     > **NOTE**:
     >
-    > `max_multimodal_len = max_batch_size * num_visual_features`, so if you change `max_batch_size`, `max_multimodal_len` **MUST** be changed accordingly.
-    > For multi-image inference, where a single request could contain multiple images, `max_multimodal_len = max_batch_size * num_visual_features * max_num_images_per_request`
+    > `max_multimodal_len = max_batch_size * num_multimodal_features`, so if you change `max_batch_size`, `max_multimodal_len` **MUST** be changed accordingly.
+    > For multi-image inference, where a single request could contain multiple images, `max_multimodal_len = max_batch_size * num_multimodal_features * max_num_images_per_request`
     >
-    > The built visual engines are located in `tmp/trt_engines/${MODEL_NAME}/vision_encoder`.
+    > The built visual engines are located in `tmp/trt_engines/${MODEL_NAME}/multimodal_encoder`.
 
 3. Prepare Tritonserver configs
 
@@ -180,7 +205,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,cross_kv_cache_fraction:0.5
 
-    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,visual_model_path:${VISUAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
+    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
 
     python3 tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
 
@@ -189,7 +214,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
 
     # Newly added for multimodal
-    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,visual_model_path:${VISUAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
+    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
     ```
     > **NOTE**:
     >

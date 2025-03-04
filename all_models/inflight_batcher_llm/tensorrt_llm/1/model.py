@@ -466,6 +466,27 @@ def get_lookahead_decoding_config_from_request(request,
                                           lookahead_verification_set_size)
 
 
+def get_mrope_config_from_request(request, batch_size=1, batch_index=0):
+    mrope_rotary_cos_sin = get_input_tensor_by_name(request,
+                                                    'mrope_rotary_cos_sin',
+                                                    batch_size, batch_index)
+    mrope_position_deltas = get_input_tensor_by_name(request,
+                                                     'mrope_position_deltas',
+                                                     batch_size,
+                                                     batch_index,
+                                                     force_on_torch=False)
+    assert (mrope_rotary_cos_sin is None) == (
+        mrope_position_deltas is None
+    ), "Both mrope_rotary_cos_sin and mrope_position_detals must be either None or not None."
+
+    if mrope_rotary_cos_sin is not None and mrope_position_deltas is not None:
+        mrope_config = trtllm.MropeConfig(
+            mrope_rotary_cos_sin=mrope_rotary_cos_sin[0],
+            mrope_position_deltas=mrope_position_deltas[0])
+        return mrope_config
+    return None
+
+
 def build_1_2_5_buckets(max_value: int) -> List[int]:
     """
     Builds a list of buckets with increasing powers of 10 multiplied by
@@ -564,6 +585,8 @@ def convert_request(request,
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
             request, batch_size, batch_index, input_length)
+        mrope_config = get_mrope_config_from_request(request, batch_size,
+                                                     batch_index)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
         kv_cache_retention_config = get_kv_cache_retention_config_from_request(
@@ -621,6 +644,7 @@ def convert_request(request,
                 output_config=output_config,
                 external_draft_tokens_config=external_draft_tokens_config,
                 prompt_tuning_config=prompt_tuning_config,
+                mrope_config=mrope_config,
                 lora_config=lora_config,
                 guided_decoding_params=guided_decoding_params,
                 lookahead_config=request_lookahead_config,

@@ -84,6 +84,26 @@ input [
         data_type: TYPE_BOOL
         dims: [ 1 ]
         optional: true
+    },
+    # Required for Qwen2-VL
+    {
+        name: "attention_mask"
+        data_type: TYPE_INT64
+
+        dims: [ -1 ]
+        optional: true
+    },
+    {
+        name: "image_grid_thw"
+        data_type: TYPE_INT64
+        dims: [ 3 ]
+        optional: true
+    },
+    {
+        name: "vision_input_id"
+        data_type: TYPE_INT32
+        dims: [ -1 ]
+        optional: true
     }
 ]
 
@@ -124,15 +144,26 @@ output [
         name: "SKIP_CROSS_ATTN_BLOCKS"
         data_type: TYPE_BOOL
         dims: [ 1 ]
+    },
+    # Mrope param, only used in Qwen2-VL
+    {
+        name: "MROPE_ROTARY_COS_SIN"
+        data_type: TYPE_FP32
+        dims: [ -1 ]
+    },
+    {
+        name: "MROPE_POSITION_DELTAS"
+        data_type: TYPE_INT64
+        dims: [ 1 ]
     }
 ]
 
 # USER can add another modal's model as parameters and also as inputs here.
 
 parameters {
-  key: "visual_model_path"
+  key: "multimodal_model_path"
   value: {
-    string_value: "${visual_model_path}"
+    string_value: "${multimodal_model_path}"
   }
 }
 # HF model path, needed for llava_onevision and mllama model

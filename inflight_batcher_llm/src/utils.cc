@@ -679,6 +679,25 @@ std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
     return pTuningConfig;
 }
 
+std::optional<executor::MropeConfig> getMropeConfigFromTensors(InputTensors const& inputsTensors)
+{
+    std::optional<executor::MropeConfig> mropeConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::mropeRotaryCosSin)
+        && inputsTensors.count(InputFieldsNames::mropePositionDeltas))
+    {
+        std::shared_ptr<runtime::ITensor> originalMropeRotaryCosSinTensor
+            = inputsTensors.at(InputFieldsNames::mropeRotaryCosSin).tensor;
+        utils::squeezeTensor(originalMropeRotaryCosSinTensor, 1);
+        auto const& mropeRotaryCosSinTensor = executor::detail::ofITensor(originalMropeRotaryCosSinTensor);
+
+        executor::SizeType32 mropePositionDeltas;
+        utils::extractSingleton<executor::SizeType32>(
+            inputsTensors, InputFieldsNames::mropePositionDeltas, mropePositionDeltas);
+        mropeConfig = executor::MropeConfig(mropeRotaryCosSinTensor, mropePositionDeltas);
+    }
+    return mropeConfig;
+}
+
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors)
 {
     std::optional<executor::LoraConfig> loraConfig = std::nullopt;
@@ -996,6 +1015,8 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputTensors, inputTokens.size());
 
+        auto mropeConfig = utils::getMropeConfigFromTensors(inputTensors);
+
         auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
 
         auto kvCacheRetentionConfig = utils::getKvCacheRetentionConfigFromTensors(inputTensors);
@@ -1007,8 +1028,9 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
             /*positionIds*/ std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig,
-            /*PromptTuningConfig*/ pTuningConfig, /*MropeConfig*/ std::nullopt, loraConfig, requestLookaheadConfig,
-            kvCacheRetentionConfig, /*logitsPostProcessorName*/ std::nullopt, encoderInputTokens);
+            /*PromptTuningConfig*/ pTuningConfig, /*MropeConfig*/ mropeConfig, loraConfig, requestLookaheadConfig,
+            kvCacheRetentionConfig, /*logitsPostProcessorName*/ std::nullopt, /*logitsPostProcessor*/ std::nullopt,
+            encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {

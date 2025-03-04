@@ -52,23 +52,17 @@ class TritonDecoder(Decoder):
         self.multimodal_encoders_name = multimodal_encoders_name
 
         self._preproc_outputs = [
-            "INPUT_ID",
-            "DECODER_INPUT_ID",
-            "REQUEST_INPUT_LEN",
-            "REQUEST_DECODER_INPUT_LEN",
-            "BAD_WORDS_IDS",
-            "STOP_WORDS_IDS",
-            "EMBEDDING_BIAS",
-            "OUT_PAD_ID",
-            "OUT_END_ID",
-            "OUT_PROMPT_TABLE_EXTRA_IDS",
-            "PIXEL_VALUES",
-            "IMAGE_SIZES",
-            "IS_VIDEO_INPUT",
+            "INPUT_ID", "DECODER_INPUT_ID", "REQUEST_INPUT_LEN",
+            "REQUEST_DECODER_INPUT_LEN", "BAD_WORDS_IDS", "STOP_WORDS_IDS",
+            "EMBEDDING_BIAS", "OUT_PAD_ID", "OUT_END_ID",
+            "OUT_PROMPT_TABLE_EXTRA_IDS", "PIXEL_VALUES", "IMAGE_SIZES",
+            "IS_VIDEO_INPUT", "VISION_INPUT_ID", "ATTENTION_MASK",
+            "IMAGE_GRID_THW"
         ]
 
         self._multimodal_enc_outputs = [
-            "OUT_PROMPT_EMBEDDING_TABLE", "OUT_PROMPT_VOCAB_SIZE"
+            "OUT_PROMPT_EMBEDDING_TABLE", "OUT_PROMPT_VOCAB_SIZE",
+            "MROPE_ROTARY_COS_SIN", "MROPE_POSITION_DELTAS"
         ]
 
         self._llm_outputs = [
@@ -282,6 +276,9 @@ class TritonDecoder(Decoder):
             "PIXEL_VALUES": "pixel_values",
             "IMAGE_SIZES": "image_sizes",
             "IS_VIDEO_INPUT": "is_video_input",
+            "ATTENTION_MASK": "attention_mask",
+            "IMAGE_GRID_THW": "image_grid_thw",
+            "VISION_INPUT_ID": "vision_input_id"
         }
         return self.convert_triton_response(triton_output, PreprocResponse,
                                             name_map)
@@ -309,7 +306,10 @@ class TritonDecoder(Decoder):
         name_map_preproc = {
             "pixel_values": "pixel_values",
             "image_sizes": "image_sizes",
-            "is_video_input": "is_video_input"
+            "is_video_input": "is_video_input",
+            "attention_mask": "attention_mask",
+            "image_grid_thw": "image_grid_thw",
+            "vision_input_id": "vision_input_id"
         }
         tensors = []
         tensors.extend(self.create_triton_tensors(request, name_map_request))
@@ -320,6 +320,8 @@ class TritonDecoder(Decoder):
         name_map = {
             "OUT_PROMPT_EMBEDDING_TABLE": "prompt_embedding_table",
             "OUT_PROMPT_VOCAB_SIZE": "prompt_vocab_size",
+            "MROPE_ROTARY_COS_SIN": "mrope_rotary_cos_sin",
+            "MROPE_POSITION_DELTAS": "mrope_position_deltas"
         }
         return self.convert_triton_response(triton_output,
                                             MultimodalEncResponse, name_map)
@@ -421,6 +423,8 @@ class TritonDecoder(Decoder):
         name_map = {
             "prompt_embedding_table": "prompt_embedding_table",
             "prompt_vocab_size": "prompt_vocab_size",
+            "mrope_rotary_cos_sin": "mrope_rotary_cos_sin",
+            "mrope_position_deltas": "mrope_position_deltas"
         }
         return self.create_triton_tensors(multimodal_enc_response, name_map)
 

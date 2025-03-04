@@ -95,6 +95,10 @@ struct InputFieldsNames
     static constexpr char const* promptEmbeddingTable = "prompt_embedding_table";
     static constexpr char const* InputTokenExtraIds = "prompt_table_extra_ids";
 
+    // MropeConfig
+    static constexpr char const* mropeRotaryCosSin = "mrope_rotary_cos_sin";
+    static constexpr char const* mropePositionDeltas = "mrope_position_deltas";
+
     // LoraConfig
     static constexpr char const* loraTaskId = "lora_task_id";
     static constexpr char const* loraWeights = "lora_weights";

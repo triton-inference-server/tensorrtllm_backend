@@ -37,7 +37,8 @@ from torch.utils.dlpack import from_dlpack, to_dlpack
 
 import tensorrt_llm
 import tensorrt_llm.logger as logger
-from tensorrt_llm._utils import str_dtype_to_torch, torch_dtype_to_trt
+from tensorrt_llm._utils import (str_dtype_to_torch, torch_dtype_to_trt,
+                                 trt_dtype_to_torch)
 from tensorrt_llm.runtime import Session, TensorInfo
 
 logger.set_level('info')
@@ -92,21 +93,21 @@ class TritonPythonModel:
         self.max_batch_size = model_config['max_batch_size']
 
         # First vision engine
-        visual_model_path = model_config['parameters'].get(
-            'visual_model_path', None)
-        if visual_model_path:
-            visual_model_path = visual_model_path['string_value']
+        multimodal_model_path = model_config['parameters'].get(
+            'multimodal_model_path', None)
+        if multimodal_model_path:
+            multimodal_model_path = multimodal_model_path['string_value']
             self.vision_stream = torch.cuda.current_stream()
 
-            visual_config_path = os.path.join(visual_model_path, 'config.json')
+            visual_config_path = os.path.join(multimodal_model_path,
+                                              'config.json')
             with open(visual_config_path, 'r') as f:
                 visual_config = json.load(f)
             self.model_type = visual_config['builder_config']['model_type']
 
-            visual_encoder_path = os.path.join(
-                visual_model_path, 'model.engine'
-                if self.model_type != "mllama" else 'visual_encoder.engine')
-            with open(visual_encoder_path, 'rb') as f:
+            multimodal_encoder_path = os.path.join(multimodal_model_path,
+                                                   'model.engine')
+            with open(multimodal_encoder_path, 'rb') as f:
                 engine_buffer = f.read()
             self.image_session = Session.from_serialized_engine(engine_buffer)
 
@@ -128,7 +129,7 @@ class TritonPythonModel:
                     'string_value'] != "${hf_model_path}", "Need to provide hf_model_path for the LLaVA OneVision model"
 
                 newline_buffer_path = os.path.join(
-                    visual_model_path, 'image_newlines.safetensors')
+                    multimodal_model_path, 'image_newlines.safetensors')
                 image_newline = load_file(
                     newline_buffer_path)['image_newline'].cuda()
                 model_config = AutoConfig.from_pretrained(
@@ -145,6 +146,22 @@ class TritonPythonModel:
                 model_config = AutoConfig.from_pretrained(
                     hf_model_path['string_value'])
                 self.text_hidden_size = model_config.text_config.hidden_size
+
+            if self.model_type == "qwen2_vl":
+                from multimodal_utils import Qwen2VLUtils
+                from transformers import AutoConfig
+                hf_model_path = model_config['parameters'].get(
+                    'hf_model_path', None)
+                assert hf_model_path is not None and hf_model_path[
+                    'string_value'] != "${hf_model_path}", "Need to provide hf_model_path for the Qwen2-VL model"
+                hf_config = AutoConfig.from_pretrained(
+                    hf_model_path['string_value'])
+                self.config = hf_config
+                self.vision_token_id = hf_config.vision_token_id
+                self.image_token_id = hf_config.image_token_id
+                self.video_token_id = hf_config.video_token_id
+                self.vocab_size = hf_config.vocab_size
+                self.qwen2vl_utils = Qwen2VLUtils(hf_config)
 
     def get_requests(self, request: List) -> Dict[str, torch.Tensor]:
         """
@@ -244,6 +261,23 @@ class TritonPythonModel:
                 ]
                 img_tensor = torch.cat(img_list, dim=0).contiguous()
                 input_tensors['input'].append(img_tensor)
+
+        elif self.model_type == 'qwen2_vl':
+            image_grid_thw = from_dlpack(
+                pb_utils.get_input_tensor_by_name(
+                    request, "image_grid_thw").to_dlpack()).to(
+                        torch.int64).pin_memory()
+            attention_mask = from_dlpack(
+                pb_utils.get_input_tensor_by_name(
+                    request, "attention_mask").to_dlpack()).to(
+                        torch.int64).pin_memory()
+            #remove dummy dim and reshape to 2D dim
+            img_tensor = img_tensor.squeeze(1).squeeze(1)
+            img_tensor = img_tensor.view(-1, img_tensor.shape[-1])
+            input_tensors['input'].append(img_tensor)
+            input_tensors['attention_mask_llm'].append(attention_mask)
+            input_tensors['image_grid_thw'].append(image_grid_thw)
+
         else:
             input_tensors['input'].append(
                 img_tensor.view(-1, img_tensor.shape[2], img_tensor.shape[3],
@@ -251,10 +285,11 @@ class TritonPythonModel:
 
         return input_tensors, batch_size, num_image
 
-    def postprocess_output_tensors(self, output_tensor: torch.Tensor,
-                                   requests: List, batch_sizes: List[int],
-                                   num_images: List[int],
-                                   is_skip_encoders: List[bool]):
+    def postprocess_output_tensors(
+            self, output_tensor: torch.Tensor, requests: List,
+            batch_sizes: List[int], num_images: List[int],
+            is_skip_encoders: List[bool],
+            other_vision_input_tensors: Dict[str, torch.Tensor]):
         """
         Processes the batched output tensor and generates inference responses
         for each request.
@@ -276,6 +311,7 @@ class TritonPythonModel:
                                     request.
             is_skip_encoders (List[bool]): A list of skipping the computing of each
                                     request since image_url is None.
+            other_vision_input_tensors (Dict[str, torch.Tensor]): A dict of tensor containing tensor needed for some models postprocessing
 
         Returns:
             List[pb_utils.InferenceResponse]: A list of inference responses,
@@ -366,7 +402,6 @@ class TritonPythonModel:
                 logger.debug(
                     f"encoder_input_features shape: {encoder_input_features.shape}"
                 )
-
                 # prepare encoder output lengths
                 # shape [bs], value [encoder_length]
                 encoder_output_lengths = torch.tensor(
@@ -402,7 +437,6 @@ class TritonPythonModel:
                 request = requests[req_idx]
                 batch_size = batch_sizes[req_idx]
                 num_image = num_images[req_idx]
-
                 is_video_input = pb_utils.get_input_tensor_by_name(
                     request, 'is_video_input')
                 if is_video_input:
@@ -429,6 +463,43 @@ class TritonPythonModel:
                     'OUT_PROMPT_EMBEDDING_TABLE', to_dlpack(prompt_table))
                 output_tensors = [prompt_embedding_table_tensor]
 
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors=output_tensors)
+                responses.append(inference_response)
+        elif self.model_type == 'qwen2_vl':
+            image_grid_thw = other_vision_input_tensors.get('image_grid_thw')
+            attention_mask = other_vision_input_tensors.get('attention_mask')
+            total_num_image = [i * j for i, j in zip(batch_sizes, num_images)]
+            image_grid_thw_list = list(
+                torch.split(image_grid_thw, total_num_image, dim=0))
+            attention_mask_list = list(
+                torch.split(attention_mask, total_num_image, dim=0))
+            single_image_prompt_table_size = int(output_tensor.shape[0] /
+                                                 len(requests))
+            prompt_embedding_table_tensor_tuple = torch.split(
+                output_tensor, single_image_prompt_table_size)
+
+            for req_idx in range(len(requests)):
+                input_ids = from_dlpack(
+                    pb_utils.get_input_tensor_by_name(
+                        requests[req_idx], 'vision_input_id').to_dlpack())
+                image_grid_thw = image_grid_thw_list[req_idx]
+                attention_mask = attention_mask_list[req_idx]
+                mrope_rotary_cos_sin, mrope_position_deltas = self.qwen2vl_utils.compute_mrope(
+                    input_ids, image_grid_thw, attention_mask)
+                prompt_embedding_table_tensor = pb_utils.Tensor.from_dlpack(
+                    'OUT_PROMPT_EMBEDDING_TABLE',
+                    to_dlpack(
+                        prompt_embedding_table_tensor_tuple[req_idx].unsqueeze(
+                            0)))
+                mrope_rotary_cos_sin_tensor = pb_utils.Tensor.from_dlpack(
+                    'MROPE_ROTARY_COS_SIN', to_dlpack(mrope_rotary_cos_sin))
+                mrope_position_deltas_tensor = pb_utils.Tensor.from_dlpack(
+                    'MROPE_POSITION_DELTAS', to_dlpack(mrope_position_deltas))
+                output_tensors = [
+                    prompt_embedding_table_tensor, mrope_rotary_cos_sin_tensor,
+                    mrope_position_deltas_tensor
+                ]
                 inference_response = pb_utils.InferenceResponse(
                     output_tensors=output_tensors)
                 responses.append(inference_response)
@@ -495,12 +566,13 @@ class TritonPythonModel:
         """
         start_idx = 0
         responses = []
-
         next_input_tensors: Dict[str, List(torch.Tensor)] = defaultdict(list)
         next_batch_sizes = []
         next_num_images = []
         next_micro_batch_size = 0
         next_is_skip_encoders = []
+        other_vision_input_tensors: Dict[str, torch.Tensor] = defaultdict(
+            lambda: torch.tensor([]))
         while start_idx < len(requests):
             # Split the full requests into several micro batches
             # the batch size of each micro batch is smaller than self.max_batch_size
@@ -513,7 +585,6 @@ class TritonPythonModel:
             # Continue adding requests to the current batch until we reach the maximum batch size or process all requests
             while micro_batch_size <= self.max_batch_size and end_idx < len(
                     requests):
-
                 input_tensor, bs, num_image = self.get_requests(
                     requests[end_idx])
                 # Check if adding this request to the current batch would exceed the maximum batch size
@@ -561,6 +632,43 @@ class TritonPythonModel:
                     for tensor_name, tensors in input_tensors.items():
                         vit_input[tensor_name] = torch.cat(
                             [t.to('cuda', non_blocking=True) for t in tensors])
+
+                if self.model_type == 'qwen2_vl':
+                    import torch.nn.functional as F
+                    from transformers.models.qwen2_vl.modeling_qwen2_vl import \
+                        VisionRotaryEmbedding
+
+                    from tensorrt_llm.tools.multimodal_builder import \
+                        compute_rotary_pos_emb
+                    img_tensor = vit_input.get('input')
+                    image_grid_thw = vit_input.get('image_grid_thw')
+                    vit_input.pop('image_grid_thw')
+                    other_vision_input_tensors[
+                        'image_grid_thw'] = image_grid_thw
+                    attention_mask = vit_input.get('attention_mask_llm')
+                    other_vision_input_tensors[
+                        'attention_mask'] = attention_mask
+                    vit_input.pop('attention_mask_llm')
+                    cu_seqlens = torch.repeat_interleave(
+                        image_grid_thw[:, 1] * image_grid_thw[:, 2],
+                        image_grid_thw[:, 0]).cumsum(dim=0, dtype=torch.int32)
+                    cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
+                    seq_length = img_tensor.shape[0]
+                    attention_mask_vit = torch.full(
+                        [1, seq_length, seq_length],
+                        torch.finfo(torch.float16).min,
+                        dtype=img_tensor.dtype)
+                    for i in range(1, len(cu_seqlens)):
+                        attention_mask_vit[...,
+                                           cu_seqlens[i - 1]:cu_seqlens[i],
+                                           cu_seqlens[i - 1]:cu_seqlens[i]] = 0
+                    rotary_pos_emb = compute_rotary_pos_emb(
+                        image_grid_thw, self.config,
+                        VisionRotaryEmbedding).to("cuda")
+                    vit_input['rotary_pos_emb'] = rotary_pos_emb.to('cuda')
+                    vit_input['attention_mask'] = attention_mask_vit.to(
+                        str_dtype_to_torch(self.vision_dtype_str)).to('cuda')
+
                 # Set up output tensors
                 vit_input_info = [
                     TensorInfo(key, torch_dtype_to_trt(val.dtype), val.shape)
@@ -571,8 +679,7 @@ class TritonPythonModel:
                 vit_output = {
                     t.name:
                     torch.empty(tuple(t.shape),
-                                dtype=str_dtype_to_torch(
-                                    self.vision_dtype_str),
+                                dtype=trt_dtype_to_torch(t.dtype),
                                 device='cuda')
                     for t in vit_output_info
                 }
@@ -584,14 +691,13 @@ class TritonPythonModel:
                     embeddings = vit_output['encoder_output'].to(
                         self.vision_output_dtype)
                 self.vision_stream.synchronize()
-
             # Post process output and save in responses
             responses.extend(
                 self.postprocess_output_tensors(embeddings,
                                                 requests[start_idx:end_idx],
                                                 batch_sizes, num_images,
-                                                is_skip_encoders))
-
+                                                is_skip_encoders,
+                                                other_vision_input_tensors))
             start_idx = end_idx
 
         assert len(responses) == len(requests), \
