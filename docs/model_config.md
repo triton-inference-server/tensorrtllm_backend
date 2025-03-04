@@ -50,7 +50,7 @@ to learn more about ensemble models.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `add_special_tokens` | The `add_special_tokens` flag used by [HF tokenizers](https://huggingface.co/transformers/v2.11.0/main_classes/tokenizer.html#transformers.PreTrainedTokenizer.add_special_tokens). |
-| `visual_model_path` | The vision engine path used in multimodal workflow. |
+| `multimodal_model_path` | The vision engine path used in multimodal workflow. |
 | `engine_dir` | The path to the engine for the model. This parameter is only needed for *multimodal processing* to extract the `vocab_size` from the engine_dir's config.json for `fake_prompt_id` mappings. |
 
 
@@ -63,7 +63,7 @@ to learn more about ensemble models.
 | `triton_max_batch_size` | The maximum batch size that Triton should use with the model. |
 | `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
 | `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
-| `visual_model_path` | The vision engine path used in multimodal workflow. |
+| `multimodal_model_path` | The vision engine path used in multimodal workflow. |
 | `hf_model_path` | The Huggingface model path used for `llava_onevision` and `mllama` models. |
 
 

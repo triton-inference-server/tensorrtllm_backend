@@ -332,6 +332,19 @@ input [
     optional: true
     allow_ragged_batch: true
   },
+  # Mrope param when mrope is used
+  {
+    name: "mrope_rotary_cos_sin"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+    optional: true
+  },
+  {
+    name: "mrope_position_deltas"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+    optional: true
+  },
   # the unique task ID for the given LoRA.
   # To perform inference with a specific LoRA for the first time `lora_task_id` `lora_weights` and `lora_config` must all be given.
   # The LoRA will be cached, so that subsequent requests for the same task only require `lora_task_id`.

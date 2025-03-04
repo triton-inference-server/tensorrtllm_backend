@@ -36,8 +36,7 @@ COPY requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
 # Remove previous TRT installation
-# We didn't remove libnvinfer* here because tritonserver depends on the pre-installed libraries.
-RUN apt-get remove --purge -y tensorrt*
+RUN apt-get remove --purge -y tensorrt* libnvinfer*
 RUN pip uninstall -y tensorrt
 
 FROM base as dev

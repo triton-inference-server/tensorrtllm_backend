@@ -239,7 +239,6 @@ class TritonPythonModel:
                     responses.append(error_response)
 
             self.decoder.reset_decoder()
-
         if self.decoupled:
             return None
         else:
