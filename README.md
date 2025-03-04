@@ -133,7 +133,7 @@ cd /app/tensorrt_llm/examples/gpt
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
 pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
 
-# Convert weights from HF Tranformers to TensorRT-LLM checkpoint
+# Convert weights from HF Transformers to TensorRT-LLM checkpoint
 python3 convert_checkpoint.py --model_dir gpt2 \
         --dtype float16 \
         --tp_size 4 \
