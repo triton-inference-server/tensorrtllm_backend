@@ -35,16 +35,18 @@ namespace triton::backend::inflight_batcher_llm::custom_metrics_reporter
 {
 
 const std::vector<std::string> CustomMetricsReporter::request_keys_{
-    "Active Request Count", "Max Request Count", "Scheduled Requests", "Context Requests"};
-const std::vector<std::string> CustomMetricsReporter::request_labels_{"active", "max", "scheduled", "context"};
+    "Active Request Count", "Max Request Count", "Scheduled Requests", "Context Requests", "Waiting Requests"};
+const std::vector<std::string> CustomMetricsReporter::request_labels_{
+    "active", "max", "scheduled", "context", "waiting"};
 
 const std::vector<std::string> CustomMetricsReporter::runtime_memory_keys_{
     "Runtime CPU Memory Usage", "Runtime GPU Memory Usage", "Runtime Pinned Memory Usage"};
 const std::vector<std::string> CustomMetricsReporter::runtime_memory_labels_{"cpu", "gpu", "pinned"};
 
 const std::vector<std::string> CustomMetricsReporter::kv_cache_keys_{"Max KV cache blocks", "Free KV cache blocks",
-    "Used KV cache blocks", "Tokens per KV cache block", "Reused KV cache blocks"};
-const std::vector<std::string> CustomMetricsReporter::kv_cache_labels_{"max", "free", "used", "tokens_per", "reused"};
+    "Used KV cache blocks", "Tokens per KV cache block", "Reused KV cache blocks", "Used KV Cache Block Fraction"};
+const std::vector<std::string> CustomMetricsReporter::kv_cache_labels_{
+    "max", "free", "used", "tokens_per", "reused", "fraction"};
 
 const std::vector<std::string> CustomMetricsReporter::dis_serving_keys_{"KV cache transfer time", "Request count"};
 const std::vector<std::string> CustomMetricsReporter::dis_serving_labels_{"kv_cache_transfer_ms", "request_count"};
