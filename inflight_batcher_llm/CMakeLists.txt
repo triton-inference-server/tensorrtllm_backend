@@ -42,6 +42,8 @@ else()
   add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=0")
 endif()
 
+find_package(CUDAToolkit REQUIRED)
+
 #
 # Options
 #
@@ -69,6 +71,30 @@ set(TRITON_CORE_REPO_TAG
 set(TRITON_BACKEND_REPO_TAG
     "main"
     CACHE STRING "Tag for triton-inference-server/backend repo")
+
+if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "11")
+  add_definitions("-DENABLE_BF16")
+  message(
+    STATUS
+      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} is greater or equal than 11.0, enable -DENABLE_BF16 flag"
+  )
+endif()
+
+if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "11.8")
+  add_definitions("-DENABLE_FP8")
+  message(
+    STATUS
+      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} is greater or equal than 11.8, enable -DENABLE_FP8 flag"
+  )
+endif()
+
+if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
+  add_definitions("-DENABLE_FP4")
+  message(
+    STATUS
+      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} is greater or equal than 12.8, enable -DENABLE_FP4 flag"
+  )
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -110,7 +136,7 @@ configure_file(src/libtriton_tensorrtllm.ldscript
                libtriton_tensorrtllm.ldscript COPYONLY)
 
 set(SRCS src/libtensorrtllm.cc src/model_instance_state.cc src/model_state.cc
-         src/utils.cc)
+         src/utils.cc src/namedTensor.cpp)
 
 add_library(triton-tensorrt-llm-backend SHARED ${SRCS})
 

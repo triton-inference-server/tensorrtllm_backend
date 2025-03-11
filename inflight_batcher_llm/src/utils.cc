@@ -26,6 +26,8 @@
 
 #include "utils.h"
 #include "tensorrt_llm/executor/serialization.h"
+#include "tensorrt_llm/runtime/bufferManager.h"
+#include <cassert>
 
 using namespace tensorrt_llm::batch_manager;
 

@@ -534,7 +534,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                     else
                         EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=1
                         EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=1
-                        EXPECTED_KV_CACHE_REUSED_BLOCKS=3
+                        EXPECTED_KV_CACHE_REUSED_BLOCKS=4
                     fi
                     EXPECTED_ACCEPTANCE_RATE=0.0
                     EXPECTED_TOTAL_ACCEPTED_DRAFT_TOKENS=0

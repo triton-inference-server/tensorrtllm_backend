@@ -30,9 +30,7 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#include "tensorrt_llm/batch_manager/callbacks.h"
 #include "tensorrt_llm/batch_manager/kvCacheConfig.h"
-#include "tensorrt_llm/batch_manager/namedTensor.h"
 #include "tensorrt_llm/executor/types.h"
 
 #include "model_state.h"
@@ -111,9 +109,6 @@ struct RequestData
 //
 class ModelInstanceState
 {
-    using InferenceRequest = tensorrt_llm::batch_manager::InferenceRequest;
-    using NamedTensor = tensorrt_llm::batch_manager::NamedTensor;
-
 public:
     // number of cpu workers used to move weights host cache to gpu cache
     static constexpr executor::SizeType32 kPeftCacheNumEnsureWorkers = 4;
