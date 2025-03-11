@@ -32,6 +32,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <fstream>
+
 namespace tle = tensorrt_llm::executor;
 using executor::SizeType32;
 

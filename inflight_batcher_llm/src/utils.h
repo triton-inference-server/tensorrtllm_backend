@@ -27,8 +27,10 @@
 #pragma once
 
 #include "NvInfer.h"
-#include "tensorrt_llm/batch_manager/inferenceRequest.h"
+#include "namedTensor.h"
 #include "tensorrt_llm/common/logger.h"
+#include "tensorrt_llm/executor/executor.h"
+#include "tensorrt_llm/executor/types.h"
 #include "tensorrt_llm/runtime/iTensor.h"
 #include "tensorrt_llm/runtime/tllmLogger.h"
 #include "triton/backend/backend_common.h"
@@ -37,7 +39,9 @@
 #include <map>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 using namespace tensorrt_llm;
 
@@ -168,7 +172,7 @@ nvinfer1::DataType to_trt_datatype(TRITONSERVER_DataType data_type);
 /// @brief Convert executor datatype to Triton datatype
 TRITONSERVER_DataType to_triton_datatype(executor::DataType data_type);
 
-using InputTensors = std::unordered_map<std::string, tensorrt_llm::batch_manager::NamedTensor>;
+using InputTensors = std::unordered_map<std::string, NamedTensor>;
 
 /// @brief Split batched input tensors into bs==1 tensors.
 /// @return Vector of maps of bs==1 tensors keyed on tensor name.
