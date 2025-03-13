@@ -1458,7 +1458,7 @@ void ModelInstanceState::WaitForStats()
                 {
                     fraction = static_cast<double>(kvStats.usedNumBlocks) / static_cast<double>(kvStats.maxNumBlocks);
                 }
-                statJson.append("\"Fraction of used KV cache blocks\":" + std::to_string(fraction) + ",");
+                statJson.append("\"Fraction used KV cache blocks\":" + std::to_string(fraction) + ",");
             }
 
             // requestStats is a list where each item is associated with an iteration,

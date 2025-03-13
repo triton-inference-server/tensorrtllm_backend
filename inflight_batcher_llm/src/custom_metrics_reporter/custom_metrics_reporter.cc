@@ -44,7 +44,7 @@ const std::vector<std::string> CustomMetricsReporter::runtime_memory_keys_{
 const std::vector<std::string> CustomMetricsReporter::runtime_memory_labels_{"cpu", "gpu", "pinned"};
 
 const std::vector<std::string> CustomMetricsReporter::kv_cache_keys_{"Max KV cache blocks", "Free KV cache blocks",
-    "Used KV cache blocks", "Tokens per KV cache block", "Reused KV cache blocks", "Used KV Cache Block Fraction"};
+    "Used KV cache blocks", "Tokens per KV cache block", "Reused KV cache blocks", "Fraction used KV cache blocks"};
 const std::vector<std::string> CustomMetricsReporter::kv_cache_labels_{
     "max", "free", "used", "tokens_per", "reused", "fraction"};
 
