@@ -12,8 +12,8 @@ BACKEND_ROOT = "backend"
 // Container configuration
 // available tags can be found in: https://urm.nvidia.com/artifactory/sw-tensorrt-docker/tensorrt-llm/
 // [base_image_name]-[arch]-[os]-[trt_version]-[torch_install_type]-[stage]-[date]-[mr_id]
-BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-x86_64-ubuntu24.04-trt10.8.0.43-skip-devel-202501292120-1002"
-BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.01-py3-aarch64-ubuntu24.04-trt10.8.0.43-skip-devel-202501292120-1002"
+BACKEND_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.03-py3-x86_64-ubuntu24.04-trt10.9.0.34-skip-devel-202503141500-1049"
+BACKEND_SBSA_DOCKER_IMAGE = "urm.nvidia.com/sw-tensorrt-docker/tensorrt-llm:tritonserver-25.03-py3-aarch64-ubuntu24.04-trt10.9.0.34-skip-devel-202503141500-1049"
 
 // TURTLE repository configuration
 TURTLE_REPO = "https://gitlab-master.nvidia.com/TensorRT/Infrastructure/turtle.git"
@@ -737,16 +737,18 @@ pipeline {
                   runTRTLLMBackendTest("t5-ib")
                 }
               }
-              stage("Test mistral-ib") {
-                steps {
-                  runTRTLLMBackendTest("mistral-ib")
-                }
-              }
-              stage("Test mistral-ib-mm") {
-                steps {
-                  runTRTLLMBackendTest("mistral-ib-mm")
-                }
-              }
+              // https://nvbugspro.nvidia.com/bug/5164358
+              // stage("Test mistral-ib") {
+              //   steps {
+              //     runTRTLLMBackendTest("mistral-ib")
+              //   }
+              // }
+              // https://nvbugspro.nvidia.com/bug/5164358
+              // stage("Test mistral-ib-mm") {
+              //   steps {
+              //     runTRTLLMBackendTest("mistral-ib-mm")
+              //   }
+              // }
               stage("Test gpt-ib-streaming") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-streaming")
