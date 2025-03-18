@@ -737,18 +737,16 @@ pipeline {
                   runTRTLLMBackendTest("t5-ib")
                 }
               }
-              // https://nvbugspro.nvidia.com/bug/5164358
-              // stage("Test mistral-ib") {
-              //   steps {
-              //     runTRTLLMBackendTest("mistral-ib")
-              //   }
-              // }
-              // https://nvbugspro.nvidia.com/bug/5164358
-              // stage("Test mistral-ib-mm") {
-              //   steps {
-              //     runTRTLLMBackendTest("mistral-ib-mm")
-              //   }
-              // }
+              stage("Test mistral-ib") {
+                steps {
+                  runTRTLLMBackendTest("mistral-ib")
+                }
+              }
+              stage("Test mistral-ib-mm") {
+                steps {
+                  runTRTLLMBackendTest("mistral-ib-mm")
+                }
+              }
               stage("Test gpt-ib-streaming") {
                 steps {
                   runTRTLLMBackendTest("gpt-ib-streaming")
