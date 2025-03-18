@@ -61,9 +61,6 @@ function build_tensorrt_engine_inflight_batcher {
     cd ${BASE_DIR}
 }
 
-# Downgrade to legacy version to accommodate Triton CI runners
-pip install pynvml==11.4.0
-
 # Generate the TRT_LLM model engines
 NUM_GPUS_TO_TEST=("1" "2" "4")
 for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
