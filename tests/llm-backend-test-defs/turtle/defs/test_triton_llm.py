@@ -3134,6 +3134,7 @@ def test_gpt_next_ptuning_ifb(
             f"--engine_dir={ENGINE_PATH}",
             f"--output_csv=output_w_prompt.csv",
             "--no_add_special_tokens",
+            "--no-kv_cache_enable_block_reuse",
         ]
         if ENABLE_CONTEXT_FMHA_FP32_ACC == "True":
             run_cmd += [
