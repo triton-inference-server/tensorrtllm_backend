@@ -37,6 +37,7 @@ metric_to_stat_dict = {
     "request_type=scheduled": "Scheduled Requests",
     "request_type=max": "Max Request Count",
     "request_type=active": "Active Request Count",
+    "request_type=waiting": "Waiting Requests",
     "memory_type=pinned": "Runtime Pinned Memory Usage",
     "memory_type=gpu": "Runtime GPU Memory Usage",
     "memory_type=cpu": "Runtime CPU Memory Usage",
@@ -45,6 +46,7 @@ metric_to_stat_dict = {
     "kv_cache_block_type=free": "Free KV cache blocks",
     "kv_cache_block_type=max": "Max KV cache blocks",
     "kv_cache_block_type=reused": "Reused KV cache blocks",
+    "kv_cache_block_type=fraction": "Fraction used KV cache blocks",
     "inflight_batcher_specific_metric=total_context_tokens":
     "Total Context Tokens",
     "inflight_batcher_specific_metric=micro_batch_id": "MicroBatch ID",
