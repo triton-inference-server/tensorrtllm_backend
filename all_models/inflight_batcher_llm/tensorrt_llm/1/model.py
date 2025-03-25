@@ -1503,11 +1503,17 @@ class TritonPythonModel:
         self.all_metrics[METRIC_TOTAL_OUTPUT_TOKENS].observe(output_tokens)
         self.all_metrics[METRIC_TOTAL_INPUT_TOKENS].observe(input_tokens)
 
-    def get_composite_metric_map(stat):
-
+    def get_composite_metric_map(self, stat):
         def get_metric(metric_name, family_stats=None):
-            if family_stats is None and hasattr(stat, metric_name):
-                return getattr(stat, metric_name)
+            if family_stats is None:
+                if hasattr(stat, metric_name):
+                    return getattr(stat, metric_name)
+                elif stat.kv_cache_stats is not None and hasattr(stat.kv_cache_stats, metric_name):
+                    return getattr(stat.kv_cache_stats, metric_name)
+                elif stat.static_batching_stats is not None and hasattr(stat.static_batching_stats, metric_name):
+                    return getattr(stat.static_batching_stats, metric_name)
+                elif stat.inflight_batching_stats is not None and hasattr(stat.inflight_batching_stats, metric_name):
+                    return getattr(stat.inflight_batching_stats, metric_name)
             elif family_stats is not None and hasattr(family_stats, metric_name):
                 return getattr(family_stats, metric_name)
             pb_utils.Logger.log_warn(f"Constituent metric \"{metric_name}\" not found.")
@@ -1518,7 +1524,7 @@ class TritonPythonModel:
         # compute fraction_used_blocks
         max_blocks = get_metric("max_num_blocks", stat.kv_cache_stats)
         used_blocks = get_metric("used_num_blocks", stat.kv_cache_stats)
-        if max_blocks and used_blocks:
+        if max_blocks not None and used_blocks not None:
             composite_metrics["fraction_used_blocks"] = 0.0 if max_blocks <= 0 else used_blocks / max_blocks
         else:
             pb_utils.Logger.log_warn(f"fraction_used_blocks is missing one or more constituent metric.")
@@ -1526,7 +1532,7 @@ class TritonPythonModel:
         # compute num_waiting_requests
         active_requests = get_metric("num_active_requests")
         scheduled_requests = get_metric("num_scheduled_requests")
-        if active_requests and scheduled_requests:
+        if active_requests not None and scheduled_requests not None:
             composite_metrics["num_waiting_requests"] = active_requests - scheduled_requests
         else:
             pb_utils.Logger.log_warn(f"num_waiting_requests is missing one or more constituent metric.")
@@ -1539,7 +1545,7 @@ class TritonPythonModel:
             time.sleep(self.stats_check_period_ms / 1000.0)
             for stat in self.executor.get_latest_iteration_stats():
                 try:
-                    composite_metrics = get_composite_metric_map(stat)
+                    composite_metrics = self.get_composite_metric_map(stat)
                     for key, metric in self.all_metrics.items():
                         # Skip processing for both histogram metrics
                         if isinstance(key, str) and key in [
