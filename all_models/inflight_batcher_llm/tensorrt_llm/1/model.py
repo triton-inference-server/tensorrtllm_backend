@@ -1524,7 +1524,7 @@ class TritonPythonModel:
         # compute fraction_used_blocks
         max_blocks = get_metric("max_num_blocks", stat.kv_cache_stats)
         used_blocks = get_metric("used_num_blocks", stat.kv_cache_stats)
-        if max_blocks not None and used_blocks not None:
+        if max_blocks is not None and used_blocks is not None:
             composite_metrics["fraction_used_blocks"] = 0.0 if max_blocks <= 0 else used_blocks / max_blocks
         else:
             pb_utils.Logger.log_warn(f"fraction_used_blocks is missing one or more constituent metric.")
@@ -1532,7 +1532,7 @@ class TritonPythonModel:
         # compute num_waiting_requests
         active_requests = get_metric("num_active_requests")
         scheduled_requests = get_metric("num_scheduled_requests")
-        if active_requests not None and scheduled_requests not None:
+        if active_requests is not None and scheduled_requests is not None:
             composite_metrics["num_waiting_requests"] = active_requests - scheduled_requests
         else:
             pb_utils.Logger.log_warn(f"num_waiting_requests is missing one or more constituent metric.")
