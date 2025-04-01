@@ -707,6 +707,7 @@ similar to the following (assuming your model is an inflight batcher model):
 ```bash
 # HELP nv_trt_llm_request_metrics TRT LLM request metrics
 # TYPE nv_trt_llm_request_metrics gauge
+nv_trt_llm_request_metrics{model="tensorrt_llm",request_type="waiting",version="1"} 1
 nv_trt_llm_request_metrics{model="tensorrt_llm",request_type="context",version="1"} 1
 nv_trt_llm_request_metrics{model="tensorrt_llm",request_type="scheduled",version="1"} 1
 nv_trt_llm_request_metrics{model="tensorrt_llm",request_type="max",version="1"} 512
@@ -718,6 +719,7 @@ nv_trt_llm_runtime_memory_metrics{memory_type="gpu",model="tensorrt_llm",version
 nv_trt_llm_runtime_memory_metrics{memory_type="cpu",model="tensorrt_llm",version="1"} 0
 # HELP nv_trt_llm_kv_cache_block_metrics TRT LLM KV cache block metrics
 # TYPE nv_trt_llm_kv_cache_block_metrics gauge
+nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type="fraction",model="tensorrt_llm",version="1"} 0.4875
 nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type="tokens_per",model="tensorrt_llm",version="1"} 64
 nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type="used",model="tensorrt_llm",version="1"} 1
 nv_trt_llm_kv_cache_block_metrics{kv_cache_block_type="free",model="tensorrt_llm",version="1"} 6239

@@ -1149,6 +1149,11 @@ class TritonPythonModel:
                 "request_type": "context",
                 **common_labels
             }),
+            "num_waiting_requests":
+            self.request_metric_family.Metric(labels={
+                "request_type": "waiting",
+                **common_labels
+            }),
             # Runtime metrics
             "cpu_mem_usage":
             self.runtime_memory_metric_family.Metric(labels={
@@ -1184,6 +1189,11 @@ class TritonPythonModel:
             "tokens_per_block":
             self.kv_cache_metric_family.Metric(labels={
                 "kv_cache_block_type": "tokens_per",
+                **common_labels
+            }),
+            "fraction_used_blocks":
+            self.kv_cache_metric_family.Metric(labels={
+                "kv_cache_block_type": "fraction",
                 **common_labels
             }),
             # General metrics
@@ -1493,12 +1503,61 @@ class TritonPythonModel:
         self.all_metrics[METRIC_TOTAL_OUTPUT_TOKENS].observe(output_tokens)
         self.all_metrics[METRIC_TOTAL_INPUT_TOKENS].observe(input_tokens)
 
+    def get_composite_metric_map(self, stat):
+
+        def get_metric(metric_name, family_stats=None):
+            if family_stats is None:
+                if hasattr(stat, metric_name):
+                    return getattr(stat, metric_name)
+                elif stat.kv_cache_stats is not None and hasattr(
+                        stat.kv_cache_stats, metric_name):
+                    return getattr(stat.kv_cache_stats, metric_name)
+                elif stat.static_batching_stats is not None and hasattr(
+                        stat.static_batching_stats, metric_name):
+                    return getattr(stat.static_batching_stats, metric_name)
+                elif stat.inflight_batching_stats is not None and hasattr(
+                        stat.inflight_batching_stats, metric_name):
+                    return getattr(stat.inflight_batching_stats, metric_name)
+            elif family_stats is not None and hasattr(family_stats,
+                                                      metric_name):
+                return getattr(family_stats, metric_name)
+            pb_utils.Logger.log_warn(
+                f"Constituent metric \"{metric_name}\" not found.")
+            return None
+
+        composite_metrics = {}
+
+        # compute fraction_used_blocks
+        max_blocks = get_metric("max_num_blocks", stat.kv_cache_stats)
+        used_blocks = get_metric("used_num_blocks", stat.kv_cache_stats)
+        if max_blocks is not None and used_blocks is not None:
+            composite_metrics[
+                "fraction_used_blocks"] = 0.0 if max_blocks <= 0 else used_blocks / max_blocks
+        else:
+            pb_utils.Logger.log_warn(
+                f"fraction_used_blocks is missing one or more constituent metric."
+            )
+
+        # compute num_waiting_requests
+        active_requests = get_metric("num_active_requests")
+        scheduled_requests = get_metric("num_scheduled_requests")
+        if active_requests is not None and scheduled_requests is not None:
+            composite_metrics[
+                "num_waiting_requests"] = active_requests - scheduled_requests
+        else:
+            pb_utils.Logger.log_warn(
+                f"num_waiting_requests is missing one or more constituent metric."
+            )
+
+        return composite_metrics
+
     def metrics_loop(self):
         """Updates triton metrics using stats from the executor."""
         while self.running:
             time.sleep(self.stats_check_period_ms / 1000.0)
             for stat in self.executor.get_latest_iteration_stats():
                 try:
+                    composite_metrics = self.get_composite_metric_map(stat)
                     for key, metric in self.all_metrics.items():
                         # Skip processing for both histogram metrics
                         if isinstance(key, str) and key in [
@@ -1518,6 +1577,8 @@ class TritonPythonModel:
                         elif stat.inflight_batching_stats is not None and hasattr(
                                 stat.inflight_batching_stats, key):
                             value = getattr(stat.inflight_batching_stats, key)
+                        elif key in composite_metrics:
+                            value = composite_metrics[key]
                         if value is not None:
                             if key == "timestamp":
                                 value = convert_timestamp_to_seconds(value)
