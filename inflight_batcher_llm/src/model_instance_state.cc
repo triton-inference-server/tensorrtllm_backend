@@ -1295,6 +1295,8 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Paused Requests\":" + std::to_string(modelStats.numPausedRequests) + ",");
                 statJson.append("\"Scheduled Requests\":" + std::to_string(modelStats.numScheduledRequests) + ",");
                 statJson.append("\"Total Context Tokens\":" + std::to_string(modelStats.numCtxTokens) + ",");
+                statJson.append("\"Waiting Requests\":"
+                    + std::to_string(stat.numActiveRequests - modelStats.numScheduledRequests) + ",");
             }
             else if (stat.staticBatchingStats.has_value())
             {
@@ -1304,6 +1306,8 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Total Context Tokens\":" + std::to_string(modelStats.numCtxTokens) + ",");
                 statJson.append("\"Total Generation Tokens\":" + std::to_string(modelStats.numGenTokens) + ",");
                 statJson.append("\"Empty Generation Slots\":" + std::to_string(modelStats.emptyGenSlots) + ",");
+                statJson.append("\"Waiting Requests\":"
+                    + std::to_string(stat.numActiveRequests - modelStats.numScheduledRequests) + ",");
             }
             else
             {
@@ -1319,6 +1323,13 @@ void ModelInstanceState::WaitForStats()
                 statJson.append("\"Tokens per KV cache block\":" + std::to_string(kvStats.tokensPerBlock) + ",");
                 statJson.append("\"Used KV cache blocks\":" + std::to_string(kvStats.usedNumBlocks) + ",");
                 statJson.append("\"Reused KV cache blocks\":" + std::to_string(kvStats.reusedBlocks) + ",");
+                // Calculate and append the used KV cache block fraction.
+                double fraction = 0.0;
+                if (static_cast<double>(kvStats.maxNumBlocks) > 0.0)
+                {
+                    fraction = static_cast<double>(kvStats.usedNumBlocks) / static_cast<double>(kvStats.maxNumBlocks);
+                }
+                statJson.append("\"Fraction used KV cache blocks\":" + std::to_string(fraction) + ",");
             }
 
             // requestStats is a list where each item is associated with an iteration,

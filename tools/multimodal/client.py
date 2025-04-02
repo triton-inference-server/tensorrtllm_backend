@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('--end-id',
                         type=int,
                         required=False,
-                        default=50118,
+                        default=-1,
                         help='The token id for end token.')
 
     parser.add_argument('--pad-id',
