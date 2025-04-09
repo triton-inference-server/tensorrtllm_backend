@@ -1,9 +1,9 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver
-ARG BASE_TAG=25.02-py3
+ARG BASE_TAG=25.03-py3
 ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.03-py3
 
-FROM ${PYTORCH_IMAGE} as pytorch_image
-FROM ${BASE_IMAGE}:${BASE_TAG} as base
+FROM ${PYTORCH_IMAGE} AS pytorch_image
+FROM ${BASE_IMAGE}:${BASE_TAG} AS base
 
 # Copy PyTorch package from PyTorch image
 COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
@@ -37,7 +37,7 @@ RUN pip3 install -r /tmp/requirements.txt
 RUN apt-get remove --purge -y tensorrt*
 RUN pip uninstall -y tensorrt
 
-FROM base as dev
+FROM base AS dev
 
 # Download & install internal TRT release
 COPY tensorrt_llm/docker/common/install_tensorrt.sh /tmp/
@@ -63,20 +63,20 @@ ARG TORCH_INSTALL_TYPE="skip"
 COPY tensorrt_llm/docker/common/install_pytorch.sh install_pytorch.sh
 RUN bash ./install_pytorch.sh $TORCH_INSTALL_TYPE && rm install_pytorch.sh
 
-FROM dev as trt_llm_builder
+FROM dev AS trt_llm_builder
 
 WORKDIR /app
 COPY scripts scripts
 COPY tensorrt_llm tensorrt_llm
 RUN cd tensorrt_llm && python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" -i -c && cd ..
 
-FROM trt_llm_builder as trt_llm_backend_builder
+FROM trt_llm_builder AS trt_llm_backend_builder
 
 WORKDIR /app/
 COPY inflight_batcher_llm inflight_batcher_llm
 RUN cd inflight_batcher_llm && bash scripts/build.sh && cd ..
 
-FROM trt_llm_backend_builder as final
+FROM trt_llm_backend_builder AS final
 
 # Install TensorRT-LLM
 WORKDIR /app/
