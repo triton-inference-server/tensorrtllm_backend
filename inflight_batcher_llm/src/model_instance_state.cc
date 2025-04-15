@@ -623,7 +623,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
 
             mExecutorLookaheadDecodingConfig
                 = executor::LookaheadDecodingConfig{windowSize, ngramSize, verificationSetSize};
-            decodingConfig.setLookaheadDecoding(mExecutorLookaheadDecodingConfig.value());
+            decodingConfig.setLookaheadDecodingConfig(mExecutorLookaheadDecodingConfig.value());
         }
         catch (std::exception const& e)
         {
