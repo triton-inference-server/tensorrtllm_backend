@@ -13,6 +13,8 @@ from datetime import datetime
 from functools import partial
 
 import numpy as np
+from end_to_end_test import \
+    test_performance as test_performance_with_text_prompts
 from transformers import AutoTokenizer
 from utils import utils
 
@@ -369,6 +371,11 @@ if __name__ == '__main__':
                         required=False,
                         help="Relative tolerance for performance check",
                         default=0.05)
+    parser.add_argument('--test-llmapi',
+                        action="store_true",
+                        required=False,
+                        default=False,
+                        help="Use LLMAPI for inference")
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
@@ -398,6 +405,29 @@ if __name__ == '__main__':
     ratio = []
 
     print(FLAGS.workload)
+    if FLAGS.test_llmapi:
+        assert FLAGS.workload == "dataset", "LLMAPI only supports dataset workload with text prompts"
+        FLAGS.streaming = FLAGS.decoupled
+        FLAGS.model_name = "tensorrt_llm"
+        prompts = []
+        output_lens = []
+        with open(FLAGS.dataset, 'r') as f:
+            data_dict = json.load(f)
+            for req in data_dict:
+                prompt = req['input'] + ' ' + req['instruction']
+                output = req['output']
+                # 1.3 is a magic number that converts number of words to number of tokens
+                if int(len(prompt.split(' ')) / 1.3) > FLAGS.max_input_len:
+                    continue
+                prompts.append(prompt)
+                # 1.3 is a magic number that converts number of words to number of tokens
+                output_lens.append(int(len(output.split(' ')) * 1.3))
+        test_performance_with_text_prompts(client,
+                                           prompts,
+                                           output_lens,
+                                           FLAGS,
+                                           use_llmapi=True)
+        exit(0)
     if FLAGS.workload == "dataset":
         tokenizer = AutoTokenizer.from_pretrained(FLAGS.tokenizer_dir,
                                                   legacy=False,

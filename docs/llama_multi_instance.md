@@ -111,7 +111,7 @@ export UNIFIED_CKPT_PATH=/tmp/ckpt/llama/7b-2tp-2gpu/
 export ENGINE_PATH=/tmp/engines/llama/7b-2tp-2gpu/
 
 # Create the checkpoint
-python tensorrt_llm/examples/llama/convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
+python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
                              --output_dir ${UNIFIED_CKPT_PATH} \
                              --dtype float16 \
                              --tp_size 2

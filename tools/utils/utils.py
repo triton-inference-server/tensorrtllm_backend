@@ -41,7 +41,10 @@ def prepare_tensor(name, input, protocol):
 def prepare_outputs(protocol,
                     return_log_probs=False,
                     return_context_logits=False,
-                    return_generation_logits=False):
+                    return_generation_logits=False,
+                    return_finish_reason=False,
+                    return_stop_reason=False,
+                    return_cumulative_logprob=False):
 
     client_util = httpclient if protocol == "http" else grpcclient
 
@@ -57,6 +60,15 @@ def prepare_outputs(protocol,
 
     if return_generation_logits:
         outputs.append(client_util.InferRequestedOutput("generation_logits"))
+
+    if return_finish_reason:
+        outputs.append(client_util.InferRequestedOutput("finish_reason"))
+
+    if return_stop_reason:
+        outputs.append(client_util.InferRequestedOutput("stop_reason"))
+
+    if return_cumulative_logprob:
+        outputs.append(client_util.InferRequestedOutput("cumulative_logprob"))
 
     return outputs
 

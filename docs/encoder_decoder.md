@@ -58,7 +58,7 @@ Build TensorRT-LLM engines.
     export INPUT_LEN=1024
     export OUTPUT_LEN=201
 
-    python3 tensorrt_llm/examples/enc_dec/convert_checkpoint.py \
+    python3 tensorrt_llm/examples/models/core/enc_dec/convert_checkpoint.py \
     --model_type ${MODEL_TYPE} \
     --model_dir ${HF_MODEL_PATH} \
     --output_dir ${UNIFIED_CKPT_PATH} \
@@ -314,7 +314,7 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
     export UNIFIED_CKPT_PATH=/workspace/ckpt/${MODEL_NAME}-2tp-2gpu
     export ENGINE_PATH=/workspace/engines/${MODEL_NAME}-2tp-2gpu
 
-    python tensorrt_llm/examples/enc_dec/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/core/enc_dec/convert_checkpoint.py \
         --model_type ${MODEL_TYPE} \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \

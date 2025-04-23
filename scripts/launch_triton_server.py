@@ -51,6 +51,12 @@ def parse_arguments():
         help='path to triton log file',
         default='triton_log.txt',
     )
+    parser.add_argument(
+        '--no-mpi',
+        action='store_true',
+        help='Launch tritonserver without MPI (single instance mode)',
+        default=False,
+    )
 
     path = str(Path(__file__).parent.absolute()) + '/../all_models/gpt'
     parser.add_argument('--model_repo', type=str, default=path)
@@ -110,16 +116,60 @@ def check_triton_version(required_version):
         return False
 
 
+def add_multi_model_config(cmd, args):
+    """Add multi-model configuration to command if enabled."""
+    if args.multi_model and check_triton_version(
+            '24.06') and not args.disable_spawn_processes:
+        cmd += [
+            '--pinned-memory-pool-byte-size=0', '--enable-peer-access=false'
+        ]
+        for j in range(number_of_gpus()):
+            cmd += [f'--cuda-memory-pool-byte-size={j}:0']
+    return cmd
+
+
+def add_logging_config(cmd, log, log_file, rank=None):
+    """Add logging configuration to command if enabled."""
+    if log and (rank is None or rank == 0):
+        cmd += ['--log-verbose=3', f'--log-file={log_file}']
+    return cmd
+
+
+def add_port_config(cmd, grpc_port, http_port, metrics_port):
+    """Add port configuration to command."""
+    cmd += [
+        f'--grpc-port={grpc_port}',
+        f'--http-port={http_port}',
+        f'--metrics-port={metrics_port}',
+    ]
+    return cmd
+
+
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             model_repo, log, log_file, tensorrt_llm_model_name, oversubscribe,
-            multimodal_gpu0_cuda_mem_pool_bytes):
-    cmd = ['mpirun', '--allow-run-as-root']
-    if oversubscribe:
-        cmd += ['--oversubscribe']
+            multimodal_gpu0_cuda_mem_pool_bytes, no_mpi):
+    if no_mpi:
+        assert world_size == 1, "world size must be 1 when using no-mpi"
+
+    use_mpi = not no_mpi
+    cmd = []
+
+    if use_mpi:
+        cmd = ['mpirun', '--allow-run-as-root']
+        if oversubscribe:
+            cmd += ['--oversubscribe']
+
     for i in range(world_size):
-        cmd += ['-n', '1', tritonserver, f'--model-repository={model_repo}']
-        if log and (i == 0):
-            cmd += ['--log-verbose=3', f'--log-file={log_file}']
+        if use_mpi:
+            cmd += ['-n', '1']
+        cmd += [tritonserver, f'--model-repository={model_repo}']
+
+        # Add port configuration
+        cmd = add_port_config(cmd, grpc_port, http_port, metrics_port)
+
+        # Add logging if requested (only for rank 0)
+        cmd = add_logging_config(cmd, log, log_file, i)
+
         # If rank is not 0, skip loading of models other than `tensorrt_llm_model_name`
         if (i != 0):
             cmd += ['--model-control-mode=explicit']
@@ -130,19 +180,19 @@ def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
             cmd += [
                 f'--cuda-memory-pool-byte-size=0:{multimodal_gpu0_cuda_mem_pool_bytes}'
             ]
-        if args.multi_model and check_triton_version(
-                '24.06') and not args.disable_spawn_processes:
-            cmd += [
-                '--pinned-memory-pool-byte-size=0',
-                '--enable-peer-access=false'
-            ]
-            for j in range(number_of_gpus()):
-                cmd += [f'--cuda-memory-pool-byte-size={j}:0']
+
+        # Add multi-model configuration if enabled
+        cmd = add_multi_model_config(cmd, args)
+
+        # Add port configuration
+        cmd = add_port_config(cmd, grpc_port, http_port, metrics_port)
+
         cmd += [
-            f'--grpc-port={grpc_port}', f'--http-port={http_port}',
-            f'--metrics-port={metrics_port}', '--disable-auto-complete-config',
-            f'--backend-config=python,shm-region-prefix-name=prefix{i}_', ':'
+            '--disable-auto-complete-config',
+            f'--backend-config=python,shm-region-prefix-name=prefix{i}_',
         ]
+        if use_mpi:
+            cmd += [':']
     return cmd
 
 
@@ -161,7 +211,8 @@ if __name__ == '__main__':
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
                   args.http_port, args.metrics_port, args.model_repo, args.log,
                   args.log_file, args.tensorrt_llm_model_name,
-                  args.oversubscribe, args.multimodal_gpu0_cuda_mem_pool_bytes)
+                  args.oversubscribe, args.multimodal_gpu0_cuda_mem_pool_bytes,
+                  args.no_mpi)
     env = os.environ.copy()
     if args.multi_model:
         if not args.disable_spawn_processes:
