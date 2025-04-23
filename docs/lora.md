@@ -30,7 +30,7 @@ huggingface-cli download meta-llama/Llama-2-7b-hf
 > Make sure that you have access to https://huggingface.co/meta-llama/Llama-2-7b-hf.
 
 ```bash
-cd /tensorrtllm_backend/tensorrt_llm/examples/llama
+cd /tensorrtllm_backend/tensorrt_llm/examples/models/core/llama
 BASE_LLAMA_MODEL=/path/to/llama-7b-hf
 
 python3 convert_checkpoint.py --model_dir ${BASE_LLAMA_MODEL} \

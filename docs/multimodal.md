@@ -85,7 +85,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     export MULTIMODAL_ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/multimodal_encoder
 
     # For BLIP-OPT2
-    python tensorrt_llm/examples/opt/convert_checkpoint.py --model_type blip2 \
+    python tensorrt_llm/examples/models/contrib/opt/convert_checkpoint.py --model_type blip2 \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype float16
@@ -100,10 +100,10 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_input_len 924 \
         --max_multimodal_len 256 # 8 (max_batch_size) * 32 (num_multimodal_features) for BLIP2
 
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_type blip2 --model_path ${HF_MODEL_PATH} --max_batch_size 8
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_type blip2 --model_path ${HF_MODEL_PATH} --max_batch_size 8
 
     # For LLAVA
-    python tensorrt_llm/examples/llama/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype float16
@@ -117,10 +117,10 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_seq_len 2560 \
         --max_multimodal_len 4608 # 8 (max_batch_size) * 576 (num_multimodal_features) for LLaVA
 
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8
 
     # For VILA
-    python tensorrt_llm/examples/llama/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype float16
@@ -134,10 +134,10 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_seq_len 2560 \
         --max_multimodal_len 6272 # 8 (max_batch_size) * 196 (num_multimodal_features) * 4 (max_num_images_per_request)
 
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type vila --vila_path ${VILA_PATH} --max_batch_size 32 #max_batch_size * max_num_images_per_request since vila support multiple images inference
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type vila --vila_path ${VILA_PATH} --max_batch_size 32 #max_batch_size * max_num_images_per_request since vila support multiple images inference
 
     # For LLaVA OneVision
-    python tensorrt_llm/examples/qwen/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/contrib/qwen/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype float16
@@ -151,10 +151,10 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
         --max_seq_len  7600 \
         --max_multimodal_len 7300 # max_batch_size * num_multimodal_features(depends on the image size or the specified video num frame)
 
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava_onevision --max_batch_size 16 # max_batch_size * patch for image or frame for video
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava_onevision --max_batch_size 16 # max_batch_size * patch for image or frame for video
 
     # For MLLAMA
-    python tensorrt_llm/examples/mllama/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/core/mllama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype bfloat16
@@ -168,7 +168,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     --max_num_tokens 4096 \
     --max_encoder_input_len 6404
 
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type mllama --output_dir ${MULTIMODAL_ENGINE_PATH} --max_batch_size 8 #max_batch_size * max_num_images_per_request
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type mllama --output_dir ${MULTIMODAL_ENGINE_PATH} --max_batch_size 8 #max_batch_size * max_num_images_per_request
 
     # For Qwen2-VL
     python3 ../qwen/convert_checkpoint.py \
@@ -352,7 +352,7 @@ Follow these steps to enable chunked context inference (using LLaVA as an exampl
     export UNIFIED_CKPT_PATH=tmp/trt_models/${MODEL_NAME}/fp8/2-gpu
     export ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/fp8/2-gpu
     export MULTIMODAL_ENGINE_PATH=tmp/trt_engines/${MODEL_NAME}/multimodal_encoder
-    python tensorrt_llm/examples/llama/convert_checkpoint.py \
+    python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py \
         --model_dir ${HF_MODEL_PATH} \
         --output_dir ${UNIFIED_CKPT_PATH} \
         --dtype float16 \
@@ -384,7 +384,7 @@ Follow these steps to enable chunked context inference (using LLaVA as an exampl
         --max_multimodal_len 4608 # 8 (max_batch_size) * 576 (num_multimodal_features) for LLaVA
 
     # Build the multimodal engine
-    python tensorrt_llm/examples/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8 --output_dir ${MULTIMODAL_ENGINE_PATH}
+    python tensorrt_llm/examples/models/core/multimodal/build_multimodal_engine.py --model_path ${HF_MODEL_PATH} --model_type llava --max_batch_size 8 --output_dir ${MULTIMODAL_ENGINE_PATH}
 ```
 2. Prepare the Tritonserver config file
 Prepare the Tritonserver config file with `enable_chunked_context` set to True. Also, to further utilize the free memory, we can set `kv_cache_free_gpu_mem_fraction` to 0.9.

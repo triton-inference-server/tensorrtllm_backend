@@ -26,7 +26,7 @@ export HF_MODEL_PATH=hf_models/${MODEL_NAME}
 export UNIFIED_CKPT_PATH=trt_ckpts/tiny_llama_1b/1-gpu/fp16
 export ENGINE_PATH=trt_engines/tiny_llama_1b/1-gpu/fp16
 
-python tensorrt_llm/examples/llama/convert_checkpoint.py --model_dir ${HF_MODEL_PATH} \
+python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py --model_dir ${HF_MODEL_PATH} \
                              --output_dir ${UNIFIED_CKPT_PATH} \
                              --dtype float16
 

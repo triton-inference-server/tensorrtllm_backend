@@ -682,8 +682,8 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
     auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
         normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType,
         /*maxBatchSize*/ std::nullopt, /*maxNumTokens*/ std::nullopt, parallelConfig, peftCacheConfig,
-        /*LogitsPostProcessorConfig*/ std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig,
+        /*LogitsPostProcessorConfig*/ std::nullopt, decodingConfig, /*useGpuDirectStorage*/ false, gpuWeightsPercent,
+        maxQueueSize, extendedRuntimePerfKnobConfig,
         /*DebugConfig*/ std::nullopt, recvPollPeriodMs};
     execConfig.setSpecDecConfig(specDecConfig);
     if (guidedConfig.has_value())

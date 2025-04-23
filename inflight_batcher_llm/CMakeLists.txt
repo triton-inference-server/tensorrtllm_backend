@@ -28,7 +28,7 @@ set_ifndef(TRTLLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tensorrt_llm)
 
 include_directories(${TRTLLM_DIR} ${TRTLLM_DIR}/cpp/include)
 
-include(${TRTLLM_DIR}/cpp/cmake/modules/find_library_create_target.cmake)
+list(APPEND CMAKE_MODULE_PATH "${TRTLLM_DIR}/cpp/cmake/modules")
 
 project(tritontensorrtllmbackend LANGUAGES C CXX)
 
@@ -62,6 +62,9 @@ if(TRITON_ENABLE_METRICS AND NOT TRITON_ENABLE_STATS)
     FATAL_ERROR "TRITON_ENABLE_METRICS=ON requires TRITON_ENABLE_STATS=ON")
 endif()
 
+set(TRITON_REPO_ORGANIZATION
+    "https://github.com/triton-inference-server"
+    CACHE STRING "Git repository to pull from")
 set(TRITON_COMMON_REPO_TAG
     "main"
     CACHE STRING "Tag for triton-inference-server/common repo")
@@ -113,17 +116,17 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  GIT_REPOSITORY https://github.com/triton-inference-server/common.git
+  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
   GIT_TAG ${TRITON_COMMON_REPO_TAG}
   GIT_SHALLOW ON)
 FetchContent_Declare(
   repo-core
-  GIT_REPOSITORY https://github.com/triton-inference-server/core.git
+  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/core.git
   GIT_TAG ${TRITON_CORE_REPO_TAG}
   GIT_SHALLOW ON)
 FetchContent_Declare(
   repo-backend
-  GIT_REPOSITORY https://github.com/triton-inference-server/backend.git
+  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/backend.git
   GIT_TAG ${TRITON_BACKEND_REPO_TAG}
   GIT_SHALLOW ON)
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
@@ -201,53 +204,15 @@ message(STATUS "Using MPI_INCLUDE_PATH: ${MPI_INCLUDE_PATH}")
 message(STATUS "Using MPI_LIBRARIES: ${MPI_LIBRARIES}")
 
 # NCCL dependencies
-set_ifndef(NCCL_LIB_DIR /usr/lib/x86_64-linux-gnu/)
-set_ifndef(NCCL_INCLUDE_DIR /usr/include/)
-find_library(NCCL_LIB nccl HINTS ${NCCL_LIB_DIR})
+find_package(NCCL 2 REQUIRED)
+set(NCCL_LIB NCCL::nccl)
 
-# TRT_LIB_DIR and TRT_INCLUDE_DIR should be aligned with the path in the
-# environment_setup.sh script
-set_ifndef(TRT_LIB_DIR
-           /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/lib)
-set_ifndef(
-  TRT_INCLUDE_DIR
-  /usr/local/tensorrt/targets/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/include)
+# TRT dependencies
+set(TensorRT_ROOT /usr/local/tensorrt)
+find_package(TensorRT 10 REQUIRED)
+add_definitions("-DTRT_LLM_USE_DIM64")
 
-set(TRT_LIB nvinfer)
-find_library_create_target(${TRT_LIB} nvinfer SHARED ${TRT_LIB_DIR})
-
-file(STRINGS "${TRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS
-     REGEX "#define NV_TENSORRT_.*")
-foreach(TYPE MAJOR MINOR PATCH BUILD)
-  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
-               ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]+" TRT_${TYPE} ${TRT_TYPE_STRING})
-endforeach(TYPE)
-
-foreach(TYPE MAJOR MINOR PATCH)
-  string(REGEX MATCH "NV_TENSORRT_${TYPE} [0-9]+" TRT_TYPE_STRING
-               ${VERSION_STRINGS})
-  string(REGEX MATCH "[0-9]+" TRT_SO_${TYPE} ${TRT_TYPE_STRING})
-endforeach(TYPE)
-
-set(TRT_VERSION
-    "${TRT_MAJOR}.${TRT_MINOR}.${TRT_PATCH}"
-    CACHE STRING "TensorRT project version")
-set(TRT_SOVERSION
-    "${TRT_SO_MAJOR}"
-    CACHE STRING "TensorRT library so version")
-message(
-  STATUS
-    "Building for TensorRT version: ${TRT_VERSION}, library version: ${TRT_SOVERSION}"
-)
-
-if(${TRT_MAJOR} GREATER_EQUAL 10)
-  add_definitions("-DTRT_LLM_USE_DIM64")
-  message(
-    STATUS "TensorRT version ${TRT_MAJOR} >= 10, int64 dimension is enabled")
-endif()
-
-list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS} ${TRT_INCLUDE_DIR})
+list(APPEND COMMON_HEADER_DIRS ${TORCH_INCLUDE_DIRS})
 include_directories(${COMMON_HEADER_DIRS})
 
 target_include_directories(
@@ -324,7 +289,7 @@ target_link_libraries(
          triton-backend-utils # from repo-backend
          ${MPI_LIBRARIES}
          ${CUDA_LIBRARIES}
-         nvinfer
+         TensorRT::NvInfer
          ${nvinfer_plugin_tensorrt_llm})
 
 FetchContent_Declare(

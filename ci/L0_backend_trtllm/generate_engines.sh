@@ -27,7 +27,7 @@
 
 BACKEND_ROOT=${BACKEND_ROOT:='/opt/tritonserver/tensorrtllm_backend'}
 BASE_DIR=${BACKEND_ROOT}/ci/L0_backend_trtllm
-GPT_DIR=${BACKEND_ROOT}/tensorrt_llm/examples/gpt
+GPT_DIR=${BACKEND_ROOT}/tensorrt_llm/examples/models/core/gpt
 TRTLLM_DIR=${BACKEND_ROOT}/tensorrt_llm/
 
 function build_base_model {

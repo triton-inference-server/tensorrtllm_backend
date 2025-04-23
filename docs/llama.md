@@ -36,7 +36,7 @@ docker run --rm -ti -v `pwd`:/mnt -w /mnt -v ~/.cache/huggingface:~/.cache/huggi
 export HF_LLAMA_MODEL=`python3 -c "from pathlib import Path; from huggingface_hub import hf_hub_download; print(Path(hf_hub_download('meta-llama/Llama-2-7b-hf', filename='config.json')).parent)"`
 export UNIFIED_CKPT_PATH=/tmp/ckpt/llama/7b/
 export ENGINE_PATH=/tmp/engines/llama/7b/
-python tensorrt_llm/examples/llama/convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
+python tensorrt_llm/examples/models/core/llama/convert_checkpoint.py --model_dir ${HF_LLAMA_MODEL} \
                              --output_dir ${UNIFIED_CKPT_PATH} \
                              --dtype float16
 

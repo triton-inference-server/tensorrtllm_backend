@@ -127,7 +127,7 @@ all the supported models. You can also check out the
 examples with serving TensorRT-LLM models.
 
 ```bash
-cd /app/tensorrt_llm/examples/gpt
+cd /app/tensorrt_llm/examples/models/core/gpt
 
 # Download weights from HuggingFace Transformers
 rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
@@ -197,7 +197,7 @@ modified, please refer to the [model config](./docs/model_config.md) section.
 
 ```bash
 ENGINE_DIR=/engines/gpt/fp16/4-gpu
-TOKENIZER_DIR=/app/tensorrt_llm/examples/gpt/gpt2
+TOKENIZER_DIR=/app/tensorrt_llm/examples/models/core/gpt/gpt2
 MODEL_FOLDER=/triton_model_repo
 TRITON_MAX_BATCH_SIZE=4
 INSTANCE_COUNT=1
