@@ -263,10 +263,10 @@ pip3 install tritonclient[all]
 
 # We will only benchmark the core tensorrtllm models.
 python3 tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
+     --tensorrt-llm-model-name tensorrt_llm \
+     --tensorrt-llm-model-name tensorrt_llm_2 \
      dataset --dataset ci/L0_backend_trtllm/simple_data.json \
-     --tokenizer-dir $HF_LLAMA_MODEL \
-     --tesnorrt-llm-model-name tensorrtllm \
-     --tensorrt-llm-model-name tensorrtllm_2
+     --tokenizer-dir $HF_LLAMA_MODEL
 ```
 
 7b. Kill the server:
