@@ -28,6 +28,7 @@ import base64
 import io
 import json
 import os
+from collections import defaultdict
 from typing import List
 
 import numpy as np
@@ -64,8 +65,8 @@ class TritonPythonModel:
 
         add_special_tokens = model_config['parameters'].get(
             'add_special_tokens')
-        visual_model_path = model_config['parameters']['visual_model_path'][
-            'string_value']
+        multimodal_model_path = model_config['parameters'][
+            'multimodal_model_path']['string_value']
         max_num_images = model_config['parameters'].get('max_num_images')
 
         if max_num_images is not None:
@@ -82,8 +83,8 @@ class TritonPythonModel:
                 f"[TensorRT-LLM][WARNING] Don't setup 'max_num_images'. Set it as None by default."
             )
             self.max_num_images = None
-        if visual_model_path == "${visual_model_path}" or visual_model_path == "":
-            visual_model_path = None
+        if multimodal_model_path == "${multimodal_model_path}" or multimodal_model_path == "":
+            multimodal_model_path = None
 
         if add_special_tokens is not None:
             add_special_tokens_str = add_special_tokens['string_value'].lower()
@@ -125,17 +126,19 @@ class TritonPythonModel:
         self.model_type = None
         self.vision_preprocessor = None
 
-        if visual_model_path is not None:
+        if multimodal_model_path is not None:
             self.is_multimodal = True
-            visual_model_path = os.path.join(visual_model_path, 'config.json')
-            with open(visual_model_path, 'r') as f:
+            multimodal_model_path = os.path.join(multimodal_model_path,
+                                                 'config.json')
+            with open(multimodal_model_path, 'r') as f:
                 visual_model_config = json.load(f)
             self.model_type = visual_model_config['builder_config'][
                 'model_type']
 
             assert self.model_type in [
-                'llava', 'blip2-opt', 'vila', 'mllama', 'llava_onevision'
-            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila, mllama and llava_onevision. Got {self.model_type}."
+                'llava', 'blip2-opt', 'vila', 'mllama', 'llava_onevision',
+                'qwen2_vl'
+            ], f"[TensorRT-LLM][ERROR] Currently supported multi-modal models are llava, blip2-opt, vila, mllama, llava_onevision and qwen2_vl. Got {self.model_type}."
 
             assert self.model_type != 'llava_onevison' or self.max_num_images is None or self.max_num_images <= 1, f"LLaVA-OneVsion is not support multi image inference currently."
 
@@ -148,7 +151,7 @@ class TritonPythonModel:
                 llm_model_config["pretrained_config"]["vocab_size"])
             self._setup_ptable_shape(llm_model_config)
 
-            if self.model_type == 'mllama' or self.model_type == 'llava_onevision':
+            if self.model_type in ['mllama', 'llava_onevision', 'qwen2_vl']:
                 self.vision_preprocessor = VisionPreProcessor(
                     self.model_type,
                     AutoProcessor.from_pretrained(tokenizer_dir), model_config)
@@ -182,12 +185,12 @@ class TritonPythonModel:
             'max_prompt_embedding_table_size']
         max_batch_size = llm_model_config['build_config']['max_batch_size']
 
-        num_visual_features = max_prompt_embedding_table_size // max_batch_size
+        num_multimodal_features = max_prompt_embedding_table_size // max_batch_size
         hidden_size = llm_model_config['pretrained_config']['hidden_size']
         if self.max_num_images is not None:
-            num_visual_features = num_visual_features // self.max_num_images
+            num_multimodal_features = num_multimodal_features // self.max_num_images
 
-        self.ptable_shape = (-1, num_visual_features, hidden_size)
+        self.ptable_shape = (-1, num_multimodal_features, hidden_size)
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -303,6 +306,18 @@ class TritonPythonModel:
                             queries=query.astype(str).tolist(),
                             video_bytes=video_bytes,
                         )
+                elif self.model_type == 'qwen2_vl':
+                    processed_tensors = self.vision_preprocessor.qwen2_vl_process_image(
+                        queries=query.astype(str).tolist(),
+                        img_urls=img_urls,
+                        image_bytes=image_bytes,
+                    )
+                    qwen2vl_input_id_tensor = processed_tensors.get(
+                        "INPUT_IDS")
+                    processed_tensors.pop("INPUT_IDS")
+                    qwen2vl_input_length_tensor = processed_tensors.get(
+                        "REQUEST_INPUT_LEN")
+                    processed_tensors.pop("REQUEST_INPUT_LEN")
                 else:
                     raise ValueError(
                         "Unsupported model type for IMAGE_BYTES or IMAGE_URL inputs"
@@ -312,10 +327,10 @@ class TritonPythonModel:
                     for k, v in processed_tensors.items()
                 ]
             else:
-                assert self.model_type != "mllama" and self.model_type != "llava_onevision", "Image processing requires IMAGE_BYTES or IMAGE_URL to be provided"
+                assert self.model_type != "llava_onevision", "Image processing requires IMAGE_BYTES or IMAGE_URL to be provided"
 
             # Preprocessing input data.
-            # For the LLaVA_OneVision model, num_visual_features is not a fixed value
+            # For the LLaVA_OneVision model, num_multimodal_features is not a fixed value
             input_id, request_input_len = self._create_request(
                 query, visual_tokens)
             if decoder_query is not None:
@@ -333,7 +348,7 @@ class TritonPythonModel:
                 embedding_bias_words, embedding_bias_weights,
                 self.embedding_bias_weights_dtype, batch_size)
 
-            if prompt_table_extra_id is not None:
+            if prompt_table_extra_id is not None and self.model_type != 'qwen2_vl':
                 prompt_table_extra_ids = np.zeros_like(input_id)
                 for i in range(batch_size):
                     prompt_table_extra_ids[i] = np.where(
@@ -342,11 +357,18 @@ class TritonPythonModel:
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
-            input_id_tensor = pb_utils.Tensor(
-                'INPUT_ID', input_id.astype(self.input_id_dtype))
-            request_input_len_tensor = pb_utils.Tensor(
-                'REQUEST_INPUT_LEN',
-                request_input_len.astype(self.request_input_len_dtype))
+            # Qwen2-VL model has special logic to process input ids
+            if self.model_type == 'qwen2_vl':
+                input_id_tensor = pb_utils.Tensor.from_dlpack(
+                    'INPUT_ID', qwen2vl_input_id_tensor)
+                request_input_len_tensor = pb_utils.Tensor.from_dlpack(
+                    'REQUEST_INPUT_LEN', qwen2vl_input_length_tensor)
+            else:
+                input_id_tensor = pb_utils.Tensor(
+                    'INPUT_ID', input_id.astype(self.input_id_dtype))
+                request_input_len_tensor = pb_utils.Tensor(
+                    'REQUEST_INPUT_LEN',
+                    request_input_len.astype(self.request_input_len_dtype))
             decoder_input_id_tensor = pb_utils.Tensor(
                 'DECODER_INPUT_ID',
                 decoder_input_id.astype(self.decoder_input_id_dtype))
@@ -365,7 +387,6 @@ class TritonPythonModel:
                                             np.array(end_id, dtype=np.int32))
             pad_id_tensor = pb_utils.Tensor('OUT_PAD_ID',
                                             np.array(pad_id, dtype=np.int32))
-
             if prompt_table_extra_id is not None:
                 prompt_table_extra_ids_tensor = pb_utils.Tensor(
                     'OUT_PROMPT_TABLE_EXTRA_IDS',
@@ -389,7 +410,6 @@ class TritonPythonModel:
                         end_id_tensor, pad_id_tensor
                     ] + vision_processed_tensors)
             responses.append(inference_response)
-
         # You should return a list of pb_utils.InferenceResponse. Length
         # of this list must match the length of `requests` list.
         return responses
@@ -442,7 +462,7 @@ class TritonPythonModel:
             np.ndarray: An array of input IDs with image placeholders replaced by fake prompt IDs.
         """
 
-        num_visual_features = self.ptable_shape[1]
+        num_multimodal_features = self.ptable_shape[1]
         input_ids_list = []
 
         for batch_idx in range(batch_size):
@@ -453,8 +473,8 @@ class TritonPythonModel:
             for split_idx in range(len(splits) - 1):
                 fake_prompt_id = np.arange(
                     sample_fake_prompt_counter,
-                    sample_fake_prompt_counter + num_visual_features)
-                sample_fake_prompt_counter += num_visual_features
+                    sample_fake_prompt_counter + num_multimodal_features)
+                sample_fake_prompt_counter += num_multimodal_features
                 fake_prompt_id = np.expand_dims(fake_prompt_id, axis=0)
                 sample_input_ids.append(fake_prompt_id)
                 sample_input_ids.append(splits[split_idx + 1])
@@ -528,6 +548,9 @@ class TritonPythonModel:
                          ).astype(int) for s in query
             ]
         else:
+            # Qwen2-VL input id is calculated when processing image
+            if 'qwen2_vl' == self.model_type:
+                return None, None
             if self.is_multimodal and self.max_num_images and self.max_num_images > 1:
                 start_ids = self._process_multi_image_inputs(query)
 
@@ -553,7 +576,6 @@ class TritonPythonModel:
             elif 'llava_onevision' == self.model_type:
                 pre_prompt = "<|im_start|>user "
                 post_prompt = "<|im_end|><|im_start|>assistant\n"
-
             pre_prompt_id = np.array(
                 self.tokenizer.encode(
                     pre_prompt,
@@ -797,12 +819,11 @@ class VisionPreProcessor:
                     images=images[batch_id],
                     text=queries[batch_id],
                     return_tensors="pt")
-
                 # Reshape pixel_values to [num_images, *HWC/CHW]
                 val = processed_vision_data["pixel_values"]
-
                 val = val.reshape(1, -1, *(val.shape[-3:]))
                 processed_vision_data["pixel_values"] = val
+
                 # Create vision output tensors
                 for key in possible_output_names:
                     val = processed_vision_data.get(key.lower())
@@ -850,7 +871,6 @@ class VisionPreProcessor:
             processed_vision_data = self.vision_model_processor(
                 images=images[batch_id], text='<image>', return_tensors="pt")
             visual_tokens.append(processed_vision_data['input_ids'].shape[1])
-
             # Create vision output tensors
             for key in possible_output_names:
                 val = processed_vision_data.get(key.lower())
@@ -906,3 +926,86 @@ class VisionPreProcessor:
                     val, self.output_str_dtypes[key])
             vision_processed_tensors[key] = val
         return vision_processed_tensors, visual_tokens
+
+    def qwen2_vl_process_image(self, queries, img_urls=None, image_bytes=None):
+        import torch
+        vision_processed_tensors = {}
+        # Retrieved from https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct/blob/main/config.json
+        vision_token_id = 151654
+        image_token_id = 151655
+        video_token_id = 151656
+        vocab_size = 152064
+
+        if img_urls is not None:
+            # download and read images
+            images = [
+                self.load_images_from_urls(urls)
+                for urls in img_urls.as_numpy()
+            ]
+        else:
+            images = [
+                img for img_list in self.load_images_tensor(image_bytes)
+                for img in img_list
+            ]
+        batch_size = len(images)
+        preprocessor_outputs = defaultdict(list)
+        possible_output_names = [
+            'PIXEL_VALUES', 'IMAGE_GRID_THW', 'ATTENTION_MASK', 'INPUT_IDS'
+        ]
+        for batch_id in range(batch_size):
+            messages = [{
+                "role":
+                "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": images[batch_id],
+                    },
+                    {
+                        "type":
+                        "text",
+                        "text":
+                        queries[batch_id][0] if isinstance(
+                            queries[batch_id], list) else queries[batch_id],
+                    },
+                ],
+            }]
+            text_inputs = self.vision_model_processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True)
+            # Preprocess images and query
+            processed_vision_data = self.vision_model_processor(
+                images=images[batch_id],
+                text=text_inputs,
+                padding=True,
+                return_tensors="pt")
+
+            # Create vision output tensors
+            for key in possible_output_names:
+                val = processed_vision_data.get(key.lower())
+                if val is not None:
+                    # Add two dummy dim to reshape pixel value tensor to 5 dim
+                    if key == 'PIXEL_VALUES':
+                        val = val.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+                    elif key == 'INPUT_IDS':
+                        val = val.to(torch.int32)
+                        pre_process_val = val.clone()
+                        mask = (val == image_token_id) | (
+                            val == vision_token_id) | (val == video_token_id)
+                        cumulative_counts = mask.cumsum(dim=1,
+                                                        dtype=torch.int32)
+                        values = (vocab_size - 1) + cumulative_counts
+                        val[mask] = values[mask]
+                        preprocessor_outputs["VISION_INPUT_ID"].append(
+                            pre_process_val)
+                        preprocessor_outputs["REQUEST_INPUT_LEN"].append(
+                            torch.tensor([val.shape[1]],
+                                         dtype=torch.int32).unsqueeze(0))
+                    preprocessor_outputs[key].append(val)
+
+        for key, tensor_list in preprocessor_outputs.items():
+            val = self.convert_tensor_list_to_tensor(tensor_list)
+            if key in self.output_str_dtypes:
+                val = self.convert_tensor_to_str_dtype(
+                    val, self.output_str_dtypes[key])
+            vision_processed_tensors[key] = val
+        return vision_processed_tensors

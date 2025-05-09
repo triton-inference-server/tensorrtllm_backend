@@ -27,6 +27,13 @@
 name: "preprocessing"
 backend: "python"
 max_batch_size: ${triton_max_batch_size}
+
+dynamic_batching {
+    preferred_batch_size: [ ${triton_max_batch_size} ]
+    max_queue_delay_microseconds: ${max_queue_delay_microseconds}
+    default_queue_policy: { max_queue_size: ${max_queue_size} }
+}
+
 input [
     {
         name: "QUERY"
@@ -192,6 +199,22 @@ output [
         name: "IS_VIDEO_INPUT"
         data_type: TYPE_BOOL
         dims: [ 1 ]
+    },
+    # Required for Qwen2-VL vision encoder
+    {
+        name: "ATTENTION_MASK"
+        data_type: TYPE_INT64
+        dims: [ -1 ]
+    },
+    {
+        name: "IMAGE_GRID_THW"
+        data_type: TYPE_INT64
+        dims: [ 3 ]
+    },
+    {
+        name: "VISION_INPUT_ID"
+        data_type: TYPE_INT32
+        dims: [ -1 ]
     }
 ]
 
@@ -210,9 +233,9 @@ parameters {
 }
 
 parameters {
-  key: "visual_model_path"
+  key: "multimodal_model_path"
   value: {
-    string_value: "${visual_model_path}"
+    string_value: "${multimodal_model_path}"
   }
 }
 

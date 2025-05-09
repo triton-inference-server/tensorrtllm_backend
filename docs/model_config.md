@@ -42,14 +42,30 @@ to learn more about ensemble models.
 | `triton_max_batch_size` | The maximum batch size that Triton should use with the model. |
 | `tokenizer_dir` | The path to the tokenizer for the model. |
 | `preprocessing_instance_count` | The number of instances of the model to run. |
+| `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
+| `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
 
 *Optional parameters*
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `add_special_tokens` | The `add_special_tokens` flag used by [HF tokenizers](https://huggingface.co/transformers/v2.11.0/main_classes/tokenizer.html#transformers.PreTrainedTokenizer.add_special_tokens). |
-| `visual_model_path` | The vision engine path used in multimodal workflow. |
+| `multimodal_model_path` | The vision engine path used in multimodal workflow. |
 | `engine_dir` | The path to the engine for the model. This parameter is only needed for *multimodal processing* to extract the `vocab_size` from the engine_dir's config.json for `fake_prompt_id` mappings. |
+
+
+### multimodal_encoders model
+
+*Mandatory parameters*
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `triton_max_batch_size` | The maximum batch size that Triton should use with the model. |
+| `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
+| `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
+| `multimodal_model_path` | The vision engine path used in multimodal workflow. |
+| `hf_model_path` | The Huggingface model path used for `llava_onevision` and `mllama` models. |
+
 
 ### postprocessing model
 
@@ -107,6 +123,7 @@ description of the parameters below.
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
 | `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. Use semicolons to separate multiple instances of the model. If not provided, the model will use all visible GPUs. (default=unspecified) |
 | `participant_ids` | Comma-separated list of MPI ranks to use for this model. Mandatory when using orchestrator mode with -disable-spawn-process (default=unspecified) |
+| `num_nodes` | Number of MPI nodes to use for this model. (default=1) |
 | `gpu_weights_percent` | Set to a number between 0.0 and 1.0 to specify the percentage of weights that reside on GPU instead of CPU and streaming load during runtime. Values less than 1.0 are only supported for an engine built with `weight_streaming` on. (default=1.0) |
 
 - KV cache
@@ -133,6 +150,7 @@ additional benefits.
 | `lora_cache_max_adapter_size` | Used to set the minimum size of a cache page.  Pages must be at least large enough to fit a single module, single later adapter_size `maxAdapterSize` row of weights. (default=64) |
 | `lora_cache_gpu_memory_fraction` | Fraction of GPU memory used for LoRA cache. Computed as a fraction of left over memory after engine load, and after KV cache is loaded. (default=0.05) |
 | `lora_cache_host_memory_bytes` | Size of host LoRA cache in bytes. (default=1G) |
+| `lora_prefetch_dir` | Folder to store the LoRA weights we hope to load during engine initialization. |
 
 - Decoding mode
 
@@ -168,6 +186,14 @@ additional benefits.
 | Name | Description |
 | :----------------------: | :-----------------------------: |
 | `eagle_choices` | To specify default per-server Eagle choices tree in the format of e.g. "{0, 0, 0}, {0, 1}". By default, `mc_sim_7b_63` choices are used. |
+
+- Guided decoding
+
+| Name | Description |
+| :----------------------: | :-----------------------------: |
+| `guided_decoding_backend` | Set to `xgrammar` to activate guided decoder. |
+| `tokenizer_dir` | The guided decoding of tensorrt_llm python backend requires tokenizer's information. |
+| `xgrammar_tokenizer_info_path` | The guided decoding of tensorrt_llm C++ backend requires xgrammar's tokenizer's info in 'json' format. |
 
 ### tensorrt_llm_bls model
 
@@ -225,7 +251,9 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `beam_width` | [1] | `int32_t` | Beam width for this request; set to 1 for greedy sampling (Default=1) |
 | `prompt_embedding_table` | [1] | `float16` (model data type) | P-tuning prompt embedding table |
 | `prompt_vocab_size` | [1] | `int32` | P-tuning prompt vocab size |
-| `return_kv_cache_reuse_stats` | [1] | `bool` | When `true`, include kv cache reuse stats in the output |
+| `return_perf_metrics` | [1] | `bool` | When `true`, include perf metrics in the output, such as kv cache reuse stats |
+| `guided_decoding_guide_type` | [1] | `string` | Guided decoding param: `guide_type` |
+| `guided_decoding_guide` | [1] | `string` | Guided decoding param: `guide` |
 
 The following inputs for lora are for both `tensorrt_llm` and `tensorrt_llm_bls`
 models. The inputs are passed through the `tensorrt_llm` model and the
@@ -239,6 +267,8 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 
 #### Common Outputs
 
+Note: the timing metrics oputputs are represented as the number of nanoseconds since epoch.
+
 | Name | Shape | Type | Description |
 | :------------: | :---------------: | :-----------: | :--------: |
 | `cum_log_probs` | [-1] | `float` | Cumulative probabilities for each output |
@@ -246,9 +276,16 @@ models. The inputs are passed through the `tensorrt_llm` model and the
 | `context_logits` | [-1, vocab_size] | `float` | Context logits for input |
 | `generation_logits` | [beam_width, seq_len, vocab_size] | `float` | Generation logits for each output |
 | `batch_index` | [1] | `int32` | Batch index |
-| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
-| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_reused_blocks` in the outputs. |
-| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_kv_cache_reuse_stats` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
+| `kv_cache_alloc_new_blocks` | [1] | `int32` | KV cache reuse metrics. Number of newly allocated blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_alloc_new_blocks` in the outputs. |
+| `kv_cache_reused_blocks` | [1] | `int32` | KV cache reuse metrics. Number of reused blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_reused_blocks` in the outputs. |
+| `kv_cache_alloc_total_blocks` | [1] | `int32` | KV cache reuse metrics. Number of total allocated blocks per request. Set the optional input `return_perf_metrics` to `true` to include `kv_cache_alloc_total_blocks` in the outputs. |
+| `arrival_time_ns` | [1] | `float` | Time when the request was received by TRT-LLM. Set the optional input `return_perf_metrics` to `true` to include `arrival_time_ns` in the outputs. |
+| `first_scheduled_time_ns` | [1] | `float` | Time when the request was first scheduled. Set the optional input `return_perf_metrics` to `true` to include `first_scheduled_time_ns` in the outputs. |
+| `first_token_time_ns` | [1] | `float` | Time when the first token was generated. Set the optional input `return_perf_metrics` to `true` to include `first_token_time_ns` in the outputs. |
+| `last_token_time_ns` | [1] | `float` | Time when the last token was generated. Set the optional input `return_perf_metrics` to `true` to include `last_token_time_ns` in the outputs. |
+| `acceptance_rate` | [1] | `float` | Acceptance rate of the speculative decoding model. Set the optional input `return_perf_metrics` to `true` to include `acceptance_rate` in the outputs. |
+| `total_accepted_draft_tokens` | [1] | `int32` | Number of tokens accepted by the target model in speculative decoding. Set the optional input `return_perf_metrics` to `true` to include `total_accepted_draft_tokens` in the outputs. |
+| `total_draft_tokens` | [1] | `int32` | Maximum number of draft tokens acceptable by the target model in speculative decoding. Set the optional input `return_perf_metrics` to `true` to include `total_draft_tokens` in the outputs. |
 
 #### Unique Inputs for tensorrt_llm model
 

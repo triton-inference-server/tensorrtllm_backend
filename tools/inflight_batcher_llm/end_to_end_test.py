@@ -8,8 +8,8 @@ import torch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import argparse
+import ast
 import json
-import sys
 from datetime import datetime
 from functools import partial
 
@@ -42,14 +42,124 @@ def verify_logits(expected_logits, input_logits, rtol=1e-02, atol=1e-02):
     return result
 
 
-def test_functionality(client,
-                       prompts,
-                       output_lens,
-                       vocabSizePadded=50257,
-                       return_log_probs=False,
-                       return_context_logits=False,
-                       return_generation_logits=False,
-                       test_bls=False):
+# Helper function to add parameter tensors
+def prepare_tensor(name, value, dtype, protocol, batch_size=1):
+    if value is not None:
+        shape = np.array([[value]],
+                         dtype=dtype) if batch_size > 1 else np.array(
+                             [value], dtype=dtype)
+        return utils.prepare_tensor(name, shape, protocol)
+    return None
+
+
+def async_stream_infer(client, model_name, inputs, outputs, protocol,
+                       user_data, request_id, use_llmapi):
+    assert use_llmapi, "Streaming is only supported for LLMAPI model"
+    assert protocol == "grpc", "Streaming is only supported for gRPC protocol"
+    client.start_stream(callback=partial(callback, user_data, datetime.now()))
+    client.async_stream_infer(model_name,
+                              inputs,
+                              outputs=outputs,
+                              request_id=str(request_id))
+    client.stop_stream()
+
+
+def test_functionality_llmapi(
+        client,
+        model_name,
+        prompts,
+        batch_size=1,  # TODO: [JIRA-4496] support batching in llmapi backend and add tests here.
+        streaming=False,
+        sampling_params=None,
+        output_config=None):
+    """Test basic model functionality with different prompts."""
+    print(f"[INFO] Start testing on {len(prompts)} prompts.")
+
+    results = []
+    user_data = utils.UserData() if streaming else None
+
+    for i, prompt in enumerate(prompts):
+        inputs = []
+        # Prepare text_input
+        input_data = np.array(
+            [prompt], dtype=object
+        )  ## TODO: [JIRA-4496] support batching in llmapi backend and add tests here.
+        inputs.append(
+            utils.prepare_tensor("text_input", input_data, FLAGS.protocol))
+
+        if streaming:
+            inputs.append(
+                utils.prepare_tensor("streaming", np.array([True], dtype=bool),
+                                     FLAGS.protocol))
+
+        # Convert sampling_params to tensors
+        if sampling_params is not None:
+            for param_name, param_value in sampling_params.items():
+                inputs.append(
+                    prepare_tensor("sampling_param_" + param_name, param_value,
+                                   type(param_value), FLAGS.protocol))
+
+        if output_config is not None:
+            for name, value in output_config.items():
+                inputs.append(prepare_tensor(name, value, bool,
+                                             FLAGS.protocol))
+
+        return_finish_reason = output_config[
+            "return_finish_reason"] if output_config and "return_finish_reason" in output_config else False
+        return_stop_reason = output_config[
+            "return_stop_reason"] if output_config and "return_stop_reason" in output_config else False
+
+        # Only include needed outputs
+        outputs = utils.prepare_outputs(
+            FLAGS.protocol,
+            return_finish_reason=return_finish_reason,
+            return_stop_reason=return_stop_reason)
+
+        try:
+            if streaming:
+                assert user_data is not None
+                # async_stream_infer(client, model_name, inputs, outputs, protocol, user_data, request_id, use_llmapi)
+                async_stream_infer(client, model_name, inputs, outputs,
+                                   FLAGS.protocol, user_data, i, True)
+            else:
+                result = client.infer(model_name, inputs, request_id=str(i))
+                results.append(result)
+        except Exception as e:
+            print(f"[Functionality test] Failed to infer with error: {e}")
+            exit(1)
+
+    if streaming:
+        results = utils.get_grpc_results(user_data, len(prompts))
+
+    for result in results:
+        text_output = result.as_numpy("text_output")[0].decode("utf-8")
+        assert text_output, "Text output should not be empty."
+        if FLAGS.verbose:
+            print(f"Text output: {text_output}", flush=True)
+
+        if return_finish_reason:
+            finish_reason = result.as_numpy("finish_reason")
+            assert finish_reason, "Finish reason should not be empty."
+            if FLAGS.verbose:
+                print(f"Finish reason: {finish_reason}")
+
+        if return_stop_reason:
+            stop_reason = result.as_numpy("stop_reason")
+            assert stop_reason, "Stop reason should not be empty."
+            if FLAGS.verbose:
+                print(f"Stop reason: {stop_reason}")
+
+    print("[INFO] Functionality test succeeded.")
+
+
+def test_functionality_ifb(client,
+                           prompts,
+                           output_lens,
+                           vocabSizePadded=50257,
+                           return_log_probs=False,
+                           return_context_logits=False,
+                           return_generation_logits=False,
+                           test_bls=False):
     print(f"[INFO] Start testing on {len(prompts)} prompts.")
     for i, prompt in enumerate(prompts):
 
@@ -315,14 +425,12 @@ def test_functionality(client,
     print(f"[INFO] Functionality test succeed.")
 
 
-def test_performance(client, prompts, output_lens):
-    model_name = "ensemble"
-
-    print(f"[INFO] Warm up for benchmarking.")
-    for i in range(min(10, len(prompts))):
-        input0 = [[prompts[0]]]
+def create_inputs(prompt, output_len, FLAGS, use_llmapi=False):
+    inputs = []
+    if not use_llmapi:
+        input0 = [[prompt]]
         input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
+        output0_len = np.ones_like(input0).astype(np.int32) * output_len
         bad_words_list = np.array([[""]], dtype=object)
         stop_words_list = np.array([[""]], dtype=object)
 
@@ -334,8 +442,39 @@ def test_performance(client, prompts, output_lens):
                                  FLAGS.protocol),
         ]
 
+    else:
+        input_data = np.array(
+            [prompt], dtype=object
+        )  ## TODO: [JIRA-4496] support batching in llmapi backend and add tests here.
+        inputs.append(
+            utils.prepare_tensor("text_input", input_data, FLAGS.protocol))
+        inputs.append(
+            utils.prepare_tensor("sampling_param_max_tokens",
+                                 np.array([output_len], dtype=np.int32),
+                                 FLAGS.protocol))
+
+    return inputs
+
+
+def test_performance(client, prompts, output_lens, FLAGS, use_llmapi=False):
+    print(f"[INFO] Warm up for benchmarking.")
+    if FLAGS.model_name is None:
+        FLAGS.model_name = "ensemble"
+    print(f"FLAGS.model_name: {FLAGS.model_name}")
+
+    for i in range(min(10, len(prompts))):
+        inputs = create_inputs(prompts[0], output_lens[0], FLAGS, use_llmapi)
         outputs = utils.prepare_outputs(FLAGS.protocol)
-        client.infer(model_name, inputs, outputs=outputs, request_id=str(i))
+        warmup_user_data = utils.UserData()
+
+        if FLAGS.streaming:
+            async_stream_infer(client, FLAGS.model_name, inputs, outputs,
+                               FLAGS.protocol, warmup_user_data, i, use_llmapi)
+        else:
+            client.infer(FLAGS.model_name,
+                         inputs,
+                         outputs=outputs,
+                         request_id=str(i))
 
     print(f"[INFO] Start benchmarking on {len(prompts)} prompts.")
     latency = 0
@@ -343,35 +482,28 @@ def test_performance(client, prompts, output_lens):
     start_time = datetime.now()
     user_data = utils.UserData()
     for i, prompt in enumerate(prompts):
-        input0 = [[prompt]]
-        input0_data = np.array(input0).astype(object)
-        output0_len = np.ones_like(input0).astype(np.int32) * output_lens[i]
-        bad_words_list = np.array([[""]], dtype=object)
-        stop_words_list = np.array([[""]], dtype=object)
-
-        inputs = [
-            utils.prepare_tensor("text_input", input0_data, FLAGS.protocol),
-            utils.prepare_tensor("max_tokens", output0_len, FLAGS.protocol),
-            utils.prepare_tensor("bad_words", bad_words_list, FLAGS.protocol),
-            utils.prepare_tensor("stop_words", stop_words_list,
-                                 FLAGS.protocol),
-        ]
-
+        inputs = create_inputs(prompt, output_lens[i], FLAGS, use_llmapi)
         outputs = utils.prepare_outputs(FLAGS.protocol)
-        if FLAGS.protocol == "http":
-            async_requests.append(
-                client.async_infer(model_name,
-                                   inputs,
-                                   outputs=outputs,
-                                   request_id=str(i)))
-        elif FLAGS.protocol == "grpc":
-            async_requests.append(
-                client.async_infer(model_name,
-                                   inputs,
-                                   outputs=outputs,
-                                   callback=partial(callback, user_data,
-                                                    datetime.now()),
-                                   request_id=str(i)))
+
+        if FLAGS.streaming:
+            async_stream_infer(client, FLAGS.model_name, inputs, outputs,
+                               FLAGS.protocol, user_data, i, use_llmapi)
+        else:
+            if FLAGS.protocol == "http":
+                async_requests.append(
+                    client.async_infer(FLAGS.model_name,
+                                       inputs,
+                                       outputs=outputs,
+                                       request_id=str(i)))
+            elif FLAGS.protocol == "grpc":
+                async_requests.append(
+                    client.async_infer(FLAGS.model_name,
+                                       inputs,
+                                       outputs=outputs,
+                                       callback=partial(
+                                           callback, user_data,
+                                           datetime.now()),
+                                       request_id=str(i)))
 
     if FLAGS.protocol == "http":
         utils.get_http_results(async_requests)
@@ -384,6 +516,11 @@ def test_performance(client, prompts, output_lens):
     latency = (stop_time - start_time).total_seconds() * 1000.0
     latency = round(latency, 3)
     print(f"[INFO] Total Latency: {latency} ms")
+    if FLAGS.protocol == "grpc":
+        request_latencies = 0.0
+        for latency in user_data._latencies:
+            request_latencies += latency
+        print(f"[INFO] Total request latencies: {request_latencies} ms")
 
 
 if __name__ == '__main__':
@@ -416,7 +553,7 @@ if __name__ == '__main__':
                         help='Specify concurrency')
     parser.add_argument('--max-input-len',
                         type=int,
-                        required=True,
+                        required=False,
                         help='Specify max input length')
 
     parser.add_argument('--dataset',
@@ -443,6 +580,24 @@ if __name__ == '__main__':
                         action="store_true",
                         default=False,
                         help="test BLS model")
+    parser.add_argument('--test-llmapi',
+                        action="store_true",
+                        default=False,
+                        help="test LLMAPI model")
+    parser.add_argument('--model-name',
+                        type=str,
+                        required=False,
+                        help="model name")
+    parser.add_argument('--streaming',
+                        action="store_true",
+                        default=False,
+                        help="streaming")
+    parser.add_argument('--output-config',
+                        type=ast.literal_eval,
+                        help='Output config dictionary')
+    parser.add_argument('--sampling-params',
+                        type=ast.literal_eval,
+                        help='Sampling parameter dictionary')
 
     FLAGS = parser.parse_args()
     if FLAGS.url is None:
@@ -473,7 +628,19 @@ if __name__ == '__main__':
             output_lens.append(int(len(output.split(' ')) * 1.3))
 
     vocabSizePadded = 50257  # gpt
-    test_functionality(client, prompts, output_lens, vocabSizePadded,
-                       FLAGS.return_log_probs, FLAGS.return_context_logits,
-                       FLAGS.return_generation_logits, FLAGS.test_bls)
-    test_performance(client, prompts, output_lens)
+    # Parse llmapi specific arguments
+    if FLAGS.test_llmapi:
+        assert FLAGS.model_name is not None, "model_name is required for llmapi tests"
+        test_functionality_llmapi(client,
+                                  FLAGS.model_name,
+                                  prompts,
+                                  streaming=FLAGS.streaming,
+                                  sampling_params=FLAGS.sampling_params,
+                                  output_config=FLAGS.output_config)
+        test_performance(client, prompts, output_lens, FLAGS, use_llmapi=True)
+    else:
+        test_functionality_ifb(client, prompts, output_lens, vocabSizePadded,
+                               FLAGS.return_log_probs,
+                               FLAGS.return_context_logits,
+                               FLAGS.return_generation_logits, FLAGS.test_bls)
+        test_performance(client, prompts, output_lens, FLAGS, use_llmapi=False)

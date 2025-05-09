@@ -51,6 +51,8 @@ trtllm-build --checkpoint_dir ./c-model/llama/fp16/1-gpu \
             --max_lora_rank 8
 ```
 
+Note that you still need to use `hf_lora_convert.py` to convert the lora weights and store in `/tmp/lora_prefetch`. But users don't need to send the `--lora-path` when you run the inference at the first time.
+
 ## Generate LoRA tensors
 
 Now generate LoRA tensors that will be passed in with each request to triton.
@@ -125,6 +127,40 @@ parameters: {
   key: "lora_cache_host_memory_bytes"
   value: {
     string_value: "${lora_cache_host_memory_bytes}"
+  }
+}
+```
+
+### prefetch lora cache during initializing the model instance
+
+If users want to load the lora models during initializing the model instance,
+instead of passing the lora weight as input, users can store the lora weights in `<lora_prefetch_dir>`
+and pass it as a parameter to initialize the model instance.
+Then, the model instance will try to load the lora weights from the folder.
+In the folder, users can put many folders for different lora tasks.
+For example, assume we want to store lora weights in `/tmp/lora_prefetch` and
+there are three lora tasks `0`, `1` and `3`, then the architecture of the folder would be like
+
+```bash
+/tmp/lora_prefetch
+├── 0
+│   ├── model.lora_config.npy
+│   └── model.lora_weights.npy
+├── 1
+│   ├── model.lora_config.npy
+│   └── model.lora_weights.npy
+└── 3
+    ├── model.lora_config.npy
+    └── model.lora_weights.npy
+```
+
+Note that you must name the folder by digit because the lora cache manager will view these name as lora task ids.
+
+```pbtxt
+parameters: {
+  key: "lora_prefetch_dir"
+  value: {
+    string_value: "${lora_prefetch_dir}"
   }
 }
 ```

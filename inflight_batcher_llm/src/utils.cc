@@ -26,6 +26,8 @@
 
 #include "utils.h"
 #include "tensorrt_llm/executor/serialization.h"
+#include "tensorrt_llm/runtime/bufferManager.h"
+#include <cassert>
 
 using namespace tensorrt_llm::batch_manager;
 
@@ -247,6 +249,17 @@ std::vector<InputTensors> readInputsTensors(TRITONBACKEND_Request* request)
         for (uint32_t i = 0; i < dims_count; ++i)
         {
             shapev.push_back(shape[i]);
+            // NOTE
+            // To handle the encoded string, we create placeholder shapes for string input.
+            // The encoded string is passed with a shape of [1] and a data type of int8, as determined by
+            // utils::to_trt_datatype. This makes that the tensor size in bytes is 1, even if the actual string size in
+            // bytes is larger. In orer to address this, we intentionally set the last dimension of the tensor's shape
+            // to match the byte size obtained from TRITONBACKEND_InputProperties. This allows us to accurately recover
+            // the actual byte size of the tensor.
+            if (data_type == TRITONSERVER_TYPE_BYTES && i == dims_count - 1)
+            {
+                shapev[dims_count - 1] = byte_size / shapev[0];
+            }
         }
 
         NamedTensor t(utils::to_trt_datatype(data_type), shapev, input_name);
@@ -607,10 +620,8 @@ executor::OutputConfig getOutputConfigFromTensors(InputTensors const& inputsTens
     bool returnContextLogits{false};
     extractSingleton<bool>(inputsTensors, InputFieldsNames::returnContextLogits, returnContextLogits);
 
-    // When returnKvCacheReuseStats is set to true, set returnPerfMetrics to true to return KV cache reuse stats from
-    // perf metrics.
     bool returnPerfMetrics{false};
-    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnKvCacheReuseStats, returnPerfMetrics);
+    extractSingleton<bool>(inputsTensors, InputFieldsNames::returnPerfMetrics, returnPerfMetrics);
 
     return executor::OutputConfig(returnLogProbs, returnContextLogits, returnGenerationLogits,
         false /* excludeInputFromOutput */, false /* returnEncoderOutput */, returnPerfMetrics);
@@ -668,6 +679,25 @@ std::optional<executor::PromptTuningConfig> getPromptTuningConfigFromTensors(
             pTuningConfig = executor::PromptTuningConfig(executorTensor);
     }
     return pTuningConfig;
+}
+
+std::optional<executor::MropeConfig> getMropeConfigFromTensors(InputTensors const& inputsTensors)
+{
+    std::optional<executor::MropeConfig> mropeConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::mropeRotaryCosSin)
+        && inputsTensors.count(InputFieldsNames::mropePositionDeltas))
+    {
+        std::shared_ptr<runtime::ITensor> originalMropeRotaryCosSinTensor
+            = inputsTensors.at(InputFieldsNames::mropeRotaryCosSin).tensor;
+        utils::squeezeTensor(originalMropeRotaryCosSinTensor, 1);
+        auto const& mropeRotaryCosSinTensor = executor::detail::ofITensor(originalMropeRotaryCosSinTensor);
+
+        executor::SizeType32 mropePositionDeltas;
+        utils::extractSingleton<executor::SizeType32>(
+            inputsTensors, InputFieldsNames::mropePositionDeltas, mropePositionDeltas);
+        mropeConfig = executor::MropeConfig(mropeRotaryCosSinTensor, mropePositionDeltas);
+    }
+    return mropeConfig;
 }
 
 std::optional<executor::LoraConfig> getLoraConfigFromTensors(InputTensors const& inputsTensors)
@@ -783,9 +813,89 @@ std::optional<executor::KvCacheRetentionConfig> getKvCacheRetentionConfigFromTen
     return std::nullopt;
 }
 
+std::optional<executor::GuidedDecodingParams> getGuidedDecodingParamsFromTensors(InputTensors const& inputsTensors)
+{
+    std::unordered_map<std::string, executor::GuidedDecodingParams::GuideType> guideTypeMapping
+        = {{"json", executor::GuidedDecodingParams::GuideType::kJSON},
+            {"json_schema", executor::GuidedDecodingParams::GuideType::kJSON_SCHEMA},
+            {"regex", executor::GuidedDecodingParams::GuideType::kREGEX},
+            {"ebnf_grammar", executor::GuidedDecodingParams::GuideType::kEBNF_GRAMMAR}};
+
+    std::optional<executor::GuidedDecodingParams::GuideType> guideTypeOpt = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::guidedDecodingGuideType))
+    {
+        auto guideTypeTensor = inputsTensors.at(InputFieldsNames::guidedDecodingGuideType).tensor;
+        utils::squeezeTensor(guideTypeTensor, 2);
+        char* encodedGuideType = static_cast<char*>(guideTypeTensor->data());
+        std::string guideType(encodedGuideType, guideTypeTensor->getSizeInBytes());
+        // NOTE
+        // The first 4 bytes is null character and need to be removed for mapping.
+        // Same happens for guideOpt below.
+        guideType.erase(0, 4);
+        if (guideTypeMapping.count(guideType))
+        {
+            guideTypeOpt = guideTypeMapping[guideType];
+        }
+    }
+
+    std::optional<std::string> guideOpt = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::guidedDecodingGuide))
+    {
+        auto guideTensor = inputsTensors.at(InputFieldsNames::guidedDecodingGuide).tensor;
+
+        char* encodedGuide = static_cast<char*>(guideTensor->data());
+        guideOpt = std::string(encodedGuide, guideTensor->getSizeInBytes());
+        if (guideOpt.has_value())
+        {
+            guideOpt->erase(0, 4);
+        }
+    }
+
+    std::optional<executor::GuidedDecodingParams> guidedDecodingParams = std::nullopt;
+    if (guideTypeOpt.has_value())
+    {
+        guidedDecodingParams = executor::GuidedDecodingParams(guideTypeOpt.value(), guideOpt);
+    }
+
+    return guidedDecodingParams;
+}
+
+std::optional<executor::LookaheadDecodingConfig> getLookaheadDecodingFromTensors(
+    InputTensors const& inputsTensors, std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig)
+{
+    std::optional<executor::LookaheadDecodingConfig> requestLookaheadConfig = std::nullopt;
+    if (inputsTensors.count(InputFieldsNames::requestLookaheadDecodingWindowSize))
+    {
+        executor::SizeType32 windowSize = 0, ngramSize = 0, verificationSetSize = 0;
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingWindowSize, windowSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_window_size");
+        }
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingNgramSize, ngramSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_ngram_size");
+        }
+        if (!utils::extractSingleton<int32_t>(
+                inputsTensors, InputFieldsNames::requestLookaheadDecodingVerificationSetSize, verificationSetSize))
+        {
+            throw std::runtime_error("Failed to extract lookahead_verification_set_size");
+        }
+
+        requestLookaheadConfig = executor::LookaheadDecodingConfig{windowSize, ngramSize, verificationSetSize};
+
+        TLLM_CHECK_WITH_INFO(executorLookaheadConfig.has_value(),
+            "Cannot set the request lookahead decoding configuration when model instance lookahead parameters are not "
+            "set.");
+    }
+    return requestLookaheadConfig;
+}
+
 std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputTensors> const& inputsTensors,
     bool paramExcludeInputFromOutput, bool isDecoupled, bool streaming, executor::ModelType modelType,
-    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits)
+    executor::RequestType requestType, bool isOrchestrator, bool specDecFastLogits,
+    std::optional<executor::LookaheadDecodingConfig> const& executorLookaheadConfig)
 {
     if (!isDecoupled && inputsTensors.size() > 1)
     {
@@ -907,6 +1017,8 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
 
         auto pTuningConfig = utils::getPromptTuningConfigFromTensors(inputTensors, inputTokens.size());
 
+        auto mropeConfig = utils::getMropeConfigFromTensors(inputTensors);
+
         auto loraConfig = utils::getLoraConfigFromTensors(inputTensors);
 
         auto kvCacheRetentionConfig = utils::getKvCacheRetentionConfigFromTensors(inputTensors);
@@ -914,9 +1026,13 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
         auto externalDraftTokensConfig
             = utils::getExternalDraftTokensConfigFromTensors(inputTensors, specDecFastLogits);
 
+        auto requestLookaheadConfig = getLookaheadDecodingFromTensors(inputTensors, executorLookaheadConfig);
+
         auto request = executor::Request(inputTokens, maxNewTokens, streaming, samplingConfig, outConfig, endId, padId,
-            std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig, pTuningConfig, std::nullopt,
-            loraConfig, std::nullopt, kvCacheRetentionConfig, std::nullopt, encoderInputTokens);
+            /*positionIds*/ std::nullopt, badWords, stopWords, embeddingBias, externalDraftTokensConfig,
+            /*PromptTuningConfig*/ pTuningConfig, /*MropeConfig*/ mropeConfig, loraConfig, requestLookaheadConfig,
+            kvCacheRetentionConfig, /*logitsPostProcessorName*/ std::nullopt, /*logitsPostProcessor*/ std::nullopt,
+            encoderInputTokens);
 
         if (encoderInputFeatures.has_value())
         {
@@ -958,6 +1074,11 @@ std::vector<executor::Request> createRequestsFromInputTensors(std::vector<InputT
             request.setSkipCrossAttnBlocks(executor::detail::ofITensor(originalTensor));
         }
 
+        auto guidedDecodingParams = utils::getGuidedDecodingParamsFromTensors(inputTensors);
+        if (guidedDecodingParams.has_value())
+        {
+            request.setGuidedDecodingParams(guidedDecodingParams.value());
+        }
         requests.emplace_back(std::move(request));
     }
     return requests;

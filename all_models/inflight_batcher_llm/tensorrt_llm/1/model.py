@@ -9,12 +9,14 @@ from threading import Lock, Thread
 from typing import Any, List
 
 import numpy as np
+import pandas as pd
 import torch
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
 from torch.utils.dlpack import from_dlpack
 
 import tensorrt_llm.bindings.executor as trtllm
+from tensorrt_llm.llmapi.tokenizer import _xgrammar_tokenizer_info
 
 METRIC_TOTAL_OUTPUT_TOKENS = "total_output_tokens"
 METRIC_TOTAL_INPUT_TOKENS = "total_input_tokens"
@@ -74,12 +76,13 @@ def mpi_rank():
 def get_input_tensor_by_name(request,
                              name,
                              expected_batch_size=None,
-                             batch_index=None):
+                             batch_index=None,
+                             force_on_torch=False):
     tensor = pb_utils.get_input_tensor_by_name(request, name)
     if tensor is None:
         return None
 
-    if tensor.is_cpu():
+    if tensor.is_cpu() and not force_on_torch:
         tensor = tensor.as_numpy()
     else:
         tensor = from_dlpack(tensor.to_dlpack())
@@ -237,7 +240,12 @@ def get_output_config_from_request(request, batch_size=1, batch_index=0):
     kwargs["return_generation_logits"] = get_input_scalar_by_name(
         request, 'return_generation_logits', batch_size, batch_index)
     kwargs["return_perf_metrics"] = get_input_scalar_by_name(
-        request, 'return_kv_cache_reuse_stats', batch_size, batch_index)
+        request, 'return_perf_metrics', batch_size, batch_index)
+    if get_input_scalar_by_name(request, 'return_kv_cache_reuse_stats',
+                                batch_size, batch_index):
+        pb_utils.Logger.log_warn(
+            "return_kv_cache_reuse_stats is deprecated, please use return_perf_metrics instead."
+        )
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return trtllm.OutputConfig(**kwargs)
 
@@ -305,6 +313,36 @@ def get_lora_config_from_request(request, batch_size=1, batch_index=0):
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if len(kwargs) > 0:
         return trtllm.LoraConfig(**kwargs)
+    return None
+
+
+def get_guided_decoding_params_from_request(request,
+                                            batch_size=1,
+                                            batch_index=0):
+    kwargs = {}
+    guided_decoding_guide_type = get_input_tensor_by_name(
+        request, 'guided_decoding_guide_type', batch_size, batch_index)
+    if guided_decoding_guide_type is not None:
+        guided_decoding_guide_type = guided_decoding_guide_type.squeeze(
+            axis=0)[0].decode()
+        guided_decoding_guide_type_mapping = {
+            "json": trtllm.GuidedDecodingParams.GuideType.JSON,
+            "json_schema": trtllm.GuidedDecodingParams.GuideType.JSON_SCHEMA,
+            "regex": trtllm.GuidedDecodingParams.GuideType.REGEX,
+            "ebnf_grammar": trtllm.GuidedDecodingParams.GuideType.EBNF_GRAMMAR
+        }
+        guided_decoding_guide_type = guided_decoding_guide_type_mapping.get(
+            guided_decoding_guide_type)
+    kwargs['guide_type'] = guided_decoding_guide_type
+
+    guided_decoding_guide = get_input_tensor_by_name(request,
+                                                     'guided_decoding_guide',
+                                                     batch_size, batch_index)
+    if guided_decoding_guide is not None:
+        kwargs['guide'] = guided_decoding_guide.squeeze(axis=0)[0].decode()
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    if len(kwargs) > 0:
+        return trtllm.GuidedDecodingParams(**kwargs)
     return None
 
 
@@ -395,6 +433,60 @@ def get_kv_cache_retention_config_from_request(request,
     return None
 
 
+def get_lookahead_decoding_config_from_request(request,
+                                               executor_lookahead_config,
+                                               batch_size=1,
+                                               batch_index=0):
+    lookahead_window_size = get_input_tensor_by_name(request,
+                                                     "lookahead_window_size",
+                                                     batch_size, batch_index)
+
+    lookahead_ngram_size = get_input_tensor_by_name(request,
+                                                    "lookahead_ngram_size",
+                                                    batch_size, batch_index)
+
+    lookahead_verification_set_size = get_input_tensor_by_name(
+        request, "lookahead_verification_set_size", batch_size, batch_index)
+
+    # None lookahead config for requests.
+    if all(x is None for x in [
+            lookahead_window_size, lookahead_ngram_size,
+            lookahead_verification_set_size
+    ]):
+        return None
+
+    # Have request lookahead config but no executor config.
+    if executor_lookahead_config is None:
+        raise RuntimeError(
+            "The request lookahead decoding input tensors (window_size, ngram_size and verification_set_size) can only be set if the model instance lookahead parameters are also specified"
+        )
+
+    return trtllm.LookaheadDecodingConfig(lookahead_window_size,
+                                          lookahead_ngram_size,
+                                          lookahead_verification_set_size)
+
+
+def get_mrope_config_from_request(request, batch_size=1, batch_index=0):
+    mrope_rotary_cos_sin = get_input_tensor_by_name(request,
+                                                    'mrope_rotary_cos_sin',
+                                                    batch_size, batch_index)
+    mrope_position_deltas = get_input_tensor_by_name(request,
+                                                     'mrope_position_deltas',
+                                                     batch_size,
+                                                     batch_index,
+                                                     force_on_torch=False)
+    assert (mrope_rotary_cos_sin is None) == (
+        mrope_position_deltas is None
+    ), "Both mrope_rotary_cos_sin and mrope_position_detals must be either None or not None."
+
+    if mrope_rotary_cos_sin is not None and mrope_position_deltas is not None:
+        mrope_config = trtllm.MropeConfig(
+            mrope_rotary_cos_sin=mrope_rotary_cos_sin[0],
+            mrope_position_deltas=mrope_position_deltas[0])
+        return mrope_config
+    return None
+
+
 def build_1_2_5_buckets(max_value: int) -> List[int]:
     """
     Builds a list of buckets with increasing powers of 10 multiplied by
@@ -418,7 +510,10 @@ def build_1_2_5_buckets(max_value: int) -> List[int]:
         exponent += 1
 
 
-def convert_request(request, exclude_input_from_output, decoupled):
+def convert_request(request,
+                    exclude_input_from_output,
+                    decoupled,
+                    executor_lookahead_config=None):
     inputs = {}
     input_token_ids = get_input_tensor_by_name(request, 'input_ids')
     if input_token_ids is None:
@@ -490,10 +585,14 @@ def convert_request(request, exclude_input_from_output, decoupled):
             request, batch_size, batch_index)
         prompt_tuning_config = get_prompt_tuning_config_from_request(
             request, batch_size, batch_index, input_length)
+        mrope_config = get_mrope_config_from_request(request, batch_size,
+                                                     batch_index)
         lora_config = get_lora_config_from_request(request, batch_size,
                                                    batch_index)
         kv_cache_retention_config = get_kv_cache_retention_config_from_request(
             request, batch_size, batch_index)
+        request_lookahead_config = get_lookahead_decoding_config_from_request(
+            request, executor_lookahead_config, batch_size, batch_index)
 
         # Inputs for mllama support
         encoder_input_features = get_input_tensor_by_name(
@@ -523,6 +622,21 @@ def convert_request(request, exclude_input_from_output, decoupled):
                     f"inputs to llm: cross_attention_mask ({ cross_attention_mask.shape})"
                 )
 
+            skip_cross_attn_blocks = get_input_tensor_by_name(
+                request,
+                'skip_cross_attn_blocks',
+                batch_size,
+                batch_index,
+                force_on_torch=True)
+            if skip_cross_attn_blocks is not None:
+                inputs['skip_cross_attn_blocks'] = skip_cross_attn_blocks[0]
+                logger.debug(
+                    f"inputs to llm: skip_cross_attn_blocks ({ skip_cross_attn_blocks.shape})"
+                )
+
+        guided_decoding_params = get_guided_decoding_params_from_request(
+            request, batch_size, batch_index)
+
         requests.append(
             trtllm.Request(
                 **inputs,
@@ -530,7 +644,10 @@ def convert_request(request, exclude_input_from_output, decoupled):
                 output_config=output_config,
                 external_draft_tokens_config=external_draft_tokens_config,
                 prompt_tuning_config=prompt_tuning_config,
+                mrope_config=mrope_config,
                 lora_config=lora_config,
+                guided_decoding_params=guided_decoding_params,
+                lookahead_config=request_lookahead_config,
                 kv_cache_retention_config=kv_cache_retention_config))
     return requests
 
@@ -625,6 +742,55 @@ def convert_response(response,
                 np.expand_dims(
                     np.array([kv_cache_metrics.num_total_allocated_blocks],
                              np.int32), 0)))
+
+        timing_metrics = result.request_perf_metrics.timing_metrics
+        output_tensors.append(
+            pb_utils.Tensor(
+                "arrival_time_ns",
+                np.expand_dims(
+                    np.array([pd.Timedelta(timing_metrics.arrival_time).value],
+                             np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "first_scheduled_time_ns",
+                np.expand_dims(
+                    np.array([
+                        pd.Timedelta(timing_metrics.first_scheduled_time).value
+                    ], np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "first_token_time_ns",
+                np.expand_dims(
+                    np.array(
+                        [pd.Timedelta(timing_metrics.first_token_time).value],
+                        np.int64), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "last_token_time_ns",
+                np.expand_dims(
+                    np.array(
+                        [pd.Timedelta(timing_metrics.last_token_time).value],
+                        np.int64), 0)))
+
+        spec_dec_metrics = result.request_perf_metrics.speculative_decoding
+        output_tensors.append(
+            pb_utils.Tensor(
+                "acceptance_rate",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.acceptance_rate], np.float32),
+                    0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "total_accepted_draft_tokens",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.total_accepted_draft_tokens],
+                             np.int32), 0)))
+        output_tensors.append(
+            pb_utils.Tensor(
+                "total_draft_tokens",
+                np.expand_dims(
+                    np.array([spec_dec_metrics.total_draft_tokens], np.int32),
+                    0)))
 
     return pb_utils.InferenceResponse(
         output_tensors), result.is_final, output_lengths
@@ -782,11 +948,48 @@ class TritonPythonModel:
                           float),
             "host_cache_size":
             get_parameter(model_config, "lora_cache_host_memory_bytes", int),
+            "lora_prefetch_dir":
+            get_parameter(model_config, "lora_prefetch_dir", int),
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.PeftCacheConfig(**kwargs)
 
+    def get_executor_lookahead_config(self, model_config):
+        lookahead_window_size = get_parameter(model_config,
+                                              "lookahead_window_size", int)
+        lookahead_ngram_size = get_parameter(model_config,
+                                             "lookahead_ngram_size", int)
+        lookahead_verification_set_size = get_parameter(
+            model_config, "lookahead_verification_set_size", int)
+        # executor_lookahead_config is not set
+        if all(item is None for item in [
+                lookahead_window_size, lookahead_ngram_size,
+                lookahead_verification_set_size
+        ]):
+            return None
+
+        incomplete_config = None in [
+            lookahead_window_size, lookahead_ngram_size,
+            lookahead_verification_set_size
+        ]
+
+        assert (
+            not incomplete_config
+        ), "Please set executor_lookahead_window_size, executor_lookahead_ngram_size and executor_lookahead_verification_set_size together."
+
+        return trtllm.LookaheadDecodingConfig(lookahead_window_size,
+                                              lookahead_ngram_size,
+                                              lookahead_verification_set_size)
+
     def get_decoding_config(self, model_config):
+
+        decoding_mode = convert_decoding_mode(
+            get_parameter(model_config, "decoding_mode"))
+        self.executor_lookahead_config = None
+        if decoding_mode == trtllm.DecodingMode.Lookahead():
+            # Add LAD config
+            self.executor_lookahead_config = self.get_executor_lookahead_config(
+                model_config)
         eagle_choices = parse_eagle_choices(
             get_parameter(model_config, "eagle_choices"))
         kwargs = {
@@ -796,9 +999,10 @@ class TritonPythonModel:
             "eagle_config":
             None
             if eagle_choices is None else trtllm.EagleConfig(eagle_choices),
+            "lookahead_decoding_config":
+            self.executor_lookahead_config,
             "decoding_mode":
-            convert_decoding_mode(get_parameter(model_config,
-                                                "decoding_mode")),
+            decoding_mode,
         }
         print(kwargs)
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -817,6 +1021,35 @@ class TritonPythonModel:
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExtendedRuntimePerfKnobConfig(**kwargs)
+
+    def get_guided_decoding_config(self, model_config):
+
+        guided_decoding_backend = get_parameter(model_config,
+                                                "guided_decoding_backend", str)
+
+        tokenizer_dir = get_parameter(model_config, "tokenizer_dir", str)
+        if guided_decoding_backend not in ['xgrammar']:
+            if tokenizer_dir:
+                pb_utils.Logger.log_warn(
+                    f"Guided decoding backend has not been set but tokenizer_dir is given. Tokenizer_dir will be ignored."
+                )
+            return None
+
+        if guided_decoding_backend == 'xgrammar':
+            guided_decoding_backend = trtllm.GuidedDecodingConfig.GuidedDecodingBackend.XGRAMMAR
+
+        if not tokenizer_dir:
+            raise ValueError(
+                "Guided decoding requires tokenizer's information. Please provide 'tokenizer_dir'."
+            )
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
+        pb_utils.Logger.log_info(
+            f"Guided decoding has been set with {guided_decoding_backend} backend"
+        )
+        return trtllm.GuidedDecodingConfig(
+            backend=guided_decoding_backend,
+            **_xgrammar_tokenizer_info(tokenizer))
 
     def get_executor_config(self, model_config):
         kwargs = {
@@ -848,7 +1081,9 @@ class TritonPythonModel:
                 {},
             ).get("max_queue_size"),
             "extended_runtime_perf_knob_config":
-            self.get_extended_runtime_perf_knob_config(model_config)
+            self.get_extended_runtime_perf_knob_config(model_config),
+            "guided_decoding_config":
+            self.get_guided_decoding_config(model_config)
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         return trtllm.ExecutorConfig(**kwargs)
@@ -1163,7 +1398,7 @@ class TritonPythonModel:
                 try:
                     converted_reqs = convert_request(
                         request, self.exclude_input_from_output,
-                        self.decoupled)
+                        self.decoupled, self.executor_lookahead_config)
                 except Exception as e:
                     response_sender.send(
                         pb_utils.InferenceResponse(error=pb_utils.TritonError(

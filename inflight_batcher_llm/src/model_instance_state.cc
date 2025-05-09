@@ -27,10 +27,12 @@
 #include "model_instance_state.h"
 #include "utils.h"
 
-#include "tensorrt_llm/common/mpiUtils.h"
 #include "tensorrt_llm/executor/serialization.h"
+#include "tensorrt_llm/runtime/utils/mpiUtils.h"
 
 #include <nlohmann/json.hpp>
+
+#include <fstream>
 
 namespace tle = tensorrt_llm::executor;
 using executor::SizeType32;
@@ -162,7 +164,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
             "use default value");
     }
 
-    bool enableKVCacheReuse = false;
+    bool enableKVCacheReuse = true;
     try
     {
         enableKVCacheReuse = model_state_->GetParameter<bool>("enable_kv_cache_reuse");
@@ -170,7 +172,7 @@ executor::KvCacheConfig ModelInstanceState::getKvCacheConfigFromParams()
     catch (std::exception const& e)
     {
         // If parameter is not specified, just ignore
-        TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to false");
+        TLLM_LOG_WARNING("enable_kv_cache_reuse is not specified, will be set to true");
     }
 
     std::optional<std::vector<SizeType32>> maxAttentionWindowVec = std::nullopt;
@@ -267,6 +269,18 @@ executor::ParallelConfig ModelInstanceState::getParallelConfigFromParams()
     {
         TLLM_THROW("Spawning of processes was disabled in orchestrator mode, but participant IDs is missing.");
     }
+
+    executor::SizeType32 numNodes = 1;
+    try
+    {
+        numNodes = model_state_->GetParameter<int32_t>("num_nodes");
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_INFO("num_nodes is not specified, will be set to 1");
+    }
+    parallelConfig.setNumNodes(numNodes);
+
     return parallelConfig;
 }
 
@@ -277,11 +291,13 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     // lora_cache_optimal_adapter_size
     // lora_cache_gpu_memory_fraction
     // lora_cache_host_memory_bytes
+    // lora_prefetch_dir
 
     SizeType32 maxAdapterSize = 64;
     SizeType32 optimalAdapterSize = 8;
     std::optional<size_t> hostCacheSize = std::nullopt;
     std::optional<float> deviceCachePercent = std::nullopt;
+    std::optional<std::string> loraPrefetchDir = std::nullopt;
 
     std::string fieldName = "lora_cache_max_adapter_size";
     try
@@ -320,10 +336,19 @@ executor::PeftCacheConfig ModelInstanceState::getPeftCacheConfigFromParams()
     {
         TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
     }
+    fieldName = "lora_prefetch_dir";
+    try
+    {
+        loraPrefetchDir = model_state_->GetParameter<std::string>(fieldName);
+    }
+    catch (std::exception const& e)
+    {
+        TLLM_LOG_WARNING(fieldName + " not set, defaulting to 1GB");
+    }
 
     return executor::PeftCacheConfig(0, 0, optimalAdapterSize, maxAdapterSize,
         ModelInstanceState::kPeftCacheNumPutWorkers, ModelInstanceState::kPeftCacheNumEnsureWorkers,
-        ModelInstanceState::kPeftCacheNumCopyStreams, 24, 8, deviceCachePercent, hostCacheSize);
+        ModelInstanceState::kPeftCacheNumCopyStreams, 24, 8, deviceCachePercent, hostCacheSize, loraPrefetchDir);
 }
 
 executor::SchedulerConfig ModelInstanceState::getSchedulerConfigFromParams(bool enableChunkedContext)
@@ -380,6 +405,51 @@ executor::SpeculativeDecodingConfig ModelInstanceState::getSpeculativeDecodingCo
     mSpeculativeDecodingFastLogits = fastLogits;
 
     return executor::SpeculativeDecodingConfig(fastLogits);
+}
+
+std::optional<executor::GuidedDecodingConfig> ModelInstanceState::getGuidedDecodingConfigFromParams()
+{
+    std::optional<executor::GuidedDecodingConfig> guidedDecodingConfig = std::nullopt;
+    std::string tokenizerDir = model_state_->GetParameter<std::string>("tokenizer_dir");
+    std::string tokenizerInfoPath = model_state_->GetParameter<std::string>("xgrammar_tokenizer_info_path");
+    std::string guidedDecodingBackendStr = model_state_->GetParameter<std::string>("guided_decoding_backend");
+
+    if (!tokenizerDir.empty() && tokenizerDir != "${tokenizer_dir}")
+    {
+        TLLM_LOG_INFO(
+            "Guided decoding C++ workflow does not use tokenizer_dir, this parameter will "
+            "be ignored.");
+    }
+
+    if (guidedDecodingBackendStr.empty() || guidedDecodingBackendStr == "${guided_decoding_backend}"
+        || tokenizerInfoPath.empty() || tokenizerInfoPath == "${xgrammar_tokenizer_info_path}")
+    {
+        return guidedDecodingConfig;
+    }
+
+    TLLM_CHECK_WITH_INFO(std::filesystem::exists(tokenizerInfoPath),
+        "Xgrammar's tokenizer info path at %s does not exist.", tokenizerInfoPath.c_str());
+
+    auto const tokenizerInfo = nlohmann::json::parse(std::ifstream{std::filesystem::path(tokenizerInfoPath)});
+    auto const encodedVocab = tokenizerInfo["encoded_vocab"].template get<std::vector<std::string>>();
+    auto const tokenizerStr = tokenizerInfo["tokenizer_str"].template get<std::string>();
+    auto const stopTokenIds
+        = tokenizerInfo["stop_token_ids"].template get<std::vector<tensorrt_llm::runtime::TokenIdType>>();
+
+    executor::GuidedDecodingConfig::GuidedDecodingBackend guidedDecodingBackend;
+    if (guidedDecodingBackendStr == "xgrammar")
+    {
+        guidedDecodingBackend = executor::GuidedDecodingConfig::GuidedDecodingBackend::kXGRAMMAR;
+    }
+    else
+    {
+        TLLM_THROW(
+            "Guided decoding is currently supported with 'xgrammar' backend. Invalid guided_decoding_backend parameter "
+            "provided.");
+    }
+    guidedDecodingConfig
+        = executor::GuidedDecodingConfig(guidedDecodingBackend, encodedVocab, tokenizerStr, stopTokenIds);
+    return guidedDecodingConfig;
 }
 
 executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
@@ -554,6 +624,28 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         }
     }
 
+    if (decodingMode && decodingMode->isLookahead())
+    {
+        try
+        {
+            executor::SizeType32 windowSize = 0, ngramSize = 0, verificationSetSize = 0;
+            windowSize = model_state_->GetParameter<uint32_t>("lookahead_window_size");
+            ngramSize = model_state_->GetParameter<uint32_t>("lookahead_ngram_size");
+            verificationSetSize = model_state_->GetParameter<uint32_t>("lookahead_verification_set_size");
+
+            mExecutorLookaheadDecodingConfig
+                = executor::LookaheadDecodingConfig{windowSize, ngramSize, verificationSetSize};
+            decodingConfig.setLookaheadDecodingConfig(mExecutorLookaheadDecodingConfig.value());
+        }
+        catch (std::exception const& e)
+        {
+            TLLM_THROW(
+                "Decoding mode is set to lookahead but lookahead parameters are not specified. "
+                "Please set parameters lookahead_window_size, lookahead_ngram_size, and "
+                "lookahead_verification_set_size.");
+        }
+    }
+
     float gpuWeightsPercent = 1.0f;
     try
     {
@@ -573,7 +665,7 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
             triton::common::TritonJson::Value default_queue_policy;
             if (dynamic_batching.Find("default_queue_policy", &default_queue_policy))
             {
-                int64_t max_queue_size;
+                int64_t max_queue_size = 0;
                 auto err = default_queue_policy.MemberAsInt("max_queue_size", &max_queue_size);
                 if (err == nullptr)
                 {
@@ -597,11 +689,20 @@ executor::ExecutorConfig ModelInstanceState::getExecutorConfigFromParams()
         TLLM_LOG_INFO("recv_poll_period_ms is not set, will use busy loop");
     }
 
+    auto guidedConfig = getGuidedDecodingConfigFromParams();
+
     auto execConfig = executor::ExecutorConfig{maxBeamWidth, schedulerConfig, kvCacheConfig, enableChunkedContext,
-        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType, std::nullopt, std::nullopt,
-        parallelConfig, peftCacheConfig, std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
-        extendedRuntimePerfKnobConfig, std::nullopt, recvPollPeriodMs};
+        normalizeLogProbs, iterStatsMaxIterations, requestStatsMaxIterations, batchingType,
+        /*maxBatchSize*/ std::nullopt, /*maxNumTokens*/ std::nullopt, parallelConfig, peftCacheConfig,
+        /*LogitsPostProcessorConfig*/ std::nullopt, decodingConfig, gpuWeightsPercent, maxQueueSize,
+        extendedRuntimePerfKnobConfig,
+        /*DebugConfig*/ std::nullopt, recvPollPeriodMs};
     execConfig.setSpecDecConfig(specDecConfig);
+    if (guidedConfig.has_value())
+    {
+        execConfig.setGuidedDecodingConfig(guidedConfig.value());
+        TLLM_LOG_INFO("Guided decoding config has been provided and set as guided decoder.");
+    }
     return execConfig;
 }
 
@@ -807,14 +908,14 @@ bool ModelInstanceState::handleStopRequest(TRITONBACKEND_Request* request, std::
 // Split batched TRITONBACKEND_Request into one executor:Request object per sample.
 std::vector<executor::Request> ModelInstanceState::createExecutorRequests(TRITONBACKEND_Request* request,
     bool excludeInputFromOutput, bool isDecoupled, executor::ModelType modelType, bool isOrchestrator,
-    bool specDecFastLogits)
+    bool specDecFastLogits, std::optional<executor::LookaheadDecodingConfig> const& lookaheadDecodingConfig)
 {
     auto inputsTensors = utils::readInputsTensors(request);
     bool streaming = utils::getRequestBooleanInputTensor(request, kStreamingInputTensorName);
     executor::RequestType requestType = utils::getRequestType(request);
 
     return utils::createRequestsFromInputTensors(inputsTensors, excludeInputFromOutput, isDecoupled, streaming,
-        modelType, requestType, isOrchestrator, specDecFastLogits);
+        modelType, requestType, isOrchestrator, specDecFastLogits, lookaheadDecodingConfig);
 }
 
 void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t const request_count)
@@ -842,8 +943,9 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                 continue;
             }
 
-            auto executorRequests = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput,
-                isDecoupled(), mModelType, mIsOrchestratorMode, mSpeculativeDecodingFastLogits);
+            auto executorRequests
+                = createExecutorRequests(request, mInstanceSpecificConfig.excludeInputFromOutput, isDecoupled(),
+                    mModelType, mIsOrchestratorMode, mSpeculativeDecodingFastLogits, mExecutorLookaheadDecodingConfig);
 
             std::lock_guard<std::mutex> lock(mRequestIdToRequestDataMutex);
             TRITONBACKEND_ResponseFactory* factory;
@@ -858,6 +960,12 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
 
             bool returnKvCacheReuseStats
                 = utils::getRequestBooleanInputTensor(request, InputFieldsNames::returnKvCacheReuseStats);
+            if (returnKvCacheReuseStats)
+            {
+                TLLM_LOG_WARNING("return_kv_cache_reuse_stats is deprecated, please use return_perf_metrics instead");
+            }
+
+            bool returnPerfMetrics = utils::getRequestBooleanInputTensor(request, InputFieldsNames::returnPerfMetrics);
 
             // Note:
             // A single TRITONBACKEND_Request will produce multiple executor requests when bs > 1.
@@ -885,7 +993,7 @@ void ModelInstanceState::enqueue(TRITONBACKEND_Request** requests, uint32_t cons
                     RequestData{factory, request, tritonRequestId, inputTokensSize, 0, streaming,
                         excludeInputFromOutput, beamWidthCopy, std::move(requestOutputNames),
                         {exec_start_ns, compute_start_ns, 0, 0}, batchIndex, static_cast<int32_t>(requestIds.size()),
-                        numReturnSequences, requestIdsSet, executorRequest.getRequestType(), returnKvCacheReuseStats});
+                        numReturnSequences, requestIdsSet, executorRequest.getRequestType(), returnPerfMetrics});
             }
             if (tritonRequestId != "")
             {
@@ -1144,22 +1252,57 @@ std::tuple<TRITONBACKEND_Response*, bool, TRITONSERVER_Error*, int64_t> ModelIns
                 }
             }
 
-            if (requestData.returnKvCacheReuseStats)
+            if (requestData.returnPerfMetrics)
             {
-                auto processStats = [&](std::string const& fieldName, int32_t value)
+                auto processStats = [&](std::string const& fieldName, auto const& value)
                 {
                     std::vector<int64_t> shape{1, 1};
-                    auto type = TRITONSERVER_TYPE_INT32;
-                    auto buffer = utils::getResponseBuffer<int32_t>(tritonResponse, shape, type, fieldName);
-                    std::vector<int32_t> vec = {value};
-                    utils::flatten<int32_t>(vec, buffer, shape);
+
+                    if constexpr (std::is_same_v<decltype(value), int32_t const&>)
+                    {
+                        auto type = TRITONSERVER_TYPE_INT32;
+                        auto buffer = utils::getResponseBuffer<int32_t>(tritonResponse, shape, type, fieldName);
+                        std::vector<int32_t> vec = {value};
+                        utils::flatten<int32_t>(vec, buffer, shape);
+                    }
+                    else if constexpr (std::is_same_v<decltype(value), float const&>)
+                    {
+                        auto type = TRITONSERVER_TYPE_FP32;
+                        auto buffer = utils::getResponseBuffer<float>(tritonResponse, shape, type, fieldName);
+                        std::vector<float> vec = {value};
+                        utils::flatten<float>(vec, buffer, shape);
+                    }
+                    else if constexpr (std::is_same_v<decltype(value), executor::RequestPerfMetrics::TimePoint const&>)
+                    {
+                        auto type = TRITONSERVER_TYPE_INT64;
+                        auto buffer = utils::getResponseBuffer<int64_t>(tritonResponse, shape, type, fieldName);
+                        auto duration = value.time_since_epoch();
+                        auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+                        std::vector<int64_t> vec = {nanoseconds.count()};
+                        utils::flatten<int64_t>(vec, buffer, shape);
+                    }
+                    else
+                    {
+                        TLLM_THROW("Unexpected type for field %s", fieldName.c_str());
+                    }
                 };
                 if (result.requestPerfMetrics.has_value())
                 {
-                    auto stats = result.requestPerfMetrics.value().kvCacheMetrics;
-                    processStats(OutputFieldsNames::kvCacheAllocNewBlocks, stats.numNewAllocatedBlocks);
-                    processStats(OutputFieldsNames::kvCacheReusedBlocks, stats.numReusedBlocks);
-                    processStats(OutputFieldsNames::kvCacheAllocTotalBlocks, stats.numTotalAllocatedBlocks);
+                    auto const& kvStats = result.requestPerfMetrics.value().kvCacheMetrics;
+                    processStats(OutputFieldsNames::kvCacheAllocNewBlocks, kvStats.numNewAllocatedBlocks);
+                    processStats(OutputFieldsNames::kvCacheReusedBlocks, kvStats.numReusedBlocks);
+                    processStats(OutputFieldsNames::kvCacheAllocTotalBlocks, kvStats.numTotalAllocatedBlocks);
+
+                    auto const& timingStats = result.requestPerfMetrics.value().timingMetrics;
+                    processStats(OutputFieldsNames::arrivalTime, timingStats.arrivalTime);
+                    processStats(OutputFieldsNames::firstScheduledTime, timingStats.firstScheduledTime);
+                    processStats(OutputFieldsNames::firstTokenTime, timingStats.firstTokenTime);
+                    processStats(OutputFieldsNames::lastTokenTime, timingStats.lastTokenTime);
+
+                    auto const& specDecStats = result.requestPerfMetrics.value().speculativeDecoding;
+                    processStats(OutputFieldsNames::acceptanceRate, specDecStats.acceptanceRate);
+                    processStats(OutputFieldsNames::totalAcceptedDraftTokens, specDecStats.totalAcceptedDraftTokens);
+                    processStats(OutputFieldsNames::totalDraftTokens, specDecStats.totalDraftTokens);
                 }
             }
         }

@@ -285,13 +285,14 @@ class TRTLLMBaseMetricsTest(unittest.TestCase):
         ]
         for stat in count_keys:
             if stat == "exec_count":
-                # Dynamic batching is enabled for the post-processing model, so
-                # the 'exec_count' will not be the same between the
-                # postprocessing model and other models.
+                # Dynamic batching is enabled for the post-processing model and
+                # pre-processing, so the 'exec_count' will not be the same
+                # between the postprocessing model and other models.
                 self.assertTrue(
                     self._all_equal([
                         model_metrics[model][stat] for model in model_metrics
                         if model != "postprocessing"
+                        and model != "preprocessing"
                     ]))
             else:
                 self.assertTrue(

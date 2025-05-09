@@ -35,10 +35,15 @@ def main(file_path, substitutions, in_place):
     with open(file_path) as f:
         pbtxt = Template(f.read())
 
-    sub_dict = {"max_queue_size": 0}
+    sub_dict = {
+        "max_queue_size": 0,
+        'max_queue_delay_microseconds': 0,
+    }
     for sub in split(substitutions, ","):
         key, value = split(sub, ":")
         sub_dict[key] = value
+
+        assert key in pbtxt.template, f"key '{key}' does not exist in the file {file_path}."
 
     pbtxt = pbtxt.safe_substitute(sub_dict)
 
