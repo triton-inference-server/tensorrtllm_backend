@@ -32,8 +32,8 @@ import pytest
 import torch
 
 sys.modules["triton_python_backend_utils"] = MagicMock()
-# Use PYTHONPATH=../multimodal/multimodal_encoders
-from multimodal_utils import LlavaOnevisionUtils
+# Use PYTHONPATH=../multimodal/multimodal_encoders/1
+from multimodal_utils import LlavaOnevisionUtils, Qwen2VLUtils
 
 
 @pytest.fixture
@@ -103,3 +103,56 @@ def test_llava_onevision_utils_image(LlavaOvUtiils, image_features,
     assert output.shape[0] == len(image_sizes)
     assert output.shape[1] == expected_dim
     assert output.shape[2] == LlavaOvUtiils.config.hidden_size
+
+
+@pytest.fixture
+def MockQwen2VLUtils():
+
+    class visionConfig:
+
+        def __init__(self, spatial_merge_size, embed_dim, num_heads):
+            self.spatial_merge_size = spatial_merge_size
+            self.embed_dim = embed_dim
+            self.num_heads = num_heads
+
+    # MockConfig
+    class Config:
+
+        def __init__(self, image_token_id, video_token_id,
+                     vision_start_token_id, max_position_embeddings,
+                     hidden_size, num_attention_heads, rope_theta,
+                     vision_config):
+            self.image_token_id = image_token_id
+            self.video_token_id = video_token_id
+            self.vision_config = vision_config
+            self.vision_start_token_id = vision_start_token_id
+            self.max_position_embeddings = max_position_embeddings
+            self.hidden_size = hidden_size
+            self.num_attention_heads = num_attention_heads
+            self.rope_theta = rope_theta
+
+    vision_config = visionConfig(2, 1280, 16)
+    config = Config(151655, 151656, 151652, 32768, 3584, 28, 1000000.0,
+                    vision_config)
+    return Qwen2VLUtils(config)
+
+
+@pytest.mark.parametrize(
+    "input_ids, image_grid_thw, attention_mask",
+    [(torch.ones((1, 300), dtype=torch.int32),
+      torch.tensor([[1, 36, 36]],
+                   dtype=torch.int64), torch.ones(
+                       (1, 300), dtype=torch.int64)),
+     (torch.ones((2, 300), dtype=torch.int32),
+      torch.tensor([[1, 36, 36], [1, 36, 36]],
+                   dtype=torch.int64), torch.ones(
+                       (2, 300), dtype=torch.int64))])
+def test_qwen2_vl_utils_compute_mrope(MockQwen2VLUtils, input_ids,
+                                      image_grid_thw, attention_mask):
+    concat_cos_sin, mrope_position_deltas = MockQwen2VLUtils.compute_mrope(
+        input_ids, image_grid_thw, attention_mask)
+    assert concat_cos_sin.dim() == 2
+    assert mrope_position_deltas.dim() == 2
+    assert concat_cos_sin.shape[0] == input_ids.shape[0]
+    assert mrope_position_deltas.shape[0] == input_ids.shape[0]
+    assert mrope_position_deltas.shape[1] == 1

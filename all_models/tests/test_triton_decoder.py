@@ -25,6 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Union
 from unittest.mock import MagicMock, patch
@@ -36,9 +37,11 @@ import torch
 # Mock pb_utils
 sys.modules["triton_python_backend_utils"] = MagicMock()
 
+import model
 from lib.decode import GenerationResponse, PreprocResponse, Request, Response
 # Use PYTHONPATH=../inflight_batcher_llm/tensorrt_llm_bls/1/
 from lib.triton_decoder import TritonDecoder
+from model import TritonPythonModel
 
 
 @dataclass
@@ -104,6 +107,13 @@ def response(request) -> MockTritonResponse:
         "kv_cache_alloc_new_blocks",
         "kv_cache_reused_blocks",
         "kv_cache_alloc_total_blocks",
+        "arrival_time_ns",
+        "first_scheduled_time_ns",
+        "first_token_time_ns",
+        "last_token_time_ns",
+        "acceptance_rate",
+        "total_accepted_draft_tokens",
+        "total_draft_tokens",
     ]
     response = Response()
     for output_name in output_names:
@@ -121,7 +131,7 @@ def triton_request(request) -> MockTritonRequest:
         "return_context_logits", "return_generation_logits", "beam_width",
         "stream", "prompt_embedding_table", "prompt_vocab_size",
         "embedding_bias_words", "embedding_bias_weights", "num_draft_tokens",
-        "return_kv_cache_reuse_stats"
+        "return_perf_metrics"
     ]
     triton_tensor_map = {}
     for input_name in input_names:
@@ -159,7 +169,14 @@ mock_reponse = {
     "sequence_index": [[0]],
     "kv_cache_alloc_new_blocks": [[0]],
     "kv_cache_reused_blocks": [[0]],
-    "kv_cache_alloc_total_blocks": [[0]]
+    "kv_cache_alloc_total_blocks": [[0]],
+    "arrival_time_ns": [[0]],
+    "first_scheduled_time_ns": [[1]],
+    "first_token_time_ns": [[2]],
+    "last_token_time_ns": [[3]],
+    "acceptance_rate": [[0.0]],
+    "total_accepted_draft_tokens": [[0]],
+    "total_draft_tokens": [[0]]
 }
 
 mock_request = {"text_input": [["Hello world"]], "max_tokens": [[24]]}
@@ -222,6 +239,13 @@ _generation_name_map = {
     "kv_cache_alloc_new_blocks": "kv_cache_alloc_new_blocks",
     "kv_cache_reused_blocks": "kv_cache_reused_blocks",
     "kv_cache_alloc_total_blocks": "kv_cache_alloc_total_blocks",
+    "arrival_time_ns": "arrival_time_ns",
+    "first_scheduled_time_ns": "first_scheduled_time_ns",
+    "first_token_time_ns": "first_token_time_ns",
+    "last_token_time_ns": "last_token_time_ns",
+    "acceptance_rate": "acceptance_rate",
+    "total_accepted_draft_tokens": "total_accepted_draft_tokens",
+    "total_draft_tokens": "total_draft_tokens",
 }
 
 convert_triton_response_testcases = [{
@@ -317,3 +341,119 @@ def test_create_triton_tensors(triton_decoder: TritonDecoder,
             else:
                 np.testing.assert_array_equal(triton_tensor_map[target_name],
                                               getattr(request, tensor_name))
+
+
+check_stop_word_test_cases = [{
+    "stop_words": [["."]],
+    "text_input": ["What is the capital of France?"],
+    "stream": [True],
+    "responses":
+    [["The", " capital", " of", " France", " is", " Paris", ".", " The"]],
+    "exclude_input_in_output": [True],
+    "expected_output": [["The capital of France is Paris."]],
+    "num_return_sequences":
+    1
+}, {
+    "stop_words": [["."]],
+    "text_input": ["What is the capital of France?"],
+    "stream": [False],
+    "responses": [["The capital of France is Paris. The"]],
+    "exclude_input_in_output": [True],
+    "expected_output": [["The capital of France is Paris."]],
+    "num_return_sequences":
+    1
+}, {
+    "stop_words": [["."], ["Ottawa"]],
+    "text_input":
+    ["What is the capital of France?", "What is the capital of Canada?"],
+    "stream": [True, True],
+    "responses":
+    [["The ", "capital ", "of ", "France ", "is ", "Paris", ".", " The"],
+     ["The", " capital ", "of ", "Canada ", "is ", "Ottawa", ".", " The"]],
+    "exclude_input_in_output": [True, True],
+    "expected_output": [["The capital of France is Paris."],
+                        ["The capital of Canada is Ottawa"]],
+    "num_return_sequences":
+    1
+}, {
+    "stop_words": [["."]],
+    "text_input": ["What is the capital of France?"],
+    "stream": [True],
+    "responses":
+    [["The ", "capital ", "of ", "France ", "is ", "Paris", ".", " The"],
+     ["Paris ", "is ", "the ", "capital ", "of ", "France", ".", " The"]],
+    "exclude_input_in_output": [True],
+    "expected_output": [["The capital of France is Paris."],
+                        ["Paris is the capital of France."]],
+    "num_return_sequences":
+    2
+}, {
+    "stop_words": [["."]],
+    "text_input": ["What is the capital of France?"],
+    "stream": [True],
+    "responses": [[["The ", "The "], ["capital ", "capital "], ["of ", "of "],
+                   ["France ", "France "], ["is ", "is "], ["Paris", "Paris"],
+                   [".", ", "], ["The ", "and "], ["", "it "], ["", "is "],
+                   ["", "beautiful"], ["", "."]]],
+    "exclude_input_in_output": [True],
+    "expected_output": [[
+        "The capital of France is Paris.",
+        "The capital of France is Paris, and it is beautiful."
+    ]],
+    "num_return_sequences":
+    1
+}]
+
+
+@pytest.mark.parametrize("check_stop_word_test_case",
+                         check_stop_word_test_cases)
+def test_check_stop_words(check_stop_word_test_case):
+    stop_words_list = check_stop_word_test_case["stop_words"]
+    text_inputs = check_stop_word_test_case["text_input"]
+    stream = check_stop_word_test_case["stream"]
+    responses = check_stop_word_test_case["responses"]
+    expected_output = check_stop_word_test_case["expected_output"]
+    num_return_sequences = check_stop_word_test_case["num_return_sequences"]
+
+    request = Request()
+    request.stop_words = [[
+        stop_word.encode("utf-8") for stop_word in stop_words
+    ] for stop_words in stop_words_list]
+    request.text_input = [[text_input.encode("utf-8")]
+                          for text_input in text_inputs]
+    request.stream = [[stream_val] for stream_val in stream]
+    request.exclude_input_in_output = [
+        [exclude_input_in_output] for exclude_input_in_output in
+        check_stop_word_test_case["exclude_input_in_output"]
+    ]
+
+    stopped_word_status = defaultdict(model.StopWordsState)
+
+    for i, response_list in enumerate(responses):
+        output = defaultdict(lambda: "")
+        detected_stop_word = False
+        for j, response in enumerate(response_list):
+            seq_index = None if num_return_sequences == 1 else i
+            batch_index = i if num_return_sequences == 1 else 0
+            if type(response) is list:
+                response_obj = Response(text_output=[
+                    response_item.encode('utf-8') for response_item in response
+                ],
+                                        batch_index=np.asarray([[batch_index]
+                                                                ]),
+                                        sequence_index=np.asarray([[seq_index]
+                                                                   ]))
+            else:
+                response_obj = Response(text_output=[response.encode('utf-8')],
+                                        batch_index=np.asarray([[batch_index]
+                                                                ]),
+                                        sequence_index=np.asarray([[seq_index]
+                                                                   ]))
+            detected_stop_word = TritonPythonModel().check_stop_words(
+                request, response_obj, stopped_word_status)
+            for j, text_output in enumerate(response_obj.text_output):
+                output[j] += str(text_output, encoding='utf-8')
+            if detected_stop_word:
+                break
+
+        assert list(output.values()) == expected_output[i]

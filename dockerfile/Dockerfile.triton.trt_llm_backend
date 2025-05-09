@@ -5,7 +5,6 @@ ARG TRT_VER=10.9.0.34
 ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.9.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.8.tar.gz
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.9.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.8.tar.gz
 
-
 FROM ${PYTORCH_IMAGE} as pytorch_image
 FROM ${BASE_IMAGE} as install_dependencies
 
@@ -44,6 +43,9 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy /usr/loc
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy-1.13.1.dist-info /usr/local/lib/python3.12/dist-packages/sympy-1.13.1.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-23.2.dist-info /usr/local/lib/python3.12/dist-packages/packaging-23.2.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-2.4.2.dev3.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-2.4.2.dev3.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
@@ -140,6 +142,9 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy /usr/loc
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy-1.13.1.dist-info /usr/local/lib/python3.12/dist-packages/sympy-1.13.1.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-23.2.dist-info /usr/local/lib/python3.12/dist-packages/packaging-23.2.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-2.4.2.dev3.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-2.4.2.dev3.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/

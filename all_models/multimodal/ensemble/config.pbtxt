@@ -57,7 +57,7 @@ input [
     dims: [ 1 ]
     optional: true
   },
-    {
+  {
     name: "video_bytes_input"
     data_type: TYPE_UINT8
     dims: [ -1, -1, -1, -1 ]
@@ -213,12 +213,12 @@ output [
   },
   {
     name: "context_logits"
-    data_type: TYPE_FP32
+    data_type: ${logits_datatype}
     dims: [ -1, -1 ]
   },
   {
     name: "generation_logits"
-    data_type: TYPE_FP32
+    data_type: ${logits_datatype}
     dims: [ -1, -1, -1 ]
   },
   {
@@ -322,6 +322,14 @@ ensemble_scheduling {
         value: "_CROSS_ATTENTION_MASK"
       }
       output_map {
+        key: "ATTENTION_MASK"
+        value: "_ATTENTION_MASK"
+      }
+      output_map {
+        key: "IMAGE_GRID_THW"
+        value: "_IMAGE_GRID_THW"
+      }
+      output_map {
         key: "IMAGE_SIZES"
         value: "_IMAGE_SIZES"
       }
@@ -357,6 +365,10 @@ ensemble_scheduling {
         key: "OUT_PROMPT_TABLE_EXTRA_IDS"
         value: "_OUT_PROMPT_TABLE_EXTRA_IDS"
       }
+      output_map {
+        key: "VISION_INPUT_ID"
+        value: "_VISION_INPUT_ID"
+      }
     },
     {
       model_name: "multimodal_encoders"
@@ -382,12 +394,24 @@ ensemble_scheduling {
         value: "_CROSS_ATTENTION_MASK"
       }
       input_map {
+        key: "attention_mask"
+        value: "_ATTENTION_MASK"
+      }
+      input_map {
+        key: "image_grid_thw"
+        value: "_IMAGE_GRID_THW"
+      }
+      input_map {
        key: "max_tokens"
        value: "_REQUEST_OUTPUT_LEN"
       }
       input_map {
         key: "image_sizes"
         value: "_IMAGE_SIZES"
+      }
+      input_map {
+        key: "vision_input_id"
+        value: "_VISION_INPUT_ID"
       }
       input_map {
         key: "is_video_input"
@@ -416,6 +440,14 @@ ensemble_scheduling {
       output_map {
         key: "SKIP_CROSS_ATTN_BLOCKS"
         value: "skip_cross_attn_blocks"
+      }
+      output_map {
+        key: "MROPE_ROTARY_COS_SIN"
+        value: "mrope_rotary_cos_sin"
+      }
+      output_map {
+        key: "MROPE_POSITION_DELTAS"
+        value: "mrope_position_deltas"
       }
     },
     {
@@ -544,6 +576,14 @@ ensemble_scheduling {
       input_map {
         key: "skip_cross_attn_blocks"
         value: "skip_cross_attn_blocks"
+      }
+      input_map {
+        key: "mrope_rotary_cos_sin"
+        value: "mrope_rotary_cos_sin"
+      }
+      input_map {
+        key: "mrope_position_deltas"
+        value: "mrope_position_deltas"
       }
       output_map {
         key: "output_ids"

@@ -187,6 +187,8 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${tokenizer_dir}' "${TOKENIZER_DIR}/" "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${preprocessing_instance_count}' '1' "${MODEL_DIR}/preprocessing/config.pbtxt"
+    replace_config_tags '${max_queue_size}' '0' "${MODEL_DIR}/preprocessing/config.pbtxt"
+    replace_config_tags '${max_queue_delay_microseconds}' '50000' "${MODEL_DIR}/preprocessing/config.pbtxt"
     replace_config_tags '${decoupled_mode}' 'False' "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${triton_max_batch_size}' "128" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
     replace_config_tags '${max_queue_size}' "0" "${MODEL_DIR}/tensorrt_llm/config.pbtxt"
@@ -488,10 +490,9 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
 
     kill_server
     wait_for_server_terminated ${SERVER_TIMEOUT} ${SERVER_PID[@]}
-
-    # Per-request KV cache reuse stats
+    # Per-request metrics stats
     # Use large number of tokens for KV cache reuse
-    echo '{"text_input": "Machine learning is a field of artificial intelligence that focuses on the development of algorithms and statistical models that enable computers to perform tasks without explicit instructions. It involves the use of data and algorithms to imitate the way humans learn, gradually improving its accuracy. Machine learning is used in a variety of applications such as email filtering, detection of network intruders, and computer vision, where it is infeasible to develop an algorithm of specific instructions for performing the task. A subset of machine learning is closely related to computational statistics, which focuses on making predictions using computers.", "max_tokens": 50, "pad_id": 2, "end_id": 2, "return_kv_cache_reuse_stats": true }' > tmp.txt
+    echo '{"text_input": "Machine learning is a field of artificial intelligence that focuses on the development of algorithms and statistical models that enable computers to perform tasks without explicit instructions. It involves the use of data and algorithms to imitate the way humans learn, gradually improving its accuracy. Machine learning is used in a variety of applications such as email filtering, detection of network intruders, and computer vision, where it is infeasible to develop an algorithm of specific instructions for performing the task. A subset of machine learning is closely related to computational statistics, which focuses on making predictions using computers.", "max_tokens": 50, "pad_id": 2, "end_id": 2, "return_perf_metrics": true }' > tmp.txt
     echo "Machine learning is a field of artificial intelligence that focuses on the development of algorithms and statistical models that enable computers to perform tasks without explicit instructions. It involves the use of data and algorithms to imitate the way humans learn, gradually improving its accuracy. Machine learning is used in a variety of applications such as email filtering, detection of network intruders, and computer vision, where it is infeasible to develop an algorithm of specific instructions for performing the task. A subset of machine learning is closely related to computational statistics, which focuses on making predictions using computers." > prompt.txt
 
     # Test the tensorrtllm model with different backends
@@ -516,25 +517,28 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
             python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
             python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT}
             python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_batching,max_queue_size:${MAX_QUEUE_SIZE},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,request_stats_max_iterations:10,exclude_input_in_output:True,enable_kv_cache_reuse:True,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
-            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT},max_queue_size:${MAX_QUEUE_SIZE}
+            python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT}
             python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_DIR}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},logits_datatype:TYPE_FP32
 
             for ENDPOINT in generate grpc inflight_batcher_llm; do
-                SERVER_LOG="./${NUM_GPU}gpu_kv_cache_stats_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_server.log"
-                CLIENT_LOG="./${NUM_GPU}gpu_kv_cache_stats_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_client.log"
+                SERVER_LOG="./${NUM_GPU}gpu_perf_metrics_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_server.log"
+                CLIENT_LOG="./${NUM_GPU}gpu_perf_metrics_${TRITON_BACKEND}_${ENDPOINT}_${DECOUPLED_TRIAL}_client.log"
                 run_server "${SERVER_ARGS}"
                 wait_for_server_ready ${SERVER_TIMEOUT} ${SERVER_PID[@]}
 
                 for ITER in 1 2; do
                     if [ "$ITER" == "1" ]; then
-                        EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=2
-                        EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=2
+                        EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=4
+                        EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=4
                         EXPECTED_KV_CACHE_REUSED_BLOCKS=0
                     else
                         EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS=1
                         EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS=1
-                        EXPECTED_KV_CACHE_REUSED_BLOCKS=1
+                        EXPECTED_KV_CACHE_REUSED_BLOCKS=4
                     fi
+                    EXPECTED_ACCEPTANCE_RATE=0.0
+                    EXPECTED_TOTAL_ACCEPTED_DRAFT_TOKENS=0
+                    EXPECTED_TOTAL_DRAFT_TOKENS=0
 
                     if [ "$WAIT_RET" != "0" ]; then
                         # Cleanup
@@ -571,6 +575,13 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                         kv_cache_alloc_new_blocks=$(jq '.kv_cache_alloc_new_blocks' curl.out)
                         kv_cache_alloc_total_blocks=$(jq '.kv_cache_alloc_total_blocks' curl.out)
                         kv_cache_reused_blocks=$(jq '.kv_cache_reused_blocks' curl.out)
+                        arrival_time_ns=$(jq '.arrival_time_ns' curl.out)
+                        first_scheduled_time_ns=$(jq '.first_scheduled_time_ns' curl.out)
+                        first_token_time_ns=$(jq '.first_token_time_ns' curl.out)
+                        last_token_time_ns=$(jq '.last_token_time_ns' curl.out)
+                        acceptance_rate=$(jq '.acceptance_rate' curl.out)
+                        total_accepted_draft_tokens=$(jq '.total_accepted_draft_tokens' curl.out)
+                        total_draft_tokens=$(jq '.total_draft_tokens' curl.out)
                     else
                         STREAMING_FLAG=""
                         if [ "${DECOUPLED_TRIAL}" == "decoupled" ]; then
@@ -578,7 +589,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                         fi
                         if [ "$ENDPOINT" == "grpc" ]; then
                             set +e
-                            python3 ${STREAM_DIR}/end_to_end_grpc_client.py -v --prompt="$(cat prompt.txt)" --return-kv-cache-reuse-stats ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
+                            python3 ${STREAM_DIR}/end_to_end_grpc_client.py -v --prompt="$(cat prompt.txt)" --return-perf-metrics ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
                             if [ $? -ne 0 ]; then
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing end_to_end_grpc_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
@@ -590,7 +601,7 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                         elif [ "$ENDPOINT" == "inflight_batcher_llm" ]; then
                             set +e
                             python3 ${STREAM_DIR}/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR} \
-                                        --return-kv-cache-reuse-stats --text "$(cat prompt.txt)" ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
+                                        --return-perf-metrics --text "$(cat prompt.txt)" ${STREAMING_FLAG} > ${CLIENT_LOG} 2>&1
                             if [ $? -ne 0 ]; then
                                 cat $SERVER_LOG
                                 echo -e "\n***\n*** Error executing inflight_batcher_llm_client.py with ${NUM_GPU}GPU(s): line ${LINENO}\n***"
@@ -603,11 +614,21 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                         kv_cache_alloc_new_blocks=$(grep "kv_cache_alloc_new_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
                         kv_cache_alloc_total_blocks=$(grep "kv_cache_alloc_total_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
                         kv_cache_reused_blocks=$(grep "kv_cache_reused_blocks" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        arrival_time_ns=$(grep "arrival_time_ns" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        first_scheduled_time_ns=$(grep "first_scheduled_time_ns" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        first_token_time_ns=$(grep "first_token_time_ns" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        last_token_time_ns=$(grep "last_token_time_ns" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        acceptance_rate=$(grep "acceptance_rate" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        total_accepted_draft_tokens=$(grep "total_accepted_draft_tokens" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
+                        total_draft_tokens=$(grep "total_draft_tokens" ${CLIENT_LOG} | head -n 1 | awk '{print $2}')
                     fi
 
                     if [[ "$kv_cache_alloc_new_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS" || \
                         "$kv_cache_alloc_total_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS" || \
-                        "$kv_cache_reused_blocks" -ne "$EXPECTED_KV_CACHE_REUSED_BLOCKS" ]]; then
+                        "$kv_cache_reused_blocks" -ne "$EXPECTED_KV_CACHE_REUSED_BLOCKS" || \
+                        "$acceptance_rate" != "$EXPECTED_ACCEPTANCE_RATE" || \
+                        "$total_accepted_draft_tokens" -ne "$EXPECTED_TOTAL_ACCEPTED_DRAFT_TOKENS" || \
+                        "$total_draft_tokens" -ne "$EXPECTED_TOTAL_DRAFT_TOKENS" ]]; then
                         echo "Test failed for ${ENDPOINT} with ${NUM_GPU}GPU(s):"
                         [[ "$kv_cache_alloc_new_blocks" -ne "$EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS" ]] && \
                             echo "  kv_cache_alloc_new_blocks: expected $EXPECTED_KV_CACHE_ALLOC_NEW_BLOCKS, got $kv_cache_alloc_new_blocks"
@@ -615,7 +636,38 @@ for NUM_GPU in "${NUM_GPUS_TO_TEST[@]}"; do
                             echo "  kv_cache_alloc_total_blocks: expected $EXPECTED_KV_CACHE_ALLOC_TOTAL_BLOCKS, got $kv_cache_alloc_total_blocks"
                         [[ "$kv_cache_reused_blocks" -ne "$EXPECTED_KV_CACHE_REUSED_BLOCKS" ]] && \
                             echo "  kv_cache_reused_blocks: expected $EXPECTED_KV_CACHE_REUSED_BLOCKS, got $kv_cache_reused_blocks"
+                        [[ "$acceptance_rate" != "$EXPECTED_ACCEPTANCE_RATE" ]] && \
+                            echo "  acceptance_rate: expected $EXPECTED_ACCEPTANCE_RATE, got $acceptance_rate"
+                        [[ "$total_accepted_draft_tokens" -ne "$EXPECTED_TOTAL_ACCEPTED_DRAFT_TOKENS" ]] && \
+                            echo "  total_accepted_draft_tokens: expected $EXPECTED_TOTAL_ACCEPTED_DRAFT_TOKENS, got $total_accepted_draft_tokens"
+                        [[ "$total_draft_tokens" -ne "$EXPECTED_TOTAL_DRAFT_TOKENS" ]] && \
+                            echo "  total_draft_tokens: expected $EXPECTED_TOTAL_DRAFT_TOKENS, got $total_draft_tokens"
                         RET=1
+                    fi
+
+                    if ! [[ $arrival_time_ns =~ ^-?[0-9]+$ ]] || [ $arrival_time_ns -eq 0 ]; then
+                        echo "Arrival time $arrival_time_ns is not valid, expected positive integer value"
+                        RET=1
+                    fi
+                    if ! [[ $first_scheduled_time_ns =~ ^-?[0-9]+$ ]] || [ $first_scheduled_time_ns  -eq 0 ]; then
+                        echo "First scheduled time $first_scheduled_time_ns is not valid, expected positive integer value"
+                        RET=1
+                    fi
+                    if ! [[ $first_token_time_ns =~ ^-?[0-9]+$ ]] || [ $first_token_time_ns -eq 0 ]; then
+                        echo "First token time $first_token_time_ns is not valid, expected positive integer value"
+                        RET=1
+                    fi
+                    if [ "${DECOUPLED_TRIAL}" == "decoupled" ]; then
+                        # Allow 0 for streaming mode
+                        if ! [[ $last_token_time_ns =~ ^-?[0-9]+$ ]]; then
+                            echo "Last token time: expected 0; got $last_token_time_ns"
+                            RET=1
+                        fi
+                    else
+                        if ! [[ $last_token_time_ns =~ ^-?[0-9]+$ ]] || [ $last_token_time_ns -eq 0 ]; then
+                            echo "Last token time $last_token_time_ns is not valid, expected positive integer value"
+                            RET=1
+                        fi
                     fi
                 done
                 kill_server
