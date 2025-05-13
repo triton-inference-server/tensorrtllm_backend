@@ -123,6 +123,7 @@ description of the parameters below.
 | `normalize_log_probs` | Controls if log probabilities should be normalized or not. Set to `false` to skip normalization of `output_log_probs`. (default=`true`) |
 | `gpu_device_ids` | Comma-separated list of GPU IDs to use for this model. Use semicolons to separate multiple instances of the model. If not provided, the model will use all visible GPUs. (default=unspecified) |
 | `participant_ids` | Comma-separated list of MPI ranks to use for this model. Mandatory when using orchestrator mode with -disable-spawn-process (default=unspecified) |
+| `num_nodes` | Number of MPI nodes to use for this model. (default=1) |
 | `gpu_weights_percent` | Set to a number between 0.0 and 1.0 to specify the percentage of weights that reside on GPU instead of CPU and streaming load during runtime. Values less than 1.0 are only supported for an engine built with `weight_streaming` on. (default=1.0) |
 
 - KV cache
@@ -239,10 +240,10 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `pad_id` | [1] | `int32` | Padding token ID |
 | `temperature` | [1] | `float32` | Sampling Config param: `temperature` |
 | `repetition_penalty` | [1] | `float` | Sampling Config param: `repetitionPenalty` |
-| `min_length` | [1] | `int32_t` | Sampling Config param: `minLength` |
+| `min_tokens` | [1] | `int32_t` | Sampling Config param: `minTokens` |
 | `presence_penalty` | [1] | `float` | Sampling Config param: `presencePenalty` |
 | `frequency_penalty` | [1] | `float` | Sampling Config param: `frequencyPenalty` |
-| `random_seed` | [1] | `uint64_t` | Sampling Config param: `randomSeed` |
+| `seed` | [1] | `uint64_t` | Sampling Config param: `seed` |
 | `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output |
 | `return_context_logits` | [1] | `bool` | When `true`, include context logits in the output |
 | `return_generation_logits` | [1] | `bool` | When `true`, include generation logits in the output |
