@@ -228,7 +228,7 @@ RUN pip3 install --no-cache-dir tensorrt_llm*.whl && \
 # Copying the scripts
 WORKDIR /app
 COPY tensorrt_llm/triton_backend/scripts scripts
-COPY tensorrt_llm/triton_backend/tensorrt_llm/models all_models
+COPY tensorrt_llm/triton_backend/all_models all_models
 COPY tensorrt_llm/triton_backend/inflight_batcher_llm/client client
 COPY tensorrt_llm/triton_backend/tools tools
 COPY tensorrt_llm/examples examples
