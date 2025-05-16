@@ -13,40 +13,18 @@ whole container from source as described below in the Build the Docker Container
 section.
 
 ```bash
-cd inflight_batcher_llm
+cd tensorrt_llm/triton_backend/inflight_batcher_llm
 bash scripts/build.sh
 ```
 
 ## Build the Docker Container
 
-### Option 1. Build the NGC Triton TRT-LLM container
+#### Build via Docker
 
-The below commands will build the same Triton TRT-LLM container as the one on the NGC.
-
-You can update the arguments in the `build.sh` script to match the
-versions you want to use.
+You can build the container using the instructions in the [TensorRT-LLM Docker Build](./tensorrt_llm/dockerfile/README.md)
+with `tritondevel` stage.
 
 ```bash
-cd tensorrtllm_backend
-./build.sh
-```
-
-There should be a new image named `tritonserver` in your local Docker images.
-
-#### Option 2. Build via Docker
-
-The version of Triton Server used in this build option can be found in the
-[Dockerfile](./dockerfile/Dockerfile.trt_llm_backend).
-
-```bash
-# Update the submodules
-cd tensorrtllm_backend
-git lfs install
-git submodule update --init --recursive
-
-# Use the Dockerfile to build the backend in a container
-# For x86_64
-DOCKER_BUILDKIT=1 docker build -t triton_trt_llm -f dockerfile/Dockerfile.trt_llm_backend .
-# For aarch64
-DOCKER_BUILDKIT=1 docker build -t triton_trt_llm --build-arg TORCH_INSTALL_TYPE="src_non_cxx11_abi" -f dockerfile/Dockerfile.trt_llm_backend .
+cd tensorrt_llm/dockerfile
+make -C docker tritondevel_build
 ```

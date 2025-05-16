@@ -14,20 +14,20 @@ ENGINE_PATH=/tmp/gemma/2B/bf16/1-gpu/
 Note that we use `tokenizer_type=sp` (sentencepiece) tokenizer.
 
 ```bash
-cp all_models/inflight_batcher_llm/ gemma -r
+cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ gemma -r
 
-python3 tools/fill_template.py -i gemma/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:sp,triton_max_batch_size:64,preprocessing_instance_count:1,add_special_tokens:True
-python3 tools/fill_template.py -i gemma/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:sp,triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tools/fill_template.py -i gemma/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i gemma/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i gemma/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,batch_scheduler_policy:guaranteed_no_evict,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i gemma/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:sp,triton_max_batch_size:64,preprocessing_instance_count:1,add_special_tokens:True
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i gemma/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:sp,triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i gemma/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i gemma/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i gemma/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,batch_scheduler_policy:guaranteed_no_evict,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 
 ```
 
 * Launch server
 
 ```bash
-python3 scripts/launch_triton_server.py --world_size 1 --model_repo=gemma/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=gemma/
 ```
 
 

@@ -53,20 +53,20 @@ trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH} \
 * Prepare configs
 
 ```bash
-cp all_models/inflight_batcher_llm/ llama_ifb -r
+cp tensorrt_llm/triton_backend/ci/all_models/inflight_batcher_llm/ llama_ifb -r
 
-python3 tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 ```
 
 * Launch server
 
 ```bash
 pip install SentencePiece
-python3 scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
 ```
 
 this setting requires about 25GB
@@ -114,7 +114,7 @@ curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What
 * Send request by `inflight_batcher_llm_client.py`
 
 ```bash
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${HF_LLAMA_MODEL}
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${HF_LLAMA_MODEL}
 
 =========
 [[1, 19298, 297, 6641, 29899, 23027, 3444, 29892, 1105, 7598, 16370, 408, 263]]
@@ -128,7 +128,7 @@ output_ids =  [14547, 297, 3681, 322, 4517, 1434, 8401, 304, 1570, 3088, 297, 29
 * Run test on dataset
 
 ```
-python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500
 
 [INFO] Start testing on 13 prompts.
 [INFO] Functionality test succeed.
@@ -142,18 +142,18 @@ python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_tr
 * Run with decoupled mode (streaming)
 
 ```bash
-cp all_models/inflight_batcher_llm/ llama_ifb -r
+cp tensorrt_llm/triton_backend/ci/all_models/inflight_batcher_llm/ llama_ifb -r
 
-python3 tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,bls_instance_count:1,accumulate_tokens:Truelogits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:True,bls_instance_count:1,accumulate_tokens:Truelogits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 
 pip install SentencePiece
-python3 scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
 
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${HF_LLAMA_MODEL} --streaming
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/inflight_batcher_llm_client.py --request-output-len 200 --tokenizer-dir ${HF_LLAMA_MODEL} --streaming
 ```
 
 <details>

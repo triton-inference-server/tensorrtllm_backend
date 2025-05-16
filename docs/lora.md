@@ -171,7 +171,7 @@ parameters: {
 MODEL_FOLDER=/path/to/triton_model_repo
 # 'world_size' is the number of GPUs you want to use for serving. This should
 # be aligned with the number of GPUs used to build the TensorRT-LLM engine.
-python3 /tensorrtllm_backend/scripts/launch_triton_server.py --world_size=1 --model_repo=${MODEL_FOLDER}
+python3 /tensorrtllm_backend/tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size=1 --model_repo=${MODEL_FOLDER}
 ```
 
 Run Multi-LoRA example by issuing multiple concurrent requests.
@@ -184,7 +184,7 @@ pip3 install tritonclient[all]
 
 TASK_IDS=("1" "2")
 LORA_PATHS=("luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights")
-INFLIGHT_BATCHER_LLM_CLIENT=/tensorrtllm_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py
+INFLIGHT_BATCHER_LLM_CLIENT=/tensorrtllm_backend/tensorrt_llm/triton_backend/tools/inflight_batcher_llm/inflight_batcher_llm_client.py
 
 for index in ${!TASK_IDS[@]}; do
     text="dummy"

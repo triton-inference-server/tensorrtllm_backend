@@ -198,23 +198,23 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 3. Prepare Tritonserver configs
 
     ```bash
-    cp all_models/inflight_batcher_llm/ multimodal_ifb -r
+    cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ multimodal_ifb -r
     # Override the ensemble and creates new multimodal_encoders directories for multimodal
-    cp all_models/multimodal/ensemble multimodal_ifb -r
-    cp all_models/multimodal/multimodal_encoders multimodal_ifb -r
+    cp tensorrt_llm/triton_backend/all_models/multimodal/ensemble multimodal_ifb -r
+    cp tensorrt_llm/triton_backend/all_models/multimodal/multimodal_encoders multimodal_ifb -r
 
-    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,cross_kv_cache_fraction:0.5
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,cross_kv_cache_fraction:0.5
 
-    python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
 
-    python3 tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
 
-    python3 tools/fill_template.py -i multimodal_ifb/ensemble/config.pbtxt triton_max_batch_size:8,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/ensemble/config.pbtxt triton_max_batch_size:8,logits_datatype:TYPE_FP32
 
-    python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
 
     # Newly added for multimodal
-    python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
     ```
     > **NOTE**:
     >
@@ -232,7 +232,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 4. Launch Tritonserver
 
     ```bash
-    python3 scripts/launch_triton_server.py --world_size 1 --model_repo=multimodal_ifb/ --tensorrt_llm_model_name tensorrt_llm,multimodal_encoders --multimodal_gpu0_cuda_mem_pool_bytes 300000000
+    python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=multimodal_ifb/ --tensorrt_llm_model_name tensorrt_llm,multimodal_encoders --multimodal_gpu0_cuda_mem_pool_bytes 300000000
     ```
 
     > **NOTE**:
@@ -245,7 +245,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 ### Send requests
 1. Send request with `decoupled_mode` set to False
     ```bash
-    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2
 
     [beam 0 ]:
     Question: which city is this? Answer: singapore
@@ -253,7 +253,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```
 2. Send request with `decoupled_mode` set to True
     ```bash
-    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --streaming
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --streaming
 
     [beam 0 ]:   sing
     [beam 0 ]:  apore
@@ -262,7 +262,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```
 3. Send request to the `tensorrt_llm_bls` model
     ```bash
-    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --use_bls
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --use_bls
 
     [beam 0 ]:
     Question: which city is this? Answer: singapore
@@ -271,7 +271,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
 4. Send request to the `tensorrt_llm_bls` model with `accumulate_tokens` set to True
     ```bash
-    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --use_bls --streaming
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --use_bls --streaming
 
     [beam 0 ]:   sing
     [beam 0 ]:   singapore
@@ -281,7 +281,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
 5. Send request with `enable_kv_cache_reuse` set to True
     ```bash
-    python tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --prompt_table_extra_id ${id}
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text 'Question: which city is this? Answer:' --image 'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 16 --model_type blip2 --prompt_table_extra_id ${id}
 
     [beam 0 ]:
     Question: which city is this? Answer: singapore
@@ -291,7 +291,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
     ```bash
     wget -O av.png https://raw.githubusercontent.com/Efficient-Large-Model/VILA/main/demo_images/av.png
 
-    python tools/multimodal/client.py --text '<image>\n<image>\n Please elaborate what you see in the images?' --image av.png,'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 68 --model_type vila --hf_model_dir ${HF_MODEL_PATH}
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text '<image>\n<image>\n Please elaborate what you see in the images?' --image av.png,'https://storage.googleapis.com/sfr-vision-language-research/LAVIS/assets/merlion.png' --request-output-len 68 --model_type vila --hf_model_dir ${HF_MODEL_PATH}
 
     [beam 0 ]:
     A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:  \n \n Please elaborate what you see in the images? ASSISTANT: The first image shows a busy street scene with a car driving through a crosswalk, surrounded by pedestrians and traffic lights. The second image captures a beautiful sunset with the iconic Merlion statue spouting water into the bay, with the Singapore Flyer and the city skyline in the background.
@@ -312,7 +312,7 @@ For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM
 
 8. Send request with video input
     ```bash
-    python tools/multimodal/client.py --text "Why is this video funny?" --video sample_demo_1.mp4 --video_num_frames 8 --request-output-len 30 --model_type llava_onevision  --end-id 151645
+    python tensorrt_llm/triton_backend/tools/multimodal/client.py --text "Why is this video funny?" --video sample_demo_1.mp4 --video_num_frames 8 --request-output-len 30 --model_type llava_onevision  --end-id 151645
 
     [beam 0 ]:
     user
@@ -389,29 +389,29 @@ Follow these steps to enable chunked context inference (using LLaVA as an exampl
 2. Prepare the Tritonserver config file
 Prepare the Tritonserver config file with `enable_chunked_context` set to True. Also, to further utilize the free memory, we can set `kv_cache_free_gpu_mem_fraction` to 0.9.
 ```bash
-cp all_models/inflight_batcher_llm/ multimodal_ifb -r
+cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ multimodal_ifb -r
 # Override the ensemble and creates new multimodal_encoders directories for multimodal
-cp all_models/multimodal/ensemble multimodal_ifb -r
-cp all_models/multimodal/multimodal_encoders multimodal_ifb -r
+cp tensorrt_llm/triton_backend/all_models/multimodal/ensemble multimodal_ifb -r
+cp tensorrt_llm/triton_backend/all_models/multimodal/multimodal_encoders multimodal_ifb -r
 
 # Changes the enable_chunked_context to True, and set kv_cache_free_gpu_mem_fraction to 0.9
-python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:True,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,kv_cache_free_gpu_mem_fraction:0.9
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:8,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:True,encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},logits_datatype:TYPE_FP32,kv_cache_free_gpu_mem_fraction:0.9
 
-python3 tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,preprocessing_instance_count:1,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},engine_dir:${ENGINE_PATH},max_num_images:1,max_queue_delay_microseconds:20000
 
-python3 tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:8,postprocessing_instance_count:1
 
-python3 tools/fill_template.py -i multimodal_ifb/ensemble/config.pbtxt triton_max_batch_size:8,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/ensemble/config.pbtxt triton_max_batch_size:8,logits_datatype:TYPE_FP32
 
-python3 tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:8,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,tensorrt_llm_model_name:tensorrt_llm,multimodal_encoders_name:multimodal_encoders,logits_datatype:TYPE_FP32
 
 # Newly added for multimodal
-python3 tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i multimodal_ifb/multimodal_encoders/config.pbtxt triton_max_batch_size:8,multimodal_model_path:${MULTIMODAL_ENGINE_PATH},encoder_input_features_data_type:${ENCODER_INPUT_FEATURES_DTYPE},hf_model_path:${HF_MODEL_PATH},max_queue_delay_microseconds:20000
 ```
 3. Launch the server
 ```bash
 # Change --world_size to your tp size
-python3 scripts/launch_triton_server.py --world_size 2 --model_repo=multimodal_ifb/ --tensorrt_llm_model_name tensorrt_llm,multimodal_encoders--multimodal_gpu0_cuda_mem_pool_bytes 300000000
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 2 --model_repo=multimodal_ifb/ --tensorrt_llm_model_name tensorrt_llm,multimodal_encoders --multimodal_gpu0_cuda_mem_pool_bytes 300000000
 ```
 
 When you launch the server, you will see logs similar to the following. In theory, now you can process long multimodal context up to the "max tokens in paged KV cache" value, and the context prefill phase will be done in chunk sizes.

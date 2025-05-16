@@ -13,7 +13,7 @@ docker run --rm -ti -v `pwd`:/mnt -w /mnt -v ~/.cache/huggingface:~/.cache/huggi
 * Prepare config
 
 ```bash
- cp -R all_models/llmapi/ llmapi_repo/
+ cp -R tensorrt_llm/triton_backend/all_models/llmapi/ llmapi_repo/
 ```
 
 Edit `llmapi_repo/tensorrt_llm/1/model.yaml` to change the model. You can either use a HuggingFace path or a local path. The following is based on `meta-llama/Llama-3.1-8B`.
@@ -23,7 +23,7 @@ This configuration file also allows you to enable CUDA graphs support and set pi
 * Launch server
 
 ```bash
-python3 scripts/launch_triton_server.py --model_repo=llmapi_repo/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo=llmapi_repo/
 ```
 
 * Send request
@@ -37,7 +37,7 @@ curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "
 * Run test on dataset
 
 ```bash
-python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500 --test-llmapi --model-name tensorrt_llm
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 --test-llmapi --model-name tensorrt_llm
 
 [INFO] Start testing on 13 prompts.
 [INFO] Functionality test succeeded.
@@ -50,10 +50,10 @@ FLAGS.model_name: tensorrt_llm
 * Run benchmark
 
 ```bash
- python3 tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
+ python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
     --tensorrt-llm-model-name tensorrt_llm \
      --test-llmapi \
-     dataset --dataset ./tools/dataset/mini_cnn_eval.json \
+     dataset --dataset ./tensorrt_llm/triton_backend/tools/dataset/mini_cnn_eval.json \
      --tokenizer-dir meta-llama/Llama-3.1-8B
 
 dataset
