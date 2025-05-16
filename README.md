@@ -162,14 +162,14 @@ more details on the parameters.
 Next, create the
 [model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
 that will be used by the Triton server. The models can be found in the
-[all_models](./all_models) folder. The folder contains two groups of models:
-- [`gpt`](./all_models/gpt): Using TensorRT-LLM pure Python runtime.
-- [`inflight_batcher_llm`](./all_models/inflight_batcher_llm/)`: Using the C++
+[all_models](./tensorrt_llm/triton_backend/all_models) folder. The folder contains two groups of models:
+- [`gpt`](./tensorrt_llm/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime.
+- [`inflight_batcher_llm`](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/)`: Using the C++
 TensorRT-LLM backend with the executor API, which includes the latest features
 including inflight batching.
 
 There are five models in
-[all_models/inflight_batcher_llm](./all_models/inflight_batcher_llm) that will
+[all_models/inflight_batcher_llm](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm) that will
 be used in this example:
 
 | Model | Description |
@@ -306,7 +306,7 @@ to send requests to the `tensorrt_llm` model.
 
 ```bash
 pip3 install tritonclient[all]
-INFLIGHT_BATCHER_LLM_CLIENT=/app/tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py
+INFLIGHT_BATCHER_LLM_CLIENT=/app/inflight_batcher_llm/client/inflight_batcher_llm_client.py
 python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
 ```
 
@@ -362,9 +362,9 @@ or
 After launching the server, you could get the output of logits by passing the
 corresponding parameters `--return-context-logits` and/or
 `--return-generation-logits` in the client scripts
-([end_to_end_grpc_client.py](./tensorrt_llm/inflight_batcher_llm/client/end_to_end_grpc_client.py)
+([end_to_end_grpc_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
 and
-[inflight_batcher_llm_client.py](./tensorrt_llm/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
+[inflight_batcher_llm_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
 
 For example:
 
