@@ -98,17 +98,17 @@ Build TensorRT-LLM engines.
 #### 4. Prepare Tritonserver configs <a id="prepare-tritonserver-configs"></a>
 
 ```
-    cp all_models/inflight_batcher_llm/ enc_dec_ifb -r
+    cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ enc_dec_ifb -r
 
-    python3 tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 
-    python3 tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
 
-    python3 tools/fill_template.py -i enc_dec_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:1
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:1
 
-    python3 tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
 
-    python3 tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
 
 ```
 
@@ -119,7 +119,7 @@ Build TensorRT-LLM engines.
 #### 5. Launch Tritonserver
 
 ```
-python3 scripts/launch_triton_server.py --world_size 1 --model_repo=enc_dec_ifb/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=enc_dec_ifb/
 ```
 
 ### Send requests
@@ -146,7 +146,7 @@ If not already installed, install `tritonclient`
 
 ```
     pip install tritonclient[all]
-    python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --text "translate English to German: This is good" --request-output-len 200 --exclude-input-in-output --tokenizer-dir ${HF_MODEL_PATH} --beam-width ${MAX_BEAM_WIDTH}
+    python3 tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py --text "translate English to German: This is good" --request-output-len 200 --exclude-input-in-output --tokenizer-dir ${HF_MODEL_PATH} --beam-width ${MAX_BEAM_WIDTH}
 
     ========
     Using pad_id:  0
@@ -166,7 +166,7 @@ If not already installed, install `tritonclient`
 #### 4. Run test on dataset
 
 ```
-    python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500
+    python3 tensorrt_llm/triton_backend/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500
 
     [INFO] Start testing on 13 prompts.
     [INFO] Functionality test succeed.
@@ -225,31 +225,31 @@ Request throughput (per sec): 12.34
 To enable streaming, we set `decoupled_mode:True` in config.pbtxt of `tensorrt_llm` and `tensorrt_llm_bls` model (if you are using BLS instead of ensemble).
 
 ```
-    cp all_models/inflight_batcher_llm/ enc_dec_ifb -r
+    cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ enc_dec_ifb -r
 
-    python3 tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 
-    python3 tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
 
-    python3 tools/fill_template.py -i enc_dec_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:1
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:1
 
-    python3 tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
 
-    python3 tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
 
 ```
 
 We launch Tritonserver
 
 ```
-python3 scripts/launch_triton_server.py --world_size 1 --model_repo=enc_dec_ifb/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=enc_dec_ifb/
 ```
 
 Then send request by `inflight_batcher_llm_client.py`
 
 ```
 pip install tritonclient[all]
-python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py --text "translate English to German: This is good" --request-output-len 200 --exclude-input-in-output --tokenizer-dir ${HF_MODEL_PATH} --beam-width ${MAX_BEAM_WIDTH} --streaming
+python3 tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py --text "translate English to German: This is good" --request-output-len 200 --exclude-input-in-output --tokenizer-dir ${HF_MODEL_PATH} --beam-width ${MAX_BEAM_WIDTH} --streaming
 ```
 
 To use Gen-AI Perf to benchmark streaming/decoupled mode, run the following command:
@@ -349,8 +349,8 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
 4. Launch the servers:
 
 ```
-    CUDA_VISIBLE_DEVICES=0,1 python3 scripts/launch_triton_server.py --world_size 2 --model_repo=enc_dec_ifb/ --http_port 8000 --grpc_port 8001 --metrics_port 8004
-    CUDA_VISIBLE_DEVICES=2,3 python3 scripts/launch_triton_server.py --world_size 2 --model_repo=enc_dec_ifb/ --http_port 8002 --grpc_port 8003 --metrics_port 8005
+    CUDA_VISIBLE_DEVICES=0,1 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 2 --model_repo=enc_dec_ifb/ --http_port 8000 --grpc_port 8001 --metrics_port 8004
+    CUDA_VISIBLE_DEVICES=2,3 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 2 --model_repo=enc_dec_ifb/ --http_port 8002 --grpc_port 8003 --metrics_port 8005
 ```
 
 4. Install NGINX:
@@ -390,10 +390,10 @@ and the second instance will run on GPUs 2 and 3. We will launch two separate `m
 
 ```
     # Test the load on all the servers
-    python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8080
+    python3 tensorrt_llm/triton_backend/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8080
 
     # Test the load on one of the servers
-    python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8000
+    python3 tensorrt_llm/triton_backend/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8000
 ```
 
 ### Kill the server
