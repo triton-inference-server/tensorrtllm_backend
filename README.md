@@ -34,6 +34,12 @@ models with Triton Inference Server. The [inflight_batcher_llm](./inflight_batch
 directory contains the C++ implementation of the backend supporting inflight
 batching, paged attention and more.
 
+> [!NOTE]
+>
+> Please note that the Triton backend source code and test have been moved
+> to [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) under the 
+> `triton_backend` directory.
+
 Where can I ask general questions about Triton and Triton backends?
 Be sure to read all the information below as well as the [general
 Triton documentation](https://github.com/triton-inference-server/server#triton-inference-server)
@@ -156,14 +162,14 @@ more details on the parameters.
 Next, create the
 [model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
 that will be used by the Triton server. The models can be found in the
-[all_models](./all_models) folder. The folder contains two groups of models:
-- [`gpt`](./all_models/gpt): Using TensorRT-LLM pure Python runtime.
-- [`inflight_batcher_llm`](./all_models/inflight_batcher_llm/)`: Using the C++
+[all_models](./tensorrt_llm/triton_backend/all_models) folder. The folder contains two groups of models:
+- [`gpt`](./tensorrt_llm/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime.
+- [`inflight_batcher_llm`](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/)`: Using the C++
 TensorRT-LLM backend with the executor API, which includes the latest features
 including inflight batching.
 
 There are five models in
-[all_models/inflight_batcher_llm](./all_models/inflight_batcher_llm) that will
+[all_models/inflight_batcher_llm](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm) that will
 be used in this example:
 
 | Model | Description |
@@ -291,11 +297,11 @@ Which should return a result similar to (formatted for readability):
 ##### Using the client scripts
 
 You can refer to the client scripts in the
-[inflight_batcher_llm/client](./inflight_batcher_llm/client) to see how to send
+[inflight_batcher_llm/client](./tensorrt_llm/triton_backend/inflight_batcher_llm/client) to see how to send
 requests via Python scripts.
 
 Below is an example of using
-[inflight_batcher_llm_client](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)
+[inflight_batcher_llm_client](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)
 to send requests to the `tensorrt_llm` model.
 
 ```bash
@@ -356,9 +362,9 @@ or
 After launching the server, you could get the output of logits by passing the
 corresponding parameters `--return-context-logits` and/or
 `--return-generation-logits` in the client scripts
-([end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py)
+([end_to_end_grpc_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
 and
-[inflight_batcher_llm_client.py](./inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
+[inflight_batcher_llm_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
 
 For example:
 
@@ -413,7 +419,7 @@ with a given batch index. An output tensor named `batch_index` is associated
 with each response to indicate which batch index this response corresponds to.
 
 The client script
-[end_to_end_grpc_client.py](./inflight_batcher_llm/client/end_to_end_grpc_client.py)
+[end_to_end_grpc_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
 demonstrates how a client can send requests with batch size > 1 and consume the
 responses returned from Triton. When passing `--batch-inputs` to the client
 script, the client will create a request with multiple prompts, and use the
