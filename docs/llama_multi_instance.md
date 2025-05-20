@@ -74,7 +74,7 @@ same GPU.
 4. Run the test client to measure performance:
 
 ```bash
-python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500
 ```
 
 If you plan to use the BLS version instead of the ensemble model, you might also
@@ -131,13 +131,13 @@ trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH} \
 
 ```bash
 # Setup the model repository for the first instance.
-cp all_models/inflight_batcher_llm/ llama_ifb -r
+cp tensorrt_llm/triton_backend/ci/all_models/inflight_batcher_llm/ llama_ifb -r
 
-python3 tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,preprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_LLAMA_MODEL},triton_max_batch_size:64,postprocessing_instance_count:1
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:64,decoupled_mode:False,max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 ```
 
 ### Leader Mode
@@ -150,8 +150,8 @@ between the servers.
 3a. Launch the servers:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 python3 scripts/launch_triton_server.py --world_size 2 --model_repo=llama_ifb/ --http_port 8000 --grpc_port 8001 --metrics_port 8004
-CUDA_VISIBLE_DEVICES=2,3 python3 scripts/launch_triton_server.py --world_size 2 --model_repo=llama_ifb/ --http_port 8002 --grpc_port 8003 --metrics_port 8005
+CUDA_VISIBLE_DEVICES=0,1 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 2 --model_repo=llama_ifb/ --http_port 8000 --grpc_port 8001 --metrics_port 8004
+CUDA_VISIBLE_DEVICES=2,3 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 2 --model_repo=llama_ifb/ --http_port 8002 --grpc_port 8003 --metrics_port 8005
 ```
 
 4a. Install NGINX:
@@ -191,10 +191,10 @@ service nginx restart
 pip3 install tritonclient[all]
 
 # Test the load on all the servers
-python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8080
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8080
 
 # Test the load on one of the servers
-python3 tools/inflight_batcher_llm/end_to_end_test.py --dataset ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8000
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 -u localhost:8000
 ```
 
 8a. Kill the server:
@@ -238,7 +238,7 @@ sed -i 's/name: "tensorrt_llm"/name: "tensorrt_llm_2"/g' llama_ifb/tensorrt_llm_
 5b. Launch the server:
 
 ```bash
-python3 scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/
 ```
 
 Alternatively, you can start all MPI ranks at once and avoid dynamic process spawning
@@ -253,7 +253,7 @@ sed -i 's/\${participant_ids}/3,4/g' llama_ifb/tensorrt_llm_2/config.pbtxt
 Note that rank 0 is reserved for the orchestrator rank.
 
 ```bash
-python3 scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/ --disable-spawn-processes --world_size=5
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/ --disable-spawn-processes --world_size=5
 ```
 
 6b. Run the test client to measure performance:
@@ -262,11 +262,11 @@ python3 scripts/launch_triton_server.py --multi-model --model_repo=llama_ifb/ --
 pip3 install tritonclient[all]
 
 # We will only benchmark the core tensorrtllm models.
-python3 tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
-     dataset --dataset ci/L0_backend_trtllm/simple_data.json \
-     --tokenizer-dir $HF_LLAMA_MODEL \
-     --tesnorrt-llm-model-name tensorrtllm \
-     --tensorrt-llm-model-name tensorrtllm_2
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
+     --tensorrt-llm-model-name tensorrt_llm \
+     --tensorrt-llm-model-name tensorrt_llm_2 \
+     dataset --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json \
+     --tokenizer-dir $HF_LLAMA_MODEL
 ```
 
 7b. Kill the server:
