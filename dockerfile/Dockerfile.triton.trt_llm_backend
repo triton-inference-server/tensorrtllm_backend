@@ -1,23 +1,28 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.03-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.03-py3
-ARG NVRTC_VER=12.8.61-1
-ARG TRT_VER=10.9.0.34
-ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.9.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.8.tar.gz
-ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.9.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.8.tar.gz
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.04-py3-min
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.04-py3
+ARG NVRTC_VER=12.9.41-1
+ARG TRT_VER=10.10.0.31
+ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.10.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.9.tar.gz
+ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.10.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
 
 # Versions of packages to copy from pytorch image
-ARG TORCH_VER=2.7.0a0+7c8ec84dab.nv25.3
+ARG TORCH_VER=2.7.0a0+79aa17489c.nv25.4
 ARG TORCHVISION_VER=0.22.0a0
-ARG SETUPTOOLS_VER=75.8.2
-ARG PYTORCH_TRITON_VER=3.2.0+gitb2684bf3b.nvinternal
+ARG SETUPTOOLS_VER=78.1.0
+ARG PYTORCH_TRITON_VER=3.2.0+git4b3bb1f8b.nvinternal
 ARG JINJA2_VER=3.1.6
 ARG NETWORKX_VER=3.4.2
-ARG SYMPY_VER=1.13.1
+ARG SYMPY_VER=1.13.3
 ARG PACKAGING_VER=23.2
 ARG FLASH_ATTN_VER=2.7.3
 
-FROM ${PYTORCH_IMAGE} as pytorch_image
-FROM ${BASE_IMAGE} as install_dependencies
+FROM ${PYTORCH_IMAGE} AS pytorch_image
+FROM ${BASE_IMAGE} AS install_dependencies
+
+ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
+ARG TENSORRTLLM_REPO_TAG=main
+
+WORKDIR /workspace
 
 ARG CCACHE_REMOTE_STORAGE
 ARG CCACHE_URL
@@ -71,15 +76,15 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_c
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN apt-get update -q=2 && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update -q=2 \
+    && apt-get install -y --no-install-recommends \
         python3-dev \
         python3-pip \
-        git-lfs && \
-    # Remove previous TRT installation
-    apt-get remove -y tensorrt* libnvinfer* && \
-    pip3 uninstall -y tensorrt && \
-    rm -rf /var/lib/apt/lists/*
+        git-lfs \
+        # Remove previous TRT installation
+    && apt-get purge -y "libnvinfer*" \
+    && pip3 uninstall -y tensorrt \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG TRT_VER
 ARG NVRTC_VER
@@ -95,16 +100,16 @@ ENV TRT_VERSION=$TRT_VER \
 LABEL TRT_VERSION $TRT_VER
 
 # Install NVRTC
-RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" && \
-    curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb && \
-    apt install /tmp/cuda-keyring.deb && \
-    rm /tmp/cuda-keyring.deb && \
-    apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* && \
-    CUDA_VER_SHORT=${CUDA_VER: 0:4} && \
-    NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} && \
-    apt-get update -qq && \
-    apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} && \
-    rm -rf /var/lib/apt/lists/*
+RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
+    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb \
+    && apt install /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
+    && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
+    && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+    && rm -rf /var/lib/apt/lists/*
 
 # Download & install TRT release
 ARG RELEASE_URL_TRT_x86
@@ -123,14 +128,17 @@ RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import s
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
 
-FROM install_dependencies as tensorrt_llm_build
+FROM install_dependencies AS tensorrt_llm_build
 
 WORKDIR /workspace
 
-RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==3.30.2
+ARG TENSORRTLLM_REPO
+ARG TENSORRTLLM_REPO_TAG
+RUN git-lfs install \
+    && git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
 
-COPY scripts scripts
-COPY tensorrt_llm tensorrt_llm
+RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==3.30.2 ninja
+
 RUN cd tensorrt_llm && \
     if [ -n "${CCACHE_REMOTE_STORAGE}" ] ; then \
       python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --use_ccache ; \
@@ -139,7 +147,7 @@ RUN cd tensorrt_llm && \
     fi
 
 # Final stage to build the TRT-LLM container
-FROM ${BASE_IMAGE} as final_stage
+FROM ${BASE_IMAGE} AS final_stage
 
 ARG TORCH_VER
 ARG TORCHVISION_VER
@@ -185,28 +193,28 @@ ENV CUDA_VER=$CUDA_VERSION \
 # Install the necessary dependencies and remove previous TRT installation in the
 # final image
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN apt-get update -q=2 && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update -q=2 \
+    && apt-get install -y --no-install-recommends \
         python3-dev \
         python3-pip \
-        python-is-python3 \
-        git-lfs && \
-    apt-get remove -y tensorrt* libnvinfer* && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip3 uninstall -y tensorrt && \
-    pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5
+        git-lfs \
+        # Remove previous TRT installation
+    && apt-get purge -y "libnvinfer*" \
+    && pip3 uninstall -y tensorrt \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5
 
 # Install NVRTC
-RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" && \
-    curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb && \
-    apt install /tmp/cuda-keyring.deb && \
-    rm /tmp/cuda-keyring.deb && \
-    apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* && \
-    CUDA_VER_SHORT=${CUDA_VER: 0:4} && \
-    NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} && \
-    apt-get update -qq && \
-    apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} && \
-    rm -rf /var/lib/apt/lists/*
+RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
+    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb \
+    && apt install /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
+    && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
+    && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install TRT
 COPY --from=install_dependencies /usr/local/tensorrt /usr/local/tensorrt
@@ -222,13 +230,6 @@ WORKDIR /tmp
 
 # Install TRT-LLM wheel after all the dependencies are installed
 COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
-RUN pip3 install --no-cache-dir tensorrt_llm*.whl && \
-    rm -f tensorrt_llm*.whl
+RUN pip3 install --no-cache-dir tensorrt_llm*.whl \
+    && rm -f tensorrt_llm*.whl
 
-# Copying the scripts
-WORKDIR /app
-COPY scripts scripts
-COPY all_models all_models
-COPY inflight_batcher_llm/client client
-COPY tools tools
-COPY tensorrt_llm/examples examples
