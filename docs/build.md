@@ -19,12 +19,15 @@ bash scripts/build.sh
 
 ## Build the Docker Container
 
-> [!CAUTION]
-> [build.sh](../build.sh) is currently not working and will be fixed in the next weekly update.
+### Build using `build.sh`
+
+```bash
+bash ../build.sh
+```
 
 #### Build via Docker
 
-You can build the container using the instructions in the [TensorRT-LLM Docker Build](../tensorrt_llm/docker/README.md)
+You can build the container using the instructions in the [TensorRT-LLM Docker Build](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docker/README.md)
 with `tritonrelease` stage.
 
 ```bash
