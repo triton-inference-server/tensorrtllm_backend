@@ -52,9 +52,9 @@ FLAGS.model_name: tensorrt_llm
 ```bash
  python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
     --tensorrt-llm-model-name tensorrt_llm \
-     --test-llmapi \
-     dataset --dataset ./tensorrt_llm/triton_backend/tools/dataset/mini_cnn_eval.json \
-     --tokenizer-dir meta-llama/Llama-3.1-8B
+    --test-llmapi \
+    dataset --dataset ./tensorrt_llm/triton_backend/tools/dataset/mini_cnn_eval.json \
+    --tokenizer-dir meta-llama/Llama-3.1-8B
 
 dataset
 Tokenizer: Tokens per word =  1.308
@@ -62,3 +62,19 @@ Tokenizer: Tokens per word =  1.308
 [INFO] Start benchmarking on 39 prompts.
 [INFO] Total Latency: 1446.623 ms
 ```
+
+** Start the server on a multi-node configuration
+
+The `srun` tool can be used to start the server in a multi-node environment:
+
+```
+srun -N 2 \
+    --ntasks-per-node=8 \
+    --mpi=pmix \
+    --container-image=<your image> \
+    --container-mounts=$(pwd)/tensorrt_llm/:/code \
+    bash /code/triton_backend/scripts/triton_task.sh
+
+```
+
+Note: inter-node tensor parallelism is not yet supported.
