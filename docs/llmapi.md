@@ -63,7 +63,7 @@ Tokenizer: Tokens per word =  1.308
 [INFO] Total Latency: 1446.623 ms
 ```
 
-** Start the server on a multi-node configuration
+### Start the server on a multi-node configuration
 
 The `srun` tool can be used to start the server in a multi-node environment:
 
