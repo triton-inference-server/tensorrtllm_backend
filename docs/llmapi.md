@@ -32,6 +32,35 @@ python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo
 curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "The future of AI is", "max_tokens":10}' | jq
 ```
 
+* Optional: include performance metrics
+
+To retrieve detailed performance metrics per request such as KV cache usage, timing breakdowns, and speculative decoding statistics - add `"sampling_param_return_perf_metrics": true` to your request payload:
+
+```bash
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "Please explain to me what is machine learning?", "max_tokens":10, "sampling_param_return_perf_metrics":true}' | jq
+```
+
+Sample response with performance metrics
+```json
+{
+  "acceptance_rate": "0.0",
+  "arrival_time_ns": "76735247746000",
+  "first_scheduled_time_ns": "76735248284000",
+  "first_token_time_ns": "76735374300000",
+  "kv_cache_alloc_new_blocks": "1",
+  "kv_cache_alloc_total_blocks": "1",
+  "kv_cache_hit_rate": "0.0",
+  "kv_cache_missed_block": "1",
+  "kv_cache_reused_block": "0",
+  "last_token_time_ns": "76736545324000",
+  "model_name": "tensorrt_llm",
+  "model_version": "1",
+  "text_output": "Please explain to me what is machine learning? \n\nMachine learning is a field of computer science that involves the development of algorithms and models that can learn from data without being explicitly programmed. It is a",
+  "total_accepted_draft_tokens": "0",
+  "total_draft_tokens": "0"
+}
+```
+
 `inflight_batcher_llm_client.py` is not supported yet.
 
 * Run test on dataset
