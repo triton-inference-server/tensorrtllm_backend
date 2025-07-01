@@ -102,7 +102,7 @@ srun -N 2 \
     --mpi=pmix \
     --container-image=<your image> \
     --container-mounts=$(pwd)/tensorrt_llm/:/code \
-    bash /code/triton_backend/scripts/triton_task.sh
+    trtllm-llmapi-launch /opt/tritonserver/bin/tritonserver --model-repository llmapi_repo
 
 ```
 
