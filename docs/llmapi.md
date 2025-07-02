@@ -29,7 +29,7 @@ python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo
 * Send request
 
 ```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "The future of AI is", "max_tokens":10}' | jq
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "The future of AI is", "sampling_param_max_tokens":10}' | jq
 ```
 
 * Optional: include performance metrics
@@ -37,7 +37,7 @@ curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "
 To retrieve detailed performance metrics per request such as KV cache usage, timing breakdowns, and speculative decoding statistics - add `"sampling_param_return_perf_metrics": true` to your request payload:
 
 ```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "Please explain to me what is machine learning?", "max_tokens":10, "sampling_param_return_perf_metrics":true}' | jq
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "Please explain to me what is machine learning?", "sampling_param_max_tokens":10, "sampling_param_return_perf_metrics":true}' | jq
 ```
 
 Sample response with performance metrics
