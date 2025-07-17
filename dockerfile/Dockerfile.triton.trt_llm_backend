@@ -1,6 +1,6 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.06-py3-min
 ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
-ARG NVRTC_VER=12.9.41-1
+ARG NVRTC_VER=12.9.86-1
 ARG TRT_VER=10.11.0.33
 ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.9.tar.gz
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
