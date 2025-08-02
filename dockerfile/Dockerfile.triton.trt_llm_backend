@@ -81,8 +81,6 @@ RUN apt-get update -q=2 \
         python3-dev \
         python3-pip \
         git-lfs \
-        libmlx5-1 \
-        ibverbs-utils \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && pip3 uninstall -y tensorrt \
@@ -201,8 +199,6 @@ RUN apt-get update -q=2 \
         python3-dev \
         python3-pip \
         git-lfs \
-        libmlx5-1 \
-        ibverbs-utils \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && pip3 uninstall -y tensorrt \
