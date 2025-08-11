@@ -109,7 +109,10 @@ RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
     && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
     && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
     && apt-get update -qq \
-    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+    && apt-get install -y --no-install-recommends \
+        cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+        libnccl2=${NCCL_VER} \
+        libnccl-dev=${NCCL_VER} \
     && rm -rf /var/lib/apt/lists/*
 
 # Download & install TRT release
