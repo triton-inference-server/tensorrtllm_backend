@@ -21,7 +21,7 @@ FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRTLLM_REPO_TAG=v0.21.0
+ARG TENSORRTLLM_REPO_TAG=release/0.21
 
 WORKDIR /workspace
 
