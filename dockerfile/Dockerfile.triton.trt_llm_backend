@@ -97,7 +97,7 @@ ENV TRT_VERSION=$TRT_VER \
     CUBLAS_VER=$CUBLAS_VERSION \
     NVRTC_VER="${NVRTC_VER}"
 
-LABEL TRT_VERSION $TRT_VER
+LABEL TRT_VERSION="$TRT_VER"
 
 # Install NVRTC
 RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
