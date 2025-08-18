@@ -140,11 +140,13 @@ RUN git-lfs install \
 RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==4.0.3 ninja
 ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 
+# TODO:TPRD-1659: revert upon comletion: https://github.com/NVIDIA/TensorRT-LLM/pull/6609
 RUN cd tensorrt_llm && \
+    MLX5_lib=$(find /usr/lib/ -name libmlx5.so.1) && \
     if [ -n "${CCACHE_REMOTE_STORAGE}" ] ; then \
-      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --use_ccache ; \
+      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --use_ccache --extra-cmake-vars MLX5_lib=${MLX5_lib} ; \
     else \
-      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean ; \
+      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --extra-cmake-vars MLX5_lib=${MLX5_lib} ; \
     fi
 
 # Final stage to build the TRT-LLM container
