@@ -82,6 +82,7 @@ RUN apt-get update -q=2 \
         python3-pip \
         git-lfs \
         pkg-config \
+        libzmq3-dev \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && pip3 uninstall -y tensorrt \
@@ -200,7 +201,8 @@ RUN apt-get update -q=2 \
         python3-dev \
         python3-pip \
         git-lfs \
-        pkg-config \     
+        pkg-config \
+        libzmq3-dev \     
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && pip3 uninstall -y tensorrt \
