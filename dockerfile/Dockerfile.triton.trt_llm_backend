@@ -1,7 +1,8 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.06-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
-ARG NVRTC_VER=12.9.86-1
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.05-py3-min
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.05-py3
+ARG NVRTC_VER=12.9.41-1
 ARG TRT_VER=10.11.0.33
+ARG NCCL_VER=2.27.5-1+cuda12.9
 ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.9.tar.gz
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
 
@@ -20,7 +21,7 @@ FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRTLLM_REPO_TAG=main
+ARG TENSORRTLLM_REPO_TAG=release/0.21
 
 WORKDIR /workspace
 
@@ -93,27 +94,32 @@ RUN apt-get update -q=2 \
 
 ARG TRT_VER
 ARG NVRTC_VER
+ARG NCCL_VER
 
 ENV TRT_VERSION=$TRT_VER \
     TRT_VER=$TRT_VER \
     CUDA_VER=$CUDA_VERSION \
     CUDNN_VER=$CUDNN_VERSION \
-    NCCL_VER=$NCCL_VERSION \
+    NCCL_VER=$NCCL_VER \
     CUBLAS_VER=$CUBLAS_VERSION \
     NVRTC_VER="${NVRTC_VER}"
 
-LABEL TRT_VERSION $TRT_VER
+LABEL TRT_VERSION=$TRT_VER
+LABEL NCCL_VER=$NCCL_VER
 
 # Install NVRTC
 RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
-    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb \
+    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb \
     && apt install /tmp/cuda-keyring.deb \
     && rm /tmp/cuda-keyring.deb \
     && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
     && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
     && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
     && apt-get update -qq \
-    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+    && apt-get install -y --no-install-recommends \
+        cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+        libnccl2=${NCCL_VER} \
+        libnccl-dev=${NCCL_VER} \
     && rm -rf /var/lib/apt/lists/*
 
 # Download & install TRT release
@@ -195,8 +201,10 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_c
 COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ARG NVRTC_VER
+ARG NCCL_VER
 ENV CUDA_VER=$CUDA_VERSION \
-    NVRTC_VER="${NVRTC_VER}"
+    NVRTC_VER="${NVRTC_VER}" \
+    NCCL_VER="${NCCL_VER}"
 
 # Install the necessary dependencies and remove previous TRT installation in the
 # final image
@@ -206,11 +214,7 @@ RUN apt-get update -q=2 \
         python3-dev \
         python3-pip \
         git-lfs \
-        pkg-config \
-        libzmq3-dev \
-        #libibverbs-dev \
-        #libmlx5-1 \
-        #libmlx5-dev \
+        perl \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && pip3 uninstall -y tensorrt \
@@ -219,14 +223,17 @@ RUN apt-get update -q=2 \
 
 # Install NVRTC
 RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
-    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.0-1_all.deb \
+    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb \
     && apt install /tmp/cuda-keyring.deb \
     && rm /tmp/cuda-keyring.deb \
     && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
     && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
     && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
     && apt-get update -qq \
-    && apt-get install -y --no-install-recommends cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+    && apt-get install -y --no-install-recommends \
+        cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
+        libnccl2=${NCCL_VER} \
+        libnccl-dev=${NCCL_VER} \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TRT
