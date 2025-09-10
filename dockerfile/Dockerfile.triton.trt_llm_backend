@@ -7,7 +7,7 @@ ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-l
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
 
 # Versions of packages to copy from pytorch image
-ARG FLASH_ATTN_VER=2.7.4
+ARG FLASH_ATTN_VER=2.7.4.post1
 ARG JINJA2_VER=3.1.6
 ARG NETWORKX_VER=3.5
 ARG PACKAGING_VER=23.2
