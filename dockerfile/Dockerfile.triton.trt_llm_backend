@@ -1,5 +1,5 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.05-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.05-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.06-py3-min
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
 ARG NVRTC_VER=12.9.41-1
 ARG TRT_VER=10.11.0.33
 ARG NCCL_VER=2.27.5-1+cuda12.9
@@ -7,21 +7,21 @@ ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-l
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
 
 # Versions of packages to copy from pytorch image
-ARG TORCH_VER=2.8.0a0+5228986c39.nv25.5
-ARG TORCHVISION_VER=0.22.0a0
-ARG SETUPTOOLS_VER=78.1.1
-ARG PYTORCH_TRITON_VER=3.3.0+git96316ce52.nvinternal
+ARG FLASH_ATTN_VER=2.7.4.post1
 ARG JINJA2_VER=3.1.6
-ARG NETWORKX_VER=3.4.2
-ARG SYMPY_VER=1.14.0
+ARG NETWORKX_VER=3.5
 ARG PACKAGING_VER=23.2
-ARG FLASH_ATTN_VER=2.7.3
+ARG PYTORCH_TRITON_VER=3.3.0+git96316ce52.nvinternal
+ARG SETUPTOOLS_VER=78.1.1
+ARG SYMPY_VER=1.14.0
+ARG TORCH_VER=2.8.0a0+5228986c39.nv25.6
+ARG TORCHVISION_VER=0.22.0a0+95f10a4e
 
 FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRTLLM_REPO_TAG=release/0.21
+ARG TENSORRTLLM_REPO_TAG=release/1.0
 
 WORKDIR /workspace
 
