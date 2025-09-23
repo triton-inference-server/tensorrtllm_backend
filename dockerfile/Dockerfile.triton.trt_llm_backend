@@ -145,7 +145,7 @@ RUN git-lfs install \
 
 RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==4.0.3 ninja \
     && apt-get update \
-    && apt-get install -y pkg-config libzmq3-dev
+    && apt-get install -y pkg-config libzmq3-dev libibverbs-dev
 ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 
 RUN cd tensorrt_llm && \
