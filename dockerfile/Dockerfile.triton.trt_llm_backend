@@ -151,7 +151,7 @@ RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==4.0.3 ni
         libibverbs-dev \
         libnuma-dev \
         libucx-dev \
-        ibverbs-providers
+        ibverbs-providers \
         openmpi-bin \
         libopenmpi-dev
 
