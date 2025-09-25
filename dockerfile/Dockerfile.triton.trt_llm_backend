@@ -184,7 +184,8 @@ ENV TRT_ROOT=/usr/local/tensorrt
 
 # Install TRT-LLM wheel after all the dependencies are installed
 ARG TENSORRTLLM_VER
-RUN pip3 install --no-cache-dir  tensorrt_llm==${TENSORRTLLM_VER}
+RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
+    pip install --no-cache-dir ${PYPI_EXTRA_VALUES} tensorrt_llm==${TENSORRTLLM_VER}
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
