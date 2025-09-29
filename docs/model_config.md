@@ -244,7 +244,7 @@ Below is the lists of input and output tensors for the `tensorrt_llm` and
 | `presence_penalty` | [1] | `float` | Sampling Config param: `presencePenalty` |
 | `frequency_penalty` | [1] | `float` | Sampling Config param: `frequencyPenalty` |
 | `seed` | [1] | `uint64_t` | Sampling Config param: `seed` |
-| `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output |
+| `return_log_probs` | [1] | `bool` | When `true`, include log probs in the output. Note: This requires at least one sampling parameter to be set (e.g., `runtime_top_k`, `runtime_top_p` for `tensorrt_llm` model, or `top_k`, `top_p` for `tensorrt_llm_bls` model). |
 | `return_context_logits` | [1] | `bool` | When `true`, include context logits in the output |
 | `return_generation_logits` | [1] | `bool` | When `true`, include generation logits in the output |
 | `num_return_sequences` | [1] | `int32_t` | Number of generated sequences per request. (Default=1) |
@@ -272,7 +272,7 @@ Note: the timing metrics oputputs are represented as the number of nanoseconds s
 | Name | Shape | Type | Description |
 | :------------: | :---------------: | :-----------: | :--------: |
 | `cum_log_probs` | [-1] | `float` | Cumulative probabilities for each output |
-| `output_log_probs` | [beam_width, -1] | `float` | Log probabilities for each output |
+| `output_log_probs` | [beam_width, -1] | `float` | Per-token log probabilities for each output. Only returned when `return_log_probs` is `true` and sampling parameters are set. |
 | `context_logits` | [-1, vocab_size] | `float` | Context logits for input |
 | `generation_logits` | [beam_width, seq_len, vocab_size] | `float` | Generation logits for each output |
 | `batch_index` | [1] | `int32` | Batch index |
