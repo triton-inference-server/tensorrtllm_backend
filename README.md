@@ -162,8 +162,9 @@ more details on the parameters.
 Next, create the
 [model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
 that will be used by the Triton server. The models can be found in the
-[all_models](./tensorrt_llm/triton_backend/all_models) folder. The folder contains two groups of models:
-- [`gpt`](./tensorrt_llm/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime.
+[all_models](./tensorrt_llm/triton_backend/all_models) folder. The folder contains six groups of models:
+- [`disaggregated_serving`](./tensorrt_llm/triton_backend/all_models/disaggregated_serving): Using the C++ TensorRT-LLM backend to run disaggregated serving.
+- [`gpt`](./tensorrt_llm/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime. This model is deprecated and will be removed in a future release.
 - [`inflight_batcher_llm`](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/)`: Using the C++
 TensorRT-LLM backend with the executor API, which includes the latest features
 including inflight batching.
@@ -193,6 +194,9 @@ please see the [model config](./docs/model_config.md#tensorrt_llm_bls-model) sec
 mkdir /triton_model_repo
 cp -r /app/all_models/inflight_batcher_llm/* /triton_model_repo/
 ```
+- [`llmapi`](./tensorrt_llm/triton_backend/all_models/llmapi/): Using TensorRT-LLM LLM API with pytorch backend.
+- [`multimodal`](./tensorrt_llm/triton_backend/all_models/multimodal/): Using TensorRT-LLM python runtime for multimodal models. See [`multimodal.md`](./docs/multimodal.md) for more details.
+- [`whisper`](./tensorrt_llm/triton_backend/all_models/whisper/): Using TensorRT-LLM python runtime for Whisper. See [`whisper.md`](./docs/whisper.md) for more details.
 
 #### Modify the Model Configuration
 Use the script to fill in the parameters in the model configuration files. For
