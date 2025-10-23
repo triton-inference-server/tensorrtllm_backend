@@ -90,10 +90,36 @@ FROM install_dependencies AS tensorrt_llm_code
 
 WORKDIR /workspace
 
+ARG CCACHE_REMOTE_STORAGE
+ARG CCACHE_URL
+ENV CCACHE_DEBUG=1
+
+RUN if [ -n "${CCACHE_REMOTE_STORAGE}" ] ; then \
+      curl -k -L ${CCACHE_URL} -o ccache.tar.gz ; \
+      tar -xzf ccache.tar.gz -C /usr/local --strip-components=1 ; \
+      rm ccache.tar.gz ; \
+      ccache --set-config=remote_only=true ; \
+      ccache --set-config=remote_storage=${CCACHE_REMOTE_STORAGE} ; \
+      ccache --set-config=log_file=/tmp/ccache.log ; \
+      ccache -p ; \
+    fi
+
 ARG TENSORRTLLM_REPO
 ARG TENSORRTLLM_REPO_TAG
 RUN git-lfs install \
     && git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
+
+RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==4.0.3 ninja
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
+
+RUN cd tensorrt_llm && \
+    if [ -n "${CCACHE_REMOTE_STORAGE}" ] ; then \
+      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean --use_ccache ; \
+    else \
+      python3 scripts/build_wheel.py --trt_root="${TRT_ROOT}" --clean ; \
+    fi
+
+
 
 # Final stage to build the TRT-LLM container
 FROM ${BASE_IMAGE} AS final_stage
@@ -179,9 +205,9 @@ ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
 
 # Install TRT-LLM wheel after all the dependencies are installed
-ARG TENSORRTLLM_VER
-RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
-    pip install --no-cache-dir ${PYPI_EXTRA_VALUES} tensorrt_llm==${TENSORRTLLM_VER}
+COPY --from=tensorrt_llm_build /workspace/tensorrt_llm/build/tensorrt_llm*whl .
+RUN pip3 install --no-cache-dir tensorrt_llm*.whl \
+    && rm -f tensorrt_llm*.whl
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
