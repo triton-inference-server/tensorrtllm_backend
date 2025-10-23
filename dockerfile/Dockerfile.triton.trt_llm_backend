@@ -137,6 +137,7 @@ RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
 
 # Install TRT
 COPY --from=install_dependencies /usr/local/tensorrt /usr/local/tensorrt
+RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import sys; print(str(sys.version_info.major) + str(sys.version_info.minor))" )*
 # Set environment variables
 ARG TRT_VER
 ENV TRT_VERSION=$TRT_VER
