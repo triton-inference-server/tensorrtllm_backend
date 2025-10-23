@@ -97,7 +97,7 @@ ARG PACKAGING_VER
 ARG FLASH_ATTN_VER
 # Copy necessary files from the base stage
 COPY --from=source_image /usr/local/lib/lib* /usr/local/lib/
-COPY --from=source_image /usr/local/lib/python3.12/* /usr/local/lib/
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages /usr/local/lib/python3.12/dist-packages
 
 ARG NVRTC_VER
 ARG NCCL_VER
