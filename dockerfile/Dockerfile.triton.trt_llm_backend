@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.08-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/tensorrt-llm/devel:1.2.0rc1
+ARG SOURCE_IMAGE=nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc1
 ARG NVRTC_VER=13.0.48-1
 ARG TRT_VER=10.13.2.6
 ARG NCCL_VER=2.27.7-1+cuda13.0
@@ -20,13 +20,13 @@ ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
 ARG TENSORRTLLM_REPO_TAG=v1.2.0rc1
 ARG TENSORRTLLM_VER=1.2.0rc1
 
-FROM ${PYTORCH_IMAGE} AS pytorch_image
+ARG TENSORRT_LLM_PREBUILT_WHEEL_PATH
+
+FROM ${SOURCE_IMAGE} AS source_image
 FROM ${BASE_IMAGE} AS install_dependencies
 
 WORKDIR /workspace
 
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update -q=2 \
@@ -109,9 +109,6 @@ ARG TENSORRTLLM_REPO_TAG
 RUN git-lfs install \
     && git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
 
-RUN pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5 cmake==4.0.3 ninja
-ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
-
 ENV CONAN_HOME=/workspace/tensorrt_llm/cpp/.conan
 
 RUN cd tensorrt_llm && \
@@ -135,30 +132,30 @@ ARG SYMPY_VER
 ARG PACKAGING_VER
 ARG FLASH_ATTN_VER
 # Copy necessary files from the base stage
-COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx /usr/local/lib/python3.12/dist-packages/networkx
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy /usr/local/lib/python3.12/dist-packages/sympy
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
+COPY --from=source_image /usr/local/lib/lib* /usr/local/lib/
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/networkx /usr/local/lib/python3.12/dist-packages/networkx
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/sympy /usr/local/lib/python3.12/dist-packages/sympy
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
 
 # Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
+COPY --from=source_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ARG NVRTC_VER
 ARG NCCL_VER
