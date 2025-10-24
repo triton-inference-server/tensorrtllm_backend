@@ -154,9 +154,6 @@ COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr
 COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
 COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
 
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=source_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
-
 ARG NVRTC_VER
 ARG NCCL_VER
 ENV CUDA_VER=$CUDA_VERSION \
