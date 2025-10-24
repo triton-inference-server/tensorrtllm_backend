@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.08-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.08-py3
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/tensorrt-llm/devel:1.2.0rc1
 ARG NVRTC_VER=13.0.48-1
 ARG TRT_VER=10.13.2.6
 ARG NCCL_VER=2.27.7-1+cuda13.0
