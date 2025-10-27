@@ -1,99 +1,65 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.08-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.08-py3
-ARG NVRTC_VER=13.0.48-1
-ARG TRT_VER=10.13.2.6
-ARG NCCL_VER=2.27.7-1+cuda13.0
-ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.2/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-13.0.tar.gz
-ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.2/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
+# syntax=docker/dockerfile:1
+ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
+ARG TENSORRTLLM_REPO_TAG=v1.2.0rc1
+ARG TENSORRTLLM_VER=1.2.0rc1
+ARG TENSORRTLLM_WHEEL
+ARG TENSORRTLLM_TRT_VER=10.13.2.6
 
-# Versions of packages to copy from pytorch image
+
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.08-py3-min
+ARG SOURCE_IMAGE=nvcr.io/nvidia/pytorch:25.08-py3
+
+
+# Versions of packages to copy from source image
+ARG FLASH_ATTN_VER=2.7.4.post1
+ARG NCCL_VER=2.27.7-1+cuda13.0
+ARG NETWORKX_VER=3.5
+ARG NVRTC_VER=13.0.48-1
+ARG PACKAGING_VER=23.2
+ARG PYTORCH_TRITON_VER=3.3.1+gitc8757738
+ARG SETUPTOOLS_VER=79.0.1
+ARG SYMPY_VER=1.14.0
 ARG TORCH_VER=2.8.0a0+34c6371d24.nv25.8
 ARG TORCHVISION_VER=0.23.0a0+428a54c9
-ARG SETUPTOOLS_VER=79.0.1
-ARG PYTORCH_TRITON_VER=3.3.1+gitc8757738
-ARG NETWORKX_VER=3.5
-ARG SYMPY_VER=1.14.0
-ARG PACKAGING_VER=23.2
-ARG FLASH_ATTN_VER=2.7.4.post1
+ARG TRT_URL_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.2/tars/TensorRT-${TENSORRTLLM_TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
+ARG TRT_URL_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.2/tars/TensorRT-${TENSORRTLLM_TRT_VER}.Linux.x86_64-gnu.cuda-13.0.tar.gz
 
-ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRTLLM_REPO_TAG=v1.2.0rc0
-ARG TENSORRTLLM_VER=1.2.0rc0
 
-FROM ${PYTORCH_IMAGE} AS pytorch_image
-FROM ${BASE_IMAGE} AS install_dependencies
-
-WORKDIR /workspace
-
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
-
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN apt-get update -q=2 \
-    && apt-get install -y --no-install-recommends \
-        python3-dev \
-        python3-pip \
-        git-lfs \
-        # Remove previous TRT installation
-    && apt-get purge -y "libnvinfer*" \
-    && pip3 uninstall -y tensorrt \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG TRT_VER
-ARG NVRTC_VER
-ARG NCCL_VER
-
-ENV TRT_VERSION=$TRT_VER \
-    TRT_VER=$TRT_VER \
-    CUDA_VER=$CUDA_VERSION \
-    CUDNN_VER=$CUDNN_VERSION \
-    NCCL_VER=$NCCL_VER \
-    CUBLAS_VER=$CUBLAS_VERSION \
-    NVRTC_VER="${NVRTC_VER}"
-
-LABEL TRT_VERSION=$TRT_VER
-LABEL NCCL_VER=$NCCL_VER
-
-# Install NVRTC
-RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
-    && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb \
-    && apt install /tmp/cuda-keyring.deb \
-    && rm /tmp/cuda-keyring.deb \
-    && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
-    && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
-    && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
-    && apt-get update -qq \
-    && apt-get install -y --no-install-recommends \
-        cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
-        libnccl2=${NCCL_VER} \
-        libnccl-dev=${NCCL_VER} \
-    && rm -rf /var/lib/apt/lists/*
+FROM ${SOURCE_IMAGE} AS source_image
+FROM ${BASE_IMAGE} AS requirements
 
 # Download & install TRT release
-ARG RELEASE_URL_TRT_x86
-ARG RELEASE_URL_TRT_ARM
+ARG TRT_URL_x86
+ARG TRT_URL_ARM
 
-RUN [ "$(uname -m)" != "x86_64" ] && RELEASE_URL_TRT=${RELEASE_URL_TRT_ARM} || RELEASE_URL_TRT=${RELEASE_URL_TRT_x86} \
-    && curl -fSL -o /tmp/tensorrt.tar.gz ${RELEASE_URL_TRT} \
+WORKDIR /requirements/
+
+
+ARG TENSORRTLLM_TRT_VER
+RUN [ "$(uname -m)" != "x86_64" ] && TRT_URL=${TRT_URL_ARM} || TRT_URL=${TRT_URL_x86} \
+    && curl -fSL -o /tmp/tensorrt.tar.gz ${TRT_URL} \
     # Extract the tarball, excluding Windows libraries and static libraries as
     # they are not needed for Linux build
     && tar xzvf /tmp/tensorrt.tar.gz --exclude="lib*win.so*" --exclude="*.a" -C /usr/local \
     && rm /tmp/tensorrt.tar.gz \
     && find /usr/local -maxdepth 1 -name Tens* -type d -exec ln -s {} /usr/local/tensorrt \;
 
-RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import sys; print(str(sys.version_info.major) + str(sys.version_info.minor))" )*
+WORKDIR /wheels/
 
-ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
-ENV TRT_ROOT=/usr/local/tensorrt
+ARG TENSORRTLLM_WHEEL
+ADD ${TENSORRTLLM_WHEEL} /wheels/
 
-FROM install_dependencies AS tensorrt_llm_code
-
-WORKDIR /workspace
+RUN apt-get update -q=2 \
+    && apt-get install -y --no-install-recommends \
+        git-lfs \
+    && git-lfs install  \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG TENSORRTLLM_REPO
 ARG TENSORRTLLM_REPO_TAG
-RUN git-lfs install \
-    && git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
+WORKDIR /workspace/
+RUN git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
+
 
 # Final stage to build the TRT-LLM container
 FROM ${BASE_IMAGE} AS final_stage
@@ -107,30 +73,27 @@ ARG SYMPY_VER
 ARG PACKAGING_VER
 ARG FLASH_ATTN_VER
 # Copy necessary files from the base stage
-COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx /usr/local/lib/python3.12/dist-packages/networkx
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy /usr/local/lib/python3.12/dist-packages/sympy
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
-
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
+COPY --from=source_image /usr/local/lib/lib* /usr/local/lib/
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torch /usr/local/lib/python3.12/dist-packages/torch
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torch-${TORCH_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchgen /usr/local/lib/python3.12/dist-packages/torchgen
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision /usr/local/lib/python3.12/dist-packages/torchvision
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info /usr/local/lib/python3.12/dist-packages/torchvision-${TORCHVISION_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /usr/local/lib/python3.12/dist-packages/torchvision.libs
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/setuptools /usr/local/lib/python3.12/dist-packages/setuptools
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info /usr/local/lib/python3.12/dist-packages/setuptools-${SETUPTOOLS_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/networkx /usr/local/lib/python3.12/dist-packages/networkx
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/sympy /usr/local/lib/python3.12/dist-packages/sympy
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info /usr/local/lib/python3.12/dist-packages/sympy-${SYMPY_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/packaging /usr/local/lib/python3.12/dist-packages/packaging
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info /usr/local/lib/python3.12/dist-packages/packaging-${PACKAGING_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
+COPY --from=source_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
 
 ARG NVRTC_VER
 ARG NCCL_VER
@@ -138,55 +101,50 @@ ENV CUDA_VER=$CUDA_VERSION \
     NVRTC_VER="${NVRTC_VER}" \
     NCCL_VER="${NCCL_VER}"
 
-# Install the necessary dependencies and remove previous TRT installation in the
-# final image
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN apt-get update -q=2 \
-    && apt-get install -y --no-install-recommends \
-        python3-dev \
-        python3-pip \
-        git-lfs \
-        perl \
-        # Remove previous TRT installation
-    && apt-get purge -y "libnvinfer*" \
-    && pip3 uninstall -y tensorrt \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5
 
-# Install NVRTC
 RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
     && curl -o /tmp/cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb \
-    && apt install /tmp/cuda-keyring.deb \
+    && apt-get install /tmp/cuda-keyring.deb \
     && rm /tmp/cuda-keyring.deb \
-    && apt-get remove --purge -y --allow-change-held-packages cuda-nvrtc-dev* \
+    && apt-get remove --purge -y --allow-change-held-packages \
+        cuda-nvrtc-dev* \
+        libnvinfer* \
+        tensorrt* \
     && CUDA_VER_SHORT=${CUDA_VER: 0:4} \
     && NVRTC_CUDA_VERSION=${CUDA_VER_SHORT/./-} \
     && apt-get update -qq \
     && apt-get install -y --no-install-recommends \
         cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
-        libnccl2=${NCCL_VER} \
+        git-lfs \
         libnccl-dev=${NCCL_VER} \
-    && rm -rf /var/lib/apt/lists/*
+        libnccl2=${NCCL_VER} \
+        perl \
+        python3-dev \
+        python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 uninstall -y tensorrt \
+    && pip3 install --no-cache-dir polygraphy==0.49.9 mpi4py==3.1.5
+
 
 # Install TRT
-COPY --from=install_dependencies /usr/local/tensorrt /usr/local/tensorrt
+COPY --from=requirements /usr/local/tensorrt /usr/local/tensorrt
 RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import sys; print(str(sys.version_info.major) + str(sys.version_info.minor))" )*
 
-# Set environment variables
-ARG TRT_VER
-ENV TRT_VERSION=$TRT_VER
+# Set enviroment variables
+ARG TENSORRTLM_TRT_VER
+ENV TRT_VERSION=$TENSORRTLLM_TRT_VER
 ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib:${LD_LIBRARY_PATH}
 ENV TRT_ROOT=/usr/local/tensorrt
 
 # Install TRT-LLM wheel after all the dependencies are installed
-ARG TENSORRTLLM_VER
-RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
-    pip install --no-cache-dir ${PYPI_EXTRA_VALUES} tensorrt_llm==${TENSORRTLLM_VER}
+RUN --mount=type=bind,from=requirements,source=/wheels/,target=/wheels/ \
+      pip3 install /wheels/tensorrt_llm*.whl
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
-COPY --from=tensorrt_llm_code /workspace/tensorrt_llm/triton_backend/scripts scripts
-COPY --from=tensorrt_llm_code /workspace/tensorrt_llm/triton_backend/all_models all_models
-COPY --from=tensorrt_llm_code /workspace/tensorrt_llm/triton_backend/inflight_batcher_llm/client client
-COPY --from=tensorrt_llm_code /workspace/tensorrt_llm/triton_backend/tools tools
-COPY --from=tensorrt_llm_code /workspace/tensorrt_llm/examples examples
+COPY --from=requirements /workspace/tensorrt_llm/triton_backend/scripts scripts
+COPY --from=requirements /workspace/tensorrt_llm/triton_backend/all_models all_models
+COPY --from=requirements /workspace/tensorrt_llm/triton_backend/inflight_batcher_llm/client client
+COPY --from=requirements /workspace/tensorrt_llm/triton_backend/tools tools
+COPY --from=requirements /workspace/tensorrt_llm/examples examples
