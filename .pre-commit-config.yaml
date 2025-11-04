@@ -73,4 +73,3 @@ repos:
         exclude: tools/dataset/
         args:
         - --skip=".git,tensorrt_llm"
-        - --exclude-file=all_models/whisper/whisper_bls/1/tokenizer.py
