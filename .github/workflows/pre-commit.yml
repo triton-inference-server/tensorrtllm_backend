@@ -24,52 +24,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-repos:
--   repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-    -   id: isort
--   repo: https://github.com/Lucas-C/pre-commit-hooks.git
-    rev: v1.1.13
-    hooks:
-    -   id: remove-crlf
--   repo: https://github.com/google/yapf
-    rev: v0.43.0
-    hooks:
-    -   id: yapf
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-    -   id: check-added-large-files
-        exclude: 'tensorrt_llm/'
-    -   id: check-merge-conflict
-    -   id: check-symlinks
-    -   id: detect-private-key
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: trailing-whitespace
--   repo: https://github.com/PyCQA/autoflake
-    rev: v1.6.1
-    hooks:
-    -   id: autoflake
-        args: ['--in-place', '--remove-all-unused-imports', '--remove-unused-variables']
--   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v16.0.0
-    hooks:
-    -   id: clang-format
-        types_or: [c++, c, cuda]
-        exclude: |
-            (?x)^(
-                tensorrt_llm/.*
-            )$
--   repo: https://github.com/cheshirekow/cmake-format-precommit
-    rev: v0.6.10
-    hooks:
-    -   id: cmake-format
--   repo: https://github.com/codespell-project/codespell
-    rev: v2.2.4
-    hooks:
-    -   id: codespell
-        exclude: tools/dataset/
-        args:
-        - --skip=".git,tensorrt_llm"
+name: pre-commit
+
+on:
+  pull_request:
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5.0.0
+    - uses: actions/setup-python@v6.0.0
+    - uses: pre-commit/action@v3.0.1

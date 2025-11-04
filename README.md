@@ -37,7 +37,7 @@ batching, paged attention and more.
 > [!NOTE]
 >
 > Please note that the Triton backend source code and test have been moved
-> to [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) under the 
+> to [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) under the
 > `triton_backend` directory.
 
 Where can I ask general questions about Triton and Triton backends?
