@@ -1,33 +1,29 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.06-py3-min
-ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.06-py3
-ARG NVRTC_VER=12.9.86-1
-ARG TRT_VER=10.11.0.33
-ARG NCCL_VER=2.27.5-1+cuda12.9
-ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-12.9.tar.gz
-ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.11.0/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-12.9.tar.gz
+ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.10-py3-min
+ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
+ARG NVRTC_VER=13.0.48-1
+ARG TRT_VER=10.13.3.9
+ARG NCCL_VER=2.27.7-1+cuda13.0
+ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.3/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-13.0.tar.gz
+ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.3/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
 
 # Versions of packages to copy from pytorch image
-ARG TORCH_VER=2.8.0a0+5228986c39.nv25.6
-ARG TORCHVISION_VER=0.22.0a0+95f10a4e
-ARG SETUPTOOLS_VER=78.1.1
-ARG PYTORCH_TRITON_VER=3.3.0+git96316ce52.nvinternal
-ARG JINJA2_VER=3.1.6
+ARG FLASH_ATTN_VER=2.7.4.post1+25.10
 ARG NETWORKX_VER=3.5
+ARG PACKAGING_VER=25.0
+ARG PYTORCH_TRITON_VER=3.4.0+gitc817b9b6
+ARG SETUPTOOLS_VER=79.0.1
 ARG SYMPY_VER=1.14.0
-ARG PACKAGING_VER=23.2
-ARG FLASH_ATTN_VER=2.7.4.post1
+ARG TORCH_VER=2.9.0a0+145a3a7bda.nv25.10
+ARG TORCHVISION_VER=0.24.0a0+094e7af5
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
 ARG TENSORRTLLM_REPO_TAG=release/1.0
-ARG TENSORRTLLM_VER=1.0.0
+ARG TENSORRTLLM_VER=1.2.0rc2
 
 FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
 
 WORKDIR /workspace
-
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update -q=2 \
@@ -103,7 +99,6 @@ ARG TORCH_VER
 ARG TORCHVISION_VER
 ARG SETUPTOOLS_VER
 ARG PYTORCH_TRITON_VER
-ARG JINJA2_VER
 ARG NETWORKX_VER
 ARG SYMPY_VER
 ARG PACKAGING_VER
@@ -121,8 +116,6 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/setuptools-${S
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /usr/local/lib/python3.12/dist-packages/functorch
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PYTORCH_TRITON_VER}.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /usr/local/lib/python3.12/dist-packages/triton
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/jinja2 /usr/local/lib/python3.12/dist-packages/jinja2
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/jinja2-${JINJA2_VER}.dist-info /usr/local/lib/python3.12/dist-packages/jinja2-${JINJA2_VER}.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx /usr/local/lib/python3.12/dist-packages/networkx
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info /usr/local/lib/python3.12/dist-packages/networkx-${NETWORKX_VER}.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/sympy /usr/local/lib/python3.12/dist-packages/sympy
@@ -132,9 +125,6 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/packaging-${PA
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /usr/local/lib/python3.12/dist-packages/flash_attn
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info /usr/local/lib/python3.12/dist-packages/flash_attn-${FLASH_ATTN_VER}.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
-
-# Might not need to copy cusparseLt in the future once it's included in DLFW cuda container
-COPY --from=pytorch_image /usr/local/cuda/lib64/libcusparseLt* /usr/local/cuda/lib64/
 
 ARG NVRTC_VER
 ARG NCCL_VER
