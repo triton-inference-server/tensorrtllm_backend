@@ -50,9 +50,9 @@ cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ llama_ifb -r
 
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:64,preprocessing_instance_count:1
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,tokenizer_dir:${HF_MODEL_PATH},guided_decoding_backend:${GUIDED_DECODING_BACKEND}
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16,tokenizer_dir:${HF_MODEL_PATH},guided_decoding_backend:${GUIDED_DECODING_BACKEND}
 
 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
 ```
@@ -72,9 +72,9 @@ cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ llama_ifb -r
 
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:64,preprocessing_instance_count:1
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/postprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:64,postprocessing_instance_count:1
-python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:64,decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/ensemble/config.pbtxt triton_max_batch_size:64,logits_datatype:TYPE_FP32
-python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,guided_decoding_backend:${GUIDED_DECODING_BACKEND},xgrammar_tokenizer_info_path:${XGRAMMAR_TOKENIZER_INFO_PATH}
+python3 tensorrt_llm/triton_backend/tools/fill_template.py -i llama_ifb/tensorrt_llm/config.pbtxt triton_backend:${TRITON_BACKEND},triton_max_batch_size:64,decoupled_mode:True,max_beam_width:1,engine_dir:${ENGINE_PATH},kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16,guided_decoding_backend:${GUIDED_DECODING_BACKEND},xgrammar_tokenizer_info_path:${XGRAMMAR_TOKENIZER_INFO_PATH}
 
 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size 1 --model_repo=llama_ifb/
 ```
