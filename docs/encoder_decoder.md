@@ -100,7 +100,7 @@ Build TensorRT-LLM engines.
 ```
     cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ enc_dec_ifb -r
 
-    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 
     python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
 
@@ -108,7 +108,7 @@ Build TensorRT-LLM engines.
 
     python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
 
-    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:False,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 
 ```
 
@@ -227,7 +227,7 @@ To enable streaming, we set `decoupled_mode:True` in config.pbtxt of `tensorrt_l
 ```
     cp tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/ enc_dec_ifb -r
 
-    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,max_beam_width:${MAX_BEAM_WIDTH},engine_dir:${ENGINE_PATH}/decoder,encoder_engine_dir:${ENGINE_PATH}/encoder,kv_cache_free_gpu_mem_fraction:0.8,cross_kv_cache_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:0,enable_chunked_context:False,max_queue_size:0,encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 
     python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/preprocessing/config.pbtxt tokenizer_dir:${HF_MODEL_PATH},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:1
 
@@ -235,7 +235,7 @@ To enable streaming, we set `decoupled_mode:True` in config.pbtxt of `tensorrt_l
 
     python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},logits_datatype:TYPE_FP32
 
-    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32
+    python3 tensorrt_llm/triton_backend/tools/fill_template.py -i enc_dec_ifb/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:True,bls_instance_count:1,accumulate_tokens:False,logits_datatype:TYPE_FP32,prompt_embedding_table_data_type:TYPE_FP16
 
 ```
 

@@ -58,11 +58,11 @@ Note that you still need to use `hf_lora_convert.py` to convert the lora weights
 Now generate LoRA tensors that will be passed in with each request to triton.
 
 ```bash
-git-lfs clone https://huggingface.co/qychen/luotuo-lora-7b-0.1
+git-lfs clone https://huggingface.co/silk-road/luotuo-lora-7b-0.1
 git-lfs clone https://huggingface.co/kunishou/Japanese-Alpaca-LoRA-7b-v0
 
-python3 ..//hf_lora_convert.py -i luotuo-lora-7b-0.1 -o luotuo-lora-7b-0.1-weights --storage-type float16
-python3 ../hf_lora_convert.py -i Japanese-Alpaca-LoRA-7b-v0 -o Japanese-Alpaca-LoRA-7b-v0-weights --storage-type float16
+python3 ../../../hf_lora_convert.py -i luotuo-lora-7b-0.1 -o luotuo-lora-7b-0.1-weights --storage-type float16
+python3 ../../../hf_lora_convert.py -i Japanese-Alpaca-LoRA-7b-v0 -o Japanese-Alpaca-LoRA-7b-v0-weights --storage-type float16
 ```
 
 ## Create a Triton model repository and launch the Triton server
