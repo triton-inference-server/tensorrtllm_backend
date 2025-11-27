@@ -184,7 +184,8 @@ pip3 install tritonclient[all]
 
 TASK_IDS=("1" "2")
 LORA_PATHS=("luotuo-lora-7b-0.1-weights" "Japanese-Alpaca-LoRA-7b-v0-weights")
-INFLIGHT_BATCHER_LLM_CLIENT=/tensorrtllm_backend/tensorrt_llm/triton_backend/tools/inflight_batcher_llm/inflight_batcher_llm_client.py
+INFLIGHT_BATCHER_LLM_CLIENT=/tensorrtllm_backend/tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py
+TOKENIZER_DIR=/root/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/<hash_id>
 
 for index in ${!TASK_IDS[@]}; do
     text="dummy"
@@ -197,7 +198,7 @@ for index in ${!TASK_IDS[@]}; do
         --top-p 0.5 \
         --request-output-len 10 \
         --text "${text}" \
-        --tokenizer-dir /path/to/llama-7b-hf \
+        --tokenizer-dir ${TOKENIZER_DIR} \
         ${lora_arg} &
 done
 ```
@@ -216,12 +217,12 @@ for index in ${!INPUT_TEXT[@]}; do
         lora_arg="--lora-task-id ${task_id}"
     fi
 
-    python3 inflight_batcher_llm/client/inflight_batcher_llm_client.py \
+    python3 ${INFLIGHT_BATCHER_LLM_CLIENT} \
         --top-k 0 \
         --top-p 0.5 \
         --request-output-len 10 \
         --text "${text}" \
-        --tokenizer-dir /home/scratch.trt_llm_data/llm-models/llama-models/llama-7b-hf \
+        --tokenizer-dir ${TOKENIZER_DIR} \
         ${lora_arg} &
 done
 

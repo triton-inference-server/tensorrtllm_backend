@@ -58,7 +58,7 @@ python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --world_size
 ```
 
 ## C++ Backend
-In order to do run `TRITON_BACKEND=tensorrtllm` which means to do run on C++ backend, you need an extra step to extract tokenizer's information into json format. `generate_xgrammar_tokenizer_info.py` will create `xgrammar_tokenizer_info.json` under given output_dir argument. And we fill the `xgrammer_tokenizer_info_path` parameter in `tensorrt_llm/config.pbtxt`.
+In order to do run `TRITON_BACKEND=tensorrtllm` which means to do run on C++ backend, you need an extra step to extract tokenizer's information into json format. `generate_xgrammar_tokenizer_info.py` will create `xgrammar_tokenizer_info.json` under given output_dir argument. And we fill the `xgrammar_tokenizer_info_path` parameter in `tensorrt_llm/config.pbtxt`.
 ```bash
 export XGRAMMAR_TOKENIZER_INFO_DIR=tokenizer_info/${MODEL_NAME}
 
