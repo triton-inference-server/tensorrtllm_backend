@@ -160,6 +160,9 @@ RUN [ "$(uname -m)" != "x86_64" ] && arch="sbsa" || arch="x86_64" \
         cuda-nvrtc-dev-${NVRTC_CUDA_VERSION}=${NVRTC_VER} \
         libnccl2=${NCCL_VER} \
         libnccl-dev=${NCCL_VER} \
+        libnvshmem3-cuda-13 \
+    && dpkg -L libnvshmem3-cuda-13 | grep libnvshmem_host.so | sed -e 's/libnvshmem_host.*//g' | sort -u > /etc/ld.so.conf.d/libnvshmem3-cuda-13.conf \
+    && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TRT
