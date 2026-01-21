@@ -1,109 +1,204 @@
-## End to end workflow to use the pytorch LLMAPI workflow
+# End-to-End Workflow for the LLMAPI Backend
 
-* Start the Triton Server Docker container:
+The LLMAPI backend provides a simplified way to deploy TensorRT-LLM models with Triton Inference Server. It uses TensorRT-LLM's high-level `LLM` class which automatically handles model loading from HuggingFace, supports the PyTorch backend, and enables features like tensor parallelism, streaming, and speculative decoding.
+
+## Quick Start
+
+### Start the Triton Server Docker Container
 
 ```bash
 # Replace <yy.mm> with the version of Triton you want to use.
-# The command below assumes the the current directory is the
-# TRT-LLM backend root git repository.
+# The command below assumes the current directory is the TRT-LLM backend root git repository.
 
-docker run --rm -ti -v `pwd`:/mnt -w /mnt -v ~/.cache/huggingface:~/.cache/huggingface --gpus all nvcr.io/nvidia/tritonserver:\<yy.mm\>-trtllm-python-py3 bash
+docker run --rm -ti \
+    -v $(pwd):/mnt -w /mnt \
+    -v ~/.cache/huggingface:/root/.cache/huggingface \
+    --gpus all \
+    nvcr.io/nvidia/tritonserver:<yy.mm>-trtllm-python-py3 bash
 ```
 
-* Prepare config
+### Prepare the Model Repository
 
 ```bash
- cp -R tensorrt_llm/triton_backend/all_models/llmapi/ llmapi_repo/
+cp -R tensorrt_llm/triton_backend/all_models/llmapi/ llmapi_repo/
 ```
 
-Edit `llmapi_repo/tensorrt_llm/1/model.yaml` to change the model. You can either use a HuggingFace path or a local path. The following is based on `meta-llama/Llama-3.1-8B`.
+### Configure the Model
 
-This configuration file also allows you to enable CUDA graphs support and set pipeline parallelism and tensor parallelism sizes.
+Edit `llmapi_repo/tensorrt_llm/1/model.yaml` to specify your model and settings. You can use either a HuggingFace model ID or a local path.
 
-* Launch server
+**Basic configuration example:**
+
+```yaml
+model: meta-llama/Llama-3.1-8B-Instruct
+backend: pytorch
+
+tensor_parallel_size: 1
+pipeline_parallel_size: 1
+
+triton_config:
+  max_batch_size: 0
+  decoupled: False
+```
+
+**Multi-GPU configuration:**
+
+```yaml
+model: meta-llama/Llama-3.1-70B-Instruct
+backend: pytorch
+
+tensor_parallel_size: 8
+pipeline_parallel_size: 1
+
+triton_config:
+  max_batch_size: 0
+  decoupled: True
+```
+
+The `triton_config` section controls Triton-specific settings:
+- `max_batch_size: 0` - Batching is handled by the LLMAPI, not Triton
+- `decoupled: True` - Required for streaming mode
+
+### Launch the Server
 
 ```bash
 python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo=llmapi_repo/
 ```
 
-* Send request
+### Send Requests
+
+**Basic request:**
 
 ```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "The future of AI is", "sampling_param_max_tokens":10}' | jq
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 100}' | jq
 ```
 
-* Optional: include performance metrics
-
-To retrieve detailed performance metrics per request such as KV cache usage, timing breakdowns, and speculative decoding statistics - add `"sampling_param_return_perf_metrics": true` to your request payload:
+**With sampling parameters:**
 
 ```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm/generate -d '{"text_input": "Please explain to me what is machine learning?", "sampling_param_max_tokens":10, "sampling_param_return_perf_metrics":true}' | jq
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "Hello, my name is", "sampling_param_max_tokens": 100, "sampling_param_temperature": 0.8, "sampling_param_top_p": 0.95}' | jq
 ```
 
-Sample response with performance metrics
+**Streaming request (requires `decoupled: True` in model.yaml):**
+
+```bash
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate_stream \
+    -d '{"text_input": "Write a poem about", "sampling_param_max_tokens": 100}' | sed 's/^data: //' | jq
+```
+
+## Configuration Options
+
+The `model.yaml` file accepts parameters from TensorRT-LLM's `LLM` class. Common options include:
+
+| Parameter | Description |
+|-----------|-------------|
+| `model` | HuggingFace model ID or local path (required) |
+| `backend` | Backend to use (`pytorch` recommended) |
+| `tensor_parallel_size` | Number of GPUs for tensor parallelism |
+| `pipeline_parallel_size` | Number of stages for pipeline parallelism |
+| `max_batch_size` | Maximum batch size for inference |
+| `max_num_tokens` | Maximum tokens per iteration (default: 8192) |
+| `trust_remote_code` | Set to `true` for models requiring custom code |
+| `enable_chunked_prefill` | Enable chunked prefill for better throughput |
+
+**KV cache configuration:**
+
+```yaml
+kv_cache_config:
+  enable_block_reuse: true
+  free_gpu_memory_fraction: 0.85
+```
+
+**CUDA graphs for faster decode (PyTorch backend):**
+
+```yaml
+cuda_graph_config:
+  max_batch_size: 16
+```
+
+**Speculative decoding:**
+
+```yaml
+speculative_config:
+  decoding_type: Lookahead
+  max_window_size: 4
+  max_ngram_size: 3
+```
+
+## Performance Metrics
+
+To retrieve detailed performance metrics per request (KV cache usage, timing breakdowns, speculative decoding statistics), add `"sampling_param_return_perf_metrics": true` to your request:
+
+```bash
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "What is machine learning?", "sampling_param_max_tokens": 50, "sampling_param_return_perf_metrics": true}' | jq
+```
+
+Sample response with metrics:
+
 ```json
 {
-  "acceptance_rate": "0.0",
+  "text_output": "Machine learning is a field of...",
+  "kv_cache_hit_rate": "0.625",
+  "kv_cache_reused_block": "5",
   "arrival_time_ns": "76735247746000",
-  "first_scheduled_time_ns": "76735248284000",
   "first_token_time_ns": "76735374300000",
-  "kv_cache_alloc_new_blocks": "1",
-  "kv_cache_alloc_total_blocks": "1",
-  "kv_cache_hit_rate": "0.0",
-  "kv_cache_missed_block": "1",
-  "kv_cache_reused_block": "0",
   "last_token_time_ns": "76736545324000",
-  "model_name": "tensorrt_llm",
-  "model_version": "1",
-  "text_output": "Please explain to me what is machine learning? \n\nMachine learning is a field of computer science that involves the development of algorithms and models that can learn from data without being explicitly programmed. It is a",
-  "total_accepted_draft_tokens": "0",
-  "total_draft_tokens": "0"
+  "acceptance_rate": "0.0"
 }
 ```
 
-`inflight_batcher_llm_client.py` is not supported yet.
+## Multi-Node Configuration
 
-* Run test on dataset
+For multi-node deployments, use `srun` with `trtllm-llmapi-launch`:
 
 ```bash
-python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json --max-input-len 500 --test-llmapi --model-name tensorrt_llm
-
-[INFO] Start testing on 13 prompts.
-[INFO] Functionality test succeeded.
-[INFO] Warm up for benchmarking.
-FLAGS.model_name: tensorrt_llm
-[INFO] Start benchmarking on 13 prompts.
-[INFO] Total Latency: 377.254 ms
+srun -N 2 \
+    --ntasks-per-node=8 \
+    --mpi=pmix \
+    --container-image=<your-image> \
+    --container-mounts=$(pwd)/tensorrt_llm/:/code \
+    trtllm-llmapi-launch /opt/tritonserver/bin/tritonserver --model-repository llmapi_repo
 ```
 
-* Run benchmark
+Configure pipeline parallelism across nodes in `model.yaml`:
+
+```yaml
+model: meta-llama/Llama-3.1-405B-Instruct
+tensor_parallel_size: 8
+pipeline_parallel_size: 2
+gpus_per_node: 8
+```
+
+**Note:** Inter-node tensor parallelism is not supported. Use pipeline parallelism for multi-node deployments.
+
+## Testing
+
+Run the end-to-end test:
 
 ```bash
- python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py --max-input-len 500 \
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/end_to_end_test.py \
+    --dataset tensorrt_llm/triton_backend/ci/L0_backend_trtllm/simple_data.json \
+    --max-input-len 500 \
+    --test-llmapi \
+    --model-name tensorrt_llm
+```
+
+Run a benchmark:
+
+```bash
+python3 tensorrt_llm/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py \
+    --max-input-len 500 \
     --tensorrt-llm-model-name tensorrt_llm \
     --test-llmapi \
     dataset --dataset ./tensorrt_llm/triton_backend/tools/dataset/mini_cnn_eval.json \
     --tokenizer-dir meta-llama/Llama-3.1-8B
-
-dataset
-Tokenizer: Tokens per word =  1.308
-[INFO] Warm up for benchmarking.
-[INFO] Start benchmarking on 39 prompts.
-[INFO] Total Latency: 1446.623 ms
 ```
 
-### Start the server on a multi-node configuration
+## Notes
 
-The `srun` tool can be used to start the server in a multi-node environment:
-
-```
-srun -N 2 \
-    --ntasks-per-node=8 \
-    --mpi=pmix \
-    --container-image=<your image> \
-    --container-mounts=$(pwd)/tensorrt_llm/:/code \
-    trtllm-llmapi-launch /opt/tritonserver/bin/tritonserver --model-repository llmapi_repo
-
-```
-
-Note: inter-node tensor parallelism is not yet supported.
+- Set `triton_config.decoupled: True` in model.yaml to enable streaming mode.
+- The LLMAPI automatically handles model loading and optimization - no pre-built engines required.
+- Available request parameters are listed in the `config.pbtxt` file (sampling_param_max_tokens, sampling_param_temperature, sampling_param_top_p, etc.).
