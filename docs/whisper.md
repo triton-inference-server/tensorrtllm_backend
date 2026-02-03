@@ -74,7 +74,7 @@ The following multimodal model is supported in tensorrtllm_backend:
 
     > **NOTE**:
     >
-    > TensorRT-LLM also supports using [distil-whisper's](https://github.com/huggingface/distil-whisper) different models by first converting their params and weights from huggingface's naming format to [openai whisper](https://github.com/openai/whisper) naming format. You can do so by running the script [distil_whisper/convert_from_distil_whisper.py](./convert_from_distil_whisper.py).
+    > TensorRT-LLM also supports using [distil-whisper's](https://github.com/huggingface/distil-whisper) different models by first converting their params and weights from huggingface's naming format to [openai whisper](https://github.com/openai/whisper) naming format. You can do so by running the script [distil_whisper/convert_from_distil_whisper.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/models/core/whisper/distil_whisper/convert_from_distil_whisper.py).
 
 3. Prepare Tritonserver configs
 

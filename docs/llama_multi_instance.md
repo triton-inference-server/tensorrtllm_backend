@@ -1,5 +1,5 @@
 <!--
-# Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -317,10 +317,10 @@ the model across multiple nodes.
 
 It is also possible to use orchestrator mode with MPI processes that have been
 pre-spawned. In order to do that, you need to set `--disable-spawn-processes`
-when using the [launch_triton_server.py](../scripts/launch_triton_server.py)
+when using the [launch_triton_server.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/scripts/launch_triton_server.py)
 script or `export TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES=0`. In this mode,
 it is possible to run the server across different nodes in orchestrator mode.
 
 In order to use the orchestrator mode itself, you need to set the `--multi-model`
-flag when using the [launch_triton_server.py](../scripts/launch_triton_server.py)
+flag when using the [launch_triton_server.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/scripts/launch_triton_server.py)
 script or `export TRTLLM_ORCHESTRATOR=1`.
