@@ -1,7 +1,7 @@
 # End to end workflow to run an Encoder-Decoder model
 
 ### Support Matrix
-For the specific models supported by encoder-decoder family, please visit [TensorRT-LLM encoder-decoder examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/enc_dec#encoder-decoder-model-support). The following two model types are supported:
+For the specific models supported by encoder-decoder family, please visit [TensorRT-LLM encoder-decoder examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/enc_dec#encoder-decoder-model-support). The following two model types are supported:
 * T5
 * BART
 
@@ -28,7 +28,7 @@ If you're using [Triton TRT-LLM NGC container](https://catalog.ngc.nvidia.com/or
     docker run --gpus all --ipc=host --ulimit memlock=-1 --shm-size=20g `pwd`:/workspace -w /workspace nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3 bash
 ```
 
-If [building your own TensorRT-LLM Backend container](https://github.com/triton-inference-server/tensorrtllm_backend#option-2-build-via-docker) then you can run the `tensorrtllm_backend` container:
+If [building your own TensorRT-LLM Backend container](https://github.com/triton-inference-server/tensorrtllm_backend) then you can run the `tensorrtllm_backend` container:
 
 ```
     docker run --gpus all --ipc=host --ulimit memlock=-1 --shm-size=20g `pwd`:/workspace -w /workspace triton_trt_llm bash
@@ -93,7 +93,7 @@ Build TensorRT-LLM engines.
 
 > **NOTE**
 >
-> If you want to build multi-GPU engine using Tensor Parallelism then you can set `--tp_size` in convert_checkpoint.py. For example, for TP=2 on 2-GPU you can set `--tp_size=2`. If you want to use beam search then set `--max_beam_width` to higher value than 1. The `--max_input_len` in encoder trtllm-build controls the model input length and should be same as `--max_encoder_input_len` in decoder trtllm-build. Additionally, to control the model output len you should set `--max_seq_len` in decoder trtllm-build to `desired output length + 1`. It is also advisable to tune [`--max_num_tokens`](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-best-practices.md#max_num_tokens) as the default value of 8192 might be too large or too small depending on your input, output len and use-cases. For BART family models, make sure to remove `--context_fmha disable` from both encoder and decoder trtllm-build commands. Please refer to [TensorRT-LLM enc-dec example](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/enc_dec#build-tensorrt-engines) for more details.
+> If you want to build multi-GPU engine using Tensor Parallelism then you can set `--tp_size` in convert_checkpoint.py. For example, for TP=2 on 2-GPU you can set `--tp_size=2`. If you want to use beam search then set `--max_beam_width` to higher value than 1. The `--max_input_len` in encoder trtllm-build controls the model input length and should be same as `--max_encoder_input_len` in decoder trtllm-build. Additionally, to control the model output len you should set `--max_seq_len` in decoder trtllm-build to `desired output length + 1`. It is also advisable to tune [`--max_num_tokens`](https://github.com/NVIDIA/TensorRT-LLM/blob/v0.16.0/docs/source/performance/perf-best-practices.md#max_num_tokens) as the default value of 8192 might be too large or too small depending on your input, output len and use-cases. For BART family models, make sure to remove `--context_fmha disable` from both encoder and decoder trtllm-build commands. Please refer to [TensorRT-LLM enc-dec example](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/enc_dec#build-tensorrt-engines) for more details.
 
 #### 4. Prepare Tritonserver configs <a id="prepare-tritonserver-configs"></a>
 

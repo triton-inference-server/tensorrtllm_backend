@@ -1,7 +1,7 @@
 # Running LoRA inference with inflight batching
 
 Below is an example of how to run LoRA inference with inflight batching. See the
-[LoRA documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/lora.md)
+[LoRA documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/lora.md)
 in the TensorRT-LLM repository for more information about running gpt-2b with
 LoRA using inflight batching.
 

@@ -3,14 +3,14 @@
 ## Model Parameters
 
 The following tables show the parameters in the `config.pbtxt` of the models in
-[all_models/inflight_batcher_llm](../tensorrt_llm/triton_backend/all_models/inflight_batcher_llm).
+[all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm).
 that can be modified before deployment. For optimal performance or custom
 parameters, please refer to
-[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-best-practices.md).
+[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/v0.16.0/docs/source/performance/perf-best-practices.md).
 
 The names of the parameters listed below are the values in the `config.pbtxt`
 that can be modified using the
-[`fill_template.py`](../tensorrt_llm/triton_backend/tools/fill_template.py) script.
+[`fill_template.py`](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/tools/fill_template.py) script.
 
 **NOTE** For fields that have comma as the value (e.g. `gpu_device_ids`,
 `participant_ids`), you need to escape the comma with
@@ -350,7 +350,7 @@ Note: the timing metrics oputputs are represented as the number of nanoseconds s
 Below are some tips for configuring models for optimal performance. These
 recommendations are based on our experiments and may not apply to all use cases.
 For guidance on other parameters, please refer to the
-[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-best-practices.md).
+[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/v0.16.0/docs/source/performance/perf-best-practices.md).
 
 - **Setting the `instance_count` for models to better utilize inflight batching**
 

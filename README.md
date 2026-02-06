@@ -1,5 +1,5 @@
 <!--
-# Copyright 2024-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,7 +30,7 @@
 The Triton backend for [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM).
 You can learn more about Triton backends in the [backend repo](https://github.com/triton-inference-server/backend).
 The goal of TensorRT-LLM Backend is to let you serve [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)
-models with Triton Inference Server. The [inflight_batcher_llm](./inflight_batcher_llm/)
+models with Triton Inference Server. The [inflight_batcher_llm](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm)
 directory contains the C++ implementation of the backend supporting inflight
 batching, paged attention and more.
 
@@ -154,7 +154,7 @@ trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
         --output_dir /engines/gpt/fp16/4-gpu
 ```
 
-See [here](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/gpt) for
+See [here](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/gpt) for
 more details on the parameters.
 
 #### Prepare the Model Repository
@@ -162,22 +162,22 @@ more details on the parameters.
 Next, create the
 [model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
 that will be used by the Triton server. The models can be found in the
-[all_models](./tensorrt_llm/triton_backend/all_models) folder. The folder contains six groups of models:
-- [`disaggregated_serving`](./tensorrt_llm/triton_backend/all_models/disaggregated_serving): Using the C++ TensorRT-LLM backend to run disaggregated serving.
-- [`gpt`](./tensorrt_llm/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime. This model is deprecated and will be removed in a future release.
-- [`inflight_batcher_llm`](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm/)`: Using the C++
+[all_models](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models) folder. The folder contains six groups of models:
+- [`disaggregated_serving`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/disaggregated_serving): Using the C++ TensorRT-LLM backend to run disaggregated serving.
+- [`gpt`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime. This model is deprecated and will be removed in a future release.
+- [`inflight_batcher_llm`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm)`: Using the C++
 TensorRT-LLM backend with the executor API, which includes the latest features
 including inflight batching.
 
 There are five models in
-[all_models/inflight_batcher_llm](./tensorrt_llm/triton_backend/all_models/inflight_batcher_llm) that will
+[all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm) that will
 be used in this example:
 
 | Model | Description |
 | :------------: | :---------------: |
 | `ensemble` | This model is used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
 | `preprocessing` | This model is used for tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints). |
-| `tensorrt_llm` | This model is a wrapper of your TensorRT-LLM model and is used for inferencing. Input specification can be found [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/inference-request.md) |
+| `tensorrt_llm` | This model is a wrapper of your TensorRT-LLM model and is used for inferencing. Input specification can be found [here](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/model_config.md#model-input-and-output) |
 | `postprocessing` | This model is used for de-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string). |
 | `tensorrt_llm_bls` | This model can also be used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
 
@@ -194,14 +194,14 @@ please see the [model config](./docs/model_config.md#tensorrt_llm_bls-model) sec
 mkdir /triton_model_repo
 cp -r /app/all_models/inflight_batcher_llm/* /triton_model_repo/
 ```
-- [`llmapi`](./tensorrt_llm/triton_backend/all_models/llmapi/): Using TensorRT-LLM LLM API with pytorch backend.
-- [`multimodal`](./tensorrt_llm/triton_backend/all_models/multimodal/): Using TensorRT-LLM python runtime for multimodal models. See [`multimodal.md`](./docs/multimodal.md) for more details.
-- [`whisper`](./tensorrt_llm/triton_backend/all_models/whisper/): Using TensorRT-LLM python runtime for Whisper. See [`whisper.md`](./docs/whisper.md) for more details.
+- [`llmapi`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/llmapi): Using TensorRT-LLM LLM API with pytorch backend.
+- [`multimodal`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/multimodal): Using TensorRT-LLM python runtime for multimodal models. See [`multimodal.md`](./docs/multimodal.md) for more details.
+- [`whisper`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/whisper): Using TensorRT-LLM python runtime for Whisper. See [`whisper.md`](./docs/whisper.md) for more details.
 
 #### Modify the Model Configuration
 Use the script to fill in the parameters in the model configuration files. For
 optimal performance or custom parameters, please refer to
-[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/performance/perf-best-practices.md).
+[performance-tuning-guide](https://github.com/NVIDIA/TensorRT-LLM/tree/main/docs/source/legacy/performance/performance-tuning-guide).
 For more details on the model configuration and the parameters that can be
 modified, please refer to the [model config](./docs/model_config.md) section.
 
@@ -301,11 +301,11 @@ Which should return a result similar to (formatted for readability):
 ##### Using the client scripts
 
 You can refer to the client scripts in the
-[inflight_batcher_llm/client](./tensorrt_llm/triton_backend/inflight_batcher_llm/client) to see how to send
+[inflight_batcher_llm/client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client) to see how to send
 requests via Python scripts.
 
 Below is an example of using
-[inflight_batcher_llm_client](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)
+[inflight_batcher_llm_client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)
 to send requests to the `tensorrt_llm` model.
 
 ```bash
@@ -361,14 +361,14 @@ engine (or `--gather_all_token_logits` to enable both at the same time). For
 more setting details about these two flags, please refer to
 [build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py)
 or
-[gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md).
+[gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-runtime.md).
 
 After launching the server, you could get the output of logits by passing the
 corresponding parameters `--return-context-logits` and/or
 `--return-generation-logits` in the client scripts
-([end_to_end_grpc_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
+([end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
 and
-[inflight_batcher_llm_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
+[inflight_batcher_llm_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
 
 For example:
 
@@ -423,7 +423,7 @@ with a given batch index. An output tensor named `batch_index` is associated
 with each response to indicate which batch index this response corresponds to.
 
 The client script
-[end_to_end_grpc_client.py](./tensorrt_llm/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
+[end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
 demonstrates how a client can send requests with batch size > 1 and consume the
 responses returned from Triton. When passing `--batch-inputs` to the client
 script, the client will create a request with multiple prompts, and use the
@@ -448,16 +448,16 @@ to the [support matrix](https://nvidia.github.io/TensorRT-LLM/reference/support-
 
 - LLaMa
   - [End to end workflow to run llama 7b with Triton](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/llama.md)
-  - [Build and run a LLaMA model in TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/llama)
+  - [Build and run a LLaMA model in TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/llama)
   - [Llama Multi-instance](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/llama_multi_instance.md)
-  - [Deploying Hugging Face Llama2-7b Model in Triton](https://github.com/triton-inference-server/tutorials/blob/main/Popular_Models_Guide/Llama2/trtllm_guide.md#infer-with-tensorrt-llm-backend)
+  - [Deploying Hugging Face Llama2-7b Model in Triton](https://github.com/triton-inference-server/tutorials/blob/main/Popular_Models_Guide/Llama2/trtllm_guide.md)
 
 - Gemma
   - [End to end workflow to run sp model with Triton](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/gemma.md)
-  - [Run Gemma on TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/gemma)
+  - [Run Gemma on TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/gemma)
 
 - Mistral
-  - [Build and run a Mixtral model in TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/mixtral/README.md)
+  - [Build and run a Mixtral model in TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/models/core/mixtral/README.md)
 
 - Multi-modal
   - [End to end workflow to run multimodal models(e.g. BLIP2-OPT, LLava1.5-7B, VILA) with Triton](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/multimodal.md)
@@ -575,7 +575,7 @@ trtllm-build --checkpoint_dir ./tllm_checkpoint_mixtral_8gpu \
 ```
 
 See the
-[doc](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/expert-parallelism.md)
+[doc](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/expert-parallelism.md)
 to learn more about how TensorRT-LLM expert parallelism works in Mixture of Experts (MoE).
 
 ### MIG Support
@@ -588,21 +588,19 @@ for more details on how to run TRT-LLM models and Triton with MIG.
 
 The scheduler policy helps the batch manager adjust how requests are scheduled
 for execution. There are two scheduler policies supported in TensorRT-LLM,
-`MAX_UTILIZATION` and `GUARANTEED_NO_EVICT`. See the
-[batch manager design](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/batch-manager.md#gptmanager-design)
-to learn more about how scheduler policies work. You can specify the scheduler
+`MAX_UTILIZATION` and `GUARANTEED_NO_EVICT`. You can specify the scheduler
 policy via the `batch_scheduler_policy` parameter in the
-[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
+[model config](./docs/model_config.md#tensorrt_llm-model) of tensorrt_llm model.
 
 ### Key-Value Cache
 
 See the
-[KV Cache](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-attention.md#kv-cache)
+[KV Cache](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-attention.md#kv-cache)
 section for more details on how TensorRT-LLM supports KV cache. Also, check out
-the [KV Cache Reuse](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/kv_cache_reuse.md)
+the [KV Cache Reuse](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/kv-cache-reuse.md)
 documentation to learn more about how to enable KV cache reuse when building the
 TRT-LLM engine. Parameters for KV cache can be found in the
-[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
+[model config](./docs/model_config.md#tensorrt_llm-model) of tensorrt_llm model.
 
 ### Decoding
 
@@ -610,30 +608,30 @@ TRT-LLM engine. Parameters for KV cache can be found in the
 
 TensorRT-LLM supports various decoding modes, including top-k, top-p,
 top-k top-p, beam search Medusa, ReDrafter, Lookahead and Eagle. See the
-[Sampling Parameters](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-runtime.md#sampling-parameters)
+[Sampling Parameters](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-runtime.md#sampling-parameters)
 section to learn more about top-k, top-p, top-k top-p and beam search decoding.
 Please refer to the
-[speculative decoding documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/speculative-decoding.md)
+[speculative decoding documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/speculative-decoding.md)
 for more details on Medusa, ReDrafter, Lookahead and Eagle.
 
 Parameters for decoding modes can be found in the
-[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
+[model config](./docs/model_config.md#tensorrt_llm-model) of tensorrt_llm model.
 
 #### Speculative Decoding
 
 See the
-[Speculative Decoding](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/speculative_decoding.md)
+[Speculative Decoding](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/speculative-decoding.md)
 documentation to learn more about how TensorRT-LLM supports speculative decoding
 to improve the performance. The parameters for speculative decoding can be found
-in the [model config](./docs/model_config.md#tensorrt_llm_bls_model) of
+in the [model config](./docs/model_config.md#tensorrt_llm_bls-model) of
 tensorrt_llm_bls model.
 
 ### Chunked Context
 
 For more details on how to use chunked context, please refer to the
-[Chunked Context](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/gpt-attention.md#chunked-context)
+[Chunked Context](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-attention.md#chunked-context)
 section. Parameters for chunked context can be found in the
-[model config](./docs/model_config.md#tensorrt_llm_model) of tensorrt_llm model.
+[model config](./docs/model_config.md#tensorrt_llm-model) of tensorrt_llm model.
 
 ### Quantization
 
@@ -699,12 +697,10 @@ You might have to contact your cluster's administrator to help you customize the
 ## Triton Metrics
 
 Starting with the 23.11 release of Triton, users can now obtain TRT LLM Batch
-Manager [statistics](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/batch-manager.md#statistics)
-by querying the Triton metrics endpoint. This can be accomplished by launching
-a Triton server in any of the ways described above (ensuring the build code /
-container is 23.11 or later) and querying the server. Upon receiving a
-successful response, you can query the metrics endpoint by entering the
-following:
+Manager statistics by querying the Triton metrics endpoint. This can be accomplished
+by launching a Triton server in any of the ways described above (ensuring the build
+code / container is 23.11 or later) and querying the server. Upon receiving a
+successful response, you can query the metrics endpoint by entering the following:
 
 ```bash
 curl localhost:8002/metrics
@@ -803,7 +799,7 @@ Check out [GenAI-Perf](https://github.com/triton-inference-server/perf_analyzer/
 tool for benchmarking TensorRT-LLM models.
 
 You can also use the
-[benchmark_core_model script](./tools/inflight_batcher_llm/benchmark_core_model.py)
+[benchmark_core_model script](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/tools/inflight_batcher_llm/benchmark_core_model.py)
 to benchmark the core model `tensosrrt_llm`. The script sends requests directly
 to deployed `tensorrt_llm` model. The benchmark core model latency indicates the
 inference latency of TensorRT-LLM, not including the pre/post-processing latency
@@ -857,5 +853,5 @@ Expected outputs
 *Please note that the expected outputs in that document are only for reference, specific performance numbers depend on the GPU you're using.*
 
 ## Testing the TensorRT-LLM Backend
-Please follow the guide in [`ci/README.md`](ci/README.md) to see how to run
+Please follow the guide in [`tensorrt_llm/triton_backend/ci/README.md`](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/ci/README.md) to see how to run
 the testing for TensorRT-LLM backend.

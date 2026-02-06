@@ -2,7 +2,7 @@
 
 This document outlines the process for running guided decoding using the TensorRT-LLM backend. Guided decoding ensures that generated outputs adhere to specified formats, such as JSON. Currently, this feature is supported through the [XGrammar](https://github.com/mlc-ai/xgrammar) backend.
 
-For more information, refer to the [guided decoding documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/advanced/executor.md#structured-output-with-guided-decoding) from TensorRT-LLM. Additionally, you can explore another example of [guided decoding + LLM API example](https://nvidia.github.io/TensorRT-LLM/llm-api-examples/llm_guided_decoding.html).
+For more information, refer to the [guided decoding documentation](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/executor.md#structured-output-with-guided-decoding) from TensorRT-LLM. Additionally, you can explore another example of [guided decoding + LLM API example](https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/llm-api/llm_guided_decoding.py).
 
 ## Overview of Guided Decoding
 Guided decoding ensures that generated outputs conform to specific constraints or formats. Supported guide types include:

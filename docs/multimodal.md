@@ -9,7 +9,7 @@ The following multimodal model is supported in tensorrtllm_backend:
 * MLLAMA
 * Qwen2-VL
 
-For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM multimodal examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/multimodal).
+For more multimodal models supported in TensorRT-LLM, please visit [TensorRT-LLM multimodal examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/multimodal).
 
 ## Run Multimodal with single-GPU Tritonserver
 ### Tritonserver setup steps
