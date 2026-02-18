@@ -106,4 +106,76 @@ srun -N 2 \
 
 ```
 
-Note: inter-node tensor parallelism is not yet supported.
+### Running Multiple Model Instances
+
+You can run multiple instances of a model using Triton's `instance_group` configuration with the `gpu_device_ids` parameter. This enables load balancing across instances handled by Triton core.
+
+The `gpu_device_ids` parameter uses semicolons to separate GPU assignments for each instance, and commas to separate GPUs within a single instance (for tensor parallelism). The number of GPU device ID sets (separated by semicolons) must equal the instance `count`.
+
+#### Example: 2 Instances with TP=2 on 4 GPUs
+
+To run 2 instances of a tensor parallel model (TP=2) across 4 GPUs, where instance 1 uses GPUs 0,1 and instance 2 uses GPUs 2,3:
+
+1. Configure `model.yaml` with tensor parallelism:
+
+```yaml
+model: meta-llama/Llama-3.1-8B
+tensor_parallel_size: 2
+```
+
+2. Update `config.pbtxt` to specify instance groups and GPU assignments:
+
+```
+instance_group [
+    {kind: KIND_CPU, count: 2}
+]
+
+parameters: {
+  key: "gpu_device_ids"
+  value: {
+    string_value: "0,1;2,3"
+  }
+}
+```
+
+3. Launch the server with `--no-mpi`:
+
+```bash
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo=llmapi_repo/ --no-mpi
+```
+
+The `--no-mpi` flag is required for multi-instance deployments.
+
+#### Example: Multiple Instances on the Same GPU
+
+You can also run multiple instances on the same GPU for smaller models. Use `kv_cache_config.free_gpu_memory_fraction` in `model.yaml` to limit KV cache memory per instance so all instances fit in GPU memory.
+
+1. Configure `model.yaml` with a reduced KV cache fraction:
+
+```yaml
+model: meta-llama/Llama-3.1-8B
+kv_cache_config:
+  free_gpu_memory_fraction: 0.3
+```
+
+2. Update `config.pbtxt` to run 2 instances on GPU 0:
+
+```
+instance_group [
+    {kind: KIND_CPU, count: 2}
+]
+
+parameters: {
+  key: "gpu_device_ids"
+  value: {
+    string_value: "0;0"
+  }
+}
+```
+
+3. Launch the server:
+
+```bash
+python3 tensorrt_llm/triton_backend/scripts/launch_triton_server.py --model_repo=llmapi_repo/ --no-mpi
+```
+
