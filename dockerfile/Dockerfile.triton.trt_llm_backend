@@ -1,24 +1,24 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/tritonserver:25.10-py3-min
 ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
-ARG NVRTC_VER=13.0.48-1
-ARG TRT_VER=10.13.3.9
-ARG NCCL_VER=2.27.7-1+cuda13.0
-ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.3/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-13.0.tar.gz
-ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.13.3/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
+ARG NVRTC_VER=13.1.80-1
+ARG TRT_VER=10.14.1.48
+ARG NCCL_VER=2.28.9-1+cuda13.0
+ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.14.1/tars/TensorRT-${TRT_VER}.Linux.x86_64-gnu.cuda-13.0.tar.gz
+ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.14.1/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
 
 # Versions of packages to copy from pytorch image
-ARG FLASH_ATTN_VER=2.7.4.post1+25.10
-ARG NETWORKX_VER=3.5
+ARG FLASH_ATTN_VER=2.7.4.post1+25.12
+ARG NETWORKX_VER=3.6.1
 ARG PACKAGING_VER=25.0
-ARG PYTORCH_TRITON_VER=3.4.0+gitc817b9b6
-ARG SETUPTOOLS_VER=79.0.1
+ARG PYTORCH_TRITON_VER=3.5.1+gitbfeb0668.nv25.12
+ARG SETUPTOOLS_VER=80.9.0
 ARG SYMPY_VER=1.14.0
-ARG TORCH_VER=2.9.0a0+145a3a7bda.nv25.10
-ARG TORCHVISION_VER=0.24.0a0+094e7af5
+ARG TORCH_VER=2.10.0a0+b4e4ee81d3.nv25.12
+ARG TORCHVISION_VER=0.25.0a0+ca221243
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
-ARG TENSORRTLLM_REPO_TAG=release/1.1
-ARG TENSORRTLLM_VER=1.1.0
+ARG TENSORRTLLM_REPO_TAG=release/1.2
+ARG TENSORRTLLM_VER=1.2.0
 
 FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
