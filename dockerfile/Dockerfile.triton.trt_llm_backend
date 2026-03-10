@@ -18,7 +18,7 @@ ARG TORCHVISION_VER=0.25.0a0+ca221243
 
 ARG TENSORRTLLM_REPO=https://github.com/NVIDIA/TensorRT-LLM.git
 ARG TENSORRTLLM_REPO_TAG=release/1.2
-ARG TENSORRTLLM_VER=1.2.0
+ARG TENSORRTLLM_VER=1.2.0rc8
 
 FROM ${PYTORCH_IMAGE} AS pytorch_image
 FROM ${BASE_IMAGE} AS install_dependencies
@@ -179,7 +179,11 @@ ENV TRT_ROOT=/usr/local/tensorrt
 # Install TRT-LLM wheel after all the dependencies are installed
 ARG TENSORRTLLM_VER
 RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
-    pip install --no-cache-dir ${PYPI_EXTRA_VALUES} tensorrt_llm==${TENSORRTLLM_VER}
+    if [ -n "${PYPI_EXTRA_VALUES}" ]; then \
+        pip3 install --no-cache-dir ${PYPI_EXTRA_VALUES} ; \
+    else \
+        pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm==${TENSORRTLLM_VER} ; \
+    fi
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
