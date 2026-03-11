@@ -143,7 +143,7 @@ RUN apt-get update -q=2 \
         perl \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
-    && pip3 uninstall -y tensorrt python3-wheel \
+    && pip3 uninstall -y tensorrt \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --no-cache-dir polygraphy==0.49.9 \
     && curl -sSL https://raw.githubusercontent.com/triton-inference-server/TensorRT-LLM/refs/tags/v1.1.0/docker/common/install_mpi4py.sh | bash
@@ -178,12 +178,14 @@ ENV TRT_ROOT=/usr/local/tensorrt
 
 # Install TRT-LLM wheel after all the dependencies are installed
 ARG TENSORRTLLM_VER
+RUN dpkg --remove --force-depends python3-wheel # FIXME:1 this required by 'antlr4-python3-runtime' which breaks installation of the TensorRT-LLM wheel
 RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
     if [ -n "${PYPI_EXTRA_VALUES}" ]; then \
         pip3 install --no-cache-dir ${PYPI_EXTRA_VALUES} ; \
     else \
         pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm==${TENSORRTLLM_VER} ; \
     fi
+RUN apt-get --fix-broken install -y  # FIXME:1 this is fixing the broken dependencies after force removal of python3-wheel
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
