@@ -185,7 +185,7 @@ RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
     else \
         pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm==${TENSORRTLLM_VER} ; \
     fi
-RUN apt-get --fix-broken install -y  # FIXME:1 this is fixing the broken dependencies after force removal of python3-wheel
+RUN apt-get --fix-broken install -y python3-pip # FIXME:1 this is fixing the broken dependencies after force removal of python3-wheel
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
