@@ -130,7 +130,12 @@ RUN apt-get update -q=2 \
     && apt-get purge -y "libnvinfer*" \
     && python3.12 -m venv /opt/venv-tritonserver \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install --no-cache-dir polygraphy==0.49.9 \
+    && pip3 install --no-cache-dir \
+           polygraphy==0.49.26 \
+           setuptools \
+           networkx \
+           sympy \
+           packaging \
     && curl -sSL https://raw.githubusercontent.com/triton-inference-server/TensorRT-LLM/refs/heads/release/1.2/docker/common/install_mpi4py.sh | bash
 
 ENV CUDA_VER=$CUDA_VERSION
