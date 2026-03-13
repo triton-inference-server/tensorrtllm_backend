@@ -5,6 +5,7 @@ ARG RELEASE_URL_TRT_x86=https://developer.nvidia.com/downloads/compute/machine-l
 ARG RELEASE_URL_TRT_ARM=https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.14.1/tars/TensorRT-${TRT_VER}.Linux.aarch64-gnu.cuda-13.0.tar.gz
 
 # Versions of packages to copy from pytorch image
+ARG PIP_WHL_VER_FLASH_ATTN=2.7.4.post1+25.12
 ARG PIP_WHL_VER_NVFUSER=0.2.34+git073e91b
 ARG PIP_WHL_VER_PYCOCOTOOLS=2.0+nv0.8.1
 ARG PIP_WHL_VER_PYTORCH_TRITON=3.5.1+gitbfeb0668.nv25.12
@@ -86,25 +87,36 @@ ARG PIP_WHL_VER_TRITON_KERNELS
 
 # Copy necessary files from the base stage python3.12/dist-packages/torch-${PIP_WHL_VER_TORCH}.dist-info
 COPY --from=pytorch_image /usr/local/lib/lib* /usr/local/lib/
+# FLASH_ATTN
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn /opt/venv-tritonserver/lib/python3.12/site-packages/flash_attn
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn-${PIP_WHL_VER_FLASH_ATTN}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/flash_attn-${PIP_WHL_VER_FLASH_ATTN}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so /opt/venv-tritonserver/lib/python3.12/site-packages/flash_attn_2_cuda.cpython-312-*-linux-gnu.so
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/hopper /opt/venv-tritonserver/lib/python3.12/site-packages/hopper
 # NVFUSER
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/nvfuser /opt/venv-tritonserver/lib/python3.12/site-packages/nvfuser
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/nvfuser-${PIP_WHL_VER_NVFUSER}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/nvfuser-${PIP_WHL_VER_NVFUSER}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/nvfuser_common /opt/venv-tritonserver/lib/python3.12/site-packages/nvfuser_common
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/nvfuser_direct /opt/venv-tritonserver/lib/python3.12/site-packages/nvfuser_direct
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/tools /opt/venv-tritonserver/lib/python3.12/site-packages/tools
 # PYCOCOTOOLS
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pycocotools /opt/venv-tritonserver/lib/python3.12/site-packages/pycocotools
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pycocotools-${PIP_WHL_VER_PYCOCOTOOLS}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/pycocotools-${PIP_WHL_VER_PYCOCOTOOLS}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/ext.cpython-312-*-linux-gnu.so /opt/venv-tritonserver/lib/python3.12/site-packages/ext.cpython-312-*-linux-gnu.so
 # PYTORCH_TRITON
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /opt/venv-tritonserver/lib/python3.12/site-packages/pytorch_triton
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PIP_WHL_VER_PYTORCH_TRITON}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/pytorch_triton-${PIP_WHL_VER_PYTORCH_TRITON}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /opt/venv-tritonserver/lib/python3.12/site-packages/triton
 # TORCH
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/functorch /opt/venv-tritonserver/lib/python3.12/site-packages/functorch
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /opt/venv-tritonserver/lib/python3.12/site-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /opt/venv-tritonserver/lib/python3.12/site-packages/torchgen
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-${PIP_WHL_VER_TORCH}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torch-${PIP_WHL_VER_TORCH}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /opt/venv-tritonserver/lib/python3.12/site-packages/torchgen
 # TORCHAO
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchao /opt/venv-tritonserver/lib/python3.12/site-packages/torchao
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchao-${PIP_WHL_VER_TORCHAO}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torchao-${PIP_WHL_VER_TORCHAO}.dist-info
 # TORCHVISION
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision /opt/venv-tritonserver/lib/python3.12/site-packages/torchvision
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision-${PIP_WHL_VER_TORCHVISION}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torchvision-${PIP_WHL_VER_TORCHVISION}.dist-info
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchvision.libs /opt/venv-tritonserver/lib/python3.12/site-packages/torchvision.libs
 
 ENV PATH="/opt/venv-tritonserver/bin:${PATH}"
 RUN apt-get update -q=2 \
