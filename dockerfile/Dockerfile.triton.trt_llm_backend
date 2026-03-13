@@ -97,8 +97,8 @@ COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/triton /opt/ve
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/pytorch_triton-${PIP_WHL_VER_PYTORCH_TRITON}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/pytorch_triton-${PIP_WHL_VER_PYTORCH_TRITON}.dist-info
 # TORCH
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch /opt/venv-tritonserver/lib/python3.12/site-packages/torch
-COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-${PIP_WHL_VER_TORCH}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torch-${PIP_WHL_VER_TORCH}.dist-info
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchgen /opt/venv-tritonserver/lib/python3.12/site-packages/torchgen
+COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torch-${PIP_WHL_VER_TORCH}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torch-${PIP_WHL_VER_TORCH}.dist-info
 # TORCHAO
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchao /opt/venv-tritonserver/lib/python3.12/site-packages/torchao
 COPY --from=pytorch_image /usr/local/lib/python3.12/dist-packages/torchao-${PIP_WHL_VER_TORCHAO}.dist-info /opt/venv-tritonserver/lib/python3.12/site-packages/torchao-${PIP_WHL_VER_TORCHAO}.dist-info
