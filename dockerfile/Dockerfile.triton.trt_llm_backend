@@ -132,7 +132,6 @@ RUN apt-get update -q=2 \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --no-cache-dir \
            polygraphy==0.49.26 \
-           setuptools \
            networkx \
            sympy \
            packaging \
