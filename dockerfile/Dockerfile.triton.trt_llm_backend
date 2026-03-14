@@ -71,7 +71,7 @@ RUN git-lfs install \
     && git clone --single-branch --recurse-submodules --depth=1 -b ${TENSORRTLLM_REPO_TAG} ${TENSORRTLLM_REPO} tensorrt_llm
 
 # Final stage to build the TRT-LLM container
-FROM ${BASE_IMAGE} AS final_stage
+FROM ${BASE_IMAGE} AS pytorch_wrapper
 
 # Install the necessary dependencies and remove previous TRT installation in the
 # final image
@@ -126,6 +126,7 @@ RUN apt-get update -q=2 \
         python3.12-venv \
         git-lfs \
         perl \
+        cuda-sanitizer-13-1 \
         # Remove previous TRT installation
     && apt-get purge -y "libnvinfer*" \
     && python3.12 -m venv /opt/venv-tritonserver \
@@ -135,10 +136,14 @@ RUN apt-get update -q=2 \
            networkx \
            sympy \
            packaging \
+           opencv-python-headless \
     && curl -sSL https://raw.githubusercontent.com/triton-inference-server/TensorRT-LLM/refs/heads/release/1.2/docker/common/install_mpi4py.sh | bash
+
+RUN find /opt /usr \( -name 'lib*torch*so' -o -name 'libInterceptorInjectionTarget.so' \) -exec dirname {} \; | sort -u > /etc/ld.so.conf.d/tensorrt-llm-pytorch.conf
 
 ENV CUDA_VER=$CUDA_VERSION
 
+FROM pytorch_wrapper AS tensorrt_llm_base
 # Install TRT
 COPY --from=install_dependencies /usr/local/tensorrt /usr/local/tensorrt
 RUN pip3 install /usr/local/tensorrt/python/tensorrt-*-cp$( python3 -c "import sys; print(str(sys.version_info.major) + str(sys.version_info.minor))" )*
@@ -157,6 +162,9 @@ RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
     else \
         pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm==${TENSORRTLLM_VER} ; \
     fi
+
+RUN find /usr /opt -name libtensorrt_llm.so -exec dirname {} \; | sort -u > /etc/ld.so.conf.d/tensorrt-llm.conf \
+    && ldconfig
 
 # Copying the Tensorrt LLM scripts and applications
 WORKDIR /app
