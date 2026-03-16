@@ -526,7 +526,7 @@ configurations.
 ### Multi-node Support
 
 Check out the
-[Multi-Node Generative AI w/ Triton Server and TensorRT-LLM](https://github.com/triton-inference-server/tutorials/tree/main/Deployment/Kubernetes/TensorRT-LLM_Multi-Node_Distributed_Models)
+[EKS Multinode Triton TRT-LLM](https://github.com/triton-inference-server/tutorials/tree/main/Deployment/Kubernetes/EKS_Multinode_Triton_TRTLLM)
 tutorial for Triton Server and TensorRT-LLM multi-node deployment.
 
 ### Model Parallelism
