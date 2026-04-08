@@ -51,7 +51,7 @@ repo. If you don't find your answer there you can ask questions on the
 - [TensorRT-LLM Backend](#tensorrt-llm-backend)
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
-    - [Quick Start](#quick-start)
+    - [Quick Start (Engine Backend)](#quick-start-engine-backend)
       - [Launch Triton TensorRT-LLM container](#launch-triton-tensorrt-llm-container)
       - [Prepare TensorRT-LLM engines](#prepare-tensorrt-llm-engines)
       - [Prepare the Model Repository](#prepare-the-model-repository)
@@ -63,6 +63,7 @@ repo. If you don't find your answer there you can ask questions on the
           - [Early stopping](#early-stopping)
           - [Return context logits and/or generation logits](#return-context-logits-andor-generation-logits)
         - [Requests with batch size \> 1](#requests-with-batch-size--1)
+    - [PyTorch Backend (LLMAPI) Quick Start](#pytorch-backend-llmapi-quick-start)
   - [Building from Source](#building-from-source)
   - [Supported Models](#supported-models)
   - [Model Config](#model-config)
@@ -92,7 +93,7 @@ repo. If you don't find your answer there you can ask questions on the
 
 ## Getting Started
 
-### Quick Start
+### Quick Start (Engine Backend)
 
 Below is an example of how to serve a TensorRT-LLM model with the Triton
 TensorRT-LLM Backend on a 4-GPU environment. The example uses the GPT model from
@@ -435,6 +436,103 @@ python3 /app/inflight_batcher_llm/client/end_to_end_grpc_client.py -o 5 -p '["Th
 ```
 
 to send a request with a batch size of 3 to the Triton server.
+
+### PyTorch Backend (LLMAPI) Quick Start
+
+The PyTorch backend (also called the LLMAPI workflow) lets you serve models
+directly from HuggingFace weights **without a TRT engine compilation step**.
+It uses the TensorRT-LLM high-level Python LLM API under the hood.
+
+> **When to use each backend**
+>
+> | | Engine Backend | PyTorch Backend (LLMAPI) |
+> |---|---|---|
+> | Setup | Requires `trtllm-build` compilation | Load HuggingFace weights directly |
+> | Performance | Maximum (compiled optimizations) | Slightly lower, but faster to iterate |
+> | Flexibility | Fixed at build time | Easy model swaps and customization |
+>
+> For a complete guide see [`docs/llmapi.md`](./docs/llmapi.md).
+
+#### Step 1: Launch the Triton container
+
+```bash
+docker run --rm -ti -v `pwd`:/mnt -w /mnt \
+    -v ~/.cache/huggingface:~/.cache/huggingface \
+    --gpus all \
+    nvcr.io/nvidia/tritonserver:<yy.mm>-trtllm-python-py3 bash
+```
+
+#### Step 2: Get the model repository template
+
+The `llmapi` template lives in the TensorRT-LLM source repo, not in the
+installed Python package. Clone the version that matches your container into
+`/tmp` — this avoids a Python import conflict explained in the note below:
+
+```bash
+# Find your container's TRT-LLM version
+python3 -c "import tensorrt_llm; print(tensorrt_llm.__version__)" 2>/dev/null | tail -1
+
+# Clone the matching tag (replace v1.1.0 with your version)
+git clone --branch v1.1.0 --depth 1 \
+    https://github.com/NVIDIA/TensorRT-LLM.git /tmp/trtllm
+```
+
+> [!NOTE]
+> **Why `/tmp`?** If you clone into a directory that already contains a
+> `tensorrt_llm/` sub-folder (e.g. the repo root when the git submodule is
+> present), Python resolves `import tensorrt_llm` to the **source tree**
+> instead of the installed package. The source tree has no compiled C++
+> extensions, so you get:
+> `ModuleNotFoundError: No module named 'tensorrt_llm.bindings'`
+>
+> Cloning to `/tmp` and launching from there avoids this entirely.
+
+#### Step 3: Configure the model
+
+Edit the `model.yaml` inside the cloned template:
+
+```bash
+cat > /tmp/trtllm/triton_backend/all_models/llmapi/tensorrt_llm/1/model.yaml << 'EOF'
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0   # any HuggingFace ID or local path
+tensor_parallel_size: 1
+kv_cache_config:
+  free_gpu_memory_fraction: 0.9
+EOF
+```
+
+For a gated model (e.g. Llama), set your token first and update `model:`:
+
+```bash
+export HF_TOKEN=hf_...
+# Then set: model: meta-llama/Llama-3.1-8B
+# And optionally: tensor_parallel_size: 2  (for multi-GPU)
+```
+
+#### Step 4: Launch the server
+
+Run from `/tmp` so Python resolves `tensorrt_llm` to the installed package:
+
+```bash
+cd /tmp
+python3 trtllm/triton_backend/scripts/launch_triton_server.py \
+    --model_repo=trtllm/triton_backend/all_models/llmapi/
+```
+
+Wait for `Started HTTPService at 0.0.0.0:8000`.
+
+#### Step 5: Send a request
+
+```bash
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 50}' | jq
+```
+
+With per-request performance metrics:
+
+```bash
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 50, "sampling_param_return_perf_metrics": true}' | jq
+```
 
 ## Building from Source
 
