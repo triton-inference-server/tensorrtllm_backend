@@ -95,16 +95,11 @@ docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --gpus all \
 ```
 
 Replace `25.12` with the latest tag from [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver/tags).
-Check your container's TRT-LLM version — you need it to match the clone tag below:
-
-```bash
-python3 -c "import tensorrt_llm; print(tensorrt_llm.__version__)" 2>/dev/null | tail -1
-```
 
 #### Clone TRT-LLM and set your model
 
 ```bash
-git clone --branch v1.1.0 --depth 1 https://github.com/NVIDIA/TensorRT-LLM.git
+git clone https://github.com/NVIDIA/TensorRT-LLM.git
 ```
 
 Edit `TensorRT-LLM/triton_backend/all_models/llmapi/tensorrt_llm/1/model.yaml`
