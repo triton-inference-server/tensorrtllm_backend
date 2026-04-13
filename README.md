@@ -131,6 +131,24 @@ curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
     -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 50}' | jq
 ```
 
+#### Cancel an in-flight request
+
+Send a second request with `"stop": true` and the same `request_id` you used in the original request:
+
+```bash
+# 1. Start a long-running request and note its request_id
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -H "triton-request-id: my-req-1" \
+    -d '{"text_input": "Write a very long essay about the history of AI", "sampling_param_max_tokens": 500}' &
+
+# 2. Cancel it
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -H "triton-request-id: my-req-1" \
+    -d '{"text_input": "", "stop": true}'
+```
+
+The server stops generation immediately and returns a cancellation response.
+
 For multi-GPU, multi-node, and advanced options see [`docs/llmapi.md`](./docs/llmapi.md).
 
 ---
