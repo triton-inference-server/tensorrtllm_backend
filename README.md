@@ -669,13 +669,13 @@ There are five models in
 [all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm) that will
 be used in this example:
 
-| Model | Description |
-| :------------: | :---------------: |
-| `ensemble` | This model is used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
-| `preprocessing` | This model is used for tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints). |
-| `tensorrt_llm` | This model is a wrapper of your TensorRT-LLM model and is used for inferencing. Input specification can be found [here](./docs/model_config.md#model-input-and-output) |
-| `postprocessing` | This model is used for de-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string). |
-| `tensorrt_llm_bls` | This model can also be used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
+| Model              | Description |
+| :----------------- | :---------- |
+| `ensemble`         | Chains the preprocessing, tensorrt_llm, and postprocessing models together. |
+| `preprocessing`    | Tokenizes input: converts prompts (string) to input_ids (list of ints). |
+| `tensorrt_llm`     | Wraps the TRT-LLM model and runs inference. Input specification can be found [here](./docs/model_config.md#model-input-and-output). |
+| `postprocessing`   | Detokenizes output: converts output_ids (list of ints) to text (string). |
+| `tensorrt_llm_bls` | Alternative to the ensemble model for chaining pre/post-processing with the TRT-LLM model. |
 
 To learn more about ensemble and BLS models, please see the
 [Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)
@@ -719,7 +719,7 @@ python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt
 ```
 
 > **NOTE**:
-It is recommended to match the number of pre/post_instance_counts with triton_max_batch_size for better performance.
+> It is recommended to match the number of pre/post_instance_counts with triton_max_batch_size for better performance.
 
 ### Serving with Triton
 
@@ -770,15 +770,16 @@ generate a response for this model:
 Therefore, we can query the server in the following way:
 
 - if using the ensemble model
-```bash
-curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
-```
+
+    ```bash
+    curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+    ```
 
 - if using the tensorrt_llm_bls model
 
-```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm_bls/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
-```
+    ```bash
+    curl -X POST localhost:8000/v2/models/tensorrt_llm_bls/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+    ```
 
 Which should return a result similar to (formatted for readability):
 ```bash
@@ -858,6 +859,7 @@ demonstrates how a client can send requests with batch size > 1 and consume the
 responses returned from Triton. When passing `--batch-inputs` to the client
 script, the client will create a request with multiple prompts, and use the
 `batch_index` output tensor to associate the responses to the original prompt.
+
 For example one could run:
 
 ```bash
