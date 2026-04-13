@@ -110,7 +110,8 @@ and set `model:` to any HuggingFace model ID or local path, for example:
 model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
 ```
 
-All keys in `model.yaml` map directly to [`LLM()` constructor arguments](https://nvidia.github.io/TensorRT-LLM/llm-api/) — this is where you configure KV cache, quantization, parallelism, and more.
+All keys in `model.yaml` map directly to [`LLM()` constructor arguments](https://nvidia.github.io/TensorRT-LLM/llm-api/).
+This is where you configure KV cache, quantization, parallelism, and more.
 
 For gated models (e.g. Llama), set your token first: `export HF_TOKEN=hf_...`
 
@@ -133,7 +134,6 @@ curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
     -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 50}' | jq
 ```
 
-The `sampling_param_*` fields map to [`SamplingParams`](https://nvidia.github.io/TensorRT-LLM/llm-api/) — see the TRT-LLM LLM API docs for the full list (temperature, top-k, stop strings, etc.).
 
 #### Cancel an in-flight request
 
