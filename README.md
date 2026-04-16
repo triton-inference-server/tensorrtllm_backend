@@ -51,8 +51,8 @@ repo. If you don't find your answer there you can ask questions on the
 - [TensorRT-LLM Backend](#tensorrt-llm-backend)
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
-    - [PyTorch Backend (LLM API) — Recommended](#pytorch-backend-llm-api--recommended)
-    - [TensorRT Engine Backend (Legacy)](#legacy-tensorrt-engine-backend)
+    - [PyTorch Backend (LLM API) — Simpler Setup](#pytorch-backend-llm-api--simpler-setup)
+    - [TensorRT Engine Backend](#tensorrt-engine-backend)
   - [Building from Source](#building-from-source)
   - [Supported Models](#supported-models)
   - [Model Config](#model-config)
@@ -79,13 +79,13 @@ repo. If you don't find your answer there you can ask questions on the
   - [Triton Metrics](#triton-metrics)
   - [Benchmarking](#benchmarking)
   - [Testing the TensorRT-LLM Backend](#testing-the-tensorrt-llm-backend)
-  - [Legacy: TensorRT Engine Backend](#legacy-tensorrt-engine-backend)
+  - [TensorRT Engine Backend](#tensorrt-engine-backend)
 
 ## Getting Started
 
-### PyTorch Backend (LLM API) — Recommended
+### PyTorch Backend (LLM API) — Simpler Setup
 
-Serve any HuggingFace model directly — no engine compilation required.
+Serve any HuggingFace model directly — no engine compilation required. This is a newer path; automated CI coverage is being added (tracked in [#853](https://github.com/triton-inference-server/tensorrtllm_backend/issues/853)).
 
 #### Launch the container
 
@@ -161,10 +161,10 @@ For multi-GPU, multi-node, and advanced options see [`docs/llmapi.md`](./docs/ll
 
 ---
 
-### TensorRT Engine Backend (Legacy)
+### TensorRT Engine Backend
 
 For workflows using pre-compiled TensorRT engines (`trtllm-build`), see the
-[Legacy: TensorRT Engine Backend](#legacy-tensorrt-engine-backend) section at the bottom of this page.
+[TensorRT Engine Backend](#tensorrt-engine-backend) section at the bottom of this page.
 
 ---
 
@@ -590,10 +590,10 @@ the testing for TensorRT-LLM backend.
 
 ---
 
-## Legacy: TensorRT Engine Backend
+## TensorRT Engine Backend
 
 > [!NOTE]
-> This section covers the legacy workflow using pre-compiled TensorRT engines (`trtllm-build`) and the `inflight_batcher_llm` model layout. For new deployments, use the [PyTorch Backend (LLM API)](#pytorch-backend-llm-api--recommended) above.
+> This section covers the workflow using pre-compiled TensorRT engines (`trtllm-build`) and the `inflight_batcher_llm` model layout. This path has full automated CI coverage. For a simpler setup without engine compilation, see the [PyTorch Backend (LLM API)](#pytorch-backend-llm-api--simpler-setup) above.
 
 Below is an example of how to serve a TensorRT-LLM model with the Triton
 TensorRT-LLM Backend on a 4-GPU environment. The example uses the GPT model from
