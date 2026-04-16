@@ -85,7 +85,7 @@ repo. If you don't find your answer there you can ask questions on the
 
 ### PyTorch Backend (LLM API) — Simpler Setup
 
-Serve any HuggingFace model directly — no engine compilation required. This is a newer path; automated CI coverage is being added (tracked in [#853](https://github.com/triton-inference-server/tensorrtllm_backend/issues/853)).
+Serve any HuggingFace model directly — no engine compilation required. This is a newer path; automated CI coverage is being added (tracked in [#854](https://github.com/triton-inference-server/tensorrtllm_backend/issues/854)).
 
 #### Launch the container
 
