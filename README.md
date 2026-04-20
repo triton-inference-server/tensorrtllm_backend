@@ -52,6 +52,10 @@ repo. If you don't find your answer there you can ask questions on the
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
     - [PyTorch Backend (LLM API) — Simpler Setup](#pytorch-backend-llm-api--simpler-setup)
+      - [Launch the container](#launch-the-container)
+      - [Clone TRT-LLM and set your model](#clone-trt-llm-and-set-your-model)
+      - [Launch and test](#launch-and-test)
+      - [Cancel an in-flight request](#cancel-an-in-flight-request)
     - [TensorRT Engine Backend](#tensorrt-engine-backend)
   - [Building from Source](#building-from-source)
   - [Supported Models](#supported-models)
@@ -79,13 +83,13 @@ repo. If you don't find your answer there you can ask questions on the
   - [Triton Metrics](#triton-metrics)
   - [Benchmarking](#benchmarking)
   - [Testing the TensorRT-LLM Backend](#testing-the-tensorrt-llm-backend)
-  - [TensorRT Engine Backend](#tensorrt-engine-backend)
+  - [TensorRT Engine Backend](#tensorrt-engine-backend-1)
 
 ## Getting Started
 
 ### PyTorch Backend (LLM API) — Simpler Setup
 
-Serve any HuggingFace model directly — no engine compilation required. This is a newer path; automated CI coverage is being added (tracked in [#854](https://github.com/triton-inference-server/tensorrtllm_backend/issues/854)).
+Serve any HuggingFace model directly — no engine compilation required.
 
 #### Launch the container
 
@@ -164,7 +168,7 @@ For multi-GPU, multi-node, and advanced options see [`docs/llmapi.md`](./docs/ll
 ### TensorRT Engine Backend
 
 For workflows using pre-compiled TensorRT engines (`trtllm-build`), see the
-[TensorRT Engine Backend](#tensorrt-engine-backend) section at the bottom of this page.
+[TensorRT Engine Backend](#tensorrt-engine-backend-1) section at the bottom of this page.
 
 ---
 
