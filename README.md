@@ -51,18 +51,12 @@ repo. If you don't find your answer there you can ask questions on the
 - [TensorRT-LLM Backend](#tensorrt-llm-backend)
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
-    - [Quick Start](#quick-start)
-      - [Launch Triton TensorRT-LLM container](#launch-triton-tensorrt-llm-container)
-      - [Prepare TensorRT-LLM engines](#prepare-tensorrt-llm-engines)
-      - [Prepare the Model Repository](#prepare-the-model-repository)
-      - [Modify the Model Configuration](#modify-the-model-configuration)
-      - [Serving with Triton](#serving-with-triton)
-      - [Send an Inference Request](#send-an-inference-request)
-        - [Using the generate endpoint](#using-the-generate-endpoint)
-        - [Using the client scripts](#using-the-client-scripts)
-          - [Early stopping](#early-stopping)
-          - [Return context logits and/or generation logits](#return-context-logits-andor-generation-logits)
-        - [Requests with batch size \> 1](#requests-with-batch-size--1)
+    - [PyTorch Backend (LLM API) — Simpler Setup](#pytorch-backend-llm-api--simpler-setup)
+      - [Launch the container](#launch-the-container)
+      - [Clone TRT-LLM and set your model](#clone-trt-llm-and-set-your-model)
+      - [Launch and test](#launch-and-test)
+      - [Cancel an in-flight request](#cancel-an-in-flight-request)
+    - [TensorRT Engine Backend](#tensorrt-engine-backend)
   - [Building from Source](#building-from-source)
   - [Supported Models](#supported-models)
   - [Model Config](#model-config)
@@ -89,352 +83,94 @@ repo. If you don't find your answer there you can ask questions on the
   - [Triton Metrics](#triton-metrics)
   - [Benchmarking](#benchmarking)
   - [Testing the TensorRT-LLM Backend](#testing-the-tensorrt-llm-backend)
+  - [TensorRT Engine Backend](#tensorrt-engine-backend-1)
 
 ## Getting Started
 
-### Quick Start
+### PyTorch Backend (LLM API) — Simpler Setup
 
-Below is an example of how to serve a TensorRT-LLM model with the Triton
-TensorRT-LLM Backend on a 4-GPU environment. The example uses the GPT model from
-the
-[TensorRT-LLM repository](https://github.com/NVIDIA/TensorRT-LLM/tree/v0.11.0/examples/gpt)
-with the
-[NGC Triton TensorRT-LLM container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver).
-Make sure you are cloning the same version of TensorRT-LLM backend as the
-version of TensorRT-LLM in the container. Please refer to the
-[support matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html)
-to see the aligned versions.
+Serve any HuggingFace model directly — no engine compilation required.
 
-In this example, we will use Triton 24.07 with TensorRT-LLM v0.11.0.
-
-
-#### Launch Triton TensorRT-LLM container
-
-Launch Triton docker container `nvcr.io/nvidia/tritonserver:<xx.yy>-trtllm-python-py3`
-with TensorRT-LLM backend.
-
-Make an `engines` folder outside docker to reuse engines for future runs. Make
-sure to replace the `<xx.yy>` with the version of Triton that you want to use.
+#### Launch the container
 
 ```bash
-docker run --rm -it --net host --shm-size=2g \
-    --ulimit memlock=-1 --ulimit stack=67108864 --gpus all \
-    -v </path/to/engines>:/engines \
-    nvcr.io/nvidia/tritonserver:24.07-trtllm-python-py3
+docker run --rm -it --net host --shm-size=2g --ulimit memlock=-1 --gpus all \
+    -v ~/.cache/huggingface:/root/.cache/huggingface \
+    nvcr.io/nvidia/tritonserver:25.12-trtllm-python-py3 bash
 ```
 
-#### Prepare TensorRT-LLM engines
+Replace `25.12` with the latest tag from [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver/tags).
 
-You can skip this step if you already have the engines ready.
-Follow the [guide](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples) in
-TensorRT-LLM repository for more details on how to to prepare the engines for
-all the supported models. You can also check out the
-[tutorials](https://github.com/triton-inference-server/tutorials) to see more
-examples with serving TensorRT-LLM models.
+#### Clone TRT-LLM and set your model
 
 ```bash
-cd /app/tensorrt_llm/examples/models/core/gpt
-
-# Download weights from HuggingFace Transformers
-rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
-pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
-
-# Convert weights from HF Tranformers to TensorRT-LLM checkpoint
-python3 convert_checkpoint.py --model_dir gpt2 \
-        --dtype float16 \
-        --tp_size 4 \
-        --output_dir ./c-model/gpt2/fp16/4-gpu
-
-# Build TensorRT engines
-trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
-        --gpt_attention_plugin float16 \
-        --remove_input_padding enable \
-        --kv_cache_type paged \
-        --gemm_plugin float16 \
-        --output_dir /engines/gpt/fp16/4-gpu
+git clone https://github.com/NVIDIA/TensorRT-LLM.git
 ```
 
-See [here](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/gpt) for
-more details on the parameters.
+Edit `TensorRT-LLM/triton_backend/all_models/llmapi/tensorrt_llm/1/model.yaml`
+and set `model:` to any HuggingFace model ID or local path, for example:
 
-#### Prepare the Model Repository
+```yaml
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+```
 
-Next, create the
-[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
-that will be used by the Triton server. The models can be found in the
-[all_models](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models) folder. The folder contains six groups of models:
-- [`disaggregated_serving`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/disaggregated_serving): Using the C++ TensorRT-LLM backend to run disaggregated serving.
-- [`gpt`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime. This model is deprecated and will be removed in a future release.
-- [`inflight_batcher_llm`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm)`: Using the C++
-TensorRT-LLM backend with the executor API, which includes the latest features
-including inflight batching.
+All keys in `model.yaml` map directly to [`LLM()` constructor arguments](https://nvidia.github.io/TensorRT-LLM/llm-api/).
+This is where you configure KV cache, quantization, parallelism, and more.
 
-There are five models in
-[all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm) that will
-be used in this example:
+For gated models (e.g. Llama), set your token first: `export HF_TOKEN=hf_...`
 
-| Model | Description |
-| :------------: | :---------------: |
-| `ensemble` | This model is used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
-| `preprocessing` | This model is used for tokenizing, meaning the conversion from prompts(string) to input_ids(list of ints). |
-| `tensorrt_llm` | This model is a wrapper of your TensorRT-LLM model and is used for inferencing. Input specification can be found [here](https://github.com/triton-inference-server/tensorrtllm_backend/blob/main/docs/model_config.md#model-input-and-output) |
-| `postprocessing` | This model is used for de-tokenizing, meaning the conversion from output_ids(list of ints) to outputs(string). |
-| `tensorrt_llm_bls` | This model can also be used to chain the preprocessing, tensorrt_llm and postprocessing models together. |
+#### Launch and test
 
-To learn more about ensemble and BLS models, please see the
-[Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)
-and
-[Business Logic Scripting](https://github.com/triton-inference-server/python_backend#business-logic-scripting)
-documentation.
-
-To learn more about the benefits and the limitations of using the BLS model,
-please see the [model config](./docs/model_config.md#tensorrt_llm_bls-model) section.
+> [!IMPORTANT]
+> Run from the directory where you ran `git clone` (the parent of `TensorRT-LLM/`),
+> **not** from inside the `TensorRT-LLM/` folder. Running from inside it causes
+> `ModuleNotFoundError: No module named 'tensorrt_llm.bindings'`.
 
 ```bash
-mkdir /triton_model_repo
-cp -r /app/all_models/inflight_batcher_llm/* /triton_model_repo/
+python3 TensorRT-LLM/triton_backend/scripts/launch_triton_server.py \
+    --model_repo=TensorRT-LLM/triton_backend/all_models/llmapi/
 ```
-- [`llmapi`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/llmapi): Using TensorRT-LLM LLM API with pytorch backend.
-- [`multimodal`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/multimodal): Using TensorRT-LLM python runtime for multimodal models. See [`multimodal.md`](./docs/multimodal.md) for more details.
-- [`whisper`](https://github.com/triton-inference-server/TensorRT-LLM/tree/main/triton_backend/all_models/whisper): Using TensorRT-LLM python runtime for Whisper. See [`whisper.md`](./docs/whisper.md) for more details.
 
-#### Modify the Model Configuration
-Use the script to fill in the parameters in the model configuration files. For
-optimal performance or custom parameters, please refer to
-[performance-tuning-guide](https://github.com/NVIDIA/TensorRT-LLM/tree/main/docs/source/legacy/performance/performance-tuning-guide).
-For more details on the model configuration and the parameters that can be
-modified, please refer to the [model config](./docs/model_config.md) section.
+Once the server is up, send a request:
 
 ```bash
-ENGINE_DIR=/engines/gpt/fp16/4-gpu
-TOKENIZER_DIR=/app/tensorrt_llm/examples/models/core/gpt/gpt2
-MODEL_FOLDER=/triton_model_repo
-TRITON_MAX_BATCH_SIZE=4
-INSTANCE_COUNT=1
-MAX_QUEUE_DELAY_MS=0
-MAX_QUEUE_SIZE=0
-FILL_TEMPLATE_SCRIPT=/app/tools/fill_template.py
-DECOUPLED_MODE=false
-LOGITS_DATATYPE=TYPE_FP32
-
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},logits_datatype:${LOGITS_DATATYPE}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,max_queue_size:${MAX_QUEUE_SIZE},encoder_input_features_data_type:TYPE_FP16,logits_datatype:${LOGITS_DATATYPE}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT}
-python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},logits_datatype:${LOGITS_DATATYPE}
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -d '{"text_input": "The future of AI is", "sampling_param_max_tokens": 50}' | jq
 ```
 
-> **NOTE**:
-It is recommended to match the number of pre/post_instance_counts with triton_max_batch_size for better performance.
 
-#### Serving with Triton
+#### Cancel an in-flight request
 
-Now, you're ready to launch the Triton server with the TensorRT-LLM model.
+Send a second request with `"stop": true` and the same `request_id` you used in the original request:
 
-Use the launch_triton_server.py script. This launches multiple instances of tritonserver with MPI.
+Start a long-running request and note its request_id:
 
 ```bash
-# 'world_size' is the number of GPUs you want to use for serving. This should
-# be aligned with the number of GPUs used to build the TensorRT-LLM engine.
-python3 /app/scripts/launch_triton_server.py --world_size=4 --model_repo=${MODEL_FOLDER}
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -H "triton-request-id: my-req-1" \
+    -d '{"text_input": "Write a very long essay about the history of AI", "sampling_param_max_tokens": 500}' &
 ```
 
-You should see the following logs when the server is successfully deployed.
+Cancel it:
 
 ```bash
-...
-I0503 22:01:25.210518 1175 grpc_server.cc:2463] Started GRPCInferenceService at 0.0.0.0:8001
-I0503 22:01:25.211612 1175 http_server.cc:4692] Started HTTPService at 0.0.0.0:8000
-I0503 22:01:25.254914 1175 http_server.cc:362] Started Metrics Service at 0.0.0.0:8002
+curl -X POST localhost:8000/v2/models/tensorrt_llm/generate \
+    -H "triton-request-id: my-req-1" \
+    -d '{"text_input": "", "stop": true}'
 ```
 
-To stop Triton Server inside the container, run:
+The server stops generation immediately and returns a cancellation response.
 
-```bash
-pkill tritonserver
-```
+For multi-GPU, multi-node, and advanced options see [`docs/llmapi.md`](./docs/llmapi.md).
 
-#### Send an Inference Request
+---
 
-##### Using the [generate endpoint](https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_generate.md)
+### TensorRT Engine Backend
 
-The general format of the generate endpoint:
-```bash
-curl -X POST localhost:8000/v2/models/${MODEL_NAME}/generate -d '{"{PARAM1_KEY}": "{PARAM1_VALUE}", ... }'
-```
+For workflows using pre-compiled TensorRT engines (`trtllm-build`), see the
+[TensorRT Engine Backend](#tensorrt-engine-backend-1) section at the bottom of this page.
 
-In the case of the models used in this example, you can replace MODEL_NAME with
-`ensemble` or `tensorrt_llm_bls`. Examining the ensemble and tensorrt_llm_bls
-model's config.pbtxt file, you can see that 4 parameters are required to
-generate a response for this model:
-
-- text_input: Input text to generate a response from
-- max_tokens: The number of requested output tokens
-- bad_words: A list of bad words (can be empty)
-- stop_words: A list of stop words (can be empty)
-
-Therefore, we can query the server in the following way:
-
-- if using the ensemble model
-```bash
-curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
-```
-
-- if using the tensorrt_llm_bls model
-
-```bash
-curl -X POST localhost:8000/v2/models/tensorrt_llm_bls/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
-```
-
-Which should return a result similar to (formatted for readability):
-```bash
-{
-  "model_name": "ensemble",
-  "model_version": "1",
-  "sequence_end": false,
-  "sequence_id": 0,
-  "sequence_start": false,
-  "text_output": "What is machine learning?\n\nMachine learning is a method of learning by using machine learning algorithms to solve problems.\n\n"
-}
-```
-
-##### Using the client scripts
-
-You can refer to the client scripts in the
-[inflight_batcher_llm/client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client) to see how to send
-requests via Python scripts.
-
-Below is an example of using
-[inflight_batcher_llm_client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)
-to send requests to the `tensorrt_llm` model.
-
-```bash
-pip3 install tritonclient[all]
-INFLIGHT_BATCHER_LLM_CLIENT=/app/inflight_batcher_llm/client/inflight_batcher_llm_client.py
-python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
-```
-
-The result should be similar to the following:
-
-```bash
-Using pad_id:  50256
-Using end_id:  50256
-Input sequence:  [28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257]
-Got completed request
-Input: Born in north-east France, Soyer trained as a
-Output beam 0:  chef before moving to London in the early 1990s. He has since worked in restaurants in London, Paris, Milan and New York.
-
-He is married to the former model and actress, Anna-Marie, and has two children, a daughter, Emma, and a son, Daniel.
-
-Soyer's wife, Anna-Marie, is a former model and actress.
-
-He is survived by his wife, Anna-Marie, and their two children, Daniel and Emma.
-
-Soyer was born in the north-east of France, and moved to London in the early 1990s.
-
-He was a chef at the London restaurant, The Bistro, before moving to New York in the early 2000s.
-
-He was a regular at the restaurant, and was also a regular at the restaurant, The Bistro, before moving to London in the early 2000s.
-
-Soyer was a regular at the restaurant, and was
-Output sequence:  [28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257, 21221, 878, 3867, 284, 3576, 287, 262, 1903, 6303, 82, 13, 679, 468, 1201, 3111, 287, 10808, 287, 3576, 11, 6342, 11, 21574, 290, 968, 1971, 13, 198, 198, 1544, 318, 6405, 284, 262, 1966, 2746, 290, 14549, 11, 11735, 12, 44507, 11, 290, 468, 734, 1751, 11, 257, 4957, 11, 18966, 11, 290, 257, 3367, 11, 7806, 13, 198, 198, 50, 726, 263, 338, 3656, 11, 11735, 12, 44507, 11, 318, 257, 1966, 2746, 290, 14549, 13, 198, 198, 1544, 318, 11803, 416, 465, 3656, 11, 11735, 12, 44507, 11, 290, 511, 734, 1751, 11, 7806, 290, 18966, 13, 198, 198, 50, 726, 263, 373, 4642, 287, 262, 5093, 12, 23316, 286, 4881, 11, 290, 3888, 284, 3576, 287, 262, 1903, 6303, 82, 13, 198, 198, 1544, 373, 257, 21221, 379, 262, 3576, 7072, 11, 383, 347, 396, 305, 11, 878, 3867, 284, 968, 1971, 287, 262, 1903, 4751, 82, 13, 198, 198, 1544, 373, 257, 3218, 379, 262, 7072, 11, 290, 373, 635, 257, 3218, 379, 262, 7072, 11, 383, 347, 396, 305, 11, 878, 3867, 284, 3576, 287, 262, 1903, 4751, 82, 13, 198, 198, 50, 726, 263, 373, 257, 3218, 379, 262, 7072, 11, 290, 373]
-```
-
-###### Early stopping
-
-You can also stop the generation process early by using the `--stop-after-ms`
-option to send a stop request after a few milliseconds:
-
-```bash
-python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --stop-after-ms 200 --request-output-len 200 --request-id 1 --tokenizer-dir ${TOKENIZER_DIR}
-```
-
-You will find that the generation process is stopped early and therefore the
-number of generated tokens is lower than 200. You can have a look at the
-client code to see how early stopping is achieved.
-
-###### Return context logits and/or generation logits
-
-If you want to get context logits and/or generation logits, you need to enable
-`--gather_context_logits` and/or `--gather_generation_logits` when building the
-engine (or `--gather_all_token_logits` to enable both at the same time). For
-more setting details about these two flags, please refer to
-[build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py)
-or
-[gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-runtime.md).
-
-After launching the server, you could get the output of logits by passing the
-corresponding parameters `--return-context-logits` and/or
-`--return-generation-logits` in the client scripts
-([end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
-and
-[inflight_batcher_llm_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
-
-For example:
-
-```bash
-python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 20 --tokenizer-dir ${TOKENIZER_DIR} --return-context-logits --return-generation-logits
-```
-
-The result should be similar to the following:
-
-```bash
-Input sequence:  [28524, 287, 5093, 12, 23316, 4881, 11, 30022, 263, 8776, 355, 257]
-Got completed request
-Input: Born in north-east France, Soyer trained as a
-Output beam 0:  has since worked in restaurants in London,
-Output sequence:  [21221, 878, 3867, 284, 3576, 287, 262, 1903, 6303, 82, 13, 679, 468, 1201, 3111, 287, 10808, 287, 3576, 11]
-context_logits.shape: (1, 12, 50257)
-context_logits: [[[ -65.9822     -62.267445   -70.08991   ...  -76.16964    -78.8893
-    -65.90678  ]
-  [-103.40278   -102.55243   -106.119026  ... -108.925415  -109.408585
-   -101.37687  ]
-  [ -63.971176   -64.03466    -67.58809   ...  -72.141235   -71.16892
-    -64.23846  ]
-  ...
-  [ -80.776375   -79.1815     -85.50916   ...  -87.07368    -88.02817
-    -79.28435  ]
-  [ -10.551408    -7.786484   -14.524468  ...  -13.805856   -15.767286
-     -7.9322424]
-  [-106.33096   -105.58956   -111.44852   ... -111.04858   -111.994194
-   -105.40376  ]]]
-generation_logits.shape: (1, 1, 20, 50257)
-generation_logits: [[[[-106.33096  -105.58956  -111.44852  ... -111.04858  -111.994194
-    -105.40376 ]
-   [ -77.867424  -76.96638   -83.119095 ...  -87.82542   -88.53957
-     -75.64877 ]
-   [-136.92282  -135.02484  -140.96051  ... -141.78284  -141.55045
-    -136.01668 ]
-   ...
-   [-100.03721   -98.98237  -105.25507  ... -108.49254  -109.45882
-     -98.95136 ]
-   [-136.78777  -136.16165  -139.13437  ... -142.21495  -143.57468
-    -134.94667 ]
-   [  19.222942   19.127287   14.804495 ...   10.556551    9.685863
-      19.625107]]]]
-```
-
-##### Requests with batch size > 1
-
-The TRT-LLM backend supports requests with batch size greater than one. When
-sending a request with a batch size greater than one, the TRT-LLM backend will
-return multiple batch size 1 responses, where each response will be associated
-with a given batch index. An output tensor named `batch_index` is associated
-with each response to indicate which batch index this response corresponds to.
-
-The client script
-[end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
-demonstrates how a client can send requests with batch size > 1 and consume the
-responses returned from Triton. When passing `--batch-inputs` to the client
-script, the client will create a request with multiple prompts, and use the
-`batch_index` output tensor to associate the responses to the original prompt.
-For example one could run:
-
-```
-python3 /app/inflight_batcher_llm/client/end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]'  --batch-inputs
-```
-
-to send a request with a batch size of 3 to the Triton server.
+---
 
 ## Building from Source
 
@@ -855,3 +591,287 @@ Expected outputs
 ## Testing the TensorRT-LLM Backend
 Please follow the guide in [`tensorrt_llm/triton_backend/ci/README.md`](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/ci/README.md) to see how to run
 the testing for TensorRT-LLM backend.
+
+---
+
+## TensorRT Engine Backend
+
+> [!NOTE]
+> This section covers the workflow using pre-compiled TensorRT engines (`trtllm-build`) and the `inflight_batcher_llm` model layout. This path has full automated CI coverage. For a simpler setup without engine compilation, see the [PyTorch Backend (LLM API)](#pytorch-backend-llm-api--simpler-setup) above.
+
+Below is an example of how to serve a TensorRT-LLM model with the Triton
+TensorRT-LLM Backend on a 4-GPU environment. The example uses the GPT model from
+the
+[TensorRT-LLM repository](https://github.com/NVIDIA/TensorRT-LLM/tree/v0.11.0/examples/gpt)
+with the
+[NGC Triton TensorRT-LLM container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tritonserver).
+Make sure you are cloning the same version of TensorRT-LLM backend as the
+version of TensorRT-LLM in the container. Please refer to the
+[support matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html)
+to see the aligned versions.
+
+In this example, we will use Triton 24.07 with TensorRT-LLM v0.11.0.
+
+### Launch Triton TensorRT-LLM container
+
+Launch Triton docker container `nvcr.io/nvidia/tritonserver:<xx.yy>-trtllm-python-py3`
+with TensorRT-LLM backend.
+
+Make an `engines` folder outside docker to reuse engines for future runs. Make
+sure to replace the `<xx.yy>` with the version of Triton that you want to use.
+
+```bash
+docker run --rm -it --net host --shm-size=2g \
+    --ulimit memlock=-1 --ulimit stack=67108864 --gpus all \
+    -v </path/to/engines>:/engines \
+    nvcr.io/nvidia/tritonserver:24.07-trtllm-python-py3
+```
+
+### Prepare TensorRT-LLM engines
+
+You can skip this step if you already have the engines ready.
+Follow the [guide](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples) in
+TensorRT-LLM repository for more details on how to prepare the engines for
+all the supported models. You can also check out the
+[tutorials](https://github.com/triton-inference-server/tutorials) to see more
+examples with serving TensorRT-LLM models.
+
+```bash
+cd /app/tensorrt_llm/examples/models/core/gpt
+
+# Download weights from HuggingFace Transformers
+rm -rf gpt2 && git clone https://huggingface.co/gpt2-medium gpt2
+pushd gpt2 && rm pytorch_model.bin model.safetensors && wget -q https://huggingface.co/gpt2-medium/resolve/main/pytorch_model.bin && popd
+
+# Convert weights from HF Transformers to TensorRT-LLM checkpoint
+python3 convert_checkpoint.py --model_dir gpt2 \
+        --dtype float16 \
+        --tp_size 4 \
+        --output_dir ./c-model/gpt2/fp16/4-gpu
+
+# Build TensorRT engines
+trtllm-build --checkpoint_dir ./c-model/gpt2/fp16/4-gpu \
+        --gpt_attention_plugin float16 \
+        --remove_input_padding enable \
+        --kv_cache_type paged \
+        --gemm_plugin float16 \
+        --output_dir /engines/gpt/fp16/4-gpu
+```
+
+See [here](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/gpt) for
+more details on the parameters.
+
+### Prepare the Model Repository
+
+Next, create the
+[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
+that will be used by the Triton server. The models can be found in the
+[all_models](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models) folder. The folder contains six groups of models:
+- [`disaggregated_serving`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/disaggregated_serving): Using the C++ TensorRT-LLM backend to run disaggregated serving.
+- [`gpt`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/gpt): Using TensorRT-LLM pure Python runtime. This model is deprecated and will be removed in a future release.
+- [`inflight_batcher_llm`](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm): Using the C++
+TensorRT-LLM backend with the executor API, which includes the latest features
+including inflight batching.
+
+There are five models in
+[all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm) that will
+be used in this example:
+
+| Model              | Description |
+| :----------------- | :---------- |
+| `ensemble`         | Chains the preprocessing, tensorrt_llm, and postprocessing models together. |
+| `preprocessing`    | Tokenizes input: converts prompts (string) to input_ids (list of ints). |
+| `tensorrt_llm`     | Wraps the TRT-LLM model and runs inference. Input specification can be found [here](./docs/model_config.md#model-input-and-output). |
+| `postprocessing`   | Detokenizes output: converts output_ids (list of ints) to text (string). |
+| `tensorrt_llm_bls` | Alternative to the ensemble model for chaining pre/post-processing with the TRT-LLM model. |
+
+To learn more about ensemble and BLS models, please see the
+[Ensemble Models](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#ensemble-models)
+and
+[Business Logic Scripting](https://github.com/triton-inference-server/python_backend#business-logic-scripting)
+documentation.
+
+To learn more about the benefits and the limitations of using the BLS model,
+please see the [model config](./docs/model_config.md#tensorrt_llm_bls-model) section.
+
+```bash
+mkdir /triton_model_repo
+cp -r /app/all_models/inflight_batcher_llm/* /triton_model_repo/
+```
+
+### Modify the Model Configuration
+
+Use the script to fill in the parameters in the model configuration files. For
+optimal performance or custom parameters, please refer to
+[performance-tuning-guide](https://github.com/NVIDIA/TensorRT-LLM/tree/main/docs/source/legacy/performance/performance-tuning-guide).
+For more details on the model configuration and the parameters that can be
+modified, please refer to the [model config](./docs/model_config.md) section.
+
+```bash
+ENGINE_DIR=/engines/gpt/fp16/4-gpu
+TOKENIZER_DIR=/app/tensorrt_llm/examples/models/core/gpt/gpt2
+MODEL_FOLDER=/triton_model_repo
+TRITON_MAX_BATCH_SIZE=4
+INSTANCE_COUNT=1
+MAX_QUEUE_DELAY_MS=0
+MAX_QUEUE_SIZE=0
+FILL_TEMPLATE_SCRIPT=/app/tools/fill_template.py
+DECOUPLED_MODE=false
+LOGITS_DATATYPE=TYPE_FP32
+
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/ensemble/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},logits_datatype:${LOGITS_DATATYPE}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,max_queue_size:${MAX_QUEUE_SIZE},encoder_input_features_data_type:TYPE_FP16,logits_datatype:${LOGITS_DATATYPE}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT}
+python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_FOLDER}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},logits_datatype:${LOGITS_DATATYPE}
+```
+
+> **NOTE**:
+> It is recommended to match the number of pre/post_instance_counts with triton_max_batch_size for better performance.
+
+### Serving with Triton
+
+Now, you're ready to launch the Triton server with the TensorRT-LLM model.
+
+Use the launch_triton_server.py script. This launches multiple instances of tritonserver with MPI.
+
+```bash
+# 'world_size' is the number of GPUs you want to use for serving. This should
+# be aligned with the number of GPUs used to build the TensorRT-LLM engine.
+python3 /app/scripts/launch_triton_server.py --world_size=4 --model_repo=${MODEL_FOLDER}
+```
+
+You should see the following logs when the server is successfully deployed.
+
+```bash
+...
+I0503 22:01:25.210518 1175 grpc_server.cc:2463] Started GRPCInferenceService at 0.0.0.0:8001
+I0503 22:01:25.211612 1175 http_server.cc:4692] Started HTTPService at 0.0.0.0:8000
+I0503 22:01:25.254914 1175 http_server.cc:362] Started Metrics Service at 0.0.0.0:8002
+```
+
+To stop Triton Server inside the container, run:
+
+```bash
+pkill tritonserver
+```
+
+### Send an Inference Request
+
+#### Using the [generate endpoint](https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_generate.md)
+
+The general format of the generate endpoint:
+```bash
+curl -X POST localhost:8000/v2/models/${MODEL_NAME}/generate -d '{"{PARAM1_KEY}": "{PARAM1_VALUE}", ... }'
+```
+
+In the case of the models used in this example, you can replace MODEL_NAME with
+`ensemble` or `tensorrt_llm_bls`. Examining the ensemble and tensorrt_llm_bls
+model's config.pbtxt file, you can see that 4 parameters are required to
+generate a response for this model:
+
+- text_input: Input text to generate a response from
+- max_tokens: The number of requested output tokens
+- bad_words: A list of bad words (can be empty)
+- stop_words: A list of stop words (can be empty)
+
+Therefore, we can query the server in the following way:
+
+- if using the ensemble model
+
+    ```bash
+    curl -X POST localhost:8000/v2/models/ensemble/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+    ```
+
+- if using the tensorrt_llm_bls model
+
+    ```bash
+    curl -X POST localhost:8000/v2/models/tensorrt_llm_bls/generate -d '{"text_input": "What is machine learning?", "max_tokens": 20, "bad_words": "", "stop_words": ""}'
+    ```
+
+Which should return a result similar to (formatted for readability):
+```bash
+{
+  "model_name": "ensemble",
+  "model_version": "1",
+  "sequence_end": false,
+  "sequence_id": 0,
+  "sequence_start": false,
+  "text_output": "What is machine learning?\n\nMachine learning is a method of learning by using machine learning algorithms to solve problems.\n\n"
+}
+```
+
+#### Using the client scripts
+
+You can refer to the client scripts in the
+[inflight_batcher_llm/client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client) to see how to send
+requests via Python scripts.
+
+Below is an example of using
+[inflight_batcher_llm_client](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)
+to send requests to the `tensorrt_llm` model.
+
+```bash
+pip3 install tritonclient[all]
+INFLIGHT_BATCHER_LLM_CLIENT=/app/inflight_batcher_llm/client/inflight_batcher_llm_client.py
+python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 200 --tokenizer-dir ${TOKENIZER_DIR}
+```
+
+##### Early stopping
+
+You can also stop the generation process early by using the `--stop-after-ms`
+option to send a stop request after a few milliseconds:
+
+```bash
+python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --stop-after-ms 200 --request-output-len 200 --request-id 1 --tokenizer-dir ${TOKENIZER_DIR}
+```
+
+You will find that the generation process is stopped early and therefore the
+number of generated tokens is lower than 200. You can have a look at the
+client code to see how early stopping is achieved.
+
+##### Return context logits and/or generation logits
+
+If you want to get context logits and/or generation logits, you need to enable
+`--gather_context_logits` and/or `--gather_generation_logits` when building the
+engine (or `--gather_all_token_logits` to enable both at the same time). For
+more setting details about these two flags, please refer to
+[build.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/commands/build.py)
+or
+[gpt_runtime](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/advanced/gpt-runtime.md).
+
+After launching the server, you could get the output of logits by passing the
+corresponding parameters `--return-context-logits` and/or
+`--return-generation-logits` in the client scripts
+([end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
+and
+[inflight_batcher_llm_client.py](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/inflight_batcher_llm/client/inflight_batcher_llm_client.py)).
+
+For example:
+
+```bash
+python3 ${INFLIGHT_BATCHER_LLM_CLIENT} --request-output-len 20 --tokenizer-dir ${TOKENIZER_DIR} --return-context-logits --return-generation-logits
+```
+
+#### Requests with batch size > 1
+
+The TRT-LLM backend supports requests with batch size greater than one. When
+sending a request with a batch size greater than one, the TRT-LLM backend will
+return multiple batch size 1 responses, where each response will be associated
+with a given batch index. An output tensor named `batch_index` is associated
+with each response to indicate which batch index this response corresponds to.
+
+The client script
+[end_to_end_grpc_client.py](https://github.com/NVIDIA/TensorRT-LLM/blob/main/triton_backend/inflight_batcher_llm/client/end_to_end_grpc_client.py)
+demonstrates how a client can send requests with batch size > 1 and consume the
+responses returned from Triton. When passing `--batch-inputs` to the client
+script, the client will create a request with multiple prompts, and use the
+`batch_index` output tensor to associate the responses to the original prompt.
+
+For example one could run:
+
+```bash
+python3 /app/inflight_batcher_llm/client/end_to_end_grpc_client.py -o 5 -p '["This is a test","I want you to","The cat is"]' --batch-inputs
+```
+
+to send a request with a batch size of 3 to the Triton server.
