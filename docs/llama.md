@@ -46,7 +46,7 @@ trtllm-build --checkpoint_dir ${UNIFIED_CKPT_PATH} \
              --context_fmha enable \
              --gemm_plugin float16 \
              --output_dir ${ENGINE_PATH} \
-             --kv_cache_type paged \
+             --paged_kv_cache enable \
              --max_batch_size 64
 ```
 
