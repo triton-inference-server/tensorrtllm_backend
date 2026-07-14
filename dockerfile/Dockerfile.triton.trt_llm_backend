@@ -159,8 +159,10 @@ ARG TENSORRTLLM_VER
 RUN --mount=type=secret,id=pypi_extra_values,env=PYPI_EXTRA_VALUES \
     if [ -n "${PYPI_EXTRA_VALUES}" ]; then \
         pip3 install --no-cache-dir ${PYPI_EXTRA_VALUES} ; \
+        pip3 uninstall -y opencv-python-headless || true; \
     else \
         pip3 install --no-cache-dir --extra-index-url https://pypi.nvidia.com tensorrt_llm==${TENSORRTLLM_VER} ; \
+        pip3 uninstall -y opencv-python-headless || true; \
     fi
 
 RUN find /usr /opt -name libtensorrt_llm.so -exec dirname {} \; | sort -u > /etc/ld.so.conf.d/tensorrt-llm.conf \
