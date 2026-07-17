@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+[tool.codespell]
+# note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
+# this is only to allow you to run codespell interactively
+skip = "./.git,./.github"
+# ignore short words, and typename parameters like OffsetT
+ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
+# use the 'clear' dictionary for unambiguous spelling mistakes
+builtin = "clear"
+# disable warnings about binary files and wrong encoding
+quiet-level = 3
+
+[tool.isort]
+profile = "black"
+use_parentheses = true
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+ensure_newline_before_comments = true
+line_length = 88
+balanced_wrapping = true
+indent = "    "
+skip = ["build"]
