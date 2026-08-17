@@ -1,13 +1,23 @@
 ## End to end workflow to run llama 7b
 
-0. Make sure that you have initialized the TRT-LLM submodule:
+0. Make sure that you have downloaded and initialized the TRT-LLM submodule:
 
 ```bash
+git clone https://github.com/triton-inference-server/tensorrtllm_backend.git
 git lfs install
 git submodule update --init --recursive
 ```
+1. Start the Triton Server Docker container:
 
-1. (Optional) Download the LLaMa model from HuggingFace:
+```bash
+# Replace <yy.mm> with the version of Triton you want to use.
+# The command below assumes the the current directory is the
+# TRT-LLM backend root git repository.
+
+`docker run --rm -ti -v ${PWD}:/mnt -w /mnt -v ${HOME}/.cache/huggingface:/root/.cache/huggingface --gpus all nvcr.io/nvidia/tritonserver:\<yy.mm\>-trtllm-python-py3 bash`
+
+
+2. (Optional) Download the LLaMa model from HuggingFace:
 
 ```bash
 huggingface-cli login
@@ -19,14 +29,6 @@ huggingface-cli download meta-llama/Llama-2-7b-hf
 >
 > Make sure that you have access to https://huggingface.co/meta-llama/Llama-2-7b-hf.
 
-2. Start the Triton Server Docker container:
-
-```bash
-# Replace <yy.mm> with the version of Triton you want to use.
-# The command below assumes the the current directory is the
-# TRT-LLM backend root git repository.
-
-docker run --rm -ti -v `pwd`:/mnt -w /mnt -v ~/.cache/huggingface:~/.cache/huggingface --gpus all nvcr.io/nvidia/tritonserver:\<yy.mm\>-trtllm-python-py3 bash
 ```
 
 3. Build the engine:
