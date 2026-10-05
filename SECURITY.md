@@ -41,7 +41,7 @@ NVIDIA product, use one of the following channels:
 2. **Email:** [psirt@nvidia.com](mailto:psirt@nvidia.com). Please encrypt
    sensitive reports with NVIDIA's
    [PGP key](https://www.nvidia.com/en-us/security/pgp-key).
-3. **GitHub Private Vulnerability Reporting:** use the **Security** tab of this
+3. **GitHub Private Vulnerability Reporting (where enabled):** use the **Security** tab of this
    repository and select **Report a vulnerability**.
 
 **OEM partners should contact their NVIDIA Customer Program Manager.**
