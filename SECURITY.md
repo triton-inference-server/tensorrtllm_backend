@@ -42,3 +42,5 @@ If reporting a potential vulnerability via email, please encrypt it using NVIDIA
 5. Potential impact of the vulnerability, including how an attacker could exploit the vulnerability
 
 See https://www.nvidia.com/en-us/security/ for past NVIDIA Security Bulletins and Notices.
+
+**Please do not report security vulnerabilities through public issues or other public channels.**
