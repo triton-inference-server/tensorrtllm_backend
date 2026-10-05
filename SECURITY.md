@@ -30,131 +30,51 @@
 
 ## Reporting a Vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues,
-discussions, or pull requests.**
+NVIDIA is dedicated to the security and trust of our software products and services, including all source code repositories managed through our organization.
 
-To report a potential security vulnerability in this project or any other
-NVIDIA product, use one of the following channels:
+To report a potential security vulnerability, please use one of the following channels:
 
-1. **NVIDIA Vulnerability Disclosure Program (preferred):**
-   [https://www.nvidia.com/en-us/security/](https://www.nvidia.com/en-us/security/)
-2. **Email:** [psirt@nvidia.com](mailto:psirt@nvidia.com). Please encrypt
-   sensitive reports with NVIDIA's
-   [PGP key](https://www.nvidia.com/en-us/security/pgp-key).
-3. **GitHub Private Vulnerability Reporting (where enabled):** use the **Security** tab of this
-   repository and select **Report a vulnerability**.
+1. **NVIDIA Vulnerability Disclosure Program** (preferred): https://www.nvidia.com/en-us/security/
+2. **Web form:** [Security Vulnerability Submission Form](https://www.nvidia.com/object/submit-security-vulnerability.html)
+3. **Email:** [NVIDIA PSIRT](mailto:psirt@nvidia.com). Please encrypt sensitive reports with NVIDIA's [PGP key](https://www.nvidia.com/en-us/security/pgp-key).
+4. **GitHub Private Vulnerability Reporting (where enabled):** use the "Report a vulnerability" button on the Security tab of this repository.
 
-**OEM partners should contact their NVIDIA Customer Program Manager.**
+**Do not open a public issue or pull request to report a vulnerability.**
 
-Please include as much of the following as you can:
+Please include:
 
-1. Product name and version or branch (for example the container tag or the
-   `tensorrtllm_backend` / TensorRT-LLM release) that contains the issue
-2. Type of vulnerability (for example code execution, denial of service,
-   memory corruption, information disclosure)
-3. Step-by-step instructions to reproduce the issue
-4. Proof-of-concept or exploit code, if available
-5. Potential impact, including how an attacker could exploit it
+* Product or component name and version or branch
+* Type of vulnerability
+* Steps to reproduce
+* Proof of concept, if available
+* Potential impact and how it could be exploited
 
-NVIDIA PSIRT acknowledges reports, assesses severity, coordinates a fix and
-disclosure timeline with the reporter, and publishes security bulletins at
-[https://www.nvidia.com/en-us/security/](https://www.nvidia.com/en-us/security/).
+See https://www.nvidia.com/en-us/security/ for past NVIDIA Security Bulletins and Notices.
 
-## Security Architecture & Context
+## Security Architecture and Context
 
-**Project:** `tensorrtllm_backend` provides the Triton Inference Server
-backend, ensemble/BLS model templates, documentation, and container
-build recipe for serving [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)
-engines with in-flight batching.
+**Project:** The Triton TensorRT-LLM Backend.
 
-**Software classification:** Library / Service component. This repository
-contains no executable service logic of its own: the C++ backend, Python
-pre/post-processing models, launch scripts, and example clients live in the
-TensorRT-LLM project and are copied into the image by
-`dockerfile/Dockerfile.triton.trt_llm_backend`. That Dockerfile does not use this
-repository's `tensorrt_llm` submodule: it clones `TENSORRTLLM_REPO` (default
-`NVIDIA/TensorRT-LLM`) at `TENSORRTLLM_REPO_TAG`, copies the scripts, models,
-client, tools and examples from that clone, and installs the `tensorrt_llm`
-wheel separately (`TENSORRTLLM_VER`). The backend runs inside
-`tritonserver` and is exposed through Triton's HTTP/REST, gRPC, and metrics
-endpoints.
+**Software type:** Software component (library, backend, client or tool) used as part of a Triton Inference Server deployment.
 
-**Primary security responsibility:** Faithfully load operator-supplied TensorRT
-engines, tokenizers, and LoRA adapters; execute inference requests without
-corrupting memory or leaking data between requests; and coordinate multi-GPU
-and multi-node execution without exposing the coordination channel.
+**Security boundaries:** The main security boundary is between this component and the data, models and configuration it is given, and between it and the server or application that hosts it.
 
-**Key security boundaries and interfaces:**
+**Repository Exposure Classification:** Public.
 
-- Triton inference APIs (HTTP/REST, gRPC) carry untrusted request inputs such
-  as `text_input`, `input_ids`, `lora_weights`, `lora_config`, and
-  `guided_decoding_guide`.
-- The model repository on disk (engines, `config.pbtxt`, tokenizer files, and
-  Python model scripts) is read at load time.
-- MPI (leader mode and orchestrator mode, `launch_triton_server.py`) links
-  Triton processes across GPUs and nodes.
-- The container build downloads TensorRT, PyTorch components, and
-  TensorRT-LLM from NVIDIA-controlled sources.
-
-**Repository Exposure Classification:** Public. Basis: the repository is
-published on GitHub with public visibility.
-
-**Service Exposure Classification:** Internal-Sensitive (confidence: medium).
-Basis: the backend is normally deployed behind an operator's own network
-controls, serves model inputs and outputs that may contain sensitive
-user data, and does not itself provide authentication. This classification is
-an assessment aid and not an official NVIDIA label.
+**Service Exposure Classification:** Deployment-dependent. Exposure depends on how the software is deployed and configured by the operator.
 
 ## Threat Model
 
-1. **Malicious or malformed inference inputs:** Crafted tensors sent to the
-   `tensorrt_llm` model, such as oversized or inconsistent `input_ids`,
-   `lora_weights`/`lora_config` shapes, or invalid `guided_decoding_guide`
-   grammars (JSON schema, regex, EBNF), could trigger crashes, excessive
-   resource use, or memory errors in the backend and in the TensorRT-LLM
-   executor it wraps.
-2. **Untrusted model artifacts:** Engines, tokenizer files, LoRA weights, and
-   the Python model scripts in a model repository are loaded and executed with
-   the privileges of the Triton process. A tampered or untrusted model
-   repository, or a tokenizer or adapter fetched from a public hub, can lead
-   to code execution or data disclosure.
-3. **Unauthenticated MPI coordination channel:** In leader and orchestrator
-   mode, Triton ranks communicate over MPI. A network-adjacent attacker, or a
-   co-tenant on the same node or cluster, who can reach that channel could
-   interfere with or observe inter-rank traffic.
-4. **Supply-chain compromise at build time:** The Dockerfile downloads the
-   TensorRT tarball over HTTPS, installs Python wheels from public and NVIDIA
-   package indexes, runs an installer script fetched from a branch URL, and
-   clones TensorRT-LLM at `release/1.2.1` by default, which is a release branch
-   that can move, not a fixed tag. A compromised upstream, mutable reference, or
-   package confusion could introduce malicious code into the image.
-5. **Cross-request information disclosure:** Features that share state across
-   requests, such as the LoRA cache keyed by `lora_task_id`, KV-cache reuse,
-   and returned logits and performance metrics, could expose one tenant's
-   data or adapters to another if deployed in a shared, multi-tenant setting.
-6. **Resource exhaustion (denial of service):** Large batches, long
-   sequences, streaming requests, and many LoRA adapters can exhaust GPU
-   memory, host memory, or request queues, and a failure of a single MPI rank
-   can stall the whole deployment.
+1. **Untrusted input:** Requests, models, configuration or data supplied to this component may be malformed or malicious, and could cause crashes, memory errors or unintended behavior if not validated.
+2. **Supply chain:** Source and build dependencies fetched at build or install time may be compromised, outdated or unpinned.
+3. **Network exposure:** When deployed behind a network-facing server, endpoints may be reachable by untrusted clients. This component does not by itself provide authentication, authorization or encryption.
+4. **Resource exhaustion:** Oversized or numerous requests may consume memory, compute or other resources and degrade availability.
+5. **Information disclosure:** Logs, metrics and error messages may reveal sensitive data such as paths, identifiers or request content.
 
 ## Critical Security Assumptions
 
-- **Authentication and authorization are external.** Neither this repository
-  nor the backend authenticates clients; operators must place Triton behind
-  an authenticated, TLS-terminating gateway or a trusted network.
-- **The model repository is trusted.** Engines, tokenizers, adapters, and
-  Python model code are assumed to come from a trusted source and to be
-  integrity-checked by the operator before being loaded.
-- **The MPI fabric is private.** Inter-process and inter-node communication
-  is assumed to run on an isolated, trusted network with no untrusted peers.
-- **Inputs are validated upstream where limits matter.** Request size,
-  sequence length, and rate limits are assumed to be enforced by Triton
-  configuration or a front-end proxy.
-- **The deployment is single-tenant, or tenants are isolated.** Shared caches
-  and adapters are assumed not to cross trust boundaries.
-- **Upstream components are trusted.** Triton Server, TensorRT,
-  TensorRT-LLM, PyTorch, CUDA, and the base container images are assumed to
-  be free of vulnerabilities in the pinned versions; consult the
-  corresponding projects for their own security policies and advisories.
-- **Build inputs are reviewed.** Operators building the image are expected to
-  review and, where required, pin build arguments and download sources.
+* The component is deployed in a trusted environment or behind a gateway that provides authentication, authorization, TLS and rate limiting.
+* Models, configuration and other inputs come from trusted sources.
+* Dependencies and the build environment are kept up to date and obtained from trusted sources.
+* Operators protect secrets, certificates and credentials, and restrict access to logs and metrics.
+* Host operating system, driver and hardware security are the operator's responsibility.
