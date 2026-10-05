@@ -70,8 +70,12 @@ engines with in-flight batching.
 **Software classification:** Library / Service component. This repository
 contains no executable service logic of its own: the C++ backend, Python
 pre/post-processing models, launch scripts, and example clients live in the
-`tensorrt_llm` git submodule (TensorRT-LLM) and are copied into the image by
-`dockerfile/Dockerfile.triton.trt_llm_backend`. The backend runs inside
+TensorRT-LLM project and are copied into the image by
+`dockerfile/Dockerfile.triton.trt_llm_backend`. That Dockerfile does not use this
+repository's `tensorrt_llm` submodule: it clones `TENSORRTLLM_REPO` (default
+`NVIDIA/TensorRT-LLM`) at `TENSORRTLLM_REPO_TAG`, copies the scripts, models,
+client, tools and examples from that clone, and installs the `tensorrt_llm`
+wheel separately (`TENSORRTLLM_VER`). The backend runs inside
 `tritonserver` and is exposed through Triton's HTTP/REST, gRPC, and metrics
 endpoints.
 
@@ -121,7 +125,8 @@ an assessment aid and not an official NVIDIA label.
 4. **Supply-chain compromise at build time:** The Dockerfile downloads the
    TensorRT tarball over HTTPS, installs Python wheels from public and NVIDIA
    package indexes, runs an installer script fetched from a branch URL, and
-   clones TensorRT-LLM by tag. A compromised upstream, mutable reference, or
+   clones TensorRT-LLM at `release/1.2.1` by default, which is a release branch
+   that can move, not a fixed tag. A compromised upstream, mutable reference, or
    package confusion could introduce malicious code into the image.
 5. **Cross-request information disclosure:** Features that share state across
    requests, such as the LoRA cache keyed by `lora_task_id`, KV-cache reuse,
