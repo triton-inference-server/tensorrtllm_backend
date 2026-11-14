@@ -301,10 +301,25 @@ for more details on how to run TRT-LLM models and Triton with MIG.
 ### Scheduling
 
 The scheduler policy helps the batch manager adjust how requests are scheduled
-for execution. There are two scheduler policies supported in TensorRT-LLM,
-`MAX_UTILIZATION` and `GUARANTEED_NO_EVICT`. You can specify the scheduler
-policy via the `batch_scheduler_policy` parameter in the
-[model config](./docs/model_config.md#tensorrt_llm-model) of tensorrt_llm model.
+for execution. TensorRT-LLM supports three capacity scheduler policies via the
+`batch_scheduler_policy` parameter in the
+[model config](./docs/model_config.md#tensorrt_llm-model) of the `tensorrt_llm`
+model:
+
+- `guaranteed_no_evict` (default): Reserves enough KV cache blocks for each admitted request to run to completion so started requests are never paused or evicted.
+- `max_utilization`: Greedily packs as many requests as possible into each in-flight batching iteration to maximize throughput, pausing and resuming requests if KV cache limits are reached.
+- `static_batch`: Only admits a new batch of requests when no requests are currently in flight, waiting for all active requests in the current batch to finish before scheduling the next batch.
+
+When configuring batching in `config.pbtxt`, note that three distinct layers work together:
+1. **Triton `dynamic_batching` (`max_queue_delay_microseconds` / `max_queue_size`)**: Controls how Triton queues and groups incoming requests before forwarding them to the TensorRT-LLM backend.
+2. **`batching_strategy` (`gpt_model_type`)**: Selects the execution mode in TensorRT-LLM (`inflight_fused_batching` / `inflight_batching` for continuous iteration-level batching across context and generation phases, or `V1` for legacy batching).
+3. **`batch_scheduler_policy`**: Controls how the TensorRT-LLM capacity scheduler admits queued requests into active batches based on KV cache capacity (`guaranteed_no_evict`, `max_utilization`, or `static_batch`).
+
+See the
+[Paged Attention, IFB, and Request Scheduling](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/features/paged-attention-ifb-scheduler.md)
+documentation and the
+[model config guide](./docs/model_config.md#how-batching-and-scheduling-parameters-interact)
+for more details.
 
 ### Key-Value Cache
 

@@ -6,7 +6,9 @@ The following tables show the parameters in the `config.pbtxt` of the models in
 [all_models/inflight_batcher_llm](https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/inflight_batcher_llm).
 that can be modified before deployment. For optimal performance or custom
 parameters, please refer to
-[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/v0.16.0/docs/source/performance/perf-best-practices.md).
+[Paged Attention, IFB, and Request Scheduling](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/features/paged-attention-ifb-scheduler.md)
+and the
+[Performance Tuning Guide](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/performance/performance-tuning-guide/introduction.md).
 
 The names of the parameters listed below are the values in the `config.pbtxt`
 that can be modified using the
@@ -101,7 +103,7 @@ description of the parameters below.
 | `max_queue_delay_microseconds` | The maximum queue delay in microseconds. Setting this parameter to a value greater than 0 can improve the chances that two requests arriving within `max_queue_delay_microseconds` will be scheduled in the same TRT-LLM iteration. |
 | `max_queue_size` | The maximum number of requests allowed in the TRT-LLM queue before rejecting new requests. |
 | `engine_dir` | The path to the engine for the model. |
-| `batching_strategy` | The batching strategy to use. Set to `inflight_fused_batching` when enabling in-flight batching support. To disable in-flight batching, set to `V1` |
+| `batching_strategy` | The batching strategy to use (sets `gpt_model_type` in `config.pbtxt`). Set to `inflight_fused_batching` (or `inflight_batching`) when enabling continuous in-flight batching support across context and generation phases. To disable in-flight batching, set to `V1`. |
 | `encoder_input_features_data_type` | The dtype for the input tensor `encoder_input_features`. For the mllama model, this must be `TYPE_BF16`. For other models like whisper, this is `TYPE_FP16`. |
 | `logits_datatype` | The data type for context and generation logits. |
 
@@ -173,7 +175,17 @@ additional benefits.
 
 | Name | Description |
 | :----------------------: | :-----------------------------: |
-| `batch_scheduler_policy` | Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration. This maximizes the throughput but may result in overheads due to request pause/resume if KV cache limits are reached during execution. Set to `guaranteed_no_evict` to guarantee that a started request is never paused. (default=`guaranteed_no_evict`) |
+| `batch_scheduler_policy` | Controls how the TensorRT-LLM capacity scheduler admits requests into batches. Set to `guaranteed_no_evict` to reserve enough KV cache capacity so that a started request is never paused. Set to `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration (maximizes throughput, but may pause/resume requests if KV cache limits are reached). Set to `static_batch` to schedule a new batch of requests only when no requests are currently active, running each batch to completion before admitting the next batch. (default=`guaranteed_no_evict`) |
+
+#### How Batching and Scheduling Parameters Interact
+
+In `config.pbtxt`, batching and scheduling are controlled across three complementary layers that can be specified together:
+
+1. **Triton `dynamic_batching` (`max_queue_delay_microseconds`, `max_queue_size`, `preferred_batch_size`)**: Operates at the Triton Server frontend before requests reach the TensorRT-LLM executor. Setting `max_queue_delay_microseconds > 0` holds incoming requests briefly in Triton's queue so requests arriving close together are handed off to the backend at the same time.
+2. **`batching_strategy` (`gpt_model_type` in `config.pbtxt`)**: Selects the TensorRT-LLM execution architecture. `inflight_fused_batching` (and `inflight_batching`) enables continuous iteration-level batching (interleaving context-phase and generation-phase tokens across iterations), whereas `V1` uses legacy batching.
+3. **`batch_scheduler_policy` (`CapacitySchedulerPolicy`)**: Controls how the TensorRT-LLM batch manager schedules requests from its queue into active iterations given KV cache constraints:
+   - With `inflight_fused_batching` + `guaranteed_no_evict` or `max_utilization`, new requests can join an already running batch at each iteration (continuous in-flight batching).
+   - With `inflight_fused_batching` + `static_batch`, the executor still uses the in-flight batching runtime, but the capacity scheduler waits until all currently active requests complete before scheduling the next batch of queued requests (resulting in static batch execution semantics). To group individual concurrent client requests into that static batch, either send batched inputs directly or configure `max_queue_delay_microseconds > 0` under `dynamic_batching` so requests accumulate in the queue before the scheduler forms the next batch.
 
 - Medusa
 
@@ -349,8 +361,10 @@ Note: the timing metrics oputputs are represented as the number of nanoseconds s
 
 Below are some tips for configuring models for optimal performance. These
 recommendations are based on our experiments and may not apply to all use cases.
-For guidance on other parameters, please refer to the
-[perf_best_practices](https://github.com/NVIDIA/TensorRT-LLM/blob/v0.16.0/docs/source/performance/perf-best-practices.md).
+For guidance on other parameters, please refer to
+[Paged Attention, IFB, and Request Scheduling](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/features/paged-attention-ifb-scheduler.md)
+and the
+[Performance Tuning Guide](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/legacy/performance/performance-tuning-guide/introduction.md).
 
 - **Setting the `instance_count` for models to better utilize inflight batching**
 
